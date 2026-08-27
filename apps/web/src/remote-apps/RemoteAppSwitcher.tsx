@@ -18,16 +18,9 @@ export function RemoteAppSwitcher() {
         label: "ChatGPT",
         disabled: state.activeSurface === "chatgpt",
       },
-      {
-        id: "open-chatgpt",
-        label: "Open ChatGPT in browser",
-        separatorBefore: true,
-      },
     ]);
     if (selection === "t3code" || selection === "chatgpt") {
       await setActiveSurface(selection);
-    } else if (selection === "open-chatgpt") {
-      await window.desktopBridge?.openExternal("https://chatgpt.com/");
     }
   };
 
