@@ -30,6 +30,21 @@ const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
 export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
   delta === null ? 1 : Math.min(3, Math.max(0.5, current + delta));
 
+export const resolveRemoteAppViewBounds = (
+  contentBounds: Pick<Electron.Rectangle, "width" | "height">,
+  mainZoomFactor: number,
+): Electron.Rectangle => {
+  const normalizedZoomFactor =
+    Number.isFinite(mainZoomFactor) && mainZoomFactor > 0 ? mainZoomFactor : 1;
+  const titlebarHeight = Math.round(TITLEBAR_HEIGHT * normalizedZoomFactor);
+  return {
+    x: 0,
+    y: titlebarHeight,
+    width: Math.max(0, contentBounds.width),
+    height: Math.max(0, contentBounds.height - titlebarHeight),
+  };
+};
+
 export const shouldAutomaticallyRecoverRenderer = (completedRecoveries: number): boolean =>
   completedRecoveries < REMOTE_APP_MAX_AUTOMATIC_RECOVERIES;
 
@@ -52,6 +67,7 @@ export class RemoteAppManager extends Context.Service<
       window: Electron.BrowserWindow,
     ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly getState: Effect.Effect<RemoteAppState>;
+    readonly syncLayout: Effect.Effect<void, RemoteAppManagerError>;
     readonly setActiveSurface: (
       surface: DesktopSurface,
     ) => Effect.Effect<RemoteAppState, RemoteAppManagerError>;
@@ -178,12 +194,7 @@ export const make = Effect.gen(function* () {
     Effect.try({
       try: () => {
         const bounds = window.getContentBounds();
-        view.setBounds({
-          x: 0,
-          y: TITLEBAR_HEIGHT,
-          width: Math.max(0, bounds.width),
-          height: Math.max(0, bounds.height - TITLEBAR_HEIGHT),
-        });
+        view.setBounds(resolveRemoteAppViewBounds(bounds, window.webContents.getZoomFactor()));
       },
       catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
     });
@@ -425,6 +436,10 @@ export const make = Effect.gen(function* () {
       const window = yield* getLiveWindow;
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
+        // Adding an existing child reorders it to the top. The main renderer
+        // is created after the remote view during startup, so this keeps the
+        // active surface above the host page instead of leaving it obscured.
+        window.value.contentView.addChildView(view.value);
         view.value.setVisible(surface === "chatgpt");
         if (surface === "chatgpt") {
           yield* positionView(window.value, view.value);
@@ -434,6 +449,14 @@ export const make = Effect.gen(function* () {
         }
       }
     });
+
+  const syncLayout = Effect.gen(function* () {
+    const window = yield* getLiveWindow;
+    const view = yield* getLiveView;
+    if (Option.isSome(window) && Option.isSome(view)) {
+      yield* positionView(window.value, view.value);
+    }
+  });
 
   const attachMainWindow = Effect.fn("remote-app.attachMainWindow")(function* (
     window: Electron.BrowserWindow,
@@ -562,6 +585,7 @@ export const make = Effect.gen(function* () {
   return RemoteAppManager.of({
     attachMainWindow,
     getState,
+    syncLayout,
     setActiveSurface,
     goBack: viewNavigation((contents) => contents.canGoBack() && contents.goBack()),
     goForward: viewNavigation((contents) => contents.canGoForward() && contents.goForward()),

@@ -929,6 +929,15 @@ export const make = Effect.gen(function* () {
       // the previewed page along with the app UI. The preview browser keeps its
       // own zoom, so put each guest back where the preview left it.
       yield* previewManager.reapplyZoom();
+      if (Option.isSome(remoteAppManager)) {
+        yield* remoteAppManager.value.syncLayout().pipe(
+          Effect.catch((error) =>
+            logWindowWarning("failed to reflow remote app surface after app zoom", {
+              error: error.message,
+            }),
+          ),
+        );
+      }
     }),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;

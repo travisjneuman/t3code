@@ -47,7 +47,7 @@ export function RemoteAppSwitcher() {
       ) : (
         <span className="font-semibold">T3</span>
       )}
-      <span className="truncate">{state.activeSurface === "chatgpt" ? "ChatGPT" : "T3 Code"}</span>
+      <span className="truncate">{state.activeSurface === "chatgpt" ? "ChatGPT" : "Code"}</span>
       <ChevronDownIcon className="size-3 opacity-60" />
     </Button>
   );
