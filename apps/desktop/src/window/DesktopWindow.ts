@@ -930,8 +930,8 @@ export const make = Effect.gen(function* () {
       // own zoom, so put each guest back where the preview left it.
       yield* previewManager.reapplyZoom();
       if (Option.isSome(remoteAppManager)) {
-        yield* remoteAppManager.value.syncLayout().pipe(
-          Effect.catch((error) =>
+        yield* remoteAppManager.value.syncLayout.pipe(
+          Effect.catchTag("RemoteAppManagerError", (error) =>
             logWindowWarning("failed to reflow remote app surface after app zoom", {
               error: error.message,
             }),

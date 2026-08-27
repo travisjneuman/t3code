@@ -69,6 +69,9 @@ export class RemoteAppStateStore extends Context.Service<
   {
     readonly get: Effect.Effect<RemoteAppState>;
     readonly set: (state: RemoteAppState) => Effect.Effect<void, RemoteAppStateStoreWriteError>;
+    readonly update: (
+      update: (state: RemoteAppState) => RemoteAppState,
+    ) => Effect.Effect<RemoteAppState, RemoteAppStateStoreWriteError>;
     readonly reset: (
       activeSurface?: RemoteAppState["activeSurface"],
     ) => Effect.Effect<RemoteAppState, RemoteAppStateStoreWriteError>;
@@ -89,30 +92,26 @@ const writeState = Effect.fnUntraced(function* (input: {
         new RemoteAppStateStoreWriteError({ operation: "encode", path: input.statePath, cause }),
     ),
   );
-  yield* input.fileSystem
-    .makeDirectory(directory, { recursive: true })
-    .pipe(
-      Effect.mapError(
-        (cause) =>
-          new RemoteAppStateStoreWriteError({
-            operation: "create-directory",
-            path: directory,
-            cause,
-          }),
-      ),
-    );
-  yield* input.fileSystem
-    .writeFileString(temporaryPath, `${encoded}\n`)
-    .pipe(
-      Effect.mapError(
-        (cause) =>
-          new RemoteAppStateStoreWriteError({
-            operation: "write-temporary",
-            path: temporaryPath,
-            cause,
-          }),
-      ),
-    );
+  yield* input.fileSystem.makeDirectory(directory, { recursive: true }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new RemoteAppStateStoreWriteError({
+          operation: "create-directory",
+          path: directory,
+          cause,
+        }),
+    ),
+  );
+  yield* input.fileSystem.writeFileString(temporaryPath, `${encoded}\n`).pipe(
+    Effect.mapError(
+      (cause) =>
+        new RemoteAppStateStoreWriteError({
+          operation: "write-temporary",
+          path: temporaryPath,
+          cause,
+        }),
+    ),
+  );
   yield* input.fileSystem
     .rename(temporaryPath, input.statePath)
     .pipe(
@@ -164,20 +163,23 @@ export const make = Effect.gen(function* () {
   );
   const statePath = environment.path.join(environment.stateDir, "remote-app-state.json");
 
-  const set = (state: RemoteAppState) => {
+  const persist = (state: RemoteAppState) => {
     const normalized = normalizeRemoteAppState(state);
-    return writeLock.withPermit(
-      Ref.set(stateRef, normalized).pipe(
-        Effect.andThen(
-          writeState({ fileSystem, path: environment.path, statePath, state: normalized }),
-        ),
+    return Ref.set(stateRef, normalized).pipe(
+      Effect.andThen(
+        writeState({ fileSystem, path: environment.path, statePath, state: normalized }),
       ),
+      Effect.as(normalized),
     );
   };
+  const set = (state: RemoteAppState) => writeLock.withPermit(persist(state)).pipe(Effect.asVoid);
+  const update = (updateState: (state: RemoteAppState) => RemoteAppState) =>
+    writeLock.withPermit(Effect.flatMap(Ref.get(stateRef), (state) => persist(updateState(state))));
 
   return RemoteAppStateStore.of({
     get: Ref.get(stateRef),
     set,
+    update,
     reset: (activeSurface = "t3code") => {
       const next = { ...DEFAULT_REMOTE_APP_STATE, activeSurface };
       return set(next).pipe(Effect.as(next));

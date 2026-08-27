@@ -151,7 +151,14 @@ export const make = Effect.gen(function* () {
 
   const setState = (state: RemoteAppState): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
     stateStore.set(state).pipe(
-      Effect.map(() => state),
+      Effect.as(state),
+      Effect.tap(publish),
+      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
+    );
+  const updateState = (
+    update: (state: RemoteAppState) => RemoteAppState,
+  ): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
+    stateStore.update(update).pipe(
       Effect.tap(publish),
       Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
     );
@@ -179,16 +186,10 @@ export const make = Effect.gen(function* () {
   };
 
   const syncNavigation = (view: Electron.WebContentsView) =>
-    Effect.gen(function* () {
-      const current = yield* stateStore.get;
-      yield* setState(updateNavigationState(view, current));
-    });
+    updateState((current) => updateNavigationState(view, current)).pipe(Effect.asVoid);
 
   const setLoadingState = (loadState: RemoteAppState["loadState"]) =>
-    Effect.gen(function* () {
-      const current = yield* stateStore.get;
-      yield* setState({ ...current, loadState, error: null });
-    });
+    updateState((current) => ({ ...current, loadState, error: null })).pipe(Effect.asVoid);
 
   const positionView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) =>
     Effect.try({
@@ -249,49 +250,42 @@ export const make = Effect.gen(function* () {
     contents.on("did-navigate-in-page", () => runSafely(syncNavigation(view)));
     contents.on("page-title-updated", (event, title) => {
       event.preventDefault();
-      runSafely(
-        stateStore.get.pipe(
-          Effect.flatMap((state) =>
-            setState({ ...state, currentTitle: sanitizeRemoteTitle(title) }),
-          ),
-        ),
-      );
+      runSafely(updateState((state) => ({ ...state, currentTitle: sanitizeRemoteTitle(title) })));
     });
     contents.on(
       "did-fail-load",
       (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
         if (!isMainFrame) return;
         runSafely(
-          stateStore.get.pipe(
-            Effect.flatMap((state) =>
-              setState({
-                ...state,
-                loadState: "failed",
-                error: { category: "network", code: "load-failed" },
-              }),
-            ),
-          ),
+          updateState((state) => ({
+            ...state,
+            loadState: "failed",
+            error: { category: "network", code: "load-failed" },
+          })),
         );
       },
     );
     contents.on("render-process-gone", () => {
       runSafely(
         Effect.gen(function* () {
-          const current = yield* stateStore.get;
           const recoveryCount = yield* Ref.get(recoveryCountRef);
           if (shouldAutomaticallyRecoverRenderer(recoveryCount)) {
             yield* Ref.update(recoveryCountRef, (count) => count + 1);
-            yield* setState({ ...current, loadState: "recovering", error: null });
+            const next = yield* updateState((state) => ({
+              ...state,
+              loadState: "recovering",
+              error: null,
+            }));
             yield* Effect.tryPromise({
-              try: () => contents.loadURL(current.currentUrl ?? REMOTE_APP_ENTRY_URL),
+              try: () => contents.loadURL(next.currentUrl ?? REMOTE_APP_ENTRY_URL),
               catch: () => undefined,
             });
           } else {
-            yield* setState({
-              ...current,
+            yield* updateState((state) => ({
+              ...state,
               loadState: "crashed",
               error: { category: "renderer", code: "render-process-gone" },
-            });
+            }));
           }
         }),
       );
@@ -300,12 +294,11 @@ export const make = Effect.gen(function* () {
       runSafely(
         Effect.gen(function* () {
           yield* Ref.set(viewRef, Option.none());
-          const current = yield* stateStore.get;
-          yield* setState({
-            ...current,
+          yield* updateState((state) => ({
+            ...state,
             loadState: "crashed",
             error: { category: "renderer", code: "destroyed" },
-          });
+          }));
         }),
       );
     });
@@ -503,27 +496,26 @@ export const make = Effect.gen(function* () {
   const getState = stateStore.get;
   const setActiveSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
-      const current = yield* stateStore.get;
       if (surface === "chatgpt") {
         const view = yield* ensureView();
         yield* showSurface(surface);
         if (view.webContents.getURL().length === 0) {
-          yield* setState({
-            ...current,
+          const next = yield* updateState((state) => ({
+            ...state,
             activeSurface: surface,
             loadState: "loading",
             error: null,
-          });
+          }));
           yield* Effect.tryPromise({
-            try: () => view.webContents.loadURL(current.currentUrl ?? REMOTE_APP_ENTRY_URL),
+            try: () => view.webContents.loadURL(next.currentUrl ?? REMOTE_APP_ENTRY_URL),
             catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
           });
         } else {
-          yield* setState({ ...current, activeSurface: surface });
+          yield* updateState((state) => ({ ...state, activeSurface: surface }));
         }
       } else {
         yield* showSurface(surface);
-        yield* setState({ ...current, activeSurface: surface });
+        yield* updateState((state) => ({ ...state, activeSurface: surface }));
       }
       return yield* stateStore.get;
     });
