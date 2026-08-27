@@ -92,6 +92,7 @@ import { AuthAccessTokenResult, AuthSessionState, AuthWebSocketTicketResult } fr
 import { AdvertisedEndpoint } from "./remoteAccess.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import type { ClientSettings } from "./settings.ts";
+import type { DesktopRemoteAppBridge } from "./remote-apps.ts";
 import type { EditorId } from "./editor.ts";
 import type {
   SourceControlCloneRepositoryInput,
@@ -1150,6 +1151,8 @@ export interface DesktopBridge {
    * Electron desktop build; web builds have `preview === undefined`.
    */
   preview?: DesktopPreviewBridge;
+  /** Desktop-only isolated ChatGPT surface. */
+  remoteApps?: DesktopRemoteAppBridge;
 }
 
 export interface DesktopPreviewBridge {

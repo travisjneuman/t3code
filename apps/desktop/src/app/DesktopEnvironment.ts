@@ -15,6 +15,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
+import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts";
 
 export interface MakeDesktopEnvironmentInput {
   readonly dirname: string;
@@ -26,6 +27,8 @@ export interface MakeDesktopEnvironmentInput {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
+  /** Test/runtime override; packaged TJN builds default to disabled. */
+  readonly autoUpdateEnabled?: boolean;
 }
 
 export class DesktopEnvironment extends Context.Service<
@@ -72,6 +75,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly branding: DesktopAppBranding;
     readonly displayName: string;
     readonly appUserModelId: string;
+    /** Custom distributions may opt out of the upstream updater feed. */
+    readonly autoUpdateEnabled?: boolean;
     readonly linuxDesktopEntryName: string;
     readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
@@ -85,7 +90,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "T3 Code";
+const APP_BASE_NAME = REMOTE_APP_DISTRIBUTION.baseName;
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -106,7 +111,7 @@ function resolveDesktopAppBranding(input: {
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
-    displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    displayName: APP_BASE_NAME,
   };
 }
 
@@ -178,8 +183,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
-  const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+  const userDataDirName = isDevelopment
+    ? REMOTE_APP_DISTRIBUTION.developmentUserDataDirName
+    : REMOTE_APP_DISTRIBUTION.packagedUserDataDirName;
+  const legacyUserDataDirName = isDevelopment ? "t3code-tjn-dev-legacy" : "t3code-tjn-legacy";
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
@@ -223,11 +230,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     otlpExportIntervalMs: config.otlpExportIntervalMs,
     branding,
     displayName,
-    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+    appUserModelId: Option.getOrElse(
+      config.appUserModelIdOverride,
+      () => REMOTE_APP_DISTRIBUTION.appId,
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    autoUpdateEnabled: input.autoUpdateEnabled ?? REMOTE_APP_DISTRIBUTION.autoUpdateEnabled,
+    linuxDesktopEntryName: isDevelopment ? "t3code-tjn-dev.desktop" : "t3code-tjn.desktop",
+    linuxWmClass: isDevelopment ? "t3code-tjn-dev" : "t3code-tjn",
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     userDataDirName,

@@ -3,11 +3,24 @@ import type {
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
+  RemoteAppState,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
+
+function isRemoteAppState(value: unknown): value is RemoteAppState {
+  if (typeof value !== "object" || value === null) return false;
+  const state = value as Partial<RemoteAppState>;
+  return (
+    state.schemaVersion === 1 &&
+    (state.activeSurface === "t3code" || state.activeSurface === "chatgpt") &&
+    typeof state.currentTitle === "string" &&
+    typeof state.zoomFactor === "number" &&
+    Array.isArray(state.recents)
+  );
+}
 
 exposeClerkBridge({ passkeys: true });
 
@@ -163,6 +176,28 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     return () => {
       ipcRenderer.removeListener(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
     };
+  },
+  remoteApps: {
+    getState: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GET_STATE_CHANNEL),
+    setActiveSurface: (surface) =>
+      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL, surface),
+    goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),
+    goForward: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_FORWARD_CHANNEL),
+    reload: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RELOAD_CHANNEL),
+    zoomIn: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_ZOOM_IN_CHANNEL),
+    zoomOut: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_ZOOM_OUT_CHANNEL),
+    resetZoom: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RESET_ZOOM_CHANNEL),
+    retry: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RETRY_CHANNEL),
+    clearData: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_CLEAR_DATA_CHANNEL),
+    onStateChange: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
+        if (isRemoteAppState(state)) listener(state);
+      };
+      ipcRenderer.on(IpcChannels.REMOTE_APP_STATE_CHANGE_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.REMOTE_APP_STATE_CHANGE_CHANNEL, wrappedListener);
+      };
+    },
   },
   preview: {
     createTab: (tabId, defaults) =>

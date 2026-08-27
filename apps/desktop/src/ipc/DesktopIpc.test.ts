@@ -76,4 +76,38 @@ describe("DesktopIpc", () => {
       assert.notInclude(error.message, cause.message);
     }),
   );
+
+  it.effect("rejects an unauthorized invoke before running the handler", () =>
+    Effect.gen(function* () {
+      let registered: DesktopIpc.DesktopIpcHandleListener | undefined;
+      let handlerCalls = 0;
+      const ipcMain = makeIpcMain({
+        handle: (_channel, listener) => {
+          registered = listener;
+        },
+      });
+      const ipc = DesktopIpc.make(ipcMain);
+      const method: DesktopIpc.DesktopIpcMethod<never, never> = {
+        channel: "desktop.test.authorized-invoke",
+        authorize: () => Effect.succeed(false),
+        handler: () =>
+          Effect.sync(() => {
+            handlerCalls += 1;
+          }),
+      };
+
+      yield* Effect.scoped(ipc.handle(method));
+      assert.isDefined(registered);
+      const result = yield* Effect.exit(
+        Effect.promise(() =>
+          Promise.resolve(
+            registered!({ sender: { id: 1, getURL: () => "t3code-tjn://app/" } }, undefined),
+          ),
+        ),
+      );
+
+      assert.isTrue(result._tag === "Failure");
+      assert.strictEqual(handlerCalls, 0);
+    }),
+  );
 });

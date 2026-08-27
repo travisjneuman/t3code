@@ -63,6 +63,9 @@ import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
+import * as RemoteAppManager from "./remote-apps/RemoteAppManager.ts";
+import * as RemoteAppSession from "./remote-apps/RemoteAppSession.ts";
+import * as RemoteAppStateStore from "./remote-apps/RemoteAppStateStore.ts";
 
 const desktopEnvironmentLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -138,6 +141,16 @@ const desktopFoundationLayer = Layer.mergeAll(
   DesktopObservability.layer,
 ).pipe(Layer.provideMerge(desktopEnvironmentLayer));
 
+const remoteAppFoundationLayer = Layer.mergeAll(
+  RemoteAppStateStore.layer,
+  RemoteAppSession.layer,
+).pipe(Layer.provideMerge(desktopFoundationLayer));
+
+const desktopRemoteAppLayer = RemoteAppManager.layer.pipe(
+  Layer.provideMerge(remoteAppFoundationLayer),
+  Layer.provideMerge(electronLayer),
+);
+
 const desktopSshLayer = desktopSshEnvironmentLayer.pipe(
   Layer.provideMerge(DesktopSshPasswordPrompts.layer()),
 );
@@ -192,6 +205,7 @@ const desktopApplicationLayer = Layer.mergeAll(
   Layer.provideMerge(DesktopUpdates.layer),
   Layer.provideMerge(desktopWslBackendLayer),
   Layer.provideMerge(desktopLocalEnvironmentAuthLayer),
+  Layer.provideMerge(desktopRemoteAppLayer),
 );
 
 const desktopClerkLayer = DesktopClerk.layer.pipe(

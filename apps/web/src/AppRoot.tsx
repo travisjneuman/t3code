@@ -4,6 +4,7 @@ import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { PreviewAutomationHosts } from "./components/preview/PreviewAutomationHosts";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
+import { RemoteAppProvider } from "./remote-apps/useRemoteAppState";
 import type { AppRouter } from "./router";
 
 /**
@@ -14,10 +15,12 @@ import type { AppRouter } from "./router";
 export function AppRoot({ router }: { readonly router: AppRouter }) {
   return (
     <AppAtomRegistryProvider>
-      <RouterProvider router={router} />
-      <PreviewAutomationHosts />
-      <ElectronBrowserHost />
-      <QuitHoldOverlay />
+      <RemoteAppProvider>
+        <RouterProvider router={router} />
+        <PreviewAutomationHosts />
+        <ElectronBrowserHost />
+        <QuitHoldOverlay />
+      </RemoteAppProvider>
     </AppAtomRegistryProvider>
   );
 }

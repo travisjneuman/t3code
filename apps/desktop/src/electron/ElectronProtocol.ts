@@ -7,10 +7,11 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
+import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts";
 
 export const DESKTOP_HOST = "app";
-export const DESKTOP_PRODUCTION_SCHEME = "t3code";
-export const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
+export const DESKTOP_PRODUCTION_SCHEME = REMOTE_APP_DISTRIBUTION.protocol;
+export const DESKTOP_DEVELOPMENT_SCHEME = `${REMOTE_APP_DISTRIBUTION.protocol}-dev`;
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;

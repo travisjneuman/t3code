@@ -14,6 +14,7 @@ import {
   resolveDesktopStateDir,
   type JoinPath,
 } from "./DesktopStatePaths.ts";
+import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts";
 
 interface EarlyDesktopSettingsInput {
   readonly env: NodeJS.ProcessEnv;
@@ -81,7 +82,9 @@ export function resolveEarlyLinuxElectronOptions(
 ): EarlyLinuxElectronOptions {
   const preference = resolveEarlyLinuxPasswordStorePreference(input);
   return {
-    linuxWmClass: isDevelopmentEnvironment(input.env) ? "t3code-dev" : "t3code",
+    linuxWmClass: isDevelopmentEnvironment(input.env)
+      ? `${REMOTE_APP_DISTRIBUTION.protocol}-dev`
+      : REMOTE_APP_DISTRIBUTION.protocol,
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,
       env: input.env,

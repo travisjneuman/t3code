@@ -296,7 +296,11 @@ export const make = Effect.gen(function* () {
   );
 
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
-    Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
+    Effect.map(
+      (appUpdateYmlConfig) =>
+        (!environment.isPackaged || environment.autoUpdateEnabled !== false) &&
+        (Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
+    ),
   );
 
   const resolveDisabledReason = Effect.gen(function* () {

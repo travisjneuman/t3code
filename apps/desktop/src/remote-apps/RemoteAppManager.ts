@@ -1,0 +1,602 @@
+import type { DesktopSurface, RemoteAppState } from "@t3tools/contracts";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+
+import * as Electron from "electron";
+
+import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopIpc from "../ipc/DesktopIpc.ts";
+import * as ElectronShell from "../electron/ElectronShell.ts";
+import { getDesktopOrigin } from "../electron/ElectronProtocol.ts";
+import {
+  REMOTE_APP_ENTRY_URL,
+  classifyRemoteAppNavigation,
+  isAllowedPermission,
+  isTrustedRemoteUrl,
+  sanitizePersistedUrl,
+  sanitizeRemoteTitle,
+} from "./RemoteAppPolicy.ts";
+import * as RemoteAppSession from "./RemoteAppSession.ts";
+import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
+import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
+import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
+
+const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
+
+export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
+  delta === null ? 1 : Math.min(3, Math.max(0.5, current + delta));
+
+export const shouldAutomaticallyRecoverRenderer = (completedRecoveries: number): boolean =>
+  completedRecoveries < REMOTE_APP_MAX_AUTOMATIC_RECOVERIES;
+
+export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppManagerError>()(
+  "RemoteAppManagerError",
+  {
+    operation: Schema.Literals(["attach", "create-view", "load", "layout", "clear-data", "state"]),
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `The isolated ChatGPT surface failed during ${this.operation}.`;
+  }
+}
+
+export class RemoteAppManager extends Context.Service<
+  RemoteAppManager,
+  {
+    readonly attachMainWindow: (
+      window: Electron.BrowserWindow,
+    ) => Effect.Effect<void, RemoteAppManagerError>;
+    readonly getState: Effect.Effect<RemoteAppState>;
+    readonly setActiveSurface: (
+      surface: DesktopSurface,
+    ) => Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly goBack: Effect.Effect<RemoteAppState>;
+    readonly goForward: Effect.Effect<RemoteAppState>;
+    readonly reload: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly zoomIn: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly zoomOut: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly resetZoom: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly retry: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly clearData: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly authorizeSender: (event: DesktopIpc.DesktopIpcInvokeEvent) => Effect.Effect<boolean>;
+  }
+>()("@t3tools/desktop/remote-apps/RemoteAppManager") {}
+
+const safeFilename = (filename: string): string => {
+  const normalized = [...filename]
+    .map((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint < 32 || codePoint === 127 ? "-" : character;
+    })
+    .join("")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .trim();
+  return normalized.length > 0 ? normalized.slice(0, 180) : "ChatGPT download";
+};
+
+const isTrustedMainFrame = (webContents: Electron.WebContents): boolean =>
+  isTrustedRemoteUrl(webContents.getURL());
+
+export const make = Effect.gen(function* () {
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const shell = yield* ElectronShell.ElectronShell;
+  const sessionService = yield* RemoteAppSession.RemoteAppSession;
+  const stateStore = yield* RemoteAppStateStore.RemoteAppStateStore;
+  const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+  const viewRef = yield* Ref.make<Option.Option<Electron.WebContentsView>>(Option.none());
+  const attachedRef = yield* Ref.make(false);
+  const recoveryCountRef = yield* Ref.make(0);
+  const popupWindows = new Set<Electron.BrowserWindow>();
+
+  const runSafely = <A, E>(effect: Effect.Effect<A, E>): void => {
+    void Effect.runPromise(
+      effect.pipe(
+        Effect.asVoid,
+        Effect.catch(() => Effect.void),
+      ),
+    ).catch(() => undefined);
+  };
+
+  const getLiveWindow = Effect.gen(function* () {
+    const window = yield* Ref.get(mainWindowRef);
+    if (Option.isSome(window) && !window.value.isDestroyed()) return window;
+    const fallback = Electron.BrowserWindow.getAllWindows().find(
+      (candidate) => !candidate.isDestroyed(),
+    );
+    return Option.fromNullishOr(fallback ?? null);
+  });
+
+  const getLiveView = Effect.gen(function* () {
+    const view = yield* Ref.get(viewRef);
+    if (Option.isNone(view) || view.value.webContents.isDestroyed())
+      return Option.none<Electron.WebContentsView>();
+    return view;
+  });
+
+  const publish = (state: RemoteAppState): Effect.Effect<void> =>
+    getLiveWindow.pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (window) =>
+            Effect.sync(() => {
+              if (!window.webContents.isDestroyed()) {
+                window.webContents.send(REMOTE_APP_STATE_CHANGE_CHANNEL, state);
+              }
+            }),
+        }),
+      ),
+    );
+
+  const setState = (state: RemoteAppState): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
+    stateStore.set(state).pipe(
+      Effect.map(() => state),
+      Effect.tap(publish),
+      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
+    );
+
+  const updateNavigationState = (view: Electron.WebContentsView, state: RemoteAppState) => {
+    const rawUrl = view.webContents.getURL();
+    const safeUrl = sanitizePersistedUrl(rawUrl);
+    const title = sanitizeRemoteTitle(view.webContents.getTitle());
+    const recents =
+      safeUrl === null
+        ? state.recents
+        : [
+            { url: safeUrl, title },
+            ...state.recents.filter((recent) => recent.url !== safeUrl),
+          ].slice(0, 20);
+    return {
+      ...state,
+      currentUrl: safeUrl ?? state.currentUrl,
+      currentTitle: title || state.currentTitle,
+      canGoBack: view.webContents.canGoBack(),
+      canGoForward: view.webContents.canGoForward(),
+      recents,
+      error: null,
+    } satisfies RemoteAppState;
+  };
+
+  const syncNavigation = (view: Electron.WebContentsView) =>
+    Effect.gen(function* () {
+      const current = yield* stateStore.get;
+      yield* setState(updateNavigationState(view, current));
+    });
+
+  const setLoadingState = (loadState: RemoteAppState["loadState"]) =>
+    Effect.gen(function* () {
+      const current = yield* stateStore.get;
+      yield* setState({ ...current, loadState, error: null });
+    });
+
+  const positionView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) =>
+    Effect.try({
+      try: () => {
+        const bounds = window.getContentBounds();
+        view.setBounds({
+          x: 0,
+          y: TITLEBAR_HEIGHT,
+          width: Math.max(0, bounds.width),
+          height: Math.max(0, bounds.height - TITLEBAR_HEIGHT),
+        });
+      },
+      catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
+    });
+
+  const openExternal = (url: string) => runSafely(shell.openExternal(url));
+
+  const configureView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) => {
+    const contents = view.webContents;
+    contents.setWindowOpenHandler(({ url }) => {
+      const decision = classifyRemoteAppNavigation(url, { authFlowActive: true });
+      if (decision.kind === "external") {
+        openExternal(decision.url);
+        return { action: "deny" };
+      }
+      if (decision.kind === "auth") {
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            parent: window,
+            modal: false,
+            webPreferences: {
+              partition: sessionService.partition,
+              sandbox: true,
+              contextIsolation: true,
+              nodeIntegration: false,
+              nodeIntegrationInSubFrames: false,
+              webSecurity: true,
+              allowRunningInsecureContent: false,
+              devTools: environment.isDevelopment,
+            },
+          },
+        };
+      }
+      if (decision.kind === "embed") {
+        void contents.loadURL(decision.url).catch(() => undefined);
+      }
+      return { action: "deny" };
+    });
+
+    contents.on("will-navigate", (event, url) => {
+      const decision = classifyRemoteAppNavigation(url);
+      if (decision.kind !== "embed") {
+        event.preventDefault();
+        if (decision.kind === "external") openExternal(decision.url);
+      }
+    });
+    contents.on("did-start-loading", () => runSafely(setLoadingState("loading")));
+    contents.on("did-stop-loading", () =>
+      runSafely(syncNavigation(view).pipe(Effect.andThen(setLoadingState("ready")))),
+    );
+    contents.on("did-navigate", () => runSafely(syncNavigation(view)));
+    contents.on("did-navigate-in-page", () => runSafely(syncNavigation(view)));
+    contents.on("page-title-updated", (event, title) => {
+      event.preventDefault();
+      runSafely(
+        stateStore.get.pipe(
+          Effect.flatMap((state) =>
+            setState({ ...state, currentTitle: sanitizeRemoteTitle(title) }),
+          ),
+        ),
+      );
+    });
+    contents.on(
+      "did-fail-load",
+      (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+        if (!isMainFrame) return;
+        runSafely(
+          stateStore.get.pipe(
+            Effect.flatMap((state) =>
+              setState({
+                ...state,
+                loadState: "failed",
+                error: { category: "network", code: "load-failed" },
+              }),
+            ),
+          ),
+        );
+      },
+    );
+    contents.on("render-process-gone", () => {
+      runSafely(
+        Effect.gen(function* () {
+          const current = yield* stateStore.get;
+          const recoveryCount = yield* Ref.get(recoveryCountRef);
+          if (shouldAutomaticallyRecoverRenderer(recoveryCount)) {
+            yield* Ref.update(recoveryCountRef, (count) => count + 1);
+            yield* setState({ ...current, loadState: "recovering", error: null });
+            yield* Effect.tryPromise({
+              try: () => contents.loadURL(current.currentUrl ?? REMOTE_APP_ENTRY_URL),
+              catch: () => undefined,
+            });
+          } else {
+            yield* setState({
+              ...current,
+              loadState: "crashed",
+              error: { category: "renderer", code: "render-process-gone" },
+            });
+          }
+        }),
+      );
+    });
+    contents.on("destroyed", () => {
+      runSafely(
+        Effect.gen(function* () {
+          yield* Ref.set(viewRef, Option.none());
+          const current = yield* stateStore.get;
+          yield* setState({
+            ...current,
+            loadState: "crashed",
+            error: { category: "renderer", code: "destroyed" },
+          });
+        }),
+      );
+    });
+    contents.on("context-menu", (event) => event.preventDefault());
+    contents.on("did-create-window", (childWindow, details) => {
+      const decision = classifyRemoteAppNavigation(details.url, { authFlowActive: true });
+      if (decision.kind !== "auth") {
+        if (!childWindow.isDestroyed()) childWindow.close();
+        return;
+      }
+      popupWindows.add(childWindow);
+      childWindow.on("closed", () => popupWindows.delete(childWindow));
+      childWindow.webContents.on("will-navigate", (event, url) => {
+        const childDecision = classifyRemoteAppNavigation(url, { authFlowActive: true });
+        if (childDecision.kind === "auth" || childDecision.kind === "embed") return;
+        event.preventDefault();
+        if (childDecision.kind === "external") openExternal(childDecision.url);
+      });
+      childWindow.webContents.setWindowOpenHandler(({ url }) => {
+        const childDecision = classifyRemoteAppNavigation(url, { authFlowActive: true });
+        if (childDecision.kind === "external") {
+          openExternal(childDecision.url);
+        }
+        return { action: "deny" };
+      });
+    });
+  };
+
+  const configureSession = (
+    session: Electron.Session,
+    view: Electron.WebContentsView,
+    owner: Electron.BrowserWindow,
+  ) => {
+    session.setPermissionRequestHandler((webContents, permission, callback) => {
+      callback(
+        webContents === view.webContents &&
+          isTrustedMainFrame(webContents) &&
+          isAllowedPermission(permission, true),
+      );
+    });
+    session.setPermissionCheckHandler(
+      (webContents, permission) =>
+        webContents === view.webContents &&
+        isTrustedMainFrame(webContents) &&
+        isAllowedPermission(permission, true),
+    );
+    session.on("will-download", (event, item) => {
+      void event;
+      if (!isTrustedRemoteUrl(item.getURL())) {
+        item.cancel();
+        return;
+      }
+      item.pause();
+      void Electron.dialog
+        .showSaveDialog(owner, { defaultPath: safeFilename(item.getFilename()) })
+        .then((result) => {
+          if (result.canceled || result.filePath === undefined) {
+            item.cancel();
+          } else {
+            item.setSavePath(result.filePath);
+            item.resume();
+          }
+        })
+        .catch(() => item.cancel());
+    });
+  };
+
+  const createView = Effect.fn("remote-app.createView")(function* (
+    window: Electron.BrowserWindow,
+  ): Effect.fn.Return<Electron.WebContentsView, RemoteAppManagerError> {
+    const session = yield* sessionService.get.pipe(
+      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "create-view", cause })),
+    );
+    const view = yield* Effect.try({
+      try: () =>
+        new Electron.WebContentsView({
+          webPreferences: {
+            partition: sessionService.partition,
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+            nodeIntegrationInSubFrames: false,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+            experimentalFeatures: false,
+            spellcheck: true,
+            backgroundThrottling: true,
+            devTools: environment.isDevelopment,
+          },
+        }),
+      catch: (cause) => new RemoteAppManagerError({ operation: "create-view", cause }),
+    });
+    window.contentView.addChildView(view);
+    configureView(window, view);
+    configureSession(session, view, window);
+    yield* positionView(window, view);
+    view.setVisible(false);
+    yield* Ref.set(viewRef, Option.some(view));
+    return view;
+  });
+
+  const ensureView = Effect.fn("remote-app.ensureView")(function* (): Effect.fn.Return<
+    Electron.WebContentsView,
+    RemoteAppManagerError
+  > {
+    const window = yield* getLiveWindow.pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new RemoteAppManagerError({ operation: "attach", cause: "main window unavailable" }),
+            ),
+          onSome: Effect.succeed,
+        }),
+      ),
+    );
+    yield* attachMainWindow(window);
+    const existing = yield* getLiveView;
+    if (Option.isSome(existing)) {
+      yield* positionView(window, existing.value);
+      return existing.value;
+    }
+    return yield* createView(window);
+  });
+
+  const showSurface = (surface: DesktopSurface) =>
+    Effect.gen(function* () {
+      const window = yield* getLiveWindow;
+      const view = yield* getLiveView;
+      if (Option.isSome(view) && Option.isSome(window)) {
+        view.value.setVisible(surface === "chatgpt");
+        if (surface === "chatgpt") {
+          yield* positionView(window.value, view.value);
+          view.value.webContents.focus();
+        } else {
+          window.value.webContents.focus();
+        }
+      }
+    });
+
+  const attachMainWindow = Effect.fn("remote-app.attachMainWindow")(function* (
+    window: Electron.BrowserWindow,
+  ): Effect.fn.Return<void, RemoteAppManagerError> {
+    const alreadyAttached = yield* Ref.get(attachedRef);
+    if (alreadyAttached) return;
+    yield* Ref.set(mainWindowRef, Option.some(window));
+    yield* Ref.set(attachedRef, true);
+    const reposition = () => {
+      runSafely(
+        Effect.gen(function* () {
+          const view = yield* getLiveView;
+          if (Option.isSome(view)) yield* positionView(window, view.value);
+        }),
+      );
+    };
+    for (const event of [
+      "resize",
+      "maximize",
+      "unmaximize",
+      "enter-full-screen",
+      "leave-full-screen",
+    ] as const) {
+      window.on(event as any, reposition);
+    }
+    window.on("closed", () => {
+      for (const popup of popupWindows) {
+        if (!popup.isDestroyed()) popup.close();
+      }
+      popupWindows.clear();
+      runSafely(
+        Effect.gen(function* () {
+          const view = yield* Ref.get(viewRef);
+          if (Option.isSome(view)) {
+            view.value.webContents.close();
+            yield* Ref.set(viewRef, Option.none());
+          }
+          yield* Ref.set(mainWindowRef, Option.none());
+        }),
+      );
+    });
+  });
+
+  const getState = stateStore.get;
+  const setActiveSurface = (surface: DesktopSurface) =>
+    Effect.gen(function* () {
+      const current = yield* stateStore.get;
+      if (surface === "chatgpt") {
+        const view = yield* ensureView();
+        yield* showSurface(surface);
+        if (view.webContents.getURL().length === 0) {
+          yield* setState({
+            ...current,
+            activeSurface: surface,
+            loadState: "loading",
+            error: null,
+          });
+          yield* Effect.tryPromise({
+            try: () => view.webContents.loadURL(current.currentUrl ?? REMOTE_APP_ENTRY_URL),
+            catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
+          });
+        } else {
+          yield* setState({ ...current, activeSurface: surface });
+        }
+      } else {
+        yield* showSurface(surface);
+        yield* setState({ ...current, activeSurface: surface });
+      }
+      return yield* stateStore.get;
+    });
+
+  const viewNavigation = (operation: (contents: Electron.WebContents) => void) =>
+    Effect.gen(function* () {
+      const view = yield* getLiveView;
+      if (Option.isSome(view) && (yield* stateStore.get).activeSurface === "chatgpt")
+        operation(view.value.webContents);
+      return yield* stateStore.get;
+    });
+
+  const reload = viewNavigation((contents) => contents.reload());
+  const retry = Effect.gen(function* () {
+    const view = yield* ensureView();
+    const state = yield* stateStore.get;
+    yield* setState({ ...state, activeSurface: "chatgpt", loadState: "loading", error: null });
+    yield* showSurface("chatgpt");
+    yield* Effect.tryPromise({
+      try: () => view.webContents.loadURL(state.currentUrl ?? REMOTE_APP_ENTRY_URL),
+      catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
+    });
+    return yield* stateStore.get;
+  });
+
+  const zoom = (delta: number | null) =>
+    Effect.gen(function* () {
+      const view = yield* getLiveView;
+      const state = yield* stateStore.get;
+      if (Option.isNone(view)) return state;
+      const nextZoom = resolveRemoteAppZoomFactor(state.zoomFactor, delta);
+      view.value.webContents.setZoomFactor(nextZoom);
+      return yield* setState({ ...state, zoomFactor: nextZoom });
+    });
+
+  const clearData = Effect.gen(function* () {
+    const state = yield* stateStore.get;
+    yield* setState({ ...state, loadState: "clearing", error: null });
+    yield* sessionService.clearData.pipe(
+      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "clear-data", cause })),
+    );
+    const reset = yield* stateStore
+      .reset(state.activeSurface)
+      .pipe(
+        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "clear-data", cause })),
+      );
+    yield* Ref.set(recoveryCountRef, 0);
+    const view = yield* getLiveView;
+    if (Option.isSome(view) && state.activeSurface === "chatgpt") {
+      yield* Effect.tryPromise({
+        try: () => view.value.webContents.loadURL(REMOTE_APP_ENTRY_URL),
+        catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
+      });
+    }
+    yield* publish(reset);
+    return reset;
+  });
+
+  return RemoteAppManager.of({
+    attachMainWindow,
+    getState,
+    setActiveSurface,
+    goBack: viewNavigation((contents) => contents.canGoBack() && contents.goBack()),
+    goForward: viewNavigation((contents) => contents.canGoForward() && contents.goForward()),
+    reload,
+    zoomIn: zoom(0.1),
+    zoomOut: zoom(-0.1),
+    resetZoom: zoom(null),
+    retry,
+    clearData,
+    authorizeSender: (event) => {
+      const senderId = event.sender?.id;
+      const senderUrl = (() => {
+        try {
+          return event.sender?.getURL?.();
+        } catch {
+          return undefined;
+        }
+      })();
+      const trustedRenderer = (() => {
+        if (senderUrl === undefined) return false;
+        const origin = getDesktopOrigin(environment.isDevelopment);
+        return senderUrl === `${origin}/` || senderUrl.startsWith(`${origin}/`);
+      })();
+      return getLiveWindow.pipe(
+        Effect.map(
+          (window) =>
+            trustedRenderer &&
+            senderId !== undefined &&
+            Option.isSome(window) &&
+            !window.value.isDestroyed() &&
+            window.value.webContents.id === senderId,
+        ),
+      );
+    },
+  });
+});
+
+export const layer = Layer.effect(RemoteAppManager, make);
