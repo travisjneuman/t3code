@@ -8,4 +8,6 @@ When ChatGPT is active, the titlebar provides back, forward, reload, retry, zoom
 
 Use “Clear ChatGPT session data” in the ChatGPT controls to remove the dedicated local session data and shell metadata for this surface. This does not remove T3 Code projects or server data.
 
-T3 Code TJN does not use the official T3 Code automatic update feed. Install a newer TJN build manually when one is published. The app keeps its own identity and data location so it can coexist with the upstream T3 Code desktop app.
+T3 Code TJN updates from the TJN fork's GitHub Releases feed, using the same custom app identity and data location. Open **Settings → About**, choose **Nightly** under **Update track**, and use **Check for Updates**. Nightly builds select the prerelease feed automatically; downloaded updates are verified by the Electron updater and require a restart to install.
+
+The GitHub **Sync fork** action and the desktop updater are separate operations. Syncing the fork copies upstream source into the fork; it does not create an installable desktop update. To publish a source change for this app, sync or merge the source in the fork, run the fork's Nightly release workflow, then check for updates in T3 Code TJN. The updater downloads only TJN-identical packaged releases; it never installs the upstream app binary across the custom identity boundary.

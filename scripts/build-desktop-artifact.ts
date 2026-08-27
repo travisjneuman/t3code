@@ -1999,7 +1999,7 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
     Option.getOrUndefined(env.githubRepository)?.trim() ||
-    ""
+    REMOTE_APP_DISTRIBUTION.updateRepository
   ).trim();
   if (!rawRepo) return undefined;
 

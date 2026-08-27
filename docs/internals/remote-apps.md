@@ -8,6 +8,6 @@ Navigation is HTTPS-only. First-party ChatGPT/OpenAI hosts remain in the view, e
 
 Remote-app IPC is registered separately from preview IPC. Every command is authorized against the main T3 renderer `webContents` id, so the isolated remote view has no preload and cannot call the bridge. State writes use a same-directory temporary file followed by rename.
 
-The distribution identity is intentionally separate from the upstream app: `T3 Code TJN`, `dev.neuman.t3code`, custom user-data names, and `t3code-tjn` protocol names. Packaged automatic updates are disabled for this distribution. New Nightly source is adopted by merging the exact published tag before release verification; unpublished upstream branch changes are not silently treated as a release baseline.
+The distribution identity is intentionally separate from the upstream app: `T3 Code TJN`, `dev.neuman.t3code`, custom user-data names, and `t3code-tjn` protocol names. Packaged updates use the fork-backed GitHub Releases feed `travisjneuman/t3code`; Nightly builds select the `nightly` prerelease channel. The updater must only install packages built with this same identity. New Nightly source is adopted by syncing or merging the exact published tag before release verification; unpublished upstream branch changes are not silently treated as a release baseline.
 
 The V1 surface does not scrape ChatGPT DOM or private APIs, intercept remote network traffic, automate the remote page, or claim passkey support for the custom bundle identity.

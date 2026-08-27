@@ -211,8 +211,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         ),
       );
 
-      assert.isUndefined(latestConfig);
-      assert.isUndefined(nightlyConfig);
+      assert.deepStrictEqual(latestConfig, {
+        provider: "github",
+        owner: "pingdotgg",
+        repo: "t3code",
+        releaseType: "release",
+      });
+      assert.deepStrictEqual(nightlyConfig, {
+        provider: "github",
+        owner: "pingdotgg",
+        repo: "t3code",
+        releaseType: "prerelease",
+        channel: "nightly",
+      });
+
+      const defaultConfig = yield* resolveGitHubPublishConfig("nightly").pipe(
+        Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
+      );
+      assert.deepStrictEqual(defaultConfig, {
+        provider: "github",
+        owner: "travisjneuman",
+        repo: "t3code",
+        releaseType: "prerelease",
+        channel: "nightly",
+      });
     }),
   );
 
@@ -238,14 +260,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       );
 
       assert.notProperty(preview, "publish");
-      assert.notProperty(release, "publish");
-    }).pipe(
-      Effect.provide(
-        ConfigProvider.layer(
-          ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "pingdotgg/t3code" } }),
-        ),
-      ),
-    ),
+      assert.deepStrictEqual(release.publish, [
+        {
+          provider: "github",
+          owner: "travisjneuman",
+          repo: "t3code",
+          releaseType: "release",
+        },
+      ]);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it("omits bundled workspace packages from staged desktop dependencies", () => {

@@ -27,7 +27,7 @@ export interface MakeDesktopEnvironmentInput {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
-  /** Test/runtime override; packaged TJN builds default to disabled. */
+  /** Test/runtime override; packaged TJN builds default to the fork-backed updater. */
   readonly autoUpdateEnabled?: boolean;
 }
 
@@ -75,7 +75,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly branding: DesktopAppBranding;
     readonly displayName: string;
     readonly appUserModelId: string;
-    /** Custom distributions may opt out of the upstream updater feed. */
+    /** Custom distributions may opt out of the configured distribution updater feed. */
     readonly autoUpdateEnabled?: boolean;
     readonly linuxDesktopEntryName: string;
     readonly linuxWmClass: string;
