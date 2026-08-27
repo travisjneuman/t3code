@@ -2754,10 +2754,16 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   if (!options.skipBuild) {
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
-    const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"]);
+    // The web bundle reads APP_VERSION at Vite build time. Keep it aligned
+    // with the artifact version even when a local Nightly build is requested
+    // without first rewriting the workspace package manifests.
+    const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"], {
+      env: { ...process.env, APP_VERSION: appVersion },
+    });
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: repoRoot,
+        env: { ...process.env, APP_VERSION: appVersion },
         shell: spawnCommand.shell,
       }),
       { label: "vp run build:desktop", verbose: options.verbose },
