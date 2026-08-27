@@ -445,6 +445,10 @@ export const make = Effect.gen(function* () {
           // also reattaches it if a platform-level transition removed it.
           window.value.contentView.addChildView(view.value);
           yield* positionView(window.value, view.value);
+          // Reassert after the compositor-facing operations so a transition
+          // from the host renderer cannot leave the remote view in a stale
+          // hidden frame.
+          view.value.setVisible(true);
           view.value.webContents.focus();
         } else {
           window.value.webContents.focus();
