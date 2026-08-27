@@ -61,11 +61,10 @@ jobs:
         id: release_meta
         shell: bash
         env:
-          NIGHTLY_DATE: ${{ github.run_started_at }}
           NIGHTLY_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          nightly_date="${NIGHTLY_DATE:0:4}${NIGHTLY_DATE:5:2}${NIGHTLY_DATE:8:2}"
+          nightly_date="$(date -u +%Y%m%d)"
           nightly_run_number="$(date -u +%H%M)"
           while [[ "$nightly_run_number" == 0* && "$nightly_run_number" != "0" ]]; do
             nightly_run_number="${nightly_run_number#0}"
