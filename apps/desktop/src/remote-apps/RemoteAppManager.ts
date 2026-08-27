@@ -435,21 +435,18 @@ export const make = Effect.gen(function* () {
       const window = yield* getLiveWindow;
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
-        // Set visibility before reattaching. On macOS, removing an invisible
-        // WebContentsView and making it visible in the same turn can leave the
-        // compositor showing the host renderer after switching back.
+        // Keep the remote view attached while switching surfaces. Detaching a
+        // live WebContentsView can leave the macOS compositor showing the host
+        // renderer after switching back, even when the persisted surface state
+        // and IPC response are already correct.
         view.value.setVisible(surface === "chatgpt");
         if (surface === "chatgpt") {
-          // Reattach after making it visible so the remote surface is the last
-          // child and is painted above the host renderer.
-          window.value.contentView.removeChildView(view.value);
+          // Adding the existing child reorders it above the host renderer. It
+          // also reattaches it if a platform-level transition removed it.
           window.value.contentView.addChildView(view.value);
           yield* positionView(window.value, view.value);
           view.value.webContents.focus();
         } else {
-          // Removing the hidden child keeps the host renderer authoritative for
-          // the T3 Code surface and avoids retaining a stale composited layer.
-          window.value.contentView.removeChildView(view.value);
           window.value.webContents.focus();
         }
       }
