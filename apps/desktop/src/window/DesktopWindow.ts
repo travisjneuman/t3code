@@ -683,6 +683,23 @@ export const make = Effect.gen(function* () {
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
+      if (Option.isSome(remoteAppManager)) {
+        void runPromise(
+          remoteAppManager.value.getState.pipe(
+            Effect.flatMap((state) =>
+              state.activeSurface === "chatgpt"
+                ? remoteAppManager.value.setActiveSurface("chatgpt")
+                : Effect.succeed(state),
+            ),
+            Effect.asVoid,
+            Effect.catchTag("RemoteAppManagerError", (error) =>
+              logWindowWarning("failed to restore ChatGPT surface after main renderer load", {
+                error: error.message,
+              }),
+            ),
+          ),
+        ).catch(() => undefined);
+      }
     });
     window.webContents.on(
       "did-fail-load",
