@@ -2,9 +2,10 @@ name: TJN Sync Upstream Source
 
 on:
   schedule:
-    # GitHub schedules are best-effort. This checks for upstream commits every
-    # 15 minutes, which is the shortest practical polling interval for Actions.
-    - cron: "*/15 * * * *"
+    # GitHub schedules are best-effort. Five minutes is the shortest supported
+    # polling interval for Actions, so this minimizes fork drift without an
+    # upstream webhook or app installation.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
