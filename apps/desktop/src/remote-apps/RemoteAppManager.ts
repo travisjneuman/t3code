@@ -435,18 +435,21 @@ export const make = Effect.gen(function* () {
       const window = yield* getLiveWindow;
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
-        // Electron does not consistently reorder an existing WebContentsView
-        // when addChildView is called with the same parent. Remove it first so
-        // switching back from the host page always puts the remote surface on
-        // top instead of leaving the state updated while the host remains
-        // visible underneath it.
-        window.value.contentView.removeChildView(view.value);
-        window.value.contentView.addChildView(view.value);
+        // Set visibility before reattaching. On macOS, removing an invisible
+        // WebContentsView and making it visible in the same turn can leave the
+        // compositor showing the host renderer after switching back.
         view.value.setVisible(surface === "chatgpt");
         if (surface === "chatgpt") {
+          // Reattach after making it visible so the remote surface is the last
+          // child and is painted above the host renderer.
+          window.value.contentView.removeChildView(view.value);
+          window.value.contentView.addChildView(view.value);
           yield* positionView(window.value, view.value);
           view.value.webContents.focus();
         } else {
+          // Removing the hidden child keeps the host renderer authoritative for
+          // the T3 Code surface and avoids retaining a stale composited layer.
+          window.value.contentView.removeChildView(view.value);
           window.value.webContents.focus();
         }
       }
