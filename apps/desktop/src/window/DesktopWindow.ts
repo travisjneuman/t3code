@@ -293,15 +293,9 @@ export const make = Effect.gen(function* () {
   const reassertRemoteAppSurface = () => {
     if (Option.isNone(remoteAppManager)) return;
     void runPromise(
-      remoteAppManager.value.getState.pipe(
-        Effect.flatMap((state) =>
-          state.activeSurface === "chatgpt"
-            ? remoteAppManager.value.setActiveSurface("chatgpt")
-            : Effect.succeed(state),
-        ),
-        Effect.asVoid,
+      remoteAppManager.value.syncLayout.pipe(
         Effect.catchTag("RemoteAppManagerError", (error) =>
-          logWindowWarning("failed to restore ChatGPT surface after main renderer load", {
+          logWindowWarning("failed to restore remote app surface after main renderer load", {
             error: error.message,
           }),
         ),

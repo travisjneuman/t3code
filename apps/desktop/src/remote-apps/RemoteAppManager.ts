@@ -435,9 +435,12 @@ export const make = Effect.gen(function* () {
       const window = yield* getLiveWindow;
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
-        // Adding an existing child reorders it to the top. The main renderer
-        // is created after the remote view during startup, so this keeps the
-        // active surface above the host page instead of leaving it obscured.
+        // Electron does not consistently reorder an existing WebContentsView
+        // when addChildView is called with the same parent. Remove it first so
+        // switching back from the host page always puts the remote surface on
+        // top instead of leaving the state updated while the host remains
+        // visible underneath it.
+        window.value.contentView.removeChildView(view.value);
         window.value.contentView.addChildView(view.value);
         view.value.setVisible(surface === "chatgpt");
         if (surface === "chatgpt") {
@@ -450,6 +453,15 @@ export const make = Effect.gen(function* () {
     });
 
   const syncLayout = Effect.gen(function* () {
+    const state = yield* stateStore.get;
+    if (state.activeSurface === "chatgpt") {
+      // Startup can finish adding the host renderer after the remote view was
+      // created. Reconcile visibility and z-order from the current persisted
+      // intent without changing that intent; a user switch made during boot
+      // must not be overwritten by a late startup reassertion.
+      yield* ensureView();
+    }
+    yield* showSurface(state.activeSurface);
     const window = yield* getLiveWindow;
     const view = yield* getLiveView;
     if (Option.isSome(window) && Option.isSome(view)) {

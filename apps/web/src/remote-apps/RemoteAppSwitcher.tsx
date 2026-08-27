@@ -1,6 +1,7 @@
 import { ChevronDownIcon, MessageSquareIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { T3Wordmark } from "~/components/sidebar/SidebarChrome";
 import { cn } from "~/lib/utils";
 
 import { useRemoteAppState } from "./useRemoteAppState";
@@ -34,7 +35,7 @@ export function RemoteAppSwitcher() {
     <Button
       aria-label={`Switch app surface, currently ${state.activeSurface === "chatgpt" ? "ChatGPT" : "T3 Code"}`}
       className={cn(
-        "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1.5 rounded-md px-2 text-xs",
+        "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1 rounded-md px-2 text-sm font-medium tracking-tight",
         "border-transparent bg-transparent text-foreground shadow-none hover:bg-accent",
       )}
       onClick={() => void openMenu()}
@@ -42,11 +43,7 @@ export function RemoteAppSwitcher() {
       variant="ghost"
       data-remote-app-switcher
     >
-      {state.activeSurface === "chatgpt" ? (
-        <MessageSquareIcon />
-      ) : (
-        <span className="font-semibold">T3</span>
-      )}
+      {state.activeSurface === "chatgpt" ? <MessageSquareIcon /> : <T3Wordmark />}
       <span className="truncate">{state.activeSurface === "chatgpt" ? "ChatGPT" : "Code"}</span>
       <ChevronDownIcon className="size-3 opacity-60" />
     </Button>

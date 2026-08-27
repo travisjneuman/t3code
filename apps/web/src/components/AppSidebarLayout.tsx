@@ -155,7 +155,7 @@ function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
 
   return (
     <div
-      className="drag-region pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center border-b border-border/60 bg-background/95 backdrop-blur-md"
+      className="drag-region pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center border-b border-border/60 bg-transparent"
       data-remote-app-titlebar
     >
       <RemoteAppSwitcher />
