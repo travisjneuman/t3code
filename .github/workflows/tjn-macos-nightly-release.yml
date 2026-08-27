@@ -2,9 +2,14 @@ name: TJN macOS Nightly Release
 
 on:
   schedule:
-    # Publish the fork's macOS updater package after the upstream-sync window.
+    # Keep a periodic fallback in case a workflow_run event is delayed.
     - cron: "37 */3 * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - TJN Sync Upstream Source
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -16,7 +21,9 @@ concurrency:
 jobs:
   publish:
     # This workflow is fork-specific and must never publish from upstream.
-    if: github.repository == 'travisjneuman/t3code'
+    if: >-
+      github.repository == 'travisjneuman/t3code' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: macos-14
     timeout-minutes: 45
     steps:
