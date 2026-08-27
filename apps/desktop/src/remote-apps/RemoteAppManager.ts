@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import * as Electron from "electron";
 
@@ -107,6 +108,7 @@ export const make = Effect.gen(function* () {
   const viewRef = yield* Ref.make<Option.Option<Electron.WebContentsView>>(Option.none());
   const attachedRef = yield* Ref.make(false);
   const recoveryCountRef = yield* Ref.make(0);
+  const stateChangeLock = yield* Semaphore.make(1);
   const popupWindows = new Set<Electron.BrowserWindow>();
 
   const runSafely = <A, E>(effect: Effect.Effect<A, E>): void => {
@@ -149,18 +151,22 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const setState = (state: RemoteAppState): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
-    stateStore.set(state).pipe(
-      Effect.as(state),
-      Effect.tap(publish),
-      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
-    );
   const updateState = (
     update: (state: RemoteAppState) => RemoteAppState,
   ): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
-    stateStore.update(update).pipe(
-      Effect.tap(publish),
-      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
+    stateChangeLock.withPermit(
+      stateStore.update(update).pipe(
+        Effect.tap(publish),
+        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
+      ),
+    );
+  const resetState = (): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
+    stateChangeLock.withPermit(
+      stateStore.get.pipe(
+        Effect.flatMap((state) => stateStore.reset(state.activeSurface)),
+        Effect.tap(publish),
+        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
+      ),
     );
 
   const updateNavigationState = (view: Electron.WebContentsView, state: RemoteAppState) => {
@@ -531,11 +537,15 @@ export const make = Effect.gen(function* () {
   const reload = viewNavigation((contents) => contents.reload());
   const retry = Effect.gen(function* () {
     const view = yield* ensureView();
-    const state = yield* stateStore.get;
-    yield* setState({ ...state, activeSurface: "chatgpt", loadState: "loading", error: null });
+    const next = yield* updateState((current) => ({
+      ...current,
+      activeSurface: "chatgpt",
+      loadState: "loading",
+      error: null,
+    }));
     yield* showSurface("chatgpt");
     yield* Effect.tryPromise({
-      try: () => view.webContents.loadURL(state.currentUrl ?? REMOTE_APP_ENTRY_URL),
+      try: () => view.webContents.loadURL(next.currentUrl ?? REMOTE_APP_ENTRY_URL),
       catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
     });
     return yield* stateStore.get;
@@ -548,20 +558,20 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(view)) return state;
       const nextZoom = resolveRemoteAppZoomFactor(state.zoomFactor, delta);
       view.value.webContents.setZoomFactor(nextZoom);
-      return yield* setState({ ...state, zoomFactor: nextZoom });
+      return yield* updateState((current) => ({ ...current, zoomFactor: nextZoom }));
     });
 
   const clearData = Effect.gen(function* () {
     const state = yield* stateStore.get;
-    yield* setState({ ...state, loadState: "clearing", error: null });
+    yield* updateState((current) => ({ ...current, loadState: "clearing", error: null }));
     yield* sessionService.clearData.pipe(
       Effect.mapError((cause) => new RemoteAppManagerError({ operation: "clear-data", cause })),
     );
-    const reset = yield* stateStore
-      .reset(state.activeSurface)
-      .pipe(
-        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "clear-data", cause })),
-      );
+    const reset = yield* resetState().pipe(
+      Effect.mapError(
+        (error) => new RemoteAppManagerError({ operation: "clear-data", cause: error }),
+      ),
+    );
     yield* Ref.set(recoveryCountRef, 0);
     const view = yield* getLiveView;
     if (Option.isSome(view) && state.activeSurface === "chatgpt") {
@@ -570,7 +580,6 @@ export const make = Effect.gen(function* () {
         catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
       });
     }
-    yield* publish(reset);
     return reset;
   });
 
