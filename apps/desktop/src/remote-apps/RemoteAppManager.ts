@@ -450,15 +450,15 @@ export const make = Effect.gen(function* () {
         }),
       );
     };
-    for (const event of [
-      "resize",
-      "maximize",
-      "unmaximize",
-      "enter-full-screen",
-      "leave-full-screen",
-    ] as const) {
+    const repositionAfterFullscreenTransition = () => {
+      reposition();
+      runSafely(Effect.sleep("100 millis").pipe(Effect.andThen(Effect.sync(reposition))));
+    };
+    for (const event of ["resize", "maximize", "unmaximize"] as const) {
       window.on(event as any, reposition);
     }
+    window.on("enter-full-screen", repositionAfterFullscreenTransition);
+    window.on("leave-full-screen", repositionAfterFullscreenTransition);
     window.on("closed", () => {
       for (const popup of popupWindows) {
         if (!popup.isDestroyed()) popup.close();
