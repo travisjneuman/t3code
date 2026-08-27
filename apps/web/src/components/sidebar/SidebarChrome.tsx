@@ -31,8 +31,6 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
-import { RemoteAppChrome } from "../../remote-apps/RemoteAppChrome";
-import { RemoteAppSwitcher } from "../../remote-apps/RemoteAppSwitcher";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -66,8 +64,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
-      {isElectron ? <RemoteAppSwitcher /> : <SidebarBrand onBackdrop={backdropVariant !== null} />}
-      {pillLabel ? (
+      {isElectron ? null : <SidebarBrand onBackdrop={backdropVariant !== null} />}
+      {!isElectron && pillLabel ? (
         <Badge
           className="relative z-10 ml-1 rounded-full px-1.5 text-muted-foreground"
           data-environment-identification="pill"
@@ -77,7 +75,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           {pillLabel}
         </Badge>
       ) : null}
-      {isElectron ? <RemoteAppChrome /> : null}
     </SidebarHeader>
   );
 });

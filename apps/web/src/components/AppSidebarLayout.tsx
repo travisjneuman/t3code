@@ -20,7 +20,9 @@ import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import {
+  resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageFocusRingOffsetClass,
+  useEnvironmentStageLabel,
   useSidebarStageBackdropVariant,
 } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
@@ -39,7 +41,11 @@ import {
   useSidebar,
   useSidebarVisibility,
 } from "./ui/sidebar";
+import { Badge } from "./ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { RemoteAppChrome } from "../remote-apps/RemoteAppChrome";
+import { RemoteAppSwitcher } from "../remote-apps/RemoteAppSwitcher";
+import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 
@@ -134,6 +140,38 @@ function SidebarControl() {
 function ProjectProjectionRetention() {
   useProjects();
   return null;
+}
+
+function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
+  const { bridge } = useRemoteAppState();
+  const stageLabel = useEnvironmentStageLabel();
+  const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  if (!isElectron || bridge === undefined) return null;
+
+  const pillLabel =
+    environmentIdentificationMode === "pill"
+      ? resolveEnvironmentIdentificationPillLabel(stageLabel)
+      : null;
+
+  return (
+    <div
+      className="drag-region pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center"
+      data-remote-app-titlebar
+    >
+      <RemoteAppSwitcher />
+      {pillLabel ? (
+        <Badge
+          className="pointer-events-auto ml-1 rounded-full px-1.5 text-muted-foreground"
+          data-environment-identification="pill"
+          size="sm"
+          variant="secondary"
+        >
+          {pillLabel}
+        </Badge>
+      ) : null}
+      <RemoteAppChrome />
+    </div>
+  );
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
@@ -239,6 +277,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         <SidebarRail onDoubleClick={resetSidebarWidth} />
       </Sidebar>
       {children}
+      <RemoteAppTitlebar isElectron={isElectron} />
       <SidebarControl />
     </SidebarProvider>
   );

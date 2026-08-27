@@ -1,0 +1,51 @@
+name: TJN Sync Upstream Source
+
+on:
+  schedule:
+    # GitHub schedules are best-effort. This checks for upstream commits every
+    # 15 minutes, which is the shortest practical polling interval for Actions.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tjn-upstream-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # This workflow is intentionally fork-specific. It must never try to sync
+    # the upstream repository to itself if the file is ever copied upstream.
+    if: github.repository == 'travisjneuman/t3code'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the fork default branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream main without dropping TJN commits
+        env:
+          UPSTREAM_REPOSITORY: pingdotgg/t3code
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags upstream main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork main already contains upstream main."
+            exit 0
+          fi
+
+          # A normal merge preserves the custom ChatGPT surface commits. A
+          # conflict fails this run before push, so custom code is never
+          # replaced by a destructive hard reset.
+          git merge --no-edit --no-ff upstream/main -m "chore(sync): merge upstream main"
+          git push origin HEAD:main

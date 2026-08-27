@@ -34,12 +34,13 @@ export function RemoteAppSwitcher() {
     <Button
       aria-label={`Switch app surface, currently ${state.activeSurface === "chatgpt" ? "ChatGPT" : "T3 Code"}`}
       className={cn(
-        "relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 gap-1 rounded-md px-2 text-xs",
+        "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1 rounded-md px-2 text-xs",
         "border-transparent bg-transparent text-foreground shadow-none hover:bg-accent",
       )}
       onClick={() => void openMenu()}
       size="sm"
       variant="ghost"
+      data-remote-app-switcher
     >
       {state.activeSurface === "chatgpt" ? (
         <MessageSquareIcon />
