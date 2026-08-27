@@ -290,6 +290,25 @@ export const make = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(context);
   let flushMainWindowBounds: Effect.Effect<void> = Effect.void;
 
+  const reassertRemoteAppSurface = () => {
+    if (Option.isNone(remoteAppManager)) return;
+    void runPromise(
+      remoteAppManager.value.getState.pipe(
+        Effect.flatMap((state) =>
+          state.activeSurface === "chatgpt"
+            ? remoteAppManager.value.setActiveSurface("chatgpt")
+            : Effect.succeed(state),
+        ),
+        Effect.asVoid,
+        Effect.catchTag("RemoteAppManagerError", (error) =>
+          logWindowWarning("failed to restore ChatGPT surface after main renderer load", {
+            error: error.message,
+          }),
+        ),
+      ),
+    ).catch(() => undefined);
+  };
+
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
     if (Option.isSome(splash) && !splash.value.isDestroyed()) {
@@ -683,23 +702,7 @@ export const make = Effect.gen(function* () {
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
-      if (Option.isSome(remoteAppManager)) {
-        void runPromise(
-          remoteAppManager.value.getState.pipe(
-            Effect.flatMap((state) =>
-              state.activeSurface === "chatgpt"
-                ? remoteAppManager.value.setActiveSurface("chatgpt")
-                : Effect.succeed(state),
-            ),
-            Effect.asVoid,
-            Effect.catchTag("RemoteAppManagerError", (error) =>
-              logWindowWarning("failed to restore ChatGPT surface after main renderer load", {
-                error: error.message,
-              }),
-            ),
-          ),
-        ).catch(() => undefined);
-      }
+      reassertRemoteAppSurface();
     });
     window.webContents.on(
       "did-fail-load",
@@ -780,7 +783,12 @@ export const make = Effect.gen(function* () {
       if (persistedSettings.mainWindowMaximized) {
         window.maximize();
       }
-      void runPromise(Effect.andThen(electronWindow.reveal(window), dismissConnectingSplash));
+      void runPromise(
+        Effect.andThen(
+          electronWindow.reveal(window),
+          Effect.andThen(dismissConnectingSplash, Effect.sync(reassertRemoteAppSurface)),
+        ),
+      );
     });
 
     loadApplication();
