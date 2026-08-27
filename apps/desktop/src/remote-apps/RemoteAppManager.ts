@@ -435,22 +435,20 @@ export const make = Effect.gen(function* () {
       const window = yield* getLiveWindow;
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
-        // Keep the remote view attached while switching surfaces. Detaching a
-        // live WebContentsView can leave the macOS compositor showing the host
-        // renderer after switching back, even when the persisted surface state
-        // and IPC response are already correct.
-        view.value.setVisible(surface === "chatgpt");
         if (surface === "chatgpt") {
-          // Adding the existing child reorders it above the host renderer. It
-          // also reattaches it if a platform-level transition removed it.
+          // Reattach before making it visible. On macOS this gives the
+          // compositor a fresh topmost layer instead of restoring an existing
+          // hidden layer behind the host renderer.
+          window.value.contentView.removeChildView(view.value);
           window.value.contentView.addChildView(view.value);
           yield* positionView(window.value, view.value);
-          // Reassert after the compositor-facing operations so a transition
-          // from the host renderer cannot leave the remote view in a stale
-          // hidden frame.
           view.value.setVisible(true);
           view.value.webContents.focus();
         } else {
+          view.value.setVisible(false);
+          // Remove the hidden child so the host renderer owns the surface and
+          // the next ChatGPT activation can reinsert a clean topmost layer.
+          window.value.contentView.removeChildView(view.value);
           window.value.webContents.focus();
         }
       }
