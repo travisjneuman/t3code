@@ -39,7 +39,16 @@ import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
-const REMOTE_APP_VIEW_LAYER_INDEX = 0;
+
+const addRemoteAppViewBelowHostRenderer = (
+  window: Electron.BrowserWindow,
+  view: Electron.WebContentsView,
+) => {
+  // The host renderer is already a child of contentView. Electron paints
+  // lower indices above higher indices, so append the remote view after the
+  // host to keep the shared T3 shell above the live remote page.
+  window.contentView.addChildView(view, window.contentView.children.length);
+};
 
 export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
   delta === null ? 1 : Math.min(3, Math.max(0.5, current + delta));
@@ -481,7 +490,7 @@ export const make = Effect.gen(function* () {
     // Keep the live remote page beneath the host renderer. The renderer owns
     // the shared title bar and the native sidebar footer; when the ChatGPT
     // surface is active it makes only those host regions opaque/interactive.
-    window.contentView.addChildView(view, REMOTE_APP_VIEW_LAYER_INDEX);
+    addRemoteAppViewBelowHostRenderer(window, view);
     configureView(window, view);
     configureSession(session, view, window);
     yield* positionView(window, view);
@@ -521,11 +530,10 @@ export const make = Effect.gen(function* () {
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
         if (surface === "chatgpt") {
-          // Reattach before making it visible. On macOS this gives the
-          // compositor a fresh topmost layer instead of restoring an existing
-          // hidden layer behind the host renderer.
+          // Reattach before making it visible while preserving the host shell
+          // above the remote page.
           window.value.contentView.removeChildView(view.value);
-          window.value.contentView.addChildView(view.value, REMOTE_APP_VIEW_LAYER_INDEX);
+          addRemoteAppViewBelowHostRenderer(window.value, view.value);
           yield* positionView(window.value, view.value);
           view.value.setVisible(true);
           view.value.webContents.focus();
