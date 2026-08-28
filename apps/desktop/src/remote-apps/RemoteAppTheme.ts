@@ -168,7 +168,7 @@ ${sidebarWidthVariable}
   --composer-surface-primary: var(--t3code-remote-surface-raised) !important;
   --composer-surface-secondary: var(--t3code-remote-surface-raised) !important;
   --sidebar-surface-primary: var(--t3code-remote-sidebar) !important;
-  --sidebar-surface-secondary: var(--t3code-remote-surface) !important;
+  --sidebar-surface-secondary: var(--t3code-remote-sidebar) !important;
   --text-primary: var(--t3code-remote-text) !important;
   --text-secondary: var(--t3code-remote-text-muted) !important;
   --text-tertiary: var(--t3code-remote-muted-foreground) !important;
@@ -268,6 +268,40 @@ ${sidebarWidthRule}
 }
 
 :where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) * {
+  border-color: transparent !important;
+}
+
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) *::before,
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) *::after {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:where(
   [class~="bg-token-main-surface-primary"],
   [class~="bg-token-main-surface-secondary"],
   [class~="bg-token-main-surface-tertiary"],
@@ -311,9 +345,7 @@ main :where(
   form:has(textarea),
   form:has([contenteditable="true"]),
   [data-testid*="composer"],
-  [class*="composer"],
-  div:has(> textarea),
-  div:has(> [contenteditable="true"])
+  [class~="group/composer"]
 ) {
   background-color: var(--t3code-remote-surface-raised) !important;
   background-image: none !important;
@@ -332,9 +364,7 @@ main :where(
   form:has(textarea),
   form:has([contenteditable="true"]),
   [data-testid*="composer"],
-  [class*="composer"],
-  div:has(> textarea),
-  div:has(> [contenteditable="true"])
+  [class~="group/composer"]
 ) :where(textarea, [contenteditable="true"]) {
   background: transparent !important;
   border-color: transparent !important;
