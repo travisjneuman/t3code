@@ -771,7 +771,17 @@ export const make = Effect.gen(function* () {
       (fire) => window.webContents.once("did-finish-load", fire),
       // If both lifecycle events are suppressed by a native child view, the
       // window is still safe to reveal after this bounded boot grace period.
-      (fire) => setTimeout(fire, MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS),
+      (fire) =>
+        setTimeout(() => {
+          if (!window.isDestroyed()) {
+            window.show();
+            if (environment.platform === "darwin") {
+              Electron.app.focus({ steal: true });
+            }
+            window.focus();
+          }
+          fire();
+        }, MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS),
     ];
     bindFirstRevealTrigger(revealSubscribers, () => {
       // Boot is done; hand the window back to normal hidden-window throttling
