@@ -39,15 +39,15 @@ import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
+const REMOTE_APP_VIEW_LAYER_INDEX = 0;
 
 const addRemoteAppViewBelowHostRenderer = (
   window: Electron.BrowserWindow,
   view: Electron.WebContentsView,
 ) => {
-  // The host renderer is already a child of contentView. Electron paints
-  // lower indices above higher indices, so append the remote view after the
-  // host to keep the shared T3 shell above the live remote page.
-  window.contentView.addChildView(view, window.contentView.children.length);
+  // The host renderer is already a child of contentView. Insert the remote
+  // view first so the host remains above it wherever their bounds overlap.
+  window.contentView.addChildView(view, REMOTE_APP_VIEW_LAYER_INDEX);
 };
 
 export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
