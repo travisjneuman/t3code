@@ -36,6 +36,7 @@ const RemoteAppContext = createContext<RemoteAppContextValue | null>(null);
 export function RemoteAppProvider({ children }: { readonly children: ReactNode }) {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.remoteApps;
   const [state, setState] = useState(DEFAULT_REMOTE_APP_STATE);
+  const stateRef = useRef(DEFAULT_REMOTE_APP_STATE);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -47,24 +48,38 @@ export function RemoteAppProvider({ children }: { readonly children: ReactNode }
       .then((next) => {
         if (!active) return;
         initializedRef.current = true;
-        setState(resolveRemoteAppState(next));
+        const resolved = resolveRemoteAppState(next);
+        stateRef.current = resolved;
+        setState(resolved);
       })
       .catch(() => undefined);
     const unsubscribe = bridge.onStateChange((next) => {
       if (!active) return;
-      setState((current) => {
-        if (
-          !shouldAcceptRemoteAppState({
-            current,
-            next,
-            initialized: initializedRef.current,
+      const current = stateRef.current;
+      if (
+        initializedRef.current &&
+        !shouldAcceptRemoteAppState({ current, next, initialized: true })
+      ) {
+        // State notifications and an IPC response can cross in flight. Do
+        // not drop an opposite-surface notification outright: it may be the
+        // real user transition rather than a late stale event. The main
+        // process is authoritative, so re-read it before committing either
+        // surface to the titlebar.
+        void bridge
+          .getState()
+          .then((authoritative) => {
+            if (!active) return;
+            const resolved = resolveRemoteAppState(authoritative);
+            stateRef.current = resolved;
+            setState(resolved);
           })
-        ) {
-          return current;
-        }
-        initializedRef.current = true;
-        return resolveRemoteAppState(next);
-      });
+          .catch(() => undefined);
+        return;
+      }
+      initializedRef.current = true;
+      const resolved = resolveRemoteAppState(next);
+      stateRef.current = resolved;
+      setState(resolved);
     });
     return () => {
       active = false;
@@ -78,7 +93,9 @@ export function RemoteAppProvider({ children }: { readonly children: ReactNode }
       try {
         const next = await action(bridge);
         initializedRef.current = true;
-        setState(resolveRemoteAppState(next));
+        const resolved = resolveRemoteAppState(next);
+        stateRef.current = resolved;
+        setState(resolved);
       } catch {
         // Main-process state events remain authoritative after a failed action.
       }
