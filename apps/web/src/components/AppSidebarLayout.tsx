@@ -20,9 +20,7 @@ import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import {
-  resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageFocusRingOffsetClass,
-  useEnvironmentStageLabel,
   useSidebarStageBackdropVariant,
 } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
@@ -41,11 +39,8 @@ import {
   useSidebar,
   useSidebarVisibility,
 } from "./ui/sidebar";
-import { Badge } from "./ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { RemoteAppChrome } from "../remote-apps/RemoteAppChrome";
 import { RemoteAppSwitcher } from "../remote-apps/RemoteAppSwitcher";
-import { shouldHideHostWorkspaceChrome } from "../remote-apps/remoteAppState";
 import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
@@ -145,20 +140,7 @@ function ProjectProjectionRetention() {
 
 function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
   const { bridge, state } = useRemoteAppState();
-  const isSidebarVisible = useSidebarVisibility();
-  const stageLabel = useEnvironmentStageLabel();
-  const environmentIdentificationMode = useEnvironmentIdentificationMode();
   if (!isElectron || bridge === undefined) return null;
-
-  const isChatGPTActive = shouldHideHostWorkspaceChrome({
-    bridgeAvailable: true,
-    activeSurface: state.activeSurface,
-  });
-
-  const pillLabel =
-    environmentIdentificationMode === "pill"
-      ? resolveEnvironmentIdentificationPillLabel(stageLabel)
-      : null;
 
   return (
     <div
@@ -166,38 +148,14 @@ function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
       data-remote-app-titlebar
       data-remote-app-active-surface={state.activeSurface}
     >
-      {isChatGPTActive ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-(--remote-app-titlebar-content-left) right-0 border-b border-border/60 bg-background surface-grain transition-[left] duration-200 ease-linear motion-reduce:transition-none"
-          data-remote-app-titlebar-surface
-          style={
-            {
-              "--remote-app-titlebar-content-left": isSidebarVisible
-                ? "var(--sidebar-width)"
-                : "0px",
-            } as CSSProperties
-          }
-        />
-      ) : null}
       <RemoteAppSwitcher />
-      {pillLabel ? (
-        <Badge
-          className="pointer-events-auto ml-1 rounded-full px-1.5 text-muted-foreground"
-          data-environment-identification="pill"
-          size="sm"
-          variant="secondary"
-        >
-          {pillLabel}
-        </Badge>
-      ) : null}
-      <RemoteAppChrome />
     </div>
   );
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const { state: remoteAppState } = useRemoteAppState();
   const legacySidebarEnabled = useLegacySidebarEnabled();
   // Settings routes show the settings nav in place of whichever thread
   // sidebar is active.
@@ -269,7 +227,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, [navigate, pathname]);
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+    <SidebarProvider
+      className="h-dvh! min-h-0!"
+      data-remote-app-surface={remoteAppState.activeSurface}
+      defaultOpen
+      style={sidebarProviderStyle}
+    >
       <ProjectProjectionRetention />
       <Sidebar
         side="left"

@@ -85,8 +85,6 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
-import { shouldHideHostWorkspaceChrome } from "../remote-apps/remoteAppState";
-import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
@@ -1274,11 +1272,6 @@ function ChatViewContent(props: ChatViewProps) {
   const draftId = routeKind === "draft" ? props.draftId : null;
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
-  const { bridge: remoteAppBridge, state: remoteAppState } = useRemoteAppState();
-  const hideHostWorkspaceChrome = shouldHideHostWorkspaceChrome({
-    bridgeAvailable: remoteAppBridge !== undefined,
-    activeSurface: remoteAppState.activeSurface,
-  });
   const handleNewThread = useNewThreadHandler();
   const { settleThread, pinThread, unpinThread } = useThreadActions();
   const routeThreadRef = useMemo(
@@ -6714,7 +6707,7 @@ function ChatViewContent(props: ChatViewProps) {
       onToggleRightPanel={toggleRightPanel}
     />
   );
-  const panelLayoutControls = hideHostWorkspaceChrome ? null : (
+  const panelLayoutControls = (
     <div
       className={cn(
         // One inset in both states: the controls move between containers when
@@ -6853,7 +6846,10 @@ function ChatViewContent(props: ChatViewProps) {
     composerBannerItems.length > 0 || Boolean(threadSyncPhase && !activeEnvironmentUnavailable);
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+    <div
+      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+      data-remote-app-host-workspace
+    >
       {rightPanelOpen && !shouldUseRightPanelSheet ? panelLayoutControls : null}
       <div
         className={cn(
@@ -6861,49 +6857,44 @@ function ChatViewContent(props: ChatViewProps) {
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
+        data-remote-app-host-column
       >
         {/* Top bar */}
         <WorkspacePageHeader
           data-chat-header
-          data-remote-app-host-header-hidden={hideHostWorkspaceChrome ? "true" : undefined}
-          aria-hidden={hideHostWorkspaceChrome ? true : undefined}
           electron={isElectron}
           reserveNativeControls={reserveTitleBarControlInset && !inlineRightPanelOwnsTitleBar}
           className="relative bg-background"
         >
-          {hideHostWorkspaceChrome ? null : (
-            <>
-              {!rightPanelOpen ? panelLayoutControls : null}
-              <ChatHeader
-                {...(!supportsPullRequests || activeProjectRepository === null
-                  ? {}
-                  : { onOpenPullRequest: openProjectPullRequest })}
-                activeThreadEnvironmentId={activeThread.environmentId}
-                activeThreadId={activeThread.id}
-                {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                activeThreadTitle={activeThread.title}
-                isServerThread={isServerThread}
-                changeRequest={activeThreadChangeRequest}
-                activeProjectName={activeProject?.title}
-                activeProjectCwd={activeProject?.workspaceRoot ?? null}
-                activeProjectFaviconPath={activeProject?.faviconPath ?? null}
-                openInCwd={gitCwd}
-                activeProjectScripts={activeProject?.scripts}
-                preferredScriptId={
-                  activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-                }
-                keybindings={keybindings}
-                availableEditors={availableEditors}
-                rightPanelOpen={rightPanelOpen}
-                gitCwd={gitCwd}
-                onNewThreadInProject={handleNewThreadInActiveProject}
-                onRunProjectScript={runProjectScript}
-                onAddProjectScript={saveProjectScript}
-                onUpdateProjectScript={updateProjectScript}
-                onDeleteProjectScript={deleteProjectScript}
-              />
-            </>
-          )}
+          {!rightPanelOpen ? panelLayoutControls : null}
+          <ChatHeader
+            {...(!supportsPullRequests || activeProjectRepository === null
+              ? {}
+              : { onOpenPullRequest: openProjectPullRequest })}
+            activeThreadEnvironmentId={activeThread.environmentId}
+            activeThreadId={activeThread.id}
+            {...(routeKind === "draft" && draftId ? { draftId } : {})}
+            activeThreadTitle={activeThread.title}
+            isServerThread={isServerThread}
+            changeRequest={activeThreadChangeRequest}
+            activeProjectName={activeProject?.title}
+            activeProjectCwd={activeProject?.workspaceRoot ?? null}
+            activeProjectFaviconPath={activeProject?.faviconPath ?? null}
+            openInCwd={gitCwd}
+            activeProjectScripts={activeProject?.scripts}
+            preferredScriptId={
+              activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
+            }
+            keybindings={keybindings}
+            availableEditors={availableEditors}
+            rightPanelOpen={rightPanelOpen}
+            gitCwd={gitCwd}
+            onNewThreadInProject={handleNewThreadInActiveProject}
+            onRunProjectScript={runProjectScript}
+            onAddProjectScript={saveProjectScript}
+            onUpdateProjectScript={updateProjectScript}
+            onDeleteProjectScript={deleteProjectScript}
+          />
         </WorkspacePageHeader>
 
         <ThreadErrorBanner

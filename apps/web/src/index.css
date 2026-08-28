@@ -2046,6 +2046,73 @@ body {
   background-size: var(--surface-grain-size);
 }
 
+/* The live ChatGPT WebContentsView is layered beneath the host renderer. In
+   that surface the host owns the shared title bar and the native sidebar
+   footer, while the remote page supplies the content behind those regions.
+   Keep the host renderer transparent only for this explicit surface so the
+   normal T3 Code page remains unchanged. */
+html:has([data-remote-app-surface="chatgpt"]),
+body:has([data-remote-app-surface="chatgpt"]),
+body:has([data-remote-app-surface="chatgpt"]) [data-slot="sidebar-wrapper"],
+body:has([data-remote-app-surface="chatgpt"]) [data-slot="sidebar-inset"],
+body:has([data-remote-app-surface="chatgpt"]) [data-remote-app-host-workspace] {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-container"],
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-inner"] {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-container"] {
+  pointer-events: none !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-content"],
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-rail"] {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-header"] {
+  pointer-events: none !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-footer"] {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 1;
+  visibility: visible !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-slot="sidebar-inset"] {
+  pointer-events: none !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-remote-app-host-workspace],
+[data-remote-app-surface="chatgpt"] [data-remote-app-host-column] {
+  background-color: transparent !important;
+  background-image: none !important;
+  pointer-events: none !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-remote-app-host-column] > :not([data-chat-header]),
+[data-remote-app-surface="chatgpt"]
+  [data-remote-app-host-workspace]
+  > [data-workspace-titlebar-controls] {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+[data-remote-app-surface="chatgpt"] [data-chat-header],
+[data-remote-app-surface="chatgpt"] [data-chat-header] [data-workspace-titlebar-controls] {
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
 pre,
 code {
   font-family: var(--font-mono);

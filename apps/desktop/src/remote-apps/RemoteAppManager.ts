@@ -39,6 +39,7 @@ import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
+const REMOTE_APP_VIEW_LAYER_INDEX = 0;
 
 export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
   delta === null ? 1 : Math.min(3, Math.max(0.5, current + delta));
@@ -477,7 +478,10 @@ export const make = Effect.gen(function* () {
         }),
       catch: (cause) => new RemoteAppManagerError({ operation: "create-view", cause }),
     });
-    window.contentView.addChildView(view);
+    // Keep the live remote page beneath the host renderer. The renderer owns
+    // the shared title bar and the native sidebar footer; when the ChatGPT
+    // surface is active it makes only those host regions opaque/interactive.
+    window.contentView.addChildView(view, REMOTE_APP_VIEW_LAYER_INDEX);
     configureView(window, view);
     configureSession(session, view, window);
     yield* positionView(window, view);
@@ -521,7 +525,7 @@ export const make = Effect.gen(function* () {
           // compositor a fresh topmost layer instead of restoring an existing
           // hidden layer behind the host renderer.
           window.value.contentView.removeChildView(view.value);
-          window.value.contentView.addChildView(view.value);
+          window.value.contentView.addChildView(view.value, REMOTE_APP_VIEW_LAYER_INDEX);
           yield* positionView(window.value, view.value);
           view.value.setVisible(true);
           view.value.webContents.focus();
