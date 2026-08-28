@@ -117,6 +117,16 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
+  it.effect("isolates packaged fork state from the upstream desktop state", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment({ isPackaged: true });
+
+      assert.equal(environment.baseDir, "/Users/alice/.t3-tjn");
+      assert.equal(environment.stateDir, "/Users/alice/.t3-tjn/userdata");
+      assert.equal(environment.serverSettingsPath, "/Users/alice/.t3-tjn/userdata/settings.json");
+    }),
+  );
+
   it.effect("keeps implicit development state separate from production state", () =>
     Effect.gen(function* () {
       const development = yield* makeEnvironment(

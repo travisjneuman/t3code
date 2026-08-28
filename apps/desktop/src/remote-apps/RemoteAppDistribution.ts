@@ -2,6 +2,10 @@ export const REMOTE_APP_DISTRIBUTION = {
   baseName: "T3 Code TJN",
   appId: "dev.neuman.t3code",
   packagedUserDataDirName: "t3code-tjn",
+  // Keep the fork's packaged server state away from the upstream desktop
+  // app's default ~/.t3 directory. This includes the SQLite database,
+  // server settings, provider secrets, and backend logs.
+  packagedBaseDirName: ".t3-tjn",
   developmentUserDataDirName: "t3code-tjn-dev",
   protocol: "t3code-tjn",
   distribution: "tjn",

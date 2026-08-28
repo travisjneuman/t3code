@@ -165,6 +165,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
     homeDirectory,
     joinPath: path.join,
     t3Home: config.t3Home,
+    ...(input.isPackaged
+      ? {
+          defaultBaseDir: path.join(homeDirectory, REMOTE_APP_DISTRIBUTION.packagedBaseDirName),
+        }
+      : {}),
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
