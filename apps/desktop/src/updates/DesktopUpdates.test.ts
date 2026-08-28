@@ -13,10 +13,8 @@ import * as References from "effect/References";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
-import * as DesktopShutdown from "../app/DesktopShutdown.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
@@ -31,7 +29,7 @@ interface UpdatesHarnessOptions {
   readonly beforeSetUpdateChannel?: Effect.Effect<void>;
   readonly setUpdateChannelError?: DesktopAppSettings.DesktopSettingsWriteError;
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
-  readonly shutdownComplete?: Effect.Effect<void>;
+  readonly quitAndInstall?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
 }
 
@@ -42,7 +40,6 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   let allowDowngrade = false;
   let fullChangelog = false;
   let quitAndInstallCalls = 0;
-  let shutdownRequestCalls = 0;
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
@@ -90,7 +87,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     quitAndInstall: () =>
       Effect.sync(() => {
         quitAndInstallCalls += 1;
-      }),
+      }).pipe(Effect.andThen(options.quitAndInstall ?? Effect.void)),
     on: (eventName, listener) =>
       Effect.acquireRelease(
         Effect.sync(() => {
@@ -118,32 +115,6 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     destroyAll: Effect.void,
     syncAllAppearance: () => Effect.void,
   } satisfies ElectronWindow.ElectronWindow["Service"]);
-
-  const stubBackendInstance: DesktopBackendPool.DesktopBackendInstance = {
-    id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
-    label: Effect.succeed("Windows"),
-    start: Effect.void,
-    stop: () => Effect.void,
-    currentConfig: Effect.succeed(Option.none()),
-    snapshot: Effect.succeed({
-      desiredRunning: false,
-      ready: false,
-      activePid: Option.none(),
-      restartAttempt: 0,
-      restartScheduled: false,
-    }),
-    waitForReady: () => Effect.succeed(true),
-  };
-  const backendLayer = DesktopBackendPool.layerTest([stubBackendInstance]);
-  const shutdownLayer = Layer.succeed(DesktopShutdown.DesktopShutdown, {
-    request: Effect.sync(() => {
-      shutdownRequestCalls += 1;
-    }),
-    awaitRequest: Effect.never,
-    markComplete: Effect.void,
-    awaitComplete: options.shutdownComplete ?? Effect.void,
-    isComplete: Effect.succeed(false),
-  } satisfies DesktopShutdown.DesktopShutdown["Service"]);
 
   const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
@@ -209,8 +180,6 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   const layer = DesktopUpdates.layer.pipe(
     Layer.provideMerge(updaterLayer),
     Layer.provideMerge(windowLayer),
-    Layer.provideMerge(backendLayer),
-    Layer.provideMerge(shutdownLayer),
     Layer.provideMerge(DesktopState.layer),
     Layer.provideMerge(settingsLayer),
     Layer.provideMerge(
@@ -231,7 +200,6 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     feedUrls: () => feedUrls,
     fullChangelog: () => fullChangelog,
     quitAndInstallCount: () => quitAndInstallCalls,
-    shutdownRequestCount: () => shutdownRequestCalls,
     listenerCount: () =>
       Array.from(listeners.values()).reduce(
         (total, eventListeners) => total + eventListeners.size,
@@ -516,12 +484,12 @@ describe("DesktopUpdates", () => {
       }),
   );
 
-  it.effect("rejects refresh checks while install is in progress", () =>
+  it.effect("does not close the desktop scope before native update handoff", () =>
     Effect.gen(function* () {
       const installStarted = yield* Deferred.make<void>();
       const releaseInstall = yield* Deferred.make<void>();
       const harness = makeHarness({
-        shutdownComplete: Deferred.succeed(installStarted, undefined).pipe(
+        quitAndInstall: Deferred.succeed(installStarted, undefined).pipe(
           Effect.andThen(Deferred.await(releaseInstall)),
         ),
       });
@@ -539,12 +507,11 @@ describe("DesktopUpdates", () => {
           const checkResult = yield* updates.check("manual");
           assert.isFalse(checkResult.checked);
           assert.equal(harness.checkCount(), 0);
-          assert.equal(harness.quitAndInstallCount(), 0);
+          assert.equal(harness.quitAndInstallCount(), 1);
 
           yield* Deferred.succeed(releaseInstall, undefined);
           const installResult = yield* Fiber.join(installFiber);
           assert.isTrue(installResult.accepted);
-          assert.equal(harness.shutdownRequestCount(), 1);
           assert.equal(harness.quitAndInstallCount(), 1);
         }),
       ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
@@ -720,7 +687,7 @@ describe("DesktopUpdates", () => {
 
   it.effect("clears quitting state after an unexpected install setup failure", () => {
     const harness = makeHarness({
-      shutdownComplete: Effect.die(new Error("desktop shutdown failed")),
+      quitAndInstall: Effect.die(new Error("native update handoff failed")),
     });
 
     return Effect.scoped(

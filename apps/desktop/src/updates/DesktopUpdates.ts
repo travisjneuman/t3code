@@ -20,7 +20,6 @@ import * as Scope from "effect/Scope";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
-import * as DesktopShutdown from "../app/DesktopShutdown.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
@@ -248,7 +247,6 @@ function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean 
 export const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   const desktopState = yield* DesktopState.DesktopState;
-  const desktopShutdown = yield* DesktopShutdown.DesktopShutdown;
   const electronUpdater = yield* ElectronUpdater.ElectronUpdater;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -487,15 +485,13 @@ export const make = Effect.gen(function* () {
     yield* Ref.set(desktopState.quitting, true);
 
     return yield* Effect.gen(function* () {
-      // Ask the desktop scope to perform its complete shutdown before handing
-      // control to Electron's native installer. This keeps every backend in
-      // the pool on the graceful stop path and, importantly, leaves the
-      // BrowserWindow alive until quitAndInstall has received it. Destroying
-      // the last macOS window first can leave the Electron process resident
-      // without a window when the native installer cannot immediately take
-      // over, which makes the next launch require a force-quit.
-      yield* desktopShutdown.request;
-      yield* desktopShutdown.awaitComplete;
+      // Let Electron's native updater own the quit/install sequence. Requesting
+      // DesktopShutdown here closes the Effect scope that registered the IPC
+      // handlers before Squirrel.Mac has validated the package. If validation
+      // fails, the window and renderer remain alive but every desktop IPC
+      // handler is gone, leaving a disconnected, unrecoverable app. The normal
+      // lifecycle handles the actual application quit after quitAndInstall is
+      // accepted; a failed handoff stays in this scope so the user can retry.
       yield* electronUpdater.quitAndInstall({
         isSilent: true,
         isForceRunAfter: true,

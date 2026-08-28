@@ -2114,6 +2114,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    if (!signed) {
+      buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs");
+    }
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
