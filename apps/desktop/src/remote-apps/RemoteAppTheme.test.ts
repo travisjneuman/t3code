@@ -38,6 +38,8 @@ describe("RemoteAppTheme", () => {
     expect(alignedCss).toContain("main :where(a)");
     expect(alignedCss).toContain("html body :is(");
     expect(alignedCss).toContain("background-image: none !important");
+    expect(alignedCss).toContain('[data-t3code-remote-sidebar="true"]');
+    expect(alignedCss).toContain("flex-basis: 235px !important");
     expect(alignedCss).not.toContain("\n:where(a) {");
   });
 
@@ -60,6 +62,9 @@ describe("RemoteAppTheme", () => {
     const script = buildRemoteAppInteractionScript();
 
     expect(script).toContain("__t3codeRemoteAppInteraction");
+    expect(script).toContain("targetSidebarWidth");
+    expect(script).toContain("dataset.t3codeRemoteSidebar");
+    expect(script).toContain("requestAnimationFrame");
     expect(script).toContain("textarea, [contenteditable='true']");
     expect(script).toContain("button[aria-label*='Add files']");
     expect(script).toContain("[data-state='open']");

@@ -90,10 +90,60 @@ export const isChatGptRemoteAppUrl = (url: string): boolean => {
  * dismisses. The handler is limited to editable controls and is installed in
  * the remote document, so it cannot affect the T3 renderer or other origins.
  */
-export const buildRemoteAppInteractionScript = (): string => `
+export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = null): string => `
 (() => {
   const key = "__t3codeRemoteAppInteraction";
   if (window[key]) return;
+  const targetSidebarWidth = ${sidebarWidth === null ? "null" : Math.round(sidebarWidth)};
+
+  const applySidebarGeometry = () => {
+    if (targetSidebarWidth === null) return;
+    const utilityHrefs = ["/images", "/library", "/scheduled", "/plugins", "/projects"];
+    const sidebarLinks = Array.from(document.querySelectorAll("a[href]")).filter((link) => {
+      const href = link.getAttribute("href") ?? "";
+      return utilityHrefs.some((utilityHref) => href === utilityHref || href.startsWith(\`\${utilityHref}?\`));
+    });
+    if (sidebarLinks.length < 3) return;
+
+    const candidates = [];
+    let candidate = sidebarLinks[0].parentElement;
+    while (candidate instanceof HTMLElement && candidate !== document.body) {
+      if (sidebarLinks.every((link) => candidate.contains(link))) {
+        const rect = candidate.getBoundingClientRect();
+        if (
+          rect.left <= 8 &&
+          rect.width >= 160 &&
+          rect.width <= 512 &&
+          rect.height >= 160
+        ) {
+          candidates.push(candidate);
+        }
+      }
+      candidate = candidate.parentElement;
+    }
+
+    for (const sidebar of candidates) {
+      sidebar.dataset.t3codeRemoteSidebar = "true";
+      sidebar.style.setProperty("box-sizing", "border-box", "important");
+      sidebar.style.setProperty("width", \`\${targetSidebarWidth}px\`, "important");
+      sidebar.style.setProperty("min-width", \`\${targetSidebarWidth}px\`, "important");
+      sidebar.style.setProperty("flex-basis", \`\${targetSidebarWidth}px\`, "important");
+    }
+  };
+
+  let geometryFrame = 0;
+  const scheduleSidebarGeometry = () => {
+    if (geometryFrame !== 0) return;
+    geometryFrame = window.requestAnimationFrame(() => {
+      geometryFrame = 0;
+      applySidebarGeometry();
+    });
+  };
+  applySidebarGeometry();
+  window.setTimeout(applySidebarGeometry, 0);
+  window.setTimeout(applySidebarGeometry, 120);
+  const sidebarObserver = new MutationObserver(scheduleSidebarGeometry);
+  sidebarObserver.observe(document.body, { childList: true, subtree: true });
 
   const getEditable = (target) => {
     if (!(target instanceof Element)) return null;
@@ -350,11 +400,18 @@ nav,
 [data-testid*="sidebar"],
 aside,
 [aria-label="Chat history"],
-[class~="group/sidebar"] {
+        [class~="group/sidebar"] {
   background-color: var(--t3code-remote-sidebar) !important;
   color: var(--t3code-remote-sidebar-foreground) !important;
   border-color: var(--t3code-remote-sidebar-border) !important;
 ${sidebarWidthRule}
+}
+
+[data-t3code-remote-sidebar="true"] {
+  box-sizing: border-box !important;
+  width: ${sidebarWidth === null ? "auto" : `${Math.round(sidebarWidth)}px`} !important;
+  min-width: ${sidebarWidth === null ? "0" : `${Math.round(sidebarWidth)}px`} !important;
+  flex-basis: ${sidebarWidth === null ? "auto" : `${Math.round(sidebarWidth)}px`} !important;
 }
 
 :where(

@@ -293,7 +293,8 @@ export const make = Effect.gen(function* () {
         });
         yield* Ref.set(insertedThemeKeyRef, Option.some(key));
         yield* Effect.tryPromise({
-          try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript()),
+          try: () =>
+            view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme.sidebarWidth)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         }).pipe(Effect.catch(() => Effect.void));
       }),
