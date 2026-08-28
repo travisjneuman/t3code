@@ -603,5 +603,43 @@ main :where(a),
   border-color: transparent !important;
   box-shadow: none !important;
 }
+
+/* ChatGPT's utility rows use token classes with greater specificity than a
+   zero-specificity :where() selector. Prefix the final reset with the live
+   document roots so the remote site's row borders cannot reappear after a
+   navigation or a React rerender. Background images are cleared only from
+   border/divider-marked descendants; icons and other sidebar decoration stay
+   intact. */
+html body :is(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :is(a, button, [role="button"], li, ul, ol, [class*="border"], [class*="divide"]) {
+  border: 0 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+html body :is(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :is(hr, [role="separator"], [class*="border"], [class*="divide"]) {
+  height: 0 !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
 `;
 };

@@ -36,6 +36,8 @@ describe("RemoteAppTheme", () => {
     expect(alignedCss).toContain("--sidebar-width: 235px !important");
     expect(alignedCss).toContain('[data-testid*="sidebar"]');
     expect(alignedCss).toContain("main :where(a)");
+    expect(alignedCss).toContain("html body :is(");
+    expect(alignedCss).toContain("background-image: none !important");
     expect(alignedCss).not.toContain("\n:where(a) {");
   });
 
