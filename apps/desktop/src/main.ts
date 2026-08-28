@@ -1,6 +1,10 @@
 for (const stream of [process.stdout, process.stderr]) {
   stream.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EPIPE") throw err;
+    // Electron can be launched from a terminal during development or from a
+    // packaged app shortcut. When the parent terminal disappears, macOS may
+    // report the closed output stream as EIO rather than EPIPE. Neither error
+    // should become an uncaught exception in the desktop main process.
+    if (err.code !== "EPIPE" && err.code !== "EIO") throw err;
   });
 }
 
