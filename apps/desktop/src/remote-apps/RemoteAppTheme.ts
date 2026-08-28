@@ -95,20 +95,50 @@ export const buildRemoteAppInteractionScript = (): string => `
   const key = "__t3codeRemoteAppInteraction";
   if (window[key]) return;
 
+  const getEditable = (target) => {
+    if (!(target instanceof Element)) return null;
+    const direct = target.closest("textarea, [contenteditable='true']");
+    if (direct instanceof HTMLElement) return direct;
+    const textbox = target.closest("[role='textbox']");
+    return textbox?.querySelector("textarea, [contenteditable='true']") ?? null;
+  };
+
+  const closeOpenAddFilesPopover = () => {
+    const trigger = document.querySelector(
+      "button[aria-label*='Add files'], button[aria-label*='files']",
+    );
+    const popover = Array.from(
+      document.querySelectorAll(
+        "[role='menu'], [data-radix-popper-content-wrapper], [data-state='open'][role='dialog']",
+      ),
+    ).find((candidate) => {
+      const style = getComputedStyle(candidate);
+      const rect = candidate.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    });
+    if (!(trigger instanceof HTMLElement) || popover === undefined) return;
+    trigger.click();
+  };
+
   const focusEditable = (target) => {
-    if (!(target instanceof Element)) return;
-    const editable = target.closest("textarea, [contenteditable='true']");
+    const editable = getEditable(target);
     if (!(editable instanceof HTMLElement)) return;
 
     const focus = () => {
-      if (editable.isConnected) editable.focus({ preventScroll: true });
+      if (!editable.isConnected) return;
+      closeOpenAddFilesPopover();
+      editable.focus({ preventScroll: true });
+      if (document.activeElement !== editable) editable.click();
+      editable.focus({ preventScroll: true });
     };
     queueMicrotask(focus);
     window.setTimeout(focus, 0);
+    window.setTimeout(focus, 32);
   };
 
-  document.addEventListener("pointerdown", (event) => focusEditable(event.target), true);
-  document.addEventListener("click", (event) => focusEditable(event.target), true);
+  for (const eventName of ["pointerdown", "mousedown", "click", "focusin"]) {
+    document.addEventListener(eventName, (event) => focusEditable(event.target), true);
+  }
   window[key] = true;
 })();
 `;

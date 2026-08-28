@@ -286,6 +286,9 @@ export const make = Effect.gen(function* () {
 
   const configureView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) => {
     const contents = view.webContents;
+    contents.on("input-event", (_event, input) => {
+      if (input.type === "mouseDown") contents.focus();
+    });
     contents.setWindowOpenHandler(({ url }) => {
       const decision = classifyRemoteAppNavigation(url, { authFlowActive: true });
       if (decision.kind === "external") {

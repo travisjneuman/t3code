@@ -59,8 +59,9 @@ describe("RemoteAppTheme", () => {
 
     expect(script).toContain("__t3codeRemoteAppInteraction");
     expect(script).toContain("textarea, [contenteditable='true']");
+    expect(script).toContain("button[aria-label*='Add files']");
     expect(script).toContain("queueMicrotask(focus)");
-    expect(script).toContain('document.addEventListener("pointerdown"');
+    expect(script).toContain('["pointerdown", "mousedown"');
     expect(script).not.toContain("fetch(");
     expect(script).not.toContain("localStorage");
   });
