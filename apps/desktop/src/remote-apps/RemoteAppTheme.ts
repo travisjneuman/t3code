@@ -107,16 +107,21 @@ export const buildRemoteAppInteractionScript = (): string => `
     const trigger = document.querySelector(
       "button[aria-label*='Add files'], button[aria-label*='files']",
     );
-    const popover = Array.from(
+    const triggerIsOpen =
+      trigger instanceof HTMLElement &&
+      (trigger.getAttribute("aria-expanded") === "true" ||
+        trigger.getAttribute("data-state") === "open");
+    const openPopover = Array.from(
       document.querySelectorAll(
-        "[role='menu'], [data-radix-popper-content-wrapper], [data-state='open'][role='dialog']",
+        "[role='menu'], [data-radix-popper-content-wrapper], [data-state='open'], [aria-expanded='true']",
       ),
     ).find((candidate) => {
+      if (candidate === trigger) return false;
       const style = getComputedStyle(candidate);
       const rect = candidate.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     });
-    if (!(trigger instanceof HTMLElement) || popover === undefined) return;
+    if (!(trigger instanceof HTMLElement) || (!triggerIsOpen && openPopover === undefined)) return;
     trigger.click();
   };
 
@@ -134,6 +139,7 @@ export const buildRemoteAppInteractionScript = (): string => `
     queueMicrotask(focus);
     window.setTimeout(focus, 0);
     window.setTimeout(focus, 32);
+    window.setTimeout(focus, 80);
   };
 
   for (const eventName of ["pointerdown", "mousedown", "click", "focusin"]) {
