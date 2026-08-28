@@ -45,6 +45,7 @@ import { Badge } from "./ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { RemoteAppChrome } from "../remote-apps/RemoteAppChrome";
 import { RemoteAppSwitcher } from "../remote-apps/RemoteAppSwitcher";
+import { shouldHideHostWorkspaceChrome } from "../remote-apps/remoteAppState";
 import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
@@ -143,10 +144,16 @@ function ProjectProjectionRetention() {
 }
 
 function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
-  const { bridge } = useRemoteAppState();
+  const { bridge, state } = useRemoteAppState();
+  const isSidebarVisible = useSidebarVisibility();
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   if (!isElectron || bridge === undefined) return null;
+
+  const isChatGPTActive = shouldHideHostWorkspaceChrome({
+    bridgeAvailable: true,
+    activeSurface: state.activeSurface,
+  });
 
   const pillLabel =
     environmentIdentificationMode === "pill"
@@ -157,7 +164,22 @@ function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
     <div
       className="drag-region pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center border-b border-border/60 bg-transparent"
       data-remote-app-titlebar
+      data-remote-app-active-surface={state.activeSurface}
     >
+      {isChatGPTActive ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-(--remote-app-titlebar-content-left) right-0 border-b border-border/60 bg-background surface-grain transition-[left] duration-200 ease-linear motion-reduce:transition-none"
+          data-remote-app-titlebar-surface
+          style={
+            {
+              "--remote-app-titlebar-content-left": isSidebarVisible
+                ? "var(--sidebar-width)"
+                : "0px",
+            } as CSSProperties
+          }
+        />
+      ) : null}
       <RemoteAppSwitcher />
       {pillLabel ? (
         <Badge

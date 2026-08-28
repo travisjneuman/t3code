@@ -37,7 +37,10 @@ export function RemoteAppChrome() {
       <span aria-live="polite" className="sr-only">
         {isBusy ? "ChatGPT is loading" : hasError ? "ChatGPT failed to load" : state.currentTitle}
       </span>
-      <div className="flex items-center gap-1" data-remote-app-control-group="navigation">
+      <div
+        className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-background/45 p-0.5 shadow-xs"
+        data-remote-app-control-group="navigation"
+      >
         {hasError ? (
           <Button
             aria-label="Retry ChatGPT"
@@ -75,8 +78,10 @@ export function RemoteAppChrome() {
           <RefreshCwIcon className={isBusy ? "animate-spin" : undefined} />
         </Button>
       </div>
-      <span aria-hidden className="mx-1 h-4 w-px bg-border/70" />
-      <div className="flex items-center gap-1" data-remote-app-control-group="zoom">
+      <div
+        className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-background/45 p-0.5 shadow-xs"
+        data-remote-app-control-group="zoom"
+      >
         <Button
           aria-label="Zoom out ChatGPT"
           onClick={() => void zoomOut()}
@@ -108,15 +113,16 @@ export function RemoteAppChrome() {
           <RotateCcwIcon />
         </Button>
       </div>
-      <span aria-hidden className="mx-1 h-4 w-px bg-border/70" />
-      <Button
-        aria-label="Clear ChatGPT session data"
-        onClick={confirmClear}
-        size="icon-micro"
-        variant="ghost"
-      >
-        <Trash2Icon />
-      </Button>
+      <div className="rounded-lg border border-border/60 bg-background/45 p-0.5 shadow-xs">
+        <Button
+          aria-label="Clear ChatGPT session data"
+          onClick={confirmClear}
+          size="icon-micro"
+          variant="ghost"
+        >
+          <Trash2Icon />
+        </Button>
+      </div>
     </div>
   );
 }

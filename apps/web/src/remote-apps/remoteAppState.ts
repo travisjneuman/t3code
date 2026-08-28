@@ -20,6 +20,16 @@ export const resolveRemoteAppState = (state: RemoteAppState | null | undefined):
   state ?? DEFAULT_REMOTE_APP_STATE;
 
 /**
+ * The native ChatGPT view owns everything below the shared titlebar. Keep the
+ * host T3 workspace chrome out of that exposed strip while the remote surface
+ * is active; otherwise the two toolbars paint on top of each other.
+ */
+export const shouldHideHostWorkspaceChrome = (input: {
+  readonly bridgeAvailable: boolean;
+  readonly activeSurface: RemoteAppState["activeSurface"];
+}): boolean => input.bridgeAvailable && input.activeSurface === "chatgpt";
+
+/**
  * A native surface switch returns the authoritative state immediately, while
  * the matching IPC notification may arrive after an older queued notification.
  * Once the renderer has an initialized snapshot, a notification for the other

@@ -4,6 +4,7 @@ import {
   DEFAULT_REMOTE_APP_STATE,
   isRemoteAppSurface,
   resolveRemoteAppState,
+  shouldHideHostWorkspaceChrome,
   shouldAcceptRemoteAppState,
 } from "./remoteAppState";
 
@@ -22,5 +23,17 @@ describe("remote app renderer state", () => {
     expect(shouldAcceptRemoteAppState({ current, next, initialized: true })).toBe(false);
     expect(shouldAcceptRemoteAppState({ current, next, initialized: false })).toBe(true);
     expect(shouldAcceptRemoteAppState({ current, next: current, initialized: true })).toBe(true);
+  });
+
+  it("hides host workspace chrome only while the native ChatGPT surface is active", () => {
+    expect(shouldHideHostWorkspaceChrome({ bridgeAvailable: true, activeSurface: "chatgpt" })).toBe(
+      true,
+    );
+    expect(shouldHideHostWorkspaceChrome({ bridgeAvailable: true, activeSurface: "t3code" })).toBe(
+      false,
+    );
+    expect(
+      shouldHideHostWorkspaceChrome({ bridgeAvailable: false, activeSurface: "chatgpt" }),
+    ).toBe(false);
   });
 });
