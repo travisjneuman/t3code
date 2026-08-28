@@ -164,7 +164,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
     joinPath: path.join,
-    t3Home: config.t3Home,
+    // Packaged TJN builds must never inherit an ambient T3CODE_HOME from a
+    // shell or another installed distribution. Development keeps the
+    // explicit override for normal maintainer workflows.
+    t3Home: input.isPackaged ? Option.none() : config.t3Home,
     ...(input.isPackaged
       ? {
           defaultBaseDir: path.join(homeDirectory, REMOTE_APP_DISTRIBUTION.packagedBaseDirName),

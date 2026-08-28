@@ -127,6 +127,18 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
+  it.effect("does not let packaged fork state inherit an ambient T3CODE_HOME", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        { isPackaged: true },
+        { T3CODE_HOME: "/Users/alice/.t3" },
+      );
+
+      assert.equal(environment.baseDir, "/Users/alice/.t3-tjn");
+      assert.equal(environment.stateDir, "/Users/alice/.t3-tjn/userdata");
+    }),
+  );
+
   it.effect("keeps implicit development state separate from production state", () =>
     Effect.gen(function* () {
       const development = yield* makeEnvironment(
