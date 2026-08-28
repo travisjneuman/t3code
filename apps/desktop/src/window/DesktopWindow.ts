@@ -35,6 +35,7 @@ const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linu
 const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
 const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
 const MAIN_WINDOW_BOUNDS_PERSIST_DEBOUNCE_MS = 500;
+const MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS = 5_000;
 const DEVELOPMENT_LOAD_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000] as const;
 // Renderer crash (usually V8 OOM on long sessions) recovery: reload after a
 // short delay, at most MAX_ATTEMPTS times per rolling WINDOW so a renderer
@@ -768,6 +769,9 @@ export const make = Effect.gen(function* () {
       // emitting ready-to-show even though the host renderer finished loading.
       // Keep the reveal one-shot, but never leave a healthy app headless.
       (fire) => window.webContents.once("did-finish-load", fire),
+      // If both lifecycle events are suppressed by a native child view, the
+      // window is still safe to reveal after this bounded boot grace period.
+      (fire) => setTimeout(fire, MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS),
     ];
     bindFirstRevealTrigger(revealSubscribers, () => {
       // Boot is done; hand the window back to normal hidden-window throttling
