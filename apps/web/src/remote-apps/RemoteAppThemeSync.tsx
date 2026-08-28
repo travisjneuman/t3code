@@ -53,6 +53,13 @@ function readRemoteThemeColors(): RemoteAppThemeColors {
   ) as RemoteAppThemeColors;
 }
 
+function readRemoteSidebarWidth(): number | null {
+  const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
+  if (sidebar === null) return null;
+  const width = sidebar.getBoundingClientRect().width;
+  return Number.isFinite(width) && width >= 160 && width <= 512 ? Math.round(width) : null;
+}
+
 /** Keeps the isolated native ChatGPT surface visually aligned with T3's live palette. */
 export function RemoteAppThemeSync() {
   const { bridge } = useRemoteAppState();
@@ -62,14 +69,27 @@ export function RemoteAppThemeSync() {
 
   useEffect(() => {
     if (bridge === undefined) return;
-    void bridge
-      .setTheme({
-        appearance: resolvedTheme,
-        colors: readRemoteThemeColors(),
-      })
-      .catch((cause: unknown) => {
-        console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);
-      });
+    const sync = () => {
+      void bridge
+        .setTheme({
+          appearance: resolvedTheme,
+          sidebarWidth: readRemoteSidebarWidth(),
+          colors: readRemoteThemeColors(),
+        })
+        .catch((cause: unknown) => {
+          console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);
+        });
+    };
+
+    sync();
+    const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
+    const observer = sidebar === null ? null : new ResizeObserver(sync);
+    if (sidebar !== null) observer?.observe(sidebar);
+    window.addEventListener("resize", sync);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", sync);
+    };
   }, [appearanceMode, bridge, darkThemeHalf, lightThemeHalf, resolvedTheme, theme]);
 
   return null;

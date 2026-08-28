@@ -24,6 +24,15 @@ describe("RemoteAppTheme", () => {
     expect(css).toContain("--sidebar-surface-primary: var(--t3code-remote-sidebar) !important");
     expect(css).toContain("background-color: var(--t3code-remote-surface-raised) !important");
     expect(css).toContain('form:where(:has(textarea), :has([contenteditable="true"]))');
+    expect(css).not.toContain("width: nullpx");
+
+    const alignedCss = buildRemoteAppThemeCss({
+      ...DEFAULT_REMOTE_APP_THEME,
+      sidebarWidth: 235,
+    });
+    expect(alignedCss).toContain("width: 235px !important");
+    expect(alignedCss).toContain("main :where(a)");
+    expect(alignedCss).not.toContain("\n:where(a) {");
   });
 
   it("rejects CSS control characters from renderer-provided theme values", () => {

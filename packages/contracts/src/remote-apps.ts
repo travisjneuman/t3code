@@ -96,6 +96,9 @@ export type RemoteAppThemeColors = typeof RemoteAppThemeColorsSchema.Type;
 
 export const RemoteAppThemeSchema = Schema.Struct({
   appearance: Schema.Literals(["light", "dark"]),
+  sidebarWidth: Schema.NullOr(
+    Schema.Number.check(Schema.isBetween({ minimum: 160, maximum: 512 })),
+  ),
   colors: RemoteAppThemeColorsSchema,
 });
 export type RemoteAppTheme = typeof RemoteAppThemeSchema.Type;

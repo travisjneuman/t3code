@@ -9,6 +9,7 @@ const SAFE_THEME_COLOR = /^[a-zA-Z0-9#(),.%/ +*-]+$/;
  */
 export const DEFAULT_REMOTE_APP_THEME: RemoteAppTheme = {
   appearance: "dark",
+  sidebarWidth: null,
   colors: {
     canvas: "#192531",
     sidebar: "#1b2a39",
@@ -60,6 +61,10 @@ const safeColor = (value: string, fallback: string): string => {
 
 export const normalizeRemoteAppTheme = (theme: RemoteAppTheme): RemoteAppTheme => ({
   appearance: theme.appearance,
+  sidebarWidth:
+    theme.sidebarWidth === null || !Number.isFinite(theme.sidebarWidth)
+      ? null
+      : Math.min(512, Math.max(160, Math.round(theme.sidebarWidth))),
   colors: Object.fromEntries(
     COLOR_KEYS.map((key) => [
       key,
@@ -88,8 +93,12 @@ export const isChatGptRemoteAppUrl = (url: string): boolean => {
  * if those implementation classes change.
  */
 export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
-  const { appearance, colors } = normalizeRemoteAppTheme(input);
+  const { appearance, sidebarWidth, colors } = normalizeRemoteAppTheme(input);
   const colorScheme = appearance === "dark" ? "dark" : "light";
+  const sidebarWidthRule =
+    sidebarWidth === null
+      ? ""
+      : `\n  width: ${sidebarWidth}px !important;\n  min-width: ${sidebarWidth}px !important;`;
   return `
 /* T3 Code scoped theme for the isolated ChatGPT surface. */
 :root {
@@ -159,6 +168,22 @@ nav,
   background-color: var(--t3code-remote-sidebar) !important;
   color: var(--t3code-remote-sidebar-foreground) !important;
   border-color: var(--t3code-remote-sidebar-border) !important;
+${sidebarWidthRule}
+}
+
+:where(nav, [role="complementary"], [data-testid="sidebar"]) a {
+  color: var(--t3code-remote-sidebar-foreground) !important;
+}
+
+:where(nav, [role="complementary"], [data-testid="sidebar"]) a:hover {
+  background-color: var(--t3code-remote-sidebar-row-hover) !important;
+}
+
+:where(nav, [role="complementary"], [data-testid="sidebar"]) :where(
+  [class~="text-token-text-secondary"],
+  [class~="text-token-text-tertiary"]
+) {
+  color: var(--t3code-remote-sidebar-muted-foreground) !important;
 }
 
 :where(
@@ -217,7 +242,8 @@ main form:where(:has(textarea), :has([contenteditable="true"])),
   color: var(--t3code-remote-placeholder) !important;
 }
 
-:where(a) {
+main :where(a),
+[role="main"] :where(a) {
   color: var(--t3code-remote-accent) !important;
 }
 
