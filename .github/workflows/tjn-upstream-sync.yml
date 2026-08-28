@@ -48,5 +48,14 @@ jobs:
           # A normal merge preserves the custom ChatGPT surface commits. A
           # conflict fails this run before push, so custom code is never
           # replaced by a destructive hard reset.
+          fork_head="$(git rev-parse HEAD)"
           git merge --no-edit --no-ff upstream/main -m "chore(sync): merge upstream main"
+
+          # The fork owns its workflow directory. GitHub's GITHUB_TOKEN is
+          # intentionally unable to push upstream changes to workflow files,
+          # so restore the fork-managed workflows before pushing the merge.
+          # Application and documentation changes from upstream are still
+          # merged normally; only CI/release automation stays fork-specific.
+          git restore --source="$fork_head" --staged --worktree -- .github/workflows
+          git commit --amend --no-edit
           git push origin HEAD:main
