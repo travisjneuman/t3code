@@ -95,6 +95,8 @@ export const isChatGptRemoteAppUrl = (url: string): boolean => {
 export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
   const { appearance, sidebarWidth, colors } = normalizeRemoteAppTheme(input);
   const colorScheme = appearance === "dark" ? "dark" : "light";
+  const sidebarWidthVariable =
+    sidebarWidth === null ? "" : `\n  --sidebar-width: ${sidebarWidth}px !important;`;
   const sidebarWidthRule =
     sidebarWidth === null
       ? ""
@@ -103,6 +105,7 @@ export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
 /* T3 Code scoped theme for the isolated ChatGPT surface. */
 :root {
   color-scheme: ${colorScheme} !important;
+${sidebarWidthVariable}
   --t3code-remote-canvas: ${colors.canvas};
   --t3code-remote-sidebar: ${colors.sidebar};
   --t3code-remote-sidebar-foreground: ${colors.sidebarForeground};
@@ -164,22 +167,50 @@ main,
 
 nav,
 [role="complementary"],
-[data-testid="sidebar"] {
+[data-testid="sidebar"],
+[data-testid*="sidebar"],
+aside,
+[aria-label="Chat history"],
+[class~="group/sidebar"] {
   background-color: var(--t3code-remote-sidebar) !important;
   color: var(--t3code-remote-sidebar-foreground) !important;
   border-color: var(--t3code-remote-sidebar-border) !important;
 ${sidebarWidthRule}
 }
 
-:where(nav, [role="complementary"], [data-testid="sidebar"]) a {
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) a {
   color: var(--t3code-remote-sidebar-foreground) !important;
 }
 
-:where(nav, [role="complementary"], [data-testid="sidebar"]) a:hover {
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) a:hover {
   background-color: var(--t3code-remote-sidebar-row-hover) !important;
 }
 
-:where(nav, [role="complementary"], [data-testid="sidebar"]) :where(
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :where(
   [class~="text-token-text-secondary"],
   [class~="text-token-text-tertiary"]
 ) {
@@ -227,8 +258,14 @@ ${sidebarWidthRule}
 }
 
 main form:where(:has(textarea), :has([contenteditable="true"])),
+form,
 [data-testid*="composer"] {
   background-color: var(--t3code-remote-surface-raised) !important;
+  border-color: var(--t3code-remote-border) !important;
+  color: var(--t3code-remote-text) !important;
+}
+
+:where(button, [role="button"]) {
   border-color: var(--t3code-remote-border) !important;
   color: var(--t3code-remote-text) !important;
 }
