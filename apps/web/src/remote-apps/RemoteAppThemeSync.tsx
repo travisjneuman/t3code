@@ -82,12 +82,29 @@ export function RemoteAppThemeSync() {
     };
 
     sync();
-    const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
-    const observer = sidebar === null ? null : new ResizeObserver(sync);
-    if (sidebar !== null) observer?.observe(sidebar);
+    let observedSidebar: HTMLElement | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    const observeSidebar = () => {
+      const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
+      if (sidebar === observedSidebar) return;
+      resizeObserver?.disconnect();
+      observedSidebar = sidebar;
+      if (sidebar === null) {
+        resizeObserver = null;
+        return;
+      }
+      resizeObserver = new ResizeObserver(sync);
+      resizeObserver.observe(sidebar);
+      sync();
+    };
+
+    const mutationObserver = new MutationObserver(observeSidebar);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    observeSidebar();
     window.addEventListener("resize", sync);
     return () => {
-      observer?.disconnect();
+      mutationObserver.disconnect();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", sync);
     };
   }, [appearanceMode, bridge, darkThemeHalf, lightThemeHalf, resolvedTheme, theme]);
