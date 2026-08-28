@@ -1,4 +1,9 @@
-import type { DesktopSurface, RemoteAppState, RemoteAppTheme } from "@t3tools/contracts";
+import type {
+  DesktopSurface,
+  RemoteAppState,
+  RemoteAppSurfaceMenuAnchor,
+  RemoteAppTheme,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -26,6 +31,7 @@ import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
 import {
   buildRemoteAppThemeCss,
   buildRemoteAppInteractionScript,
+  buildRemoteAppSurfaceMenuHtml,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
 } from "./RemoteAppTheme.ts";
@@ -55,6 +61,18 @@ export const resolveRemoteAppViewBounds = (
 export const shouldAutomaticallyRecoverRenderer = (completedRecoveries: number): boolean =>
   completedRecoveries < REMOTE_APP_MAX_AUTOMATIC_RECOVERIES;
 
+export const parseRemoteAppSurfaceMenuUrl = (url: string): DesktopSurface | undefined => {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "t3code-surface:" || parsed.hostname !== "select") return undefined;
+    if (parsed.pathname === "/t3code") return "t3code";
+    if (parsed.pathname === "/chatgpt") return "chatgpt";
+    return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppManagerError>()(
   "RemoteAppManagerError",
   {
@@ -66,6 +84,7 @@ export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppMana
       "clear-data",
       "state",
       "theme",
+      "surface-menu",
     ]),
     cause: Schema.Defect(),
   },
@@ -85,6 +104,9 @@ export class RemoteAppManager extends Context.Service<
     ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly getState: Effect.Effect<RemoteAppState>;
     readonly setTheme: (theme: RemoteAppTheme) => Effect.Effect<void, RemoteAppManagerError>;
+    readonly openSurfaceMenu: (
+      anchor: RemoteAppSurfaceMenuAnchor,
+    ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly syncLayout: Effect.Effect<void, RemoteAppManagerError>;
     readonly setActiveSurface: (
       surface: DesktopSurface,
@@ -130,6 +152,13 @@ export const make = Effect.gen(function* () {
   const remoteThemeRef = yield* Ref.make<RemoteAppTheme>(DEFAULT_REMOTE_APP_THEME);
   const insertedThemeKeyRef = yield* Ref.make<Option.Option<string>>(Option.none());
   const popupWindows = new Set<Electron.BrowserWindow>();
+  let surfaceMenuWindow: Electron.BrowserWindow | null = null;
+
+  const closeSurfaceMenu = (): void => {
+    const menu = surfaceMenuWindow;
+    surfaceMenuWindow = null;
+    if (menu !== null && !menu.isDestroyed()) menu.close();
+  };
 
   const runSafely = <A, E>(effect: Effect.Effect<A, E>): void => {
     void Effect.runPromise(
@@ -480,6 +509,7 @@ export const make = Effect.gen(function* () {
 
   const showSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
+      closeSurfaceMenu();
       const window = yield* getLiveWindow;
       const view = yield* getLiveView;
       if (Option.isSome(view) && Option.isSome(window)) {
@@ -544,6 +574,7 @@ export const make = Effect.gen(function* () {
     window.on("enter-full-screen", repositionAfterFullscreenTransition);
     window.on("leave-full-screen", repositionAfterFullscreenTransition);
     window.on("closed", () => {
+      closeSurfaceMenu();
       for (const popup of popupWindows) {
         if (!popup.isDestroyed()) popup.close();
       }
@@ -574,6 +605,99 @@ export const make = Effect.gen(function* () {
           : new RemoteAppManagerError({ operation: "theme", cause }),
       ),
     );
+  const openSurfaceMenu = Effect.fn("remote-app.openSurfaceMenu")(function* (
+    anchor: RemoteAppSurfaceMenuAnchor,
+  ): Effect.fn.Return<void, RemoteAppManagerError> {
+    const owner = yield* getLiveWindow.pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new RemoteAppManagerError({
+                operation: "surface-menu",
+                cause: "main window unavailable",
+              }),
+            ),
+          onSome: Effect.succeed,
+        }),
+      ),
+    );
+    const state = yield* stateStore.get;
+    const theme = yield* Ref.get(remoteThemeRef);
+    closeSurfaceMenu();
+
+    const menu = yield* Effect.try({
+      try: () =>
+        new Electron.BrowserWindow({
+          parent: owner,
+          modal: false,
+          frame: false,
+          transparent: true,
+          resizable: false,
+          movable: false,
+          focusable: true,
+          skipTaskbar: true,
+          hasShadow: true,
+          show: false,
+          backgroundColor: "#00000000",
+          webPreferences: {
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+            nodeIntegrationInSubFrames: false,
+            webSecurity: true,
+            backgroundThrottling: true,
+          },
+        }),
+      catch: (cause) => new RemoteAppManagerError({ operation: "surface-menu", cause }),
+    });
+    surfaceMenuWindow = menu;
+    menu.setMenuBarVisibility(false);
+    menu.setAlwaysOnTop(true);
+    menu.setWindowButtonVisibility(false);
+    menu.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    menu.webContents.on("will-navigate", (event, url) => {
+      const surface = parseRemoteAppSurfaceMenuUrl(url);
+      event.preventDefault();
+      if (surface === undefined) return;
+      closeSurfaceMenu();
+      runSafely(setActiveSurface(surface));
+    });
+    menu.on("blur", closeSurfaceMenu);
+    menu.on("closed", () => {
+      if (surfaceMenuWindow === menu) surfaceMenuWindow = null;
+    });
+
+    const zoomFactor = owner.webContents.getZoomFactor();
+    const scale = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
+    const contentBounds = owner.getContentBounds();
+    const menuWidth = 196;
+    const menuHeight = 92;
+    const requestedX = contentBounds.x + Math.round(anchor.x * scale);
+    const requestedY = contentBounds.y + Math.round((anchor.y + anchor.height) * scale) + 4;
+    const display = Electron.screen.getDisplayNearestPoint({ x: requestedX, y: requestedY });
+    const workArea = display.workArea;
+    const x = Math.min(
+      Math.max(workArea.x + 8, requestedX),
+      workArea.x + workArea.width - menuWidth - 8,
+    );
+    const y = Math.min(
+      Math.max(workArea.y + 8, requestedY),
+      workArea.y + workArea.height - menuHeight - 8,
+    );
+    menu.setBounds({ x, y, width: menuWidth, height: menuHeight });
+    const documentUrl = `data:text/html;charset=utf-8,${encodeURIComponent(
+      buildRemoteAppSurfaceMenuHtml(theme, state.activeSurface),
+    )}`;
+    yield* Effect.tryPromise({
+      try: () => menu.loadURL(documentUrl),
+      catch: (cause) => new RemoteAppManagerError({ operation: "surface-menu", cause }),
+    }).pipe(Effect.tapError(() => Effect.sync(closeSurfaceMenu)));
+    if (!menu.isDestroyed()) {
+      menu.show();
+      menu.focus();
+    }
+  });
   const setActiveSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
       if (surface === "chatgpt") {
@@ -661,6 +785,7 @@ export const make = Effect.gen(function* () {
     attachMainWindow,
     getState,
     setTheme,
+    openSurfaceMenu,
     syncLayout,
     setActiveSurface,
     goBack: viewNavigation((contents) => contents.canGoBack() && contents.goBack()),

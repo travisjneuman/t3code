@@ -1,5 +1,6 @@
 import {
   DesktopSurfaceSchema,
+  RemoteAppSurfaceMenuAnchorSchema,
   RemoteAppStateSchema,
   RemoteAppThemeSchema,
 } from "@t3tools/contracts";
@@ -37,6 +38,17 @@ export const getState = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.remoteApp.getState")(function* () {
     const manager = yield* RemoteAppManager.RemoteAppManager;
     return yield* manager.getState;
+  }),
+});
+
+export const openSurfaceMenu = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL,
+  payload: RemoteAppSurfaceMenuAnchorSchema,
+  result: Schema.Void,
+  authorize,
+  handler: Effect.fn("desktop.ipc.remoteApp.openSurfaceMenu")(function* (anchor) {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    yield* manager.openSurfaceMenu(anchor);
   }),
 });
 
@@ -116,6 +128,7 @@ export const clearData = makeAction(
 export const methods = [
   setTheme,
   getState,
+  openSurfaceMenu,
   setActiveSurface,
   goBack,
   goForward,

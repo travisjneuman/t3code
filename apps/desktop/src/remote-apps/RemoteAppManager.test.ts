@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  parseRemoteAppSurfaceMenuUrl,
   resolveRemoteAppViewBounds,
   resolveRemoteAppZoomFactor,
   shouldAutomaticallyRecoverRenderer,
@@ -29,5 +30,15 @@ describe("RemoteAppManager", () => {
     expect(resolveRemoteAppZoomFactor(2, null)).toBe(1);
     expect(shouldAutomaticallyRecoverRenderer(0)).toBe(true);
     expect(shouldAutomaticallyRecoverRenderer(1)).toBe(false);
+  });
+
+  it("accepts only the two internal surface-picker destinations", () => {
+    expect(parseRemoteAppSurfaceMenuUrl("t3code-surface://select/t3code")).toBe("t3code");
+    expect(parseRemoteAppSurfaceMenuUrl("t3code-surface://select/chatgpt")).toBe("chatgpt");
+    expect(parseRemoteAppSurfaceMenuUrl("https://example.com")).toBeUndefined();
+    expect(parseRemoteAppSurfaceMenuUrl("t3code-surface://select/chatgpt?external=1")).toBe(
+      "chatgpt",
+    );
+    expect(parseRemoteAppSurfaceMenuUrl("t3code-surface://select/other")).toBeUndefined();
   });
 });

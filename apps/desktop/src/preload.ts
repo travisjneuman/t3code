@@ -3,6 +3,7 @@ import type {
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
+  RemoteAppSurfaceMenuAnchor,
   RemoteAppTheme,
   RemoteAppState,
 } from "@t3tools/contracts";
@@ -186,6 +187,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     getState: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GET_STATE_CHANNEL),
     setTheme: (theme: RemoteAppTheme) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_THEME_CHANNEL, theme),
+    openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) =>
+      ipcRenderer.invoke(IpcChannels.REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL, anchor),
     setActiveSurface: (surface) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL, surface),
     goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),

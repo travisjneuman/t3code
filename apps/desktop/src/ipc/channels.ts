@@ -85,6 +85,7 @@ export const PREVIEW_STATE_CHANGE_CHANNEL = "desktop:preview-state-change";
 export const PREVIEW_POINTER_EVENT_CHANNEL = "desktop:preview-pointer-event";
 export const REMOTE_APP_GET_STATE_CHANNEL = "remote-app:get-state";
 export const REMOTE_APP_SET_THEME_CHANNEL = "remote-app:set-theme";
+export const REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL = "remote-app:open-surface-menu";
 export const REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL = "remote-app:set-active-surface";
 export const REMOTE_APP_GO_BACK_CHANNEL = "remote-app:go-back";
 export const REMOTE_APP_GO_FORWARD_CHANNEL = "remote-app:go-forward";

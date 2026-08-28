@@ -1,4 +1,4 @@
-import type { RemoteAppTheme, RemoteAppThemeColors } from "@t3tools/contracts";
+import type { DesktopSurface, RemoteAppTheme, RemoteAppThemeColors } from "@t3tools/contracts";
 
 const SAFE_THEME_COLOR = /^[a-zA-Z0-9#(),.%/ +*-]+$/;
 
@@ -112,6 +112,85 @@ export const buildRemoteAppInteractionScript = (): string => `
   window[key] = true;
 })();
 `;
+
+const surfaceMenuUrl = (surface: DesktopSurface): string => `t3code-surface://select/${surface}`;
+
+/**
+ * The surface picker is rendered in a small host-owned window. A remote
+ * WebContentsView is composited above the renderer, so a renderer popover
+ * cannot reliably appear over ChatGPT. Keep this document intentionally small
+ * and self-contained so it remains available while the remote surface is
+ * loading or offline.
+ */
+export const buildRemoteAppSurfaceMenuHtml = (
+  input: RemoteAppTheme,
+  activeSurface: DesktopSurface,
+): string => {
+  const { appearance, colors } = normalizeRemoteAppTheme(input);
+  const checked = (surface: DesktopSurface): string =>
+    activeSurface === surface ? "true" : "false";
+  return `<!doctype html>
+<html lang="en" data-theme="${appearance}">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      :root { color-scheme: ${appearance}; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+      body {
+        padding: 6px;
+        background: transparent;
+        color: ${colors.text};
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      }
+      [role="menu"] {
+        width: 184px;
+        padding: 5px;
+        border: 1px solid ${colors.toolbarBorder};
+        border-radius: 12px;
+        background: ${colors.surfaceOverlay};
+        box-shadow: 0 14px 32px rgb(0 0 0 / 32%), 0 1px 0 rgb(255 255 255 / 8%) inset;
+      }
+      [role="menuitemradio"] {
+        display: flex;
+        align-items: center;
+        min-height: 32px;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 8px;
+        color: ${colors.text};
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 20px;
+        text-decoration: none;
+        outline: none;
+      }
+      [role="menuitemradio"]:hover,
+      [role="menuitemradio"]:focus-visible,
+      [role="menuitemradio"][aria-checked="true"] {
+        background: ${colors.sidebarRowSelected};
+      }
+      [role="menuitemradio"]:focus-visible {
+        box-shadow: 0 0 0 2px ${colors.focus} inset;
+      }
+      .check { width: 14px; color: ${colors.accent}; font-size: 14px; text-align: center; }
+      .check[aria-hidden="true"] { flex: 0 0 14px; }
+    </style>
+  </head>
+  <body>
+    <div role="menu" aria-label="Switch app surface">
+      <a role="menuitemradio" aria-checked="${checked("t3code")}" href="${surfaceMenuUrl("t3code")}">
+        <span class="check" aria-hidden="true">${activeSurface === "t3code" ? "✓" : ""}</span>
+        <span>T3 Code</span>
+      </a>
+      <a role="menuitemradio" aria-checked="${checked("chatgpt")}" href="${surfaceMenuUrl("chatgpt")}">
+        <span class="check" aria-hidden="true">${activeSurface === "chatgpt" ? "✓" : ""}</span>
+        <span>ChatGPT</span>
+      </a>
+    </div>
+  </body>
+</html>`;
+};
 
 /**
  * ChatGPT is still the real remote site. This user stylesheet only changes
@@ -347,13 +426,24 @@ main :where(
   [data-testid*="composer"],
   [class~="group/composer"]
 ) {
-  background-color: var(--t3code-remote-surface-raised) !important;
-  background-image: none !important;
-  border-style: solid !important;
-  border-width: 1px !important;
-  border-color: var(--t3code-remote-border) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
   color: var(--t3code-remote-text) !important;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 4%) inset, 0 10px 28px rgb(0 0 0 / 12%) !important;
+}
+
+main :where(
+  form:has(textarea) div:has(> textarea),
+  form:has([contenteditable="true"]) div:has(> [contenteditable="true"]),
+  [data-testid*="composer"] div:has(> textarea),
+  [data-testid*="composer"] div:has(> [contenteditable="true"]),
+  [class~="group/composer"] div:has(> textarea),
+  [class~="group/composer"] div:has(> [contenteditable="true"])
+) {
+  background: var(--t3code-remote-surface-raised) !important;
+  border: 1px solid var(--t3code-remote-border) !important;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 5%) inset, 0 10px 28px rgb(0 0 0 / 16%) !important;
 }
 
 main :where(button, [role="button"]) {
@@ -396,6 +486,43 @@ main :where(a),
 ::selection {
   background-color: var(--t3code-remote-accent) !important;
   color: var(--t3code-remote-accent-foreground) !important;
+}
+
+/* Keep row separators out of the remote utility list. This is intentionally
+   last so it wins over the site's later token-border rules. */
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :where(a, button, [role="button"], li, ul, ol, [class*="border"], [class*="divide"]) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :where(a, button, [role="button"], li, ul, ol, [class*="border"], [class*="divide"])::before,
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :where(a, button, [role="button"], li, ul, ol, [class*="border"], [class*="divide"])::after {
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 `;
 };

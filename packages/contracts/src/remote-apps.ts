@@ -3,6 +3,14 @@ import * as Schema from "effect/Schema";
 export const DesktopSurfaceSchema = Schema.Literals(["t3code", "chatgpt"]);
 export type DesktopSurface = typeof DesktopSurfaceSchema.Type;
 
+export const RemoteAppSurfaceMenuAnchorSchema = Schema.Struct({
+  x: Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 20_000 })),
+  y: Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 20_000 })),
+  width: Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2_000 })),
+  height: Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2_000 })),
+});
+export type RemoteAppSurfaceMenuAnchor = typeof RemoteAppSurfaceMenuAnchorSchema.Type;
+
 export const RemoteAppLoadStateSchema = Schema.Literals([
   "not-created",
   "creating",
@@ -106,6 +114,7 @@ export type RemoteAppTheme = typeof RemoteAppThemeSchema.Type;
 export interface DesktopRemoteAppBridge {
   getState: () => Promise<RemoteAppState>;
   setTheme: (theme: RemoteAppTheme) => Promise<void>;
+  openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) => Promise<void>;
   setActiveSurface: (surface: DesktopSurface) => Promise<RemoteAppState>;
   goBack: () => Promise<RemoteAppState>;
   goForward: () => Promise<RemoteAppState>;
