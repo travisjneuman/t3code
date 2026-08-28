@@ -634,12 +634,23 @@ html body :is(
   [aria-label="Chat history"],
   [class~="group/sidebar"]
 ) :is(hr, [role="separator"], [class*="border"], [class*="divide"]) {
-  height: 0 !important;
-  min-height: 0 !important;
   border: 0 !important;
   background: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
+}
+
+html body :is(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :is(hr, [role="separator"]) {
+  height: 0 !important;
+  min-height: 0 !important;
 }
 `;
 };
