@@ -1,4 +1,4 @@
-import type { DesktopSurface, RemoteAppState } from "@t3tools/contracts";
+import type { DesktopSurface, RemoteAppState, RemoteAppTheme } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -23,6 +23,11 @@ import {
 } from "./RemoteAppPolicy.ts";
 import * as RemoteAppSession from "./RemoteAppSession.ts";
 import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
+import {
+  buildRemoteAppThemeCss,
+  DEFAULT_REMOTE_APP_THEME,
+  isChatGptRemoteAppUrl,
+} from "./RemoteAppTheme.ts";
 import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
@@ -52,7 +57,15 @@ export const shouldAutomaticallyRecoverRenderer = (completedRecoveries: number):
 export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppManagerError>()(
   "RemoteAppManagerError",
   {
-    operation: Schema.Literals(["attach", "create-view", "load", "layout", "clear-data", "state"]),
+    operation: Schema.Literals([
+      "attach",
+      "create-view",
+      "load",
+      "layout",
+      "clear-data",
+      "state",
+      "theme",
+    ]),
     cause: Schema.Defect(),
   },
 ) {
@@ -61,6 +74,8 @@ export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppMana
   }
 }
 
+const isRemoteAppManagerError = Schema.is(RemoteAppManagerError);
+
 export class RemoteAppManager extends Context.Service<
   RemoteAppManager,
   {
@@ -68,6 +83,7 @@ export class RemoteAppManager extends Context.Service<
       window: Electron.BrowserWindow,
     ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly getState: Effect.Effect<RemoteAppState>;
+    readonly setTheme: (theme: RemoteAppTheme) => Effect.Effect<void, RemoteAppManagerError>;
     readonly syncLayout: Effect.Effect<void, RemoteAppManagerError>;
     readonly setActiveSurface: (
       surface: DesktopSurface,
@@ -109,6 +125,9 @@ export const make = Effect.gen(function* () {
   const attachedRef = yield* Ref.make(false);
   const recoveryCountRef = yield* Ref.make(0);
   const stateChangeLock = yield* Semaphore.make(1);
+  const themeCssLock = yield* Semaphore.make(1);
+  const remoteThemeRef = yield* Ref.make<RemoteAppTheme>(DEFAULT_REMOTE_APP_THEME);
+  const insertedThemeKeyRef = yield* Ref.make<Option.Option<string>>(Option.none());
   const popupWindows = new Set<Electron.BrowserWindow>();
 
   const runSafely = <A, E>(effect: Effect.Effect<A, E>): void => {
@@ -208,6 +227,29 @@ export const make = Effect.gen(function* () {
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
+  const applyRemoteTheme = Effect.fn("remote-app.applyTheme")(function* (
+    view: Electron.WebContentsView,
+  ): Effect.fn.Return<void, RemoteAppManagerError> {
+    yield* themeCssLock.withPermit(
+      Effect.gen(function* () {
+        const previousKey = yield* Ref.getAndSet(insertedThemeKeyRef, Option.none());
+        if (Option.isSome(previousKey)) {
+          yield* Effect.tryPromise({
+            try: () => view.webContents.removeInsertedCSS(previousKey.value),
+            catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+          }).pipe(Effect.catch(() => Effect.void));
+        }
+        if (!isChatGptRemoteAppUrl(view.webContents.getURL())) return;
+        const theme = yield* Ref.get(remoteThemeRef);
+        const key = yield* Effect.tryPromise({
+          try: () => view.webContents.insertCSS(buildRemoteAppThemeCss(theme)),
+          catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+        });
+        yield* Ref.set(insertedThemeKeyRef, Option.some(key));
+      }),
+    );
+  });
+
   const configureView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) => {
     const contents = view.webContents;
     contents.setWindowOpenHandler(({ url }) => {
@@ -249,6 +291,7 @@ export const make = Effect.gen(function* () {
       }
     });
     contents.on("did-start-loading", () => runSafely(setLoadingState("loading")));
+    contents.on("did-finish-load", () => runSafely(applyRemoteTheme(view)));
     contents.on("did-stop-loading", () =>
       runSafely(syncNavigation(view).pipe(Effect.andThen(setLoadingState("ready")))),
     );
@@ -514,6 +557,18 @@ export const make = Effect.gen(function* () {
   });
 
   const getState = stateStore.get;
+  const setTheme = (theme: RemoteAppTheme) =>
+    Effect.gen(function* () {
+      yield* Ref.set(remoteThemeRef, theme);
+      const view = yield* getLiveView;
+      if (Option.isSome(view)) yield* applyRemoteTheme(view.value);
+    }).pipe(
+      Effect.mapError((cause) =>
+        isRemoteAppManagerError(cause)
+          ? cause
+          : new RemoteAppManagerError({ operation: "theme", cause }),
+      ),
+    );
   const setActiveSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
       if (surface === "chatgpt") {
@@ -600,6 +655,7 @@ export const make = Effect.gen(function* () {
   return RemoteAppManager.of({
     attachMainWindow,
     getState,
+    setTheme,
     syncLayout,
     setActiveSurface,
     goBack: viewNavigation((contents) => contents.canGoBack() && contents.goBack()),

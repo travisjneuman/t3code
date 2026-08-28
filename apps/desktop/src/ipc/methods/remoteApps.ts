@@ -1,4 +1,8 @@
-import { DesktopSurfaceSchema, RemoteAppStateSchema } from "@t3tools/contracts";
+import {
+  DesktopSurfaceSchema,
+  RemoteAppStateSchema,
+  RemoteAppThemeSchema,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -13,6 +17,17 @@ const authorize = (event: DesktopIpc.DesktopIpcInvokeEvent) =>
   });
 
 const voidInput = Schema.Void;
+
+export const setTheme = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.REMOTE_APP_SET_THEME_CHANNEL,
+  payload: RemoteAppThemeSchema,
+  result: Schema.Void,
+  authorize,
+  handler: Effect.fn("desktop.ipc.remoteApp.setTheme")(function* (theme) {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    yield* manager.setTheme(theme);
+  }),
+});
 
 export const getState = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.REMOTE_APP_GET_STATE_CHANNEL,
@@ -99,6 +114,7 @@ export const clearData = makeAction(
 );
 
 export const methods = [
+  setTheme,
   getState,
   setActiveSurface,
   goBack,

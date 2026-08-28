@@ -3,6 +3,7 @@ import type {
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
+  RemoteAppTheme,
   RemoteAppState,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
@@ -183,6 +184,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   remoteApps: {
     getState: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GET_STATE_CHANNEL),
+    setTheme: (theme: RemoteAppTheme) =>
+      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_THEME_CHANNEL, theme),
     setActiveSurface: (surface) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL, surface),
     goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),
