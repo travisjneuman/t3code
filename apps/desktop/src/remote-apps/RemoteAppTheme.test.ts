@@ -64,6 +64,9 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain("button[aria-label*='Add files']");
     expect(script).toContain("[data-state='open']");
     expect(script).toContain("triggerIsOpen");
+    expect(script).toContain("dispatchEscape");
+    expect(script).toContain('key: "Escape"');
+    expect(script).toContain("window.setTimeout(focus, 160)");
     expect(script).toContain("queueMicrotask(focus)");
     expect(script).toContain('["pointerdown", "mousedown"');
     expect(script).not.toContain("fetch(");

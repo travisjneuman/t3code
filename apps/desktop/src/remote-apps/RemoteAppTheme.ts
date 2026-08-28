@@ -103,7 +103,7 @@ export const buildRemoteAppInteractionScript = (): string => `
     return textbox?.querySelector("textarea, [contenteditable='true']") ?? null;
   };
 
-  const closeOpenAddFilesPopover = () => {
+  const getOpenAddFilesPopover = () => {
     const trigger = document.querySelector(
       "button[aria-label*='Add files'], button[aria-label*='files']",
     );
@@ -121,8 +121,40 @@ export const buildRemoteAppInteractionScript = (): string => `
       const rect = candidate.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     });
-    if (!(trigger instanceof HTMLElement) || (!triggerIsOpen && openPopover === undefined)) return;
-    trigger.click();
+    return { open: triggerIsOpen || openPopover !== undefined, trigger };
+  };
+
+  const dispatchEscape = () => {
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      code: "Escape",
+      key: "Escape",
+      keyCode: 27,
+      which: 27,
+    });
+    document.dispatchEvent(event);
+    window.dispatchEvent(event);
+  };
+
+  const closeOpenAddFilesPopover = () => {
+    const { open, trigger } = getOpenAddFilesPopover();
+    if (!open) return;
+
+    // ChatGPT's current attachment picker is a non-modal popover. Its outside
+    // click path is not consistently reached when the user clicks the editor,
+    // so use the same Escape dismissal the site uses for keyboard focus changes
+    // and retain a trigger fallback for older site revisions.
+    dispatchEscape();
+    if (!getOpenAddFilesPopover().open && !(trigger instanceof HTMLElement)) return;
+    if (trigger instanceof HTMLElement) {
+      trigger.click();
+      if (getOpenAddFilesPopover().open) {
+        trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        trigger.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      }
+    }
   };
 
   const focusEditable = (target) => {
@@ -140,6 +172,7 @@ export const buildRemoteAppInteractionScript = (): string => `
     window.setTimeout(focus, 0);
     window.setTimeout(focus, 32);
     window.setTimeout(focus, 80);
+    window.setTimeout(focus, 160);
   };
 
   for (const eventName of ["pointerdown", "mousedown", "click", "focusin"]) {
