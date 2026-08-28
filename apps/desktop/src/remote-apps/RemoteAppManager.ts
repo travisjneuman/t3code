@@ -25,6 +25,7 @@ import * as RemoteAppSession from "./RemoteAppSession.ts";
 import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
 import {
   buildRemoteAppThemeCss,
+  buildRemoteAppInteractionScript,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
 } from "./RemoteAppTheme.ts";
@@ -246,6 +247,10 @@ export const make = Effect.gen(function* () {
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         });
         yield* Ref.set(insertedThemeKeyRef, Option.some(key));
+        yield* Effect.tryPromise({
+          try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript()),
+          catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+        }).pipe(Effect.catch(() => Effect.void));
       }),
     );
   });

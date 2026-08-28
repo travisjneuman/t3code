@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  buildRemoteAppInteractionScript,
   buildRemoteAppThemeCss,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
@@ -23,7 +24,7 @@ describe("RemoteAppTheme", () => {
     expect(css).toContain("--main-surface-primary: var(--t3code-remote-canvas) !important");
     expect(css).toContain("--sidebar-surface-primary: var(--t3code-remote-sidebar) !important");
     expect(css).toContain("background-color: var(--t3code-remote-surface-raised) !important");
-    expect(css).toContain('form:where(:has(textarea), :has([contenteditable="true"]))');
+    expect(css).toContain("form:has(textarea)");
     expect(css).not.toContain("width: nullpx");
 
     const alignedCss = buildRemoteAppThemeCss({
@@ -50,5 +51,16 @@ describe("RemoteAppTheme", () => {
       DEFAULT_REMOTE_APP_THEME.colors.canvas,
     );
     expect(buildRemoteAppThemeCss(theme)).not.toContain("example.invalid");
+  });
+
+  it("installs a focused-only editor recovery handler for the add-files popover", () => {
+    const script = buildRemoteAppInteractionScript();
+
+    expect(script).toContain("__t3codeRemoteAppInteraction");
+    expect(script).toContain("textarea, [contenteditable='true']");
+    expect(script).toContain("queueMicrotask(focus)");
+    expect(script).toContain('document.addEventListener("pointerdown"');
+    expect(script).not.toContain("fetch(");
+    expect(script).not.toContain("localStorage");
   });
 });

@@ -86,6 +86,34 @@ export const isChatGptRemoteAppUrl = (url: string): boolean => {
 };
 
 /**
+ * Restores the native site's expected editor focus after its add-files popover
+ * dismisses. The handler is limited to editable controls and is installed in
+ * the remote document, so it cannot affect the T3 renderer or other origins.
+ */
+export const buildRemoteAppInteractionScript = (): string => `
+(() => {
+  const key = "__t3codeRemoteAppInteraction";
+  if (window[key]) return;
+
+  const focusEditable = (target) => {
+    if (!(target instanceof Element)) return;
+    const editable = target.closest("textarea, [contenteditable='true']");
+    if (!(editable instanceof HTMLElement)) return;
+
+    const focus = () => {
+      if (editable.isConnected) editable.focus({ preventScroll: true });
+    };
+    queueMicrotask(focus);
+    window.setTimeout(focus, 0);
+  };
+
+  document.addEventListener("pointerdown", (event) => focusEditable(event.target), true);
+  document.addEventListener("click", (event) => focusEditable(event.target), true);
+  window[key] = true;
+})();
+`;
+
+/**
  * ChatGPT is still the real remote site. This user stylesheet only changes
  * presentation: it does not replace markup, intercept requests, or touch the
  * dedicated session's cookies/storage. Token selectors cover ChatGPT's stable
@@ -134,8 +162,11 @@ ${sidebarWidthVariable}
   --t3code-remote-toolbar-control: ${colors.toolbarControl};
   --t3code-remote-toolbar-control-foreground: ${colors.toolbarControlForeground};
   --main-surface-primary: var(--t3code-remote-canvas) !important;
-  --main-surface-secondary: var(--t3code-remote-surface) !important;
+  --main-surface-secondary: var(--t3code-remote-surface-raised) !important;
   --main-surface-tertiary: var(--t3code-remote-surface-raised) !important;
+  --composer-surface: var(--t3code-remote-surface-raised) !important;
+  --composer-surface-primary: var(--t3code-remote-surface-raised) !important;
+  --composer-surface-secondary: var(--t3code-remote-surface-raised) !important;
   --sidebar-surface-primary: var(--t3code-remote-sidebar) !important;
   --sidebar-surface-secondary: var(--t3code-remote-surface) !important;
   --text-primary: var(--t3code-remote-text) !important;
@@ -217,6 +248,25 @@ ${sidebarWidthRule}
   color: var(--t3code-remote-sidebar-muted-foreground) !important;
 }
 
+/* The live sidebar currently gives several utility rows their own border.
+   Keep the sidebar's outer edge, but make its child rows read as one clean
+   list like T3's native sidebar. */
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :where(a, button, [role="button"], li, ul, ol, [class*="border"], [class*="divide"]) {
+  border-top-color: transparent !important;
+  border-right-color: transparent !important;
+  border-bottom-color: transparent !important;
+  border-left-color: transparent !important;
+  box-shadow: none !important;
+}
+
 :where(
   [class~="bg-token-main-surface-primary"],
   [class~="bg-token-main-surface-secondary"],
@@ -257,17 +307,38 @@ ${sidebarWidthRule}
   --tw-ring-color: var(--t3code-remote-focus) !important;
 }
 
-main form:where(:has(textarea), :has([contenteditable="true"])),
-form,
-[data-testid*="composer"] {
+main :where(
+  form:has(textarea),
+  form:has([contenteditable="true"]),
+  [data-testid*="composer"],
+  [class*="composer"],
+  div:has(> textarea),
+  div:has(> [contenteditable="true"])
+) {
   background-color: var(--t3code-remote-surface-raised) !important;
+  background-image: none !important;
+  border-style: solid !important;
+  border-width: 1px !important;
   border-color: var(--t3code-remote-border) !important;
+  color: var(--t3code-remote-text) !important;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 4%) inset, 0 10px 28px rgb(0 0 0 / 12%) !important;
+}
+
+main :where(button, [role="button"]) {
   color: var(--t3code-remote-text) !important;
 }
 
-:where(button, [role="button"]) {
-  border-color: var(--t3code-remote-border) !important;
-  color: var(--t3code-remote-text) !important;
+main :where(
+  form:has(textarea),
+  form:has([contenteditable="true"]),
+  [data-testid*="composer"],
+  [class*="composer"],
+  div:has(> textarea),
+  div:has(> [contenteditable="true"])
+) :where(textarea, [contenteditable="true"]) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 :where(textarea, [contenteditable="true"]) {
