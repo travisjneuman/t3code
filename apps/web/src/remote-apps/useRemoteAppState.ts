@@ -6,11 +6,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { DEFAULT_REMOTE_APP_STATE, resolveRemoteAppState } from "./remoteAppState";
+import {
+  DEFAULT_REMOTE_APP_STATE,
+  resolveRemoteAppState,
+  shouldAcceptRemoteAppState,
+} from "./remoteAppState";
 
 interface RemoteAppContextValue {
   readonly state: RemoteAppState;
@@ -31,18 +36,35 @@ const RemoteAppContext = createContext<RemoteAppContextValue | null>(null);
 export function RemoteAppProvider({ children }: { readonly children: ReactNode }) {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.remoteApps;
   const [state, setState] = useState(DEFAULT_REMOTE_APP_STATE);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     if (bridge === undefined) return;
     let active = true;
+    initializedRef.current = false;
     void bridge
       .getState()
       .then((next) => {
-        if (active) setState(resolveRemoteAppState(next));
+        if (!active) return;
+        initializedRef.current = true;
+        setState(resolveRemoteAppState(next));
       })
       .catch(() => undefined);
     const unsubscribe = bridge.onStateChange((next) => {
-      if (active) setState(resolveRemoteAppState(next));
+      if (!active) return;
+      setState((current) => {
+        if (
+          !shouldAcceptRemoteAppState({
+            current,
+            next,
+            initialized: initializedRef.current,
+          })
+        ) {
+          return current;
+        }
+        initializedRef.current = true;
+        return resolveRemoteAppState(next);
+      });
     });
     return () => {
       active = false;
@@ -55,6 +77,7 @@ export function RemoteAppProvider({ children }: { readonly children: ReactNode }
       if (bridge === undefined) return;
       try {
         const next = await action(bridge);
+        initializedRef.current = true;
         setState(resolveRemoteAppState(next));
       } catch {
         // Main-process state events remain authoritative after a failed action.

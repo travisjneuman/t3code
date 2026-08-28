@@ -4,6 +4,7 @@ import {
   DEFAULT_REMOTE_APP_STATE,
   isRemoteAppSurface,
   resolveRemoteAppState,
+  shouldAcceptRemoteAppState,
 } from "./remoteAppState";
 
 describe("remote app renderer state", () => {
@@ -12,5 +13,14 @@ describe("remote app renderer state", () => {
     expect(isRemoteAppSurface("t3code")).toBe(true);
     expect(isRemoteAppSurface("chatgpt")).toBe(true);
     expect(isRemoteAppSurface("preview")).toBe(false);
+  });
+
+  it("ignores a late notification for the previously active surface", () => {
+    const current = { ...DEFAULT_REMOTE_APP_STATE, activeSurface: "chatgpt" as const };
+    const next = { ...DEFAULT_REMOTE_APP_STATE, activeSurface: "t3code" as const };
+
+    expect(shouldAcceptRemoteAppState({ current, next, initialized: true })).toBe(false);
+    expect(shouldAcceptRemoteAppState({ current, next, initialized: false })).toBe(true);
+    expect(shouldAcceptRemoteAppState({ current, next: current, initialized: true })).toBe(true);
   });
 });
