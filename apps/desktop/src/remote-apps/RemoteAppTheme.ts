@@ -101,7 +101,12 @@ export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = nu
     const utilityHrefs = ["/images", "/library", "/scheduled", "/plugins", "/projects"];
     const sidebarLinks = Array.from(document.querySelectorAll("a[href]")).filter((link) => {
       const href = link.getAttribute("href") ?? "";
-      return utilityHrefs.some((utilityHref) => href === utilityHref || href.startsWith(\`\${utilityHref}?\`));
+      try {
+        const pathname = new URL(href, window.location.href).pathname;
+        return utilityHrefs.includes(pathname);
+      } catch {
+        return false;
+      }
     });
     if (sidebarLinks.length < 3) return;
 
