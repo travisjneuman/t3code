@@ -762,10 +762,13 @@ export const make = Effect.gen(function* () {
       );
     });
 
-    const revealSubscribers: RevealSubscription[] = [(fire) => window.once("ready-to-show", fire)];
-    if (environment.platform === "linux") {
-      revealSubscribers.push((fire) => window.webContents.once("did-finish-load", fire));
-    }
+    const revealSubscribers: RevealSubscription[] = [
+      (fire) => window.once("ready-to-show", fire),
+      // A WebContentsView attached during boot can prevent macOS from
+      // emitting ready-to-show even though the host renderer finished loading.
+      // Keep the reveal one-shot, but never leave a healthy app headless.
+      (fire) => window.webContents.once("did-finish-load", fire),
+    ];
     bindFirstRevealTrigger(revealSubscribers, () => {
       // Boot is done; hand the window back to normal hidden-window throttling
       // (see the backgroundThrottling comment on the create options above).
