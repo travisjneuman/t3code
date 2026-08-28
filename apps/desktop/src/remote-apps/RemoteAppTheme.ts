@@ -108,7 +108,10 @@ export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = nu
         return false;
       }
     });
-    if (sidebarLinks.length < 3) return;
+    // ChatGPT may hide some utility links for a given account or viewport. Two
+    // stable utility links are enough to identify the sidebar without relying
+    // on a particular account's menu configuration.
+    if (sidebarLinks.length < 2) return;
 
     const candidates = [];
     let candidate = sidebarLinks[0].parentElement;
