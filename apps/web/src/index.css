@@ -2062,7 +2062,7 @@ body:has([data-remote-app-surface="chatgpt"]) [data-remote-app-host-workspace] {
 
 [data-remote-app-surface="chatgpt"] [data-slot="sidebar-container"],
 [data-remote-app-surface="chatgpt"] [data-slot="sidebar-inner"] {
-  background-color: transparent !important;
+  background-color: var(--sidebar) !important;
   background-image: none !important;
   border-color: transparent !important;
 }
@@ -2094,7 +2094,7 @@ body:has([data-remote-app-surface="chatgpt"]) [data-remote-app-host-workspace] {
 
 [data-remote-app-surface="chatgpt"] [data-remote-app-host-workspace],
 [data-remote-app-surface="chatgpt"] [data-remote-app-host-column] {
-  background-color: transparent !important;
+  background-color: var(--background) !important;
   background-image: none !important;
   pointer-events: none !important;
 }

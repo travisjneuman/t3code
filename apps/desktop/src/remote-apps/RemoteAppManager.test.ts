@@ -8,12 +8,12 @@ import {
 } from "./RemoteAppManager.ts";
 
 describe("RemoteAppManager", () => {
-  it("keeps the remote view below the zoomed titlebar", () => {
+  it("keeps the remote view inside the host titlebar and footer bounds", () => {
     expect(resolveRemoteAppViewBounds({ width: 1200, height: 800 }, 1.5)).toEqual({
       x: 0,
       y: 60,
       width: 1200,
-      height: 740,
+      height: 668,
     });
     expect(resolveRemoteAppViewBounds({ width: 1200, height: 20 }, Number.NaN)).toEqual({
       x: 0,

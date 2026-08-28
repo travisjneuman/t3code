@@ -40,6 +40,11 @@ import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
 const REMOTE_APP_VIEW_LAYER_INDEX = 0;
+// SidebarChromeFooter is a 32px utility row with 8px padding on each side.
+// Keep the live remote document above the host footer's exact 48px strip so
+// the native Settings, Pull Requests, Usage, and update controls remain both
+// visible and interactive on the ChatGPT surface.
+export const REMOTE_APP_HOST_FOOTER_HEIGHT = 48;
 
 const addRemoteAppViewBelowHostRenderer = (
   window: Electron.BrowserWindow,
@@ -60,11 +65,12 @@ export const resolveRemoteAppViewBounds = (
   const normalizedZoomFactor =
     Number.isFinite(mainZoomFactor) && mainZoomFactor > 0 ? mainZoomFactor : 1;
   const titlebarHeight = Math.round(TITLEBAR_HEIGHT * normalizedZoomFactor);
+  const hostFooterHeight = Math.round(REMOTE_APP_HOST_FOOTER_HEIGHT * normalizedZoomFactor);
   return {
     x: 0,
     y: titlebarHeight,
     width: Math.max(0, contentBounds.width),
-    height: Math.max(0, contentBounds.height - titlebarHeight),
+    height: Math.max(0, contentBounds.height - titlebarHeight - hostFooterHeight),
   };
 };
 
