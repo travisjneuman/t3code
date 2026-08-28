@@ -554,5 +554,54 @@ main :where(a),
   border-color: transparent !important;
   box-shadow: none !important;
 }
+
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) * {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) :where(hr, [role="separator"]) {
+  height: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) *::before,
+:where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"]
+) *::after {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
 `;
 };
