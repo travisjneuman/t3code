@@ -4,14 +4,14 @@ import { getDefaultThemeColors, getThemeColorsForMode, OCEAN_THEME } from "../th
 import { resolveRemoteThemeColors } from "./RemoteAppThemeSync";
 
 describe("remote app theme synchronization", () => {
-  it("uses the active T3 palette instead of a ChatGPT-specific fallback", () => {
+  it("uses the rendered T3 palette instead of a ChatGPT-specific fallback", () => {
     const colors = resolveRemoteThemeColors({
       theme: OCEAN_THEME.id,
       resolvedTheme: "dark",
       themeHalves: null,
       computed: {
-        canvas: "#192531",
-        sidebar: "#1b2a39",
+        canvas: getThemeColorsForMode(OCEAN_THEME, "dark")!.canvas,
+        sidebar: getThemeColorsForMode(OCEAN_THEME, "dark")!.sidebar,
         stageNightTop: "oklch(0.3 0.1 280)",
       },
     });
@@ -20,6 +20,18 @@ describe("remote app theme synchronization", () => {
     expect(colors.canvas).toBe(oceanDark.canvas);
     expect(colors.sidebar).toBe(oceanDark.sidebar);
     expect(colors.stageNightTop).toBe("oklch(0.3 0.1 280)");
+  });
+
+  it("falls back to the shared active definition when CSS tokens have not landed", () => {
+    const colors = resolveRemoteThemeColors({
+      theme: OCEAN_THEME.id,
+      resolvedTheme: "dark",
+      themeHalves: null,
+      computed: { canvas: "", sidebar: "" },
+    });
+
+    expect(colors.canvas).toBe(getThemeColorsForMode(OCEAN_THEME, "dark")!.canvas);
+    expect(colors.sidebar).toBe(getThemeColorsForMode(OCEAN_THEME, "dark")!.sidebar);
   });
 
   it("follows the selected light/dark theme half", () => {
@@ -37,7 +49,7 @@ describe("remote app theme synchronization", () => {
       theme: "system",
       resolvedTheme: "light",
       themeHalves: null,
-      computed: { canvas: "#192531" },
+      computed: { canvas: "" },
     });
 
     expect(colors.canvas).toBe(getDefaultThemeColors("light").canvas);

@@ -108,7 +108,7 @@ export function resolveRemoteThemeColors({
 
   return Object.fromEntries([
     ...REMOTE_THEME_ROLES.map(
-      (role) => [role, activeColors[role] ?? computed?.[role] ?? ""] as const,
+      (role) => [role, computed?.[role] || activeColors[role] || ""] as const,
     ),
     ...Object.keys(REMOTE_STAGE_COLOR_VARIABLES).map(
       (role) => [role, computed?.[role as keyof RemoteAppThemeColors] ?? ""] as const,
