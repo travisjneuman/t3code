@@ -105,10 +105,10 @@ export function enqueueLatestRemoteThemeSync(
 
 /**
  * Resolve the remote palette from the same theme definition that paints the
- * native renderer. Computed CSS remains the source for stage artwork (whose
- * channel pigments are declared in index.css), but the ChatGPT surfaces must
- * never fall back to a second, site-specific color scheme when the CSS
- * variables have not landed yet.
+ * native renderer. The semantic theme definition is authoritative for every
+ * surface role, so an in-flight DOM repaint can never leak the previously
+ * selected half into the remote payload. Computed CSS remains the source for
+ * stage artwork (whose channel pigments are declared in index.css).
  */
 export function resolveRemoteThemeColors({
   theme,
@@ -129,7 +129,7 @@ export function resolveRemoteThemeColors({
 
   return Object.fromEntries([
     ...REMOTE_THEME_ROLES.map(
-      (role) => [role, computed?.[role] || activeColors[role] || ""] as const,
+      (role) => [role, activeColors[role] || computed?.[role] || ""] as const,
     ),
     ...Object.keys(REMOTE_STAGE_COLOR_VARIABLES).map(
       (role) => [role, computed?.[role as keyof RemoteAppThemeColors] ?? ""] as const,

@@ -34,6 +34,22 @@ describe("remote app theme synchronization", () => {
     expect(colors.sidebar).toBe(getThemeColorsForMode(OCEAN_THEME, "dark")!.sidebar);
   });
 
+  it("does not let a stale rendered token override the selected theme half", () => {
+    const colors = resolveRemoteThemeColors({
+      theme: OCEAN_THEME.id,
+      resolvedTheme: "dark",
+      themeHalves: null,
+      computed: {
+        canvas: "oklch(0.245899 0.019144 42.044)",
+        sidebar: "oklch(0.293349 0.029554 46.882)",
+      },
+    });
+
+    const oceanDark = getThemeColorsForMode(OCEAN_THEME, "dark")!;
+    expect(colors.canvas).toBe(oceanDark.canvas);
+    expect(colors.sidebar).toBe(oceanDark.sidebar);
+  });
+
   it("follows the selected light/dark theme half", () => {
     const colors = resolveRemoteThemeColors({
       theme: "system",
