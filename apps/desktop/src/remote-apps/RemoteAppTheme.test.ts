@@ -78,6 +78,25 @@ describe("RemoteAppTheme", () => {
     ).toBe("none");
   });
 
+  it("accepts bounded browser-serialized stage color expressions", () => {
+    const nestedStageColor =
+      "color-mix(in oklch, oklch(0.732079 0.09296 224.414) 55%, " +
+      "color-mix(in oklch, oklch(0.461094 0.084904 243.478) 38%, " +
+      "oklch(0.227147 0.086086 277.99)))";
+    expect(nestedStageColor.length).toBeGreaterThan(128);
+    expect(nestedStageColor.length).toBeLessThanOrEqual(512);
+
+    const theme = {
+      ...DEFAULT_REMOTE_APP_THEME,
+      colors: { ...DEFAULT_REMOTE_APP_THEME.colors, stageNightSecondary: nestedStageColor },
+    };
+
+    expect(Schema.decodeUnknownSync(RemoteAppThemeSchema)(theme).colors.stageNightSecondary).toBe(
+      nestedStageColor,
+    );
+    expect(normalizeRemoteAppTheme(theme).colors.stageNightSecondary).toBe(nestedStageColor);
+  });
+
   it("rejects CSS control characters from renderer-provided theme values", () => {
     const theme = {
       ...DEFAULT_REMOTE_APP_THEME,

@@ -62,7 +62,16 @@ export const RemoteAppStateSchema = Schema.Struct({
 });
 export type RemoteAppState = typeof RemoteAppStateSchema.Type;
 
-const RemoteAppThemeColorSchema = Schema.String.check(Schema.isMaxLength(128));
+const REMOTE_APP_THEME_COLOR_MAX_LENGTH = 128;
+// Browser-serialized stage artwork pigments can contain nested color-mix()
+// expressions, so they need a larger bound than ordinary palette tokens.
+export const REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH = 512;
+const RemoteAppThemeColorSchema = Schema.String.check(
+  Schema.isMaxLength(REMOTE_APP_THEME_COLOR_MAX_LENGTH),
+);
+const RemoteAppThemeStageColorSchema = Schema.String.check(
+  Schema.isMaxLength(REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH),
+);
 
 export const RemoteAppStageArtSchema = Schema.Literals(["none", "nightly", "dev"]);
 export type RemoteAppStageArt = typeof RemoteAppStageArtSchema.Type;
@@ -103,27 +112,27 @@ export const RemoteAppThemeColorsSchema = Schema.Struct({
   messageActionHover: RemoteAppThemeColorSchema,
   codeBackground: RemoteAppThemeColorSchema,
   codeForeground: RemoteAppThemeColorSchema,
-  stageArtTop: RemoteAppThemeColorSchema,
-  stageArtMid: RemoteAppThemeColorSchema,
-  stageArtBottom: RemoteAppThemeColorSchema,
-  stageArtHighlight: RemoteAppThemeColorSchema,
-  stageArtSecondary: RemoteAppThemeColorSchema,
-  stageArtTertiary: RemoteAppThemeColorSchema,
-  stageArtLine: RemoteAppThemeColorSchema,
-  stageArtCelesteHighlight: RemoteAppThemeColorSchema,
-  stageArtCelesteSecondary: RemoteAppThemeColorSchema,
-  stageArtVioletHighlight: RemoteAppThemeColorSchema,
-  stageArtGridLine: RemoteAppThemeColorSchema,
-  stageNightTop: RemoteAppThemeColorSchema,
-  stageNightMid: RemoteAppThemeColorSchema,
-  stageNightBottom: RemoteAppThemeColorSchema,
-  stageNightHighlight: RemoteAppThemeColorSchema,
-  stageNightSecondary: RemoteAppThemeColorSchema,
-  stageNightTertiary: RemoteAppThemeColorSchema,
-  stageNightLine: RemoteAppThemeColorSchema,
-  stageNightGlowHighlight: RemoteAppThemeColorSchema,
-  stageNightGlowSecondary: RemoteAppThemeColorSchema,
-  stageNightSparkle: RemoteAppThemeColorSchema,
+  stageArtTop: RemoteAppThemeStageColorSchema,
+  stageArtMid: RemoteAppThemeStageColorSchema,
+  stageArtBottom: RemoteAppThemeStageColorSchema,
+  stageArtHighlight: RemoteAppThemeStageColorSchema,
+  stageArtSecondary: RemoteAppThemeStageColorSchema,
+  stageArtTertiary: RemoteAppThemeStageColorSchema,
+  stageArtLine: RemoteAppThemeStageColorSchema,
+  stageArtCelesteHighlight: RemoteAppThemeStageColorSchema,
+  stageArtCelesteSecondary: RemoteAppThemeStageColorSchema,
+  stageArtVioletHighlight: RemoteAppThemeStageColorSchema,
+  stageArtGridLine: RemoteAppThemeStageColorSchema,
+  stageNightTop: RemoteAppThemeStageColorSchema,
+  stageNightMid: RemoteAppThemeStageColorSchema,
+  stageNightBottom: RemoteAppThemeStageColorSchema,
+  stageNightHighlight: RemoteAppThemeStageColorSchema,
+  stageNightSecondary: RemoteAppThemeStageColorSchema,
+  stageNightTertiary: RemoteAppThemeStageColorSchema,
+  stageNightLine: RemoteAppThemeStageColorSchema,
+  stageNightGlowHighlight: RemoteAppThemeStageColorSchema,
+  stageNightGlowSecondary: RemoteAppThemeStageColorSchema,
+  stageNightSparkle: RemoteAppThemeStageColorSchema,
 });
 export type RemoteAppThemeColors = typeof RemoteAppThemeColorsSchema.Type;
 

@@ -1,7 +1,13 @@
-import type { DesktopSurface, RemoteAppTheme, RemoteAppThemeColors } from "@t3tools/contracts";
+import {
+  REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH,
+  type DesktopSurface,
+  type RemoteAppTheme,
+  type RemoteAppThemeColors,
+} from "@t3tools/contracts";
 import { buildSidebarStageArtworkSvg } from "@t3tools/shared/sidebarStageArtwork";
 
 const SAFE_THEME_COLOR = /^[a-zA-Z0-9#(),.%/ +*-]+$/;
+const REMOTE_APP_THEME_COLOR_MAX_LENGTH = 128;
 
 /**
  * A blue-gray fallback prevents a black flash before the renderer has sent its
@@ -76,9 +82,15 @@ const COLOR_KEYS = Object.keys(DEFAULT_REMOTE_APP_THEME.colors) as Array<
   keyof RemoteAppThemeColors
 >;
 
-const safeColor = (value: string, fallback: string): string => {
+const safeColor = (
+  value: string,
+  fallback: string,
+  maxLength = REMOTE_APP_THEME_COLOR_MAX_LENGTH,
+): string => {
   const normalized = value.trim();
-  return normalized.length > 0 && normalized.length <= 128 && SAFE_THEME_COLOR.test(normalized)
+  return normalized.length > 0 &&
+    normalized.length <= maxLength &&
+    SAFE_THEME_COLOR.test(normalized)
     ? normalized
     : fallback;
 };
@@ -93,7 +105,11 @@ export const normalizeRemoteAppTheme = (theme: RemoteAppTheme): RemoteAppTheme =
   colors: Object.fromEntries(
     COLOR_KEYS.map((key) => [
       key,
-      safeColor(theme.colors[key], DEFAULT_REMOTE_APP_THEME.colors[key]),
+      safeColor(
+        theme.colors[key],
+        DEFAULT_REMOTE_APP_THEME.colors[key],
+        key.startsWith("stage") ? REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH : undefined,
+      ),
     ]),
   ) as RemoteAppThemeColors,
 });
