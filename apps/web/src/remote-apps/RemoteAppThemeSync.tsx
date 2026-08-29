@@ -195,6 +195,7 @@ export function RemoteAppThemeSync() {
   useEffect(() => {
     if (bridge === undefined) return;
     let disposed = false;
+    let pendingThemeFrame: number | null = null;
     const sync = () => {
       if (disposed) return;
       const sequence = ++syncSequenceRef.current;
@@ -230,6 +231,23 @@ export function RemoteAppThemeSync() {
       );
     };
 
+    // Theme selection paints the root tokens before React publishes the new
+    // external-store snapshot. Defer the boundary reaction until that paint
+    // so the queued payload sees both the freshly rendered tokens and the
+    // latest theme-half selection.
+    const syncAfterThemePaint = () => {
+      if (pendingThemeFrame !== null) return;
+      const run = () => {
+        pendingThemeFrame = null;
+        sync();
+      };
+      if (typeof window.requestAnimationFrame === "function") {
+        pendingThemeFrame = window.requestAnimationFrame(run);
+      } else {
+        window.setTimeout(run, 0);
+      }
+    };
+
     sync();
     let observedSidebar: HTMLElement | null = null;
     let resizeObserver: ResizeObserver | null = null;
@@ -255,7 +273,7 @@ export function RemoteAppThemeSync() {
       attributeFilter: ["class", "style"],
     });
     observeSidebar();
-    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    window.addEventListener(THEME_CHANGE_EVENT, syncAfterThemePaint);
     window.addEventListener("resize", sync);
     return () => {
       disposed = true;
@@ -265,7 +283,11 @@ export function RemoteAppThemeSync() {
       mutationObserver.disconnect();
       themeObserver.disconnect();
       resizeObserver?.disconnect();
-      window.removeEventListener(THEME_CHANGE_EVENT, sync);
+      if (pendingThemeFrame !== null && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(pendingThemeFrame);
+      }
+      pendingThemeFrame = null;
+      window.removeEventListener(THEME_CHANGE_EVENT, syncAfterThemePaint);
       window.removeEventListener("resize", sync);
     };
   }, [
