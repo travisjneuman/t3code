@@ -4,6 +4,8 @@ import { useEffect } from "react";
 
 import { getThemeColorVariable, type ThemeColorRole } from "../themePalette";
 import { useTheme } from "../hooks/useTheme";
+import { useEnvironmentIdentificationMode } from "../hooks/useSettings";
+import { useSidebarStageBackdropVariant } from "../components/SidebarStageBackdrop";
 import { useRemoteAppState } from "./useRemoteAppState";
 
 const REMOTE_THEME_ROLES = [
@@ -34,6 +36,7 @@ const REMOTE_THEME_ROLES = [
   "toolbarBorder",
   "toolbarControl",
   "toolbarControlForeground",
+  "toolbarControlHover",
   "messageSurface",
   "messageForeground",
   "messageAction",
@@ -43,14 +46,40 @@ const REMOTE_THEME_ROLES = [
   "codeForeground",
 ] as const satisfies ReadonlyArray<ThemeColorRole>;
 
+const REMOTE_STAGE_COLOR_VARIABLES = {
+  stageArtTop: "--stage-art-top",
+  stageArtMid: "--stage-art-mid",
+  stageArtBottom: "--stage-art-bottom",
+  stageArtHighlight: "--stage-art-highlight",
+  stageArtSecondary: "--stage-art-secondary",
+  stageArtTertiary: "--stage-art-tertiary",
+  stageArtLine: "--stage-art-line",
+  stageArtCelesteHighlight: "--stage-art-celeste-highlight",
+  stageArtCelesteSecondary: "--stage-art-celeste-secondary",
+  stageArtVioletHighlight: "--stage-art-violet-highlight",
+  stageArtGridLine: "--stage-art-grid-line",
+  stageNightTop: "--stage-night-top",
+  stageNightMid: "--stage-night-mid",
+  stageNightBottom: "--stage-night-bottom",
+  stageNightHighlight: "--stage-night-highlight",
+  stageNightSecondary: "--stage-night-secondary",
+  stageNightTertiary: "--stage-night-tertiary",
+  stageNightLine: "--stage-night-line",
+  stageNightGlowHighlight: "--stage-night-glow-highlight",
+  stageNightGlowSecondary: "--stage-night-glow-secondary",
+  stageNightSparkle: "--stage-night-sparkle",
+} as const satisfies Readonly<Record<string, `--${string}`>>;
+
 function readRemoteThemeColors(): RemoteAppThemeColors {
   const styles = getComputedStyle(document.documentElement);
-  return Object.fromEntries(
-    REMOTE_THEME_ROLES.map((role) => [
-      role,
-      styles.getPropertyValue(getThemeColorVariable(role)).trim(),
-    ]),
-  ) as RemoteAppThemeColors;
+  return Object.fromEntries([
+    ...REMOTE_THEME_ROLES.map(
+      (role) => [role, styles.getPropertyValue(getThemeColorVariable(role)).trim()] as const,
+    ),
+    ...Object.entries(REMOTE_STAGE_COLOR_VARIABLES).map(
+      ([role, variable]) => [role, styles.getPropertyValue(variable).trim()] as const,
+    ),
+  ]) as RemoteAppThemeColors;
 }
 
 function readRemoteSidebarWidth(): number | null {
@@ -64,6 +93,9 @@ function readRemoteSidebarWidth(): number | null {
 export function RemoteAppThemeSync() {
   const { bridge } = useRemoteAppState();
   const { theme, resolvedTheme, appearanceMode, themeHalves } = useTheme();
+  const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  const stageArt =
+    useSidebarStageBackdropVariant(environmentIdentificationMode === "artwork") ?? "none";
   const lightThemeHalf = themeHalves?.light ?? "";
   const darkThemeHalf = themeHalves?.dark ?? "";
 
@@ -73,6 +105,7 @@ export function RemoteAppThemeSync() {
       void bridge
         .setTheme({
           appearance: resolvedTheme,
+          stageArt,
           sidebarWidth: readRemoteSidebarWidth(),
           colors: readRemoteThemeColors(),
         })
@@ -107,7 +140,7 @@ export function RemoteAppThemeSync() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [appearanceMode, bridge, darkThemeHalf, lightThemeHalf, resolvedTheme, theme]);
+  }, [appearanceMode, bridge, darkThemeHalf, lightThemeHalf, resolvedTheme, stageArt, theme]);
 
   return null;
 }

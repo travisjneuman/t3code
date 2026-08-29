@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  REMOTE_APP_THEME_DOCUMENT_EVENTS,
   parseRemoteAppSurfaceMenuUrl,
   resolveRemoteAppViewBounds,
   resolveRemoteAppViewZoomFactor,
@@ -47,5 +48,9 @@ describe("RemoteAppManager", () => {
       "chatgpt",
     );
     expect(parseRemoteAppSurfaceMenuUrl("t3code-surface://select/other")).toBeUndefined();
+  });
+
+  it("reapplies remote presentation after each replacement document loads", () => {
+    expect(REMOTE_APP_THEME_DOCUMENT_EVENTS).toEqual(["did-finish-load"]);
   });
 });

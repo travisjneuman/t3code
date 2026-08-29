@@ -59,6 +59,7 @@ describe("SidebarStageBackdrop", () => {
     expect(devMarkup).toContain("var(--stage-art-line)");
     expect(nightlyMarkup).not.toMatch(/#[0-9a-f]{3,8}/i);
     expect(devMarkup).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(nightlyMarkup).toContain("stage-night-sky");
   });
 
   it.each([

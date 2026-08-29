@@ -45,6 +45,7 @@ const REMOTE_APP_VIEW_LAYER_INDEX = 0;
 // the native Settings, Pull Requests, Usage, and update controls remain both
 // visible and interactive on the ChatGPT surface.
 export const REMOTE_APP_HOST_FOOTER_HEIGHT = 48;
+export const REMOTE_APP_THEME_DOCUMENT_EVENTS = ["did-finish-load"] as const;
 
 const addRemoteAppViewBelowHostRenderer = (
   window: Electron.BrowserWindow,
@@ -300,8 +301,7 @@ export const make = Effect.gen(function* () {
         });
         yield* Ref.set(insertedThemeKeyRef, Option.some(key));
         yield* Effect.tryPromise({
-          try: () =>
-            view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme.sidebarWidth)),
+          try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         }).pipe(Effect.catch(() => Effect.void));
       }),
@@ -352,7 +352,9 @@ export const make = Effect.gen(function* () {
       }
     });
     contents.on("did-start-loading", () => runSafely(setLoadingState("loading")));
-    contents.on("did-finish-load", () => runSafely(applyRemoteTheme(view)));
+    for (const event of REMOTE_APP_THEME_DOCUMENT_EVENTS) {
+      contents.on(event, () => runSafely(applyRemoteTheme(view)));
+    }
     contents.on("did-stop-loading", () =>
       runSafely(syncNavigation(view).pipe(Effect.andThen(setLoadingState("ready")))),
     );

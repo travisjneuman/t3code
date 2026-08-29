@@ -1,3 +1,5 @@
+import { RemoteAppThemeSchema } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -7,6 +9,7 @@ import {
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
   normalizeRemoteAppTheme,
+  resolveRemoteToolbarControlKind,
 } from "./RemoteAppTheme.ts";
 
 describe("RemoteAppTheme", () => {
@@ -24,8 +27,11 @@ describe("RemoteAppTheme", () => {
     expect(css).toContain("color-scheme: dark !important");
     expect(css).toContain("--main-surface-primary: var(--t3code-remote-canvas) !important");
     expect(css).toContain("--sidebar-surface-primary: var(--t3code-remote-sidebar) !important");
-    expect(css).toContain("background-color: var(--t3code-remote-surface-raised) !important");
-    expect(css).toContain("form:has(textarea)");
+    expect(css).toContain("--composer-surface: var(--t3code-remote-input) !important");
+    expect(css).toContain('[data-t3code-remote-composer-shell="true"]');
+    expect(css).toContain("background: var(--t3code-remote-input) !important");
+    expect(css).toContain("[data-t3code-remote-toolbar-control]");
+    expect(css).not.toContain("form:has(textarea)");
     expect(css).not.toContain("width: nullpx");
 
     const alignedCss = buildRemoteAppThemeCss({
@@ -43,7 +49,21 @@ describe("RemoteAppTheme", () => {
     expect(alignedCss).not.toContain("flex-basis: 235px !important");
     expect(alignedCss).toContain("overflow-x: hidden !important");
     expect(alignedCss).toContain("padding-top: 9px !important");
+    expect(alignedCss).toContain("transform: translateY(-40px) !important");
     expect(alignedCss).not.toContain("\n:where(a) {");
+  });
+
+  it("validates stage-art variants and defaults unknown presentation input", () => {
+    const decodeTheme = Schema.decodeUnknownSync(RemoteAppThemeSchema);
+
+    expect(decodeTheme(DEFAULT_REMOTE_APP_THEME).stageArt).toBe("none");
+    expect(() => decodeTheme({ ...DEFAULT_REMOTE_APP_THEME, stageArt: "preview" })).toThrow();
+    expect(
+      normalizeRemoteAppTheme({
+        ...DEFAULT_REMOTE_APP_THEME,
+        stageArt: "preview" as never,
+      }).stageArt,
+    ).toBe("none");
   });
 
   it("rejects CSS control characters from renderer-provided theme values", () => {
@@ -62,7 +82,10 @@ describe("RemoteAppTheme", () => {
   });
 
   it("installs a focused-only editor recovery handler for the add-files popover", () => {
-    const script = buildRemoteAppInteractionScript();
+    const script = buildRemoteAppInteractionScript({
+      ...DEFAULT_REMOTE_APP_THEME,
+      stageArt: "nightly",
+    });
 
     expect(script).toContain("__t3codeRemoteAppInteraction");
     expect(script).toContain("targetSidebarWidth");
@@ -70,12 +93,17 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain("dataset.t3codeRemoteSidebarRoot");
     expect(script).toContain("style.removeProperty(property)");
     expect(script).toContain("getBoundingClientRect().height >=");
-    expect(script).toContain("existing.setSidebarWidth(nextSidebarWidth)");
-    expect(script).toContain("setSidebarWidth(value)");
+    expect(script).toContain("existing.setPresentation(");
+    expect(script).toContain("setPresentation(value, stageArt, stageMarkup)");
     expect(script).toContain('setProperty("overflow-x", "hidden", "important")');
     expect(script).not.toContain('rootSidebar.querySelectorAll("*")');
     expect(script).toContain("requestAnimationFrame");
     expect(script).toContain("textarea, [contenteditable='true']");
+    expect(script).toContain("dataset.t3codeRemoteComposerShell");
+    expect(script).toContain("dataset.t3codeRemoteComposerEditable");
+    expect(script).toContain("dataset.t3codeRemoteToolbarControl");
+    expect(script).toContain("data-t3code-remote-stage-art");
+    expect(script).toContain("stage-nightly");
     expect(script).toContain("button[aria-label*='Add files']");
     expect(script).toContain("[data-state='open']");
     expect(script).toContain("triggerIsOpen");
@@ -86,6 +114,33 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain('["pointerdown", "mousedown"');
     expect(script).not.toContain("fetch(");
     expect(script).not.toContain("localStorage");
+    expect(() => Function(script)).not.toThrow();
+  });
+
+  it("identifies only main-content upper-right ChatGPT toolbar controls", () => {
+    const base = {
+      insideMainContent: true,
+      left: 900,
+      top: 24,
+      viewportWidth: 1200,
+      sidebarWidth: 240,
+    };
+
+    expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade" })).toBe("upgrade");
+    expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Temporary Chat" })).toBe(
+      "temporary-chat",
+    );
+    expect(
+      resolveRemoteToolbarControlKind({
+        ...base,
+        accessibleName: "Upgrade",
+        insideMainContent: false,
+      }),
+    ).toBeNull();
+    expect(
+      resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade", left: 120 }),
+    ).toBeNull();
+    expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade plan" })).toBeNull();
   });
 
   it("builds a self-contained themed surface picker with one active option", () => {

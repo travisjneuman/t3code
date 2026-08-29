@@ -64,6 +64,9 @@ export type RemoteAppState = typeof RemoteAppStateSchema.Type;
 
 const RemoteAppThemeColorSchema = Schema.String.check(Schema.isMaxLength(128));
 
+export const RemoteAppStageArtSchema = Schema.Literals(["none", "nightly", "dev"]);
+export type RemoteAppStageArt = typeof RemoteAppStageArtSchema.Type;
+
 export const RemoteAppThemeColorsSchema = Schema.Struct({
   canvas: RemoteAppThemeColorSchema,
   sidebar: RemoteAppThemeColorSchema,
@@ -92,6 +95,7 @@ export const RemoteAppThemeColorsSchema = Schema.Struct({
   toolbarBorder: RemoteAppThemeColorSchema,
   toolbarControl: RemoteAppThemeColorSchema,
   toolbarControlForeground: RemoteAppThemeColorSchema,
+  toolbarControlHover: RemoteAppThemeColorSchema,
   messageSurface: RemoteAppThemeColorSchema,
   messageForeground: RemoteAppThemeColorSchema,
   messageAction: RemoteAppThemeColorSchema,
@@ -99,11 +103,33 @@ export const RemoteAppThemeColorsSchema = Schema.Struct({
   messageActionHover: RemoteAppThemeColorSchema,
   codeBackground: RemoteAppThemeColorSchema,
   codeForeground: RemoteAppThemeColorSchema,
+  stageArtTop: RemoteAppThemeColorSchema,
+  stageArtMid: RemoteAppThemeColorSchema,
+  stageArtBottom: RemoteAppThemeColorSchema,
+  stageArtHighlight: RemoteAppThemeColorSchema,
+  stageArtSecondary: RemoteAppThemeColorSchema,
+  stageArtTertiary: RemoteAppThemeColorSchema,
+  stageArtLine: RemoteAppThemeColorSchema,
+  stageArtCelesteHighlight: RemoteAppThemeColorSchema,
+  stageArtCelesteSecondary: RemoteAppThemeColorSchema,
+  stageArtVioletHighlight: RemoteAppThemeColorSchema,
+  stageArtGridLine: RemoteAppThemeColorSchema,
+  stageNightTop: RemoteAppThemeColorSchema,
+  stageNightMid: RemoteAppThemeColorSchema,
+  stageNightBottom: RemoteAppThemeColorSchema,
+  stageNightHighlight: RemoteAppThemeColorSchema,
+  stageNightSecondary: RemoteAppThemeColorSchema,
+  stageNightTertiary: RemoteAppThemeColorSchema,
+  stageNightLine: RemoteAppThemeColorSchema,
+  stageNightGlowHighlight: RemoteAppThemeColorSchema,
+  stageNightGlowSecondary: RemoteAppThemeColorSchema,
+  stageNightSparkle: RemoteAppThemeColorSchema,
 });
 export type RemoteAppThemeColors = typeof RemoteAppThemeColorsSchema.Type;
 
 export const RemoteAppThemeSchema = Schema.Struct({
   appearance: Schema.Literals(["light", "dark"]),
+  stageArt: RemoteAppStageArtSchema,
   sidebarWidth: Schema.NullOr(
     Schema.Number.check(Schema.isBetween({ minimum: 160, maximum: 512 })),
   ),
