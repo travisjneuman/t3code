@@ -819,6 +819,14 @@ ${stageArtworkRule}
   background-color: var(--t3code-remote-sidebar) !important;
 }
 
+/* The semantic outer sidebar remains opaque. Clear only non-interactive
+   nested wrapper fills so they cannot cover the canonical stage artwork;
+   links and controls retain their own hover, selected, and account states. */
+[data-t3code-remote-sidebar-root="true"]
+  :where(*):not(a):not(button):not([role="button"]) {
+  background-color: transparent !important;
+}
+
 :where(
   [class~="text-token-text-primary"],
   [class~="text-token-text-secondary"],

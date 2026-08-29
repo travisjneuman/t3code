@@ -59,6 +59,7 @@ describe("RemoteAppTheme", () => {
     expect(nightlyCss).toContain('background-image: url("data:image/svg+xml,');
     expect(nightlyCss).toContain("background-position: left -40px !important");
     expect(nightlyCss).toContain('data-t3code-remote-sidebar-root="true"] :where(');
+    expect(nightlyCss).toContain(':where(*):not(a):not(button):not([role="button"])');
     expect(nightlyCss).toContain("background-color: transparent !important");
     expect(nightlyCss).toContain("stage-nightly");
     expect(nightlyCss).not.toContain("var(--stage-night-bottom)");
