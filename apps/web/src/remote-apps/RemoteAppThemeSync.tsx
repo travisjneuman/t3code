@@ -170,6 +170,23 @@ export function RemoteAppThemeSync() {
     useSidebarStageBackdropVariant(environmentIdentificationMode === "artwork") ?? "none";
   const lightThemeHalf = themeHalves?.light ?? "";
   const darkThemeHalf = themeHalves?.dark ?? "";
+  const latestThemeRef = useRef<{
+    theme: typeof theme;
+    resolvedTheme: typeof resolvedTheme;
+    stageArt: "none" | "nightly" | "dev";
+    themeHalves: typeof themeHalves;
+  }>({
+    theme,
+    resolvedTheme,
+    stageArt: stageArt as "none" | "nightly" | "dev",
+    themeHalves,
+  });
+  latestThemeRef.current = {
+    theme,
+    resolvedTheme,
+    stageArt: stageArt as "none" | "nightly" | "dev",
+    themeHalves,
+  };
   const syncSequenceRef = useRef(0);
   const syncQueueRef = useRef(Promise.resolve());
 
@@ -178,12 +195,17 @@ export function RemoteAppThemeSync() {
     let disposed = false;
     const sync = () => {
       if (disposed) return;
+      const latestTheme = latestThemeRef.current;
       const sequence = ++syncSequenceRef.current;
       const payload = {
-        appearance: resolvedTheme,
-        stageArt,
+        appearance: latestTheme.resolvedTheme,
+        stageArt: latestTheme.stageArt,
         sidebarWidth: readRemoteSidebarWidth(),
-        colors: readRemoteThemeColors(theme, resolvedTheme, themeHalves),
+        colors: readRemoteThemeColors(
+          latestTheme.theme,
+          latestTheme.resolvedTheme,
+          latestTheme.themeHalves,
+        ),
       } as const;
       syncQueueRef.current = enqueueLatestRemoteThemeSync(
         syncQueueRef.current,
@@ -218,6 +240,11 @@ export function RemoteAppThemeSync() {
 
     const mutationObserver = new MutationObserver(observeSidebar);
     mutationObserver.observe(document.body, { childList: true, subtree: true });
+    const themeObserver = new MutationObserver(sync);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
     observeSidebar();
     window.addEventListener("resize", sync);
     return () => {
@@ -226,6 +253,7 @@ export function RemoteAppThemeSync() {
       // snapshot starts its own synchronization.
       syncSequenceRef.current += 1;
       mutationObserver.disconnect();
+      themeObserver.disconnect();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", sync);
     };
