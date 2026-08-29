@@ -142,7 +142,7 @@ function readRemoteSidebarWidth(): number | null {
 
 /** Keeps the isolated native ChatGPT surface visually aligned with T3's live palette. */
 export function RemoteAppThemeSync() {
-  const { bridge } = useRemoteAppState();
+  const { bridge, state } = useRemoteAppState();
   const { theme, resolvedTheme, appearanceMode, themeHalves } = useTheme();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const stageArt =
@@ -191,7 +191,16 @@ export function RemoteAppThemeSync() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [appearanceMode, bridge, darkThemeHalf, lightThemeHalf, resolvedTheme, stageArt, theme]);
+  }, [
+    appearanceMode,
+    bridge,
+    darkThemeHalf,
+    lightThemeHalf,
+    resolvedTheme,
+    stageArt,
+    state.activeSurface,
+    theme,
+  ]);
 
   return null;
 }
