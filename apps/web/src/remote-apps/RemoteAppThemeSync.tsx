@@ -13,7 +13,7 @@ import {
   type ThemeHalves,
   type ThemePreference,
 } from "../themePalette";
-import { useTheme } from "../hooks/useTheme";
+import { THEME_CHANGE_EVENT, useTheme } from "../hooks/useTheme";
 import { useEnvironmentIdentificationMode } from "../hooks/useSettings";
 import { useSidebarStageBackdropVariant } from "../components/SidebarStageBackdrop";
 import { useRemoteAppState } from "./useRemoteAppState";
@@ -209,13 +209,16 @@ export function RemoteAppThemeSync() {
             // and execution; capturing the payload earlier could reapply the
             // previous theme after a newer selection.
             const latestTheme = latestThemeRef.current;
+            const renderedAppearance = document.documentElement.classList.contains("dark")
+              ? "dark"
+              : "light";
             const payload = {
-              appearance: latestTheme.resolvedTheme,
+              appearance: renderedAppearance,
               stageArt: latestTheme.stageArt,
               sidebarWidth: readRemoteSidebarWidth(),
               colors: readRemoteThemeColors(
                 latestTheme.theme,
-                latestTheme.resolvedTheme,
+                renderedAppearance,
                 latestTheme.themeHalves,
               ),
             } as const;
@@ -252,6 +255,7 @@ export function RemoteAppThemeSync() {
       attributeFilter: ["class", "style"],
     });
     observeSidebar();
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
     window.addEventListener("resize", sync);
     return () => {
       disposed = true;
@@ -261,6 +265,7 @@ export function RemoteAppThemeSync() {
       mutationObserver.disconnect();
       themeObserver.disconnect();
       resizeObserver?.disconnect();
+      window.removeEventListener(THEME_CHANGE_EVENT, sync);
       window.removeEventListener("resize", sync);
     };
   }, [

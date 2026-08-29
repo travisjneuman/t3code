@@ -37,6 +37,7 @@ type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
 const STORAGE_KEY = "t3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
+export const THEME_CHANGE_EVENT = "t3code:theme-change";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
   resolvedTheme: "light",
@@ -141,6 +142,9 @@ let themeStorageReadFailure: ThemeStorageError | null = null;
 function emitChange() {
   snapshotStale = true;
   for (const listener of listeners) listener();
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+  }
 }
 
 function getSystemDark() {
