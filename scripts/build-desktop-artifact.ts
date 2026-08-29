@@ -2068,7 +2068,6 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
     provider: "github",
     owner,
     repo,
-    updaterCacheDirName: REMOTE_APP_DISTRIBUTION.updaterCacheDirName,
     releaseType: updateChannel === "nightly" ? "prerelease" : "release",
     ...(updateChannel === "nightly" ? { channel: "nightly" as const } : {}),
   };
@@ -3185,7 +3184,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: REMOTE_APP_DISTRIBUTION.packageName,
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,

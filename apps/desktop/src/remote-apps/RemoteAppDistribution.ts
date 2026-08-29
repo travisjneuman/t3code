@@ -14,9 +14,10 @@ export const REMOTE_APP_DISTRIBUTION = {
   // distribution identity. Upstream binaries use a different app identity
   // and data boundary, so they are never a valid update source for TJN.
   updateRepository: "travisjneuman/t3code",
-  // electron-builder's ShipIt helper keys its cache by this value. Keep the
-  // fork isolated from the official Nightly app, which uses t3code-updater.
-  updaterCacheDirName: "t3code-tjn-updater",
+  // electron-builder derives its ShipIt cache from the staged package name.
+  // Keep the fork isolated from the official Nightly app, which is named
+  // t3code and therefore uses t3code-updater.
+  packageName: "t3code-tjn",
   autoUpdateEnabled: true,
 } as const;
 
