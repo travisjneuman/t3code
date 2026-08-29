@@ -49,8 +49,19 @@ describe("RemoteAppTheme", () => {
     expect(alignedCss).not.toContain("flex-basis: 235px !important");
     expect(alignedCss).toContain("overflow-x: hidden !important");
     expect(alignedCss).toContain("padding-top: 9px !important");
-    expect(alignedCss).toContain("transform: translateY(-40px) !important");
+    expect(alignedCss).not.toContain("data:image/svg+xml");
     expect(alignedCss).not.toContain("\n:where(a) {");
+
+    const nightlyCss = buildRemoteAppThemeCss({
+      ...DEFAULT_REMOTE_APP_THEME,
+      stageArt: "nightly",
+    });
+    expect(nightlyCss).toContain('background-image: url("data:image/svg+xml,');
+    expect(nightlyCss).toContain("background-position: left -40px !important");
+    expect(nightlyCss).toContain('data-t3code-remote-sidebar-root="true"] :where(');
+    expect(nightlyCss).toContain("background-color: transparent !important");
+    expect(nightlyCss).toContain("stage-nightly");
+    expect(nightlyCss).not.toContain("var(--stage-night-bottom)");
   });
 
   it("validates stage-art variants and defaults unknown presentation input", () => {
@@ -93,25 +104,31 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain("dataset.t3codeRemoteSidebarRoot");
     expect(script).toContain("style.removeProperty(property)");
     expect(script).toContain("getBoundingClientRect().height >=");
-    expect(script).toContain("existing.setPresentation(");
-    expect(script).toContain("setPresentation(value, stageArt, stageMarkup)");
+    expect(script).toContain("existing.setSidebarWidth(");
+    expect(script).toContain('existing.setPresentation(nextSidebarWidth, "none", "")');
+    expect(script).toContain("setSidebarWidth(value)");
     expect(script).toContain('setProperty("overflow-x", "hidden", "important")');
     expect(script).not.toContain('rootSidebar.querySelectorAll("*")');
     expect(script).toContain("requestAnimationFrame");
+    expect(script).toContain("10_000");
+    expect(script).not.toContain("MutationObserver");
     expect(script).toContain("textarea, [contenteditable='true']");
     expect(script).toContain("dataset.t3codeRemoteComposerShell");
     expect(script).toContain("dataset.t3codeRemoteComposerEditable");
     expect(script).toContain("dataset.t3codeRemoteToolbarControl");
-    expect(script).toContain("data-t3code-remote-stage-art");
-    expect(script).toContain("stage-nightly");
+    expect(script).not.toContain("data-t3code-remote-stage-art");
+    expect(script).not.toContain("rootSidebar.prepend(");
     expect(script).toContain("button[aria-label*='Add files']");
     expect(script).toContain("[data-state='open']");
     expect(script).toContain("triggerIsOpen");
+    expect(script).toContain("document.activeElement === editable");
+    expect(script).toContain("button, a, input, select, [role='button']");
     expect(script).toContain("dispatchEscape");
     expect(script).toContain('key: "Escape"');
     expect(script).toContain("window.setTimeout(focus, 160)");
     expect(script).toContain("queueMicrotask(focus)");
     expect(script).toContain('["pointerdown", "mousedown"');
+    expect(script).not.toContain('"focusin"');
     expect(script).not.toContain("fetch(");
     expect(script).not.toContain("localStorage");
     expect(() => Function(script)).not.toThrow();

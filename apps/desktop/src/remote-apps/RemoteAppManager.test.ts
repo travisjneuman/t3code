@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   REMOTE_APP_THEME_DOCUMENT_EVENTS,
+  REMOTE_APP_THEME_NAVIGATION_EVENTS,
   parseRemoteAppSurfaceMenuUrl,
   resolveRemoteAppViewBounds,
   resolveRemoteAppViewZoomFactor,
@@ -52,5 +53,6 @@ describe("RemoteAppManager", () => {
 
   it("reapplies remote presentation after each replacement document loads", () => {
     expect(REMOTE_APP_THEME_DOCUMENT_EVENTS).toEqual(["did-finish-load"]);
+    expect(REMOTE_APP_THEME_NAVIGATION_EVENTS).toEqual(["did-navigate-in-page"]);
   });
 });

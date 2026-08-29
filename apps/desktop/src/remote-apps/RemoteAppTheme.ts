@@ -146,28 +146,21 @@ export function resolveRemoteToolbarControlKind(
 export const buildRemoteAppInteractionScript = (
   input: RemoteAppTheme = DEFAULT_REMOTE_APP_THEME,
 ): string => {
-  const { sidebarWidth, stageArt } = normalizeRemoteAppTheme(input);
-  const stageMarkup =
-    stageArt === "none"
-      ? ""
-      : buildSidebarStageArtworkSvg({
-          variant: stageArt,
-          idPrefix: "t3code-remote-sidebar-stage",
-        });
+  const { sidebarWidth } = normalizeRemoteAppTheme(input);
   return `
 (() => {
   const key = "__t3codeRemoteAppInteraction";
   const nextSidebarWidth = ${sidebarWidth === null ? "null" : Math.round(sidebarWidth)};
-  const nextStageArt = ${JSON.stringify(stageArt)};
-  const nextStageMarkup = ${JSON.stringify(stageMarkup)};
   const existing = window[key];
+  if (existing && typeof existing.setSidebarWidth === "function") {
+    existing.setSidebarWidth(nextSidebarWidth);
+    return;
+  }
   if (existing && typeof existing.setPresentation === "function") {
-    existing.setPresentation(nextSidebarWidth, nextStageArt, nextStageMarkup);
+    existing.setPresentation(nextSidebarWidth, "none", "");
     return;
   }
   let targetSidebarWidth = nextSidebarWidth;
-  let targetStageArt = nextStageArt;
-  let targetStageMarkup = nextStageMarkup;
 
   const applySidebarGeometry = () => {
     const utilityHrefs = ["/images", "/library", "/scheduled", "/plugins", "/projects"];
@@ -230,24 +223,6 @@ export const buildRemoteAppInteractionScript = (
         rootSidebar.style.setProperty("min-width", \`\${targetSidebarWidth}px\`, "important");
       }
       rootSidebar.style.setProperty("overflow-x", "hidden", "important");
-
-      const existingArtwork = rootSidebar.querySelector(
-        ":scope > [data-t3code-remote-stage-art]",
-      );
-      if (targetStageArt === "none") {
-        existingArtwork?.remove();
-      } else {
-        const artwork =
-          existingArtwork instanceof HTMLElement
-            ? existingArtwork
-            : document.createElement("div");
-        if (artwork.dataset.t3codeRemoteStageArt !== targetStageArt) {
-          artwork.dataset.t3codeRemoteStageArt = targetStageArt;
-          artwork.setAttribute("aria-hidden", "true");
-          artwork.innerHTML = targetStageMarkup;
-        }
-        if (!(existingArtwork instanceof HTMLElement)) rootSidebar.prepend(artwork);
-      }
     }
   };
 
@@ -346,29 +321,44 @@ export const buildRemoteAppInteractionScript = (
     }
   };
 
-  let presentationFrame = 0;
-  const applyPresentation = () => {
-    applySidebarGeometry();
+  const applySemanticMarkers = () => {
     applyComposerMarkers();
     applyToolbarControlMarkers();
   };
-  const schedulePresentation = () => {
-    if (presentationFrame !== 0) return;
-    presentationFrame = window.requestAnimationFrame(() => {
-      presentationFrame = 0;
-      applyPresentation();
+  let geometryFrame = 0;
+  const scheduleSidebarGeometry = () => {
+    if (geometryFrame !== 0) return;
+    geometryFrame = window.requestAnimationFrame(() => {
+      geometryFrame = 0;
+      applySidebarGeometry();
     });
   };
-  applyPresentation();
-  window.setTimeout(applyPresentation, 0);
-  window.setTimeout(applyPresentation, 120);
-  const sidebarObserver = new MutationObserver(schedulePresentation);
-  sidebarObserver.observe(document.body, { childList: true, subtree: true });
+  let semanticTimer = 0;
+  const scheduleSemanticMarkers = () => {
+    if (semanticTimer !== 0) return;
+    semanticTimer = window.setTimeout(() => {
+      semanticTimer = 0;
+      applySemanticMarkers();
+    }, 80);
+  };
+  applySidebarGeometry();
+  applySemanticMarkers();
+  for (const delay of [0, 120, 500, 1_200, 3_000, 6_000, 10_000]) {
+    window.setTimeout(applySidebarGeometry, delay);
+    window.setTimeout(applySemanticMarkers, delay);
+  }
 
   const getEditable = (target) => {
     if (!(target instanceof Element)) return null;
     const direct = target.closest("[data-t3code-remote-composer-editable='true']");
     if (direct instanceof HTMLElement) return direct;
+    if (
+      target.closest(
+        "button, a, input, select, [role='button'], [role='menuitem'], [role='option']",
+      )
+    ) {
+      return null;
+    }
     const composer = target.closest("[data-t3code-remote-composer-root='true']");
     return composer?.querySelector("[data-t3code-remote-composer-editable='true']") ?? null;
   };
@@ -431,6 +421,7 @@ export const buildRemoteAppInteractionScript = (
   const focusEditable = (target) => {
     const editable = getEditable(target);
     if (!(editable instanceof HTMLElement)) return;
+    if (document.activeElement === editable && !getOpenAddFilesPopover().open) return;
 
     const focus = () => {
       if (!editable.isConnected) return;
@@ -446,15 +437,14 @@ export const buildRemoteAppInteractionScript = (
     window.setTimeout(focus, 160);
   };
 
-  for (const eventName of ["pointerdown", "mousedown", "click", "focusin"]) {
+  for (const eventName of ["pointerdown", "mousedown", "click"]) {
     document.addEventListener(eventName, (event) => focusEditable(event.target), true);
   }
   window[key] = {
-    setPresentation(value, stageArt, stageMarkup) {
+    setSidebarWidth(value) {
       targetSidebarWidth = value;
-      targetStageArt = stageArt;
-      targetStageMarkup = stageMarkup;
-      schedulePresentation();
+      scheduleSidebarGeometry();
+      scheduleSemanticMarkers();
     },
   };
 })();
@@ -548,10 +538,42 @@ export const buildRemoteAppSurfaceMenuHtml = (
  * if those implementation classes change.
  */
 export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
-  const { appearance, sidebarWidth, colors } = normalizeRemoteAppTheme(input);
+  const { appearance, stageArt, sidebarWidth, colors } = normalizeRemoteAppTheme(input);
   const colorScheme = appearance === "dark" ? "dark" : "light";
   const sidebarWidthVariable =
     sidebarWidth === null ? "" : `\n  --sidebar-width: ${sidebarWidth}px !important;`;
+  const stageArtwork =
+    stageArt === "none"
+      ? null
+      : buildSidebarStageArtworkSvg({
+          variant: stageArt,
+          idPrefix: "t3code-remote-sidebar-stage",
+        })
+          .replaceAll("var(--stage-art-top)", colors.stageArtTop)
+          .replaceAll("var(--stage-art-mid)", colors.stageArtMid)
+          .replaceAll("var(--stage-art-bottom)", colors.stageArtBottom)
+          .replaceAll("var(--stage-art-highlight)", colors.stageArtHighlight)
+          .replaceAll("var(--stage-art-secondary)", colors.stageArtSecondary)
+          .replaceAll("var(--stage-art-tertiary)", colors.stageArtTertiary)
+          .replaceAll("var(--stage-art-line)", colors.stageArtLine)
+          .replaceAll("var(--stage-art-celeste-highlight)", colors.stageArtCelesteHighlight)
+          .replaceAll("var(--stage-art-celeste-secondary)", colors.stageArtCelesteSecondary)
+          .replaceAll("var(--stage-art-violet-highlight)", colors.stageArtVioletHighlight)
+          .replaceAll("var(--stage-art-grid-line)", colors.stageArtGridLine)
+          .replaceAll("var(--stage-night-top)", colors.stageNightTop)
+          .replaceAll("var(--stage-night-mid)", colors.stageNightMid)
+          .replaceAll("var(--stage-night-bottom)", colors.stageNightBottom)
+          .replaceAll("var(--stage-night-highlight)", colors.stageNightHighlight)
+          .replaceAll("var(--stage-night-secondary)", colors.stageNightSecondary)
+          .replaceAll("var(--stage-night-tertiary)", colors.stageNightTertiary)
+          .replaceAll("var(--stage-night-line)", colors.stageNightLine)
+          .replaceAll("var(--stage-night-glow-highlight)", colors.stageNightGlowHighlight)
+          .replaceAll("var(--stage-night-glow-secondary)", colors.stageNightGlowSecondary)
+          .replaceAll("var(--stage-night-sparkle)", colors.stageNightSparkle);
+  const stageArtworkRule =
+    stageArtwork === null
+      ? ""
+      : `\n  background-image: url("data:image/svg+xml,${encodeURIComponent(stageArtwork)}") !important;\n  background-position: left -40px !important;\n  background-repeat: no-repeat !important;\n  background-size: 100% 80px !important;`;
   return `
 /* T3 Code scoped theme for the isolated ChatGPT surface. */
 :root {
@@ -666,26 +688,25 @@ aside,
 [data-t3code-remote-sidebar-root="true"] {
   position: relative !important;
   padding-top: 9px !important;
+  background-color: var(--t3code-remote-sidebar) !important;
+${stageArtworkRule}
 }
 
-/* Continue the lower half of the native 80px stage art below the 40px shell
-   divider. The SVG is the same canonical artwork used by the T3 sidebar. */
-[data-t3code-remote-stage-art] {
-  position: absolute !important;
-  inset: 0 0 auto 0 !important;
-  z-index: 0 !important;
-  display: block !important;
-  height: 40px !important;
-  overflow: hidden !important;
-  pointer-events: none !important;
-  user-select: none !important;
-}
-
-[data-t3code-remote-stage-art] > svg {
-  display: block !important;
-  width: 100% !important;
-  height: 80px !important;
-  transform: translateY(-40px) !important;
+/* ChatGPT nests opaque sidebar wrappers inside the detected outer boundary.
+   Keep that outer boundary opaque, but let the nested wrappers reveal its
+   canonical stage artwork instead of covering it with the same solid fill. */
+[data-t3code-remote-sidebar-root="true"] :where(
+  nav,
+  [role="complementary"],
+  [data-testid="sidebar"],
+  [data-testid*="sidebar"],
+  aside,
+  [aria-label="Chat history"],
+  [class~="group/sidebar"],
+  [class~="bg-token-sidebar-surface-primary"],
+  [class~="bg-token-sidebar-surface-secondary"]
+) {
+  background-color: transparent !important;
 }
 
 :where(

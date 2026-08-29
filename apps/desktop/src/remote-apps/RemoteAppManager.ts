@@ -46,6 +46,7 @@ const REMOTE_APP_VIEW_LAYER_INDEX = 0;
 // visible and interactive on the ChatGPT surface.
 export const REMOTE_APP_HOST_FOOTER_HEIGHT = 48;
 export const REMOTE_APP_THEME_DOCUMENT_EVENTS = ["did-finish-load"] as const;
+export const REMOTE_APP_THEME_NAVIGATION_EVENTS = ["did-navigate-in-page"] as const;
 
 const addRemoteAppViewBelowHostRenderer = (
   window: Electron.BrowserWindow,
@@ -359,7 +360,11 @@ export const make = Effect.gen(function* () {
       runSafely(syncNavigation(view).pipe(Effect.andThen(setLoadingState("ready")))),
     );
     contents.on("did-navigate", () => runSafely(syncNavigation(view)));
-    contents.on("did-navigate-in-page", () => runSafely(syncNavigation(view)));
+    for (const event of REMOTE_APP_THEME_NAVIGATION_EVENTS) {
+      contents.on(event, () =>
+        runSafely(syncNavigation(view).pipe(Effect.andThen(applyRemoteTheme(view)))),
+      );
+    }
     contents.on("page-title-updated", (event, title) => {
       event.preventDefault();
       runSafely(updateState((state) => ({ ...state, currentTitle: sanitizeRemoteTitle(title) })));
