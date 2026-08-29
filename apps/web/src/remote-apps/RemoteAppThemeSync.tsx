@@ -2,7 +2,17 @@ import type { RemoteAppThemeColors } from "@t3tools/contracts";
 
 import { useEffect } from "react";
 
-import { getThemeColorVariable, type ThemeColorRole } from "../themePalette";
+import {
+  getDefaultThemeColors,
+  getThemeColorVariable,
+  getThemeColorsForMode,
+  getThemeDefinition,
+  resolveThemeHalf,
+  type ThemeAppearance,
+  type ThemeColorRole,
+  type ThemeHalves,
+  type ThemePreference,
+} from "../themePalette";
 import { useTheme } from "../hooks/useTheme";
 import { useEnvironmentIdentificationMode } from "../hooks/useSettings";
 import { useSidebarStageBackdropVariant } from "../components/SidebarStageBackdrop";
@@ -70,16 +80,57 @@ const REMOTE_STAGE_COLOR_VARIABLES = {
   stageNightSparkle: "--stage-night-sparkle",
 } as const satisfies Readonly<Record<string, `--${string}`>>;
 
-function readRemoteThemeColors(): RemoteAppThemeColors {
-  const styles = getComputedStyle(document.documentElement);
+type ComputedRemoteThemeColors = Partial<Record<keyof RemoteAppThemeColors, string>>;
+
+/**
+ * Resolve the remote palette from the same theme definition that paints the
+ * native renderer. Computed CSS remains the source for stage artwork (whose
+ * channel pigments are declared in index.css), but the ChatGPT surfaces must
+ * never fall back to a second, site-specific color scheme when the CSS
+ * variables have not landed yet.
+ */
+export function resolveRemoteThemeColors({
+  theme,
+  resolvedTheme,
+  themeHalves,
+  computed,
+}: {
+  readonly theme: ThemePreference;
+  readonly resolvedTheme: ThemeAppearance;
+  readonly themeHalves: ThemeHalves | null;
+  readonly computed?: ComputedRemoteThemeColors;
+}): RemoteAppThemeColors {
+  const activePreference = resolveThemeHalf(theme, themeHalves, resolvedTheme);
+  const definition = getThemeDefinition(activePreference);
+  const activeColors = definition
+    ? (getThemeColorsForMode(definition, resolvedTheme) ?? definition.colors)
+    : getDefaultThemeColors(resolvedTheme);
+
   return Object.fromEntries([
+    ...REMOTE_THEME_ROLES.map(
+      (role) => [role, activeColors[role] ?? computed?.[role] ?? ""] as const,
+    ),
+    ...Object.keys(REMOTE_STAGE_COLOR_VARIABLES).map(
+      (role) => [role, computed?.[role as keyof RemoteAppThemeColors] ?? ""] as const,
+    ),
+  ]) as RemoteAppThemeColors;
+}
+
+function readRemoteThemeColors(
+  theme: ThemePreference,
+  resolvedTheme: ThemeAppearance,
+  themeHalves: ThemeHalves | null,
+): RemoteAppThemeColors {
+  const styles = getComputedStyle(document.documentElement);
+  const computed = Object.fromEntries([
     ...REMOTE_THEME_ROLES.map(
       (role) => [role, styles.getPropertyValue(getThemeColorVariable(role)).trim()] as const,
     ),
     ...Object.entries(REMOTE_STAGE_COLOR_VARIABLES).map(
       ([role, variable]) => [role, styles.getPropertyValue(variable).trim()] as const,
     ),
-  ]) as RemoteAppThemeColors;
+  ]) as ComputedRemoteThemeColors;
+  return resolveRemoteThemeColors({ theme, resolvedTheme, themeHalves, computed });
 }
 
 function readRemoteSidebarWidth(): number | null {
@@ -107,7 +158,7 @@ export function RemoteAppThemeSync() {
           appearance: resolvedTheme,
           stageArt,
           sidebarWidth: readRemoteSidebarWidth(),
-          colors: readRemoteThemeColors(),
+          colors: readRemoteThemeColors(theme, resolvedTheme, themeHalves),
         })
         .catch((cause: unknown) => {
           console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);

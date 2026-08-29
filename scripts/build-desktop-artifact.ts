@@ -2068,6 +2068,7 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
     provider: "github",
     owner,
     repo,
+    updaterCacheDirName: REMOTE_APP_DISTRIBUTION.updaterCacheDirName,
     releaseType: updateChannel === "nightly" ? "prerelease" : "release",
     ...(updateChannel === "nightly" ? { channel: "nightly" as const } : {}),
   };

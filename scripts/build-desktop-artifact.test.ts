@@ -306,12 +306,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         provider: "github",
         owner: "pingdotgg",
         repo: "t3code",
+        updaterCacheDirName: "t3code-tjn-updater",
         releaseType: "release",
       });
       assert.deepStrictEqual(nightlyConfig, {
         provider: "github",
         owner: "pingdotgg",
         repo: "t3code",
+        updaterCacheDirName: "t3code-tjn-updater",
         releaseType: "prerelease",
         channel: "nightly",
       });
@@ -323,6 +325,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         provider: "github",
         owner: "travisjneuman",
         repo: "t3code",
+        updaterCacheDirName: "t3code-tjn-updater",
         releaseType: "prerelease",
         channel: "nightly",
       });
@@ -356,6 +359,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           provider: "github",
           owner: "travisjneuman",
           repo: "t3code",
+          updaterCacheDirName: "t3code-tjn-updater",
           releaseType: "release",
         },
       ]);
