@@ -175,7 +175,9 @@ export function RemoteAppThemeSync() {
 
   useEffect(() => {
     if (bridge === undefined) return;
+    let disposed = false;
     const sync = () => {
+      if (disposed) return;
       const sequence = ++syncSequenceRef.current;
       const payload = {
         appearance: resolvedTheme,
@@ -219,6 +221,7 @@ export function RemoteAppThemeSync() {
     observeSidebar();
     window.addEventListener("resize", sync);
     return () => {
+      disposed = true;
       // Invalidate work queued by this effect before a later theme/surface
       // snapshot starts its own synchronization.
       syncSequenceRef.current += 1;
