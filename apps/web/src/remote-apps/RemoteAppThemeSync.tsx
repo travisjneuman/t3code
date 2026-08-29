@@ -104,11 +104,13 @@ export function enqueueLatestRemoteThemeSync(
 }
 
 /**
- * Resolve the remote palette from the same theme definition that paints the
- * native renderer. The semantic theme definition is authoritative for every
- * surface role, so an in-flight DOM repaint can never leak the previously
- * selected half into the remote payload. Computed CSS remains the source for
- * stage artwork (whose channel pigments are declared in index.css).
+ * Resolve the remote palette from the tokens currently painted into the
+ * native renderer. Those computed values are authoritative because they also
+ * include custom-theme edits and the selected light/dark half. The named
+ * theme definition is retained as a deterministic fallback for the brief
+ * interval before a palette has landed in the document. Computed CSS remains
+ * the source for stage artwork (whose channel pigments are declared in
+ * index.css).
  */
 export function resolveRemoteThemeColors({
   theme,
@@ -129,7 +131,7 @@ export function resolveRemoteThemeColors({
 
   return Object.fromEntries([
     ...REMOTE_THEME_ROLES.map(
-      (role) => [role, activeColors[role] || computed?.[role] || ""] as const,
+      (role) => [role, computed?.[role] || activeColors[role] || ""] as const,
     ),
     ...Object.keys(REMOTE_STAGE_COLOR_VARIABLES).map(
       (role) => [role, computed?.[role as keyof RemoteAppThemeColors] ?? ""] as const,
