@@ -1148,6 +1148,11 @@ export interface DesktopBridge {
   onQuitShortcut?: (listener: (state: "down" | "up") => void) => () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;
+  /**
+   * Presents a native confirmation above embedded WebContentsViews. Optional
+   * so older desktop shells can continue using the renderer confirmation host.
+   */
+  confirm?: (message: string) => Promise<boolean>;
   getUpdateState: () => Promise<DesktopUpdateState>;
   setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;

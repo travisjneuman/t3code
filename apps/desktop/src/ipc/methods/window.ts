@@ -51,6 +51,15 @@ const ContextMenuInput = Schema.Struct({
   position: Schema.optionalKey(ContextMenuPosition),
 });
 
+const ConfirmDialogMessage = Schema.String.check(Schema.isMaxLength(4_000));
+
+const splitConfirmDialogMessage = (message: string): { message: string; detail?: string } => {
+  const lines = message.trim().split("\n");
+  const title = lines.shift()?.trim() ?? "Confirm action";
+  const detail = lines.join("\n").trim();
+  return detail.length > 0 ? { message: title || "Confirm action", detail } : { message: title };
+};
+
 function toWebSocketBaseUrl(httpBaseUrl: URL): string {
   const url = new URL(httpBaseUrl.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -82,6 +91,32 @@ export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const window = yield* electronWindow.currentMainOrFirst;
     return Option.isSome(window) && window.value.isFullScreen();
+  }),
+});
+
+/**
+ * Native confirmations stay above embedded WebContentsViews. Renderer-owned
+ * dialogs are intentionally retained for the normal T3 Code surface, but a
+ * remote app can cover that renderer region while it is active.
+ */
+export const confirm = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.CONFIRM_DIALOG_CHANNEL,
+  payload: ConfirmDialogMessage,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.confirm")(function* (message) {
+    const dialog = yield* ElectronDialog.ElectronDialog;
+    const copy = splitConfirmDialogMessage(message);
+    const result = yield* dialog.showMessageBox({
+      type: "question",
+      title: "T3 Code",
+      message: copy.message,
+      ...(copy.detail === undefined ? {} : { detail: copy.detail }),
+      buttons: ["Cancel", "Confirm"],
+      cancelId: 0,
+      defaultId: 1,
+      noLink: true,
+    });
+    return result.response === 1;
   }),
 });
 

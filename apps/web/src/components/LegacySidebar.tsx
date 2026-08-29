@@ -107,7 +107,7 @@ import {
 } from "../keybindings";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { ensureLocalApi, readLocalApi } from "../localApi";
+import { confirmDesktopUpdateInstall, ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
@@ -3604,7 +3604,7 @@ export default function LegacySidebar() {
     if (desktopUpdateButtonAction === "install") {
       let confirmed = false;
       try {
-        confirmed = await ensureLocalApi().dialogs.confirm(
+        confirmed = await confirmDesktopUpdateInstall(
           getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
         );
       } catch (error) {

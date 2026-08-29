@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { isElectron } from "../../env";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
-import { ensureLocalApi } from "../../localApi";
+import { confirmDesktopUpdateInstall, ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
@@ -222,7 +222,7 @@ function SidebarUpdateControl() {
     if (action === "install") {
       let confirmed = false;
       try {
-        confirmed = await ensureLocalApi().dialogs.confirm(
+        confirmed = await confirmDesktopUpdateInstall(
           getDesktopUpdateInstallConfirmationMessage(state),
         );
       } catch (error) {

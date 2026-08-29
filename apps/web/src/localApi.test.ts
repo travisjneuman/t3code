@@ -106,6 +106,22 @@ describe("LocalApi", () => {
     expect(requestConfirmDialogMock).toHaveBeenCalledWith("Delete this thread?", options);
   });
 
+  it("uses native confirmation above the remote ChatGPT surface for updates", async () => {
+    const nativeConfirm = vi.fn().mockResolvedValue(true);
+    const getState = vi.fn().mockResolvedValue({ activeSurface: "chatgpt" });
+    testWindow().desktopBridge = {
+      confirm: nativeConfirm,
+      remoteApps: { getState },
+    } as unknown as DesktopBridge;
+
+    const { confirmDesktopUpdateInstall } = await import("./localApi");
+
+    await expect(confirmDesktopUpdateInstall("Install update?")).resolves.toBe(true);
+    expect(getState).toHaveBeenCalledOnce();
+    expect(nativeConfirm).toHaveBeenCalledWith("Install update?");
+    expect(requestConfirmDialogMock).not.toHaveBeenCalled();
+  });
+
   it("fails closed in a browser when no themed host is available", async () => {
     requestConfirmDialogMock.mockReturnValue(undefined);
     const { createLocalApi } = await import("./localApi");
