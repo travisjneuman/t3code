@@ -296,9 +296,10 @@ export const buildRemoteAppInteractionScript = (
       delete previous.dataset.t3codeRemoteToolbarControl;
     }
     const main = document.querySelector("main, [role='main']");
-    if (!(main instanceof HTMLElement)) return;
     const contentBoundary = targetSidebarWidth ?? window.innerWidth * 0.45;
-    for (const control of main.querySelectorAll("button, a[role='button']")) {
+    const sidebarSelector =
+      "[data-t3code-remote-sidebar-root='true'], nav, [role='complementary'], [data-testid='sidebar'], [data-testid*='sidebar'], aside, [aria-label='Chat history'], [class~='group/sidebar']";
+    for (const control of document.querySelectorAll("button, a[role='button']")) {
       if (!(control instanceof HTMLElement) || !isVisible(control)) continue;
       const accessibleName = (
         control.getAttribute("aria-label") ??
@@ -316,7 +317,18 @@ export const buildRemoteAppInteractionScript = (
             ? "temporary-chat"
             : null;
       const rect = control.getBoundingClientRect();
-      if (kind === null || rect.left < contentBoundary || rect.top < 0 || rect.top > 160) continue;
+      const insideSidebar = control.closest(sidebarSelector) !== null;
+      const insideMainContent = main instanceof HTMLElement && main.contains(control);
+      const inUpperRightContent =
+        !insideSidebar && (insideMainContent || rect.left >= contentBoundary);
+      if (
+        kind === null ||
+        !inUpperRightContent ||
+        rect.left < contentBoundary ||
+        rect.top < 0 ||
+        rect.top > 160
+      )
+        continue;
       control.dataset.t3codeRemoteToolbarControl = kind;
     }
   };
@@ -888,6 +900,14 @@ main :where(button, [role="button"]) {
   border: 1px solid var(--t3code-remote-toolbar-border) !important;
   color: var(--t3code-remote-toolbar-control-foreground) !important;
   box-shadow: none !important;
+}
+
+[data-t3code-remote-toolbar-control] :where(*) {
+  color: inherit !important;
+}
+
+[data-t3code-remote-toolbar-control] :where(svg) {
+  color: inherit !important;
 }
 
 [data-t3code-remote-toolbar-control]:where(:hover, [data-state="open"]):not(:disabled) {

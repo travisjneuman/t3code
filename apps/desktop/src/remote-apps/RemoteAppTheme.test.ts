@@ -117,6 +117,9 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain("dataset.t3codeRemoteComposerShell");
     expect(script).toContain("dataset.t3codeRemoteComposerEditable");
     expect(script).toContain("dataset.t3codeRemoteToolbarControl");
+    expect(script).toContain("document.querySelectorAll(\"button, a[role='button']\")");
+    expect(script).toContain("insideSidebar");
+    expect(script).toContain("inUpperRightContent");
     expect(script).not.toContain("data-t3code-remote-stage-art");
     expect(script).not.toContain("rootSidebar.prepend(");
     expect(script).toContain("button[aria-label*='Add files']");
