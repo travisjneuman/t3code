@@ -197,24 +197,28 @@ export function RemoteAppThemeSync() {
     let disposed = false;
     const sync = () => {
       if (disposed) return;
-      const latestTheme = latestThemeRef.current;
       const sequence = ++syncSequenceRef.current;
-      const payload = {
-        appearance: latestTheme.resolvedTheme,
-        stageArt: latestTheme.stageArt,
-        sidebarWidth: readRemoteSidebarWidth(),
-        colors: readRemoteThemeColors(
-          latestTheme.theme,
-          latestTheme.resolvedTheme,
-          latestTheme.themeHalves,
-        ),
-      } as const;
       syncQueueRef.current = enqueueLatestRemoteThemeSync(
         syncQueueRef.current,
         sequence,
         () => syncSequenceRef.current,
         async () => {
           try {
+            // Read only after this sequence reaches the head of the queue.
+            // React and the root-token repaint can settle between scheduling
+            // and execution; capturing the payload earlier could reapply the
+            // previous theme after a newer selection.
+            const latestTheme = latestThemeRef.current;
+            const payload = {
+              appearance: latestTheme.resolvedTheme,
+              stageArt: latestTheme.stageArt,
+              sidebarWidth: readRemoteSidebarWidth(),
+              colors: readRemoteThemeColors(
+                latestTheme.theme,
+                latestTheme.resolvedTheme,
+                latestTheme.themeHalves,
+              ),
+            } as const;
             await bridge.setTheme(payload);
           } catch (cause: unknown) {
             console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);
