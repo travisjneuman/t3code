@@ -557,6 +557,11 @@ export const make = Effect.gen(function* () {
           addRemoteAppViewBelowHostRenderer(window.value, view.value);
           yield* positionView(window.value, view.value);
           view.value.setVisible(true);
+          // Surface switches can happen while the renderer is still
+          // reconciling its theme snapshot. Reapply the manager's current
+          // validated palette at the activation boundary so a reused
+          // WebContentsView cannot display the previous theme.
+          yield* applyRemoteTheme(view.value);
           view.value.webContents.focus();
         } else {
           view.value.setVisible(false);
