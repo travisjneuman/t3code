@@ -12,6 +12,8 @@ import {
   resolveRemoteToolbarControlKind,
 } from "./RemoteAppTheme.ts";
 
+const decodeRemoteAppTheme = Schema.decodeUnknownSync(RemoteAppThemeSchema);
+
 describe("RemoteAppTheme", () => {
   it("only applies the live-site theme to ChatGPT URLs", () => {
     expect(isChatGptRemoteAppUrl("https://chatgpt.com/")).toBe(true);
@@ -66,10 +68,10 @@ describe("RemoteAppTheme", () => {
   });
 
   it("validates stage-art variants and defaults unknown presentation input", () => {
-    const decodeTheme = Schema.decodeUnknownSync(RemoteAppThemeSchema);
-
-    expect(decodeTheme(DEFAULT_REMOTE_APP_THEME).stageArt).toBe("none");
-    expect(() => decodeTheme({ ...DEFAULT_REMOTE_APP_THEME, stageArt: "preview" })).toThrow();
+    expect(decodeRemoteAppTheme(DEFAULT_REMOTE_APP_THEME).stageArt).toBe("none");
+    expect(() =>
+      decodeRemoteAppTheme({ ...DEFAULT_REMOTE_APP_THEME, stageArt: "preview" }),
+    ).toThrow();
     expect(
       normalizeRemoteAppTheme({
         ...DEFAULT_REMOTE_APP_THEME,
@@ -91,9 +93,7 @@ describe("RemoteAppTheme", () => {
       colors: { ...DEFAULT_REMOTE_APP_THEME.colors, stageNightSecondary: nestedStageColor },
     };
 
-    expect(Schema.decodeUnknownSync(RemoteAppThemeSchema)(theme).colors.stageNightSecondary).toBe(
-      nestedStageColor,
-    );
+    expect(decodeRemoteAppTheme(theme).colors.stageNightSecondary).toBe(nestedStageColor);
     expect(normalizeRemoteAppTheme(theme).colors.stageNightSecondary).toBe(nestedStageColor);
   });
 
