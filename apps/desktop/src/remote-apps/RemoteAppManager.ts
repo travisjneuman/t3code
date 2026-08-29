@@ -58,12 +58,14 @@ const addRemoteAppViewBelowHostRenderer = (
 export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
   delta === null ? 1 : Math.min(3, Math.max(0.5, current + delta));
 
+export const resolveRemoteAppViewZoomFactor = (mainZoomFactor: number): number =>
+  Number.isFinite(mainZoomFactor) && mainZoomFactor > 0 ? mainZoomFactor : 1;
+
 export const resolveRemoteAppViewBounds = (
   contentBounds: Pick<Electron.Rectangle, "width" | "height">,
   mainZoomFactor: number,
 ): Electron.Rectangle => {
-  const normalizedZoomFactor =
-    Number.isFinite(mainZoomFactor) && mainZoomFactor > 0 ? mainZoomFactor : 1;
+  const normalizedZoomFactor = resolveRemoteAppViewZoomFactor(mainZoomFactor);
   const titlebarHeight = Math.round(TITLEBAR_HEIGHT * normalizedZoomFactor);
   const hostFooterHeight = Math.round(REMOTE_APP_HOST_FOOTER_HEIGHT * normalizedZoomFactor);
   return {
@@ -266,7 +268,12 @@ export const make = Effect.gen(function* () {
     Effect.try({
       try: () => {
         const bounds = window.getContentBounds();
-        view.setBounds(resolveRemoteAppViewBounds(bounds, window.webContents.getZoomFactor()));
+        const zoomFactor = resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor());
+        // The native shell owns application zoom. Keep the live remote page on
+        // that same scale so its sidebar width, typography, and responsive
+        // breakpoints continue to line up with the host at every zoom level.
+        view.webContents.setZoomFactor(zoomFactor);
+        view.setBounds(resolveRemoteAppViewBounds(bounds, zoomFactor));
       },
       catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
     });

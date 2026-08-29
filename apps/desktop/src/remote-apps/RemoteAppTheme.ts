@@ -93,8 +93,13 @@ export const isChatGptRemoteAppUrl = (url: string): boolean => {
 export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = null): string => `
 (() => {
   const key = "__t3codeRemoteAppInteraction";
-  if (window[key]) return;
-  const targetSidebarWidth = ${sidebarWidth === null ? "null" : Math.round(sidebarWidth)};
+  const nextSidebarWidth = ${sidebarWidth === null ? "null" : Math.round(sidebarWidth)};
+  const existing = window[key];
+  if (existing && typeof existing.setSidebarWidth === "function") {
+    existing.setSidebarWidth(nextSidebarWidth);
+    return;
+  }
+  let targetSidebarWidth = nextSidebarWidth;
 
   const applySidebarGeometry = () => {
     if (targetSidebarWidth === null) return;
@@ -113,6 +118,16 @@ export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = nu
     // on a particular account's menu configuration.
     if (sidebarLinks.length < 2) return;
 
+    for (const previousSidebar of document.querySelectorAll(
+      "[data-t3code-remote-sidebar='true']",
+    )) {
+      delete previousSidebar.dataset.t3codeRemoteSidebar;
+      delete previousSidebar.dataset.t3codeRemoteSidebarRoot;
+      for (const property of ["box-sizing", "width", "min-width", "flex-basis", "overflow-x"]) {
+        previousSidebar.style.removeProperty(property);
+      }
+    }
+
     const candidates = [];
     let candidate = sidebarLinks[0].parentElement;
     while (candidate instanceof HTMLElement && candidate !== document.body) {
@@ -130,12 +145,22 @@ export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = nu
       candidate = candidate.parentElement;
     }
 
-    for (const sidebar of candidates) {
-      sidebar.dataset.t3codeRemoteSidebar = "true";
-      sidebar.style.setProperty("box-sizing", "border-box", "important");
-      sidebar.style.setProperty("width", \`\${targetSidebarWidth}px\`, "important");
-      sidebar.style.setProperty("min-width", \`\${targetSidebarWidth}px\`, "important");
-      sidebar.style.setProperty("flex-basis", \`\${targetSidebarWidth}px\`, "important");
+    let rootSidebar = candidates[0];
+    for (const candidate of candidates) {
+      if (
+        !(rootSidebar instanceof HTMLElement) ||
+        candidate.getBoundingClientRect().height >= rootSidebar.getBoundingClientRect().height
+      ) {
+        rootSidebar = candidate;
+      }
+    }
+    if (rootSidebar instanceof HTMLElement) {
+      rootSidebar.dataset.t3codeRemoteSidebar = "true";
+      rootSidebar.dataset.t3codeRemoteSidebarRoot = "true";
+      rootSidebar.style.setProperty("box-sizing", "border-box", "important");
+      rootSidebar.style.setProperty("width", \`\${targetSidebarWidth}px\`, "important");
+      rootSidebar.style.setProperty("min-width", \`\${targetSidebarWidth}px\`, "important");
+      rootSidebar.style.setProperty("overflow-x", "hidden", "important");
     }
   };
 
@@ -236,7 +261,12 @@ export const buildRemoteAppInteractionScript = (sidebarWidth: number | null = nu
   for (const eventName of ["pointerdown", "mousedown", "click", "focusin"]) {
     document.addEventListener(eventName, (event) => focusEditable(event.target), true);
   }
-  window[key] = true;
+  window[key] = {
+    setSidebarWidth(value) {
+      targetSidebarWidth = value;
+      scheduleSidebarGeometry();
+    },
+  };
 })();
 `;
 
@@ -331,10 +361,6 @@ export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
   const colorScheme = appearance === "dark" ? "dark" : "light";
   const sidebarWidthVariable =
     sidebarWidth === null ? "" : `\n  --sidebar-width: ${sidebarWidth}px !important;`;
-  const sidebarWidthRule =
-    sidebarWidth === null
-      ? ""
-      : `\n  width: ${sidebarWidth}px !important;\n  min-width: ${sidebarWidth}px !important;`;
   return `
 /* T3 Code scoped theme for the isolated ChatGPT surface. */
 :root {
@@ -412,14 +438,20 @@ aside,
   background-color: var(--t3code-remote-sidebar) !important;
   color: var(--t3code-remote-sidebar-foreground) !important;
   border-color: var(--t3code-remote-sidebar-border) !important;
-${sidebarWidthRule}
 }
 
 [data-t3code-remote-sidebar="true"] {
   box-sizing: border-box !important;
   width: ${sidebarWidth === null ? "auto" : `${Math.round(sidebarWidth)}px`} !important;
   min-width: ${sidebarWidth === null ? "0" : `${Math.round(sidebarWidth)}px`} !important;
-  flex-basis: ${sidebarWidth === null ? "auto" : `${Math.round(sidebarWidth)}px`} !important;
+  overflow-x: hidden !important;
+}
+
+/* Match the first remote row to the native Search row instead of letting it
+   hug the shared titlebar. Only the outer detected sidebar receives this
+   inset; nested width containers stay untouched. */
+[data-t3code-remote-sidebar-root="true"] {
+  padding-top: 9px !important;
 }
 
 :where(

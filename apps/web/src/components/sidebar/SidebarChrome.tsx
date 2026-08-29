@@ -10,6 +10,7 @@ import { Link, useCanGoBack, useLocation, useNavigate } from "@tanstack/react-ro
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
+import { useRemoteAppState } from "../../remote-apps/useRemoteAppState";
 import { useEnvironments } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -146,6 +147,7 @@ function SidebarUtilityItem({
 export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const canGoBack = useCanGoBack();
+  const { setActiveSurface } = useRemoteAppState();
   const { isMobile, setOpenMobile } = useSidebar();
   const currentFooterPage = useLocation({
     select: (location) =>
@@ -172,19 +174,25 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   }, [isMobile, setOpenMobile]);
   const handlePullRequestsClick = useCallback(() => {
     closeMobileSidebar();
-    void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
-  }, [closeMobileSidebar, navigate]);
+    void setActiveSurface("t3code").then(() => {
+      void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
+    });
+  }, [closeMobileSidebar, navigate, setActiveSurface]);
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
-    void navigate({ to: "/settings" });
-  }, [closeMobileSidebar, navigate]);
+    void setActiveSurface("t3code").then(() => {
+      void navigate({ to: "/settings" });
+    });
+  }, [closeMobileSidebar, navigate, setActiveSurface]);
 
   const handleUsageClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
     }
-    void navigate({ to: "/usage" });
-  }, [isMobile, navigate, setOpenMobile]);
+    void setActiveSurface("t3code").then(() => {
+      void navigate({ to: "/usage" });
+    });
+  }, [isMobile, navigate, setActiveSurface, setOpenMobile]);
 
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
