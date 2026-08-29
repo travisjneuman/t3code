@@ -1273,7 +1273,7 @@ function ChatViewContent(props: ChatViewProps) {
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
   const handleNewThread = useNewThreadHandler();
-  const { settleThread, pinThread, unpinThread } = useThreadActions();
+  const { settleThread, pinThread, confirmAndUnpinThread } = useThreadActions();
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -4394,7 +4394,7 @@ function ChatViewContent(props: ChatViewProps) {
       ? activePlan.steps
       : null;
   const autoSettleAfterDays = useClientSettings((settings) => settings.sidebarAutoSettleAfterDays);
-  const autoSettleMode = useClientSettings((settings) => settings.sidebarAutoSettleMode);
+  const autoSettleOnMerge = useClientSettings((settings) => settings.sidebarAutoSettleOnMerge);
   const linkedPullRequestStatus = useLinkedThreadPullRequest(
     activeThreadRef?.environmentId ?? null,
     linkedThreadPullRequest,
@@ -4465,8 +4465,10 @@ function ChatViewContent(props: ChatViewProps) {
   const activeThreadWokeVisible = useMemo(() => {
     if (activeThreadWokeAt === null) return false;
     if (
-      autoSettleMode === "change-request" &&
-      changeRequestAutoSettles(activeThreadChangeRequest, { thread: activeThreadShell })
+      changeRequestAutoSettles(activeThreadChangeRequest, {
+        autoSettleOnMerge,
+        thread: activeThreadShell,
+      })
     ) {
       return false;
     }
@@ -4492,21 +4494,21 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadChangeRequest,
     activeThreadShell,
     activeThreadWokeAt,
-    autoSettleMode,
+    autoSettleOnMerge,
   ]);
   const activeThreadSettled = useMemo(() => {
     if (activeThreadShell === null || !supportsSettlement) return false;
     return effectiveSettled(activeThreadShell, {
       now: `${nowMinute}:00.000Z`,
       autoSettleAfterDays,
-      autoSettleMode,
+      autoSettleOnMerge,
       changeRequest: activeThreadChangeRequest,
     });
   }, [
     activeThreadChangeRequest,
     activeThreadShell,
     autoSettleAfterDays,
-    autoSettleMode,
+    autoSettleOnMerge,
     changeRequestSnapshotByKey,
     nowMinute,
     supportsSettlement,
@@ -5146,17 +5148,19 @@ function ChatViewContent(props: ChatViewProps) {
         event.stopPropagation();
         if (!isServerThread || !activeThreadRef || !supportsPinning) return;
         const pinned = activeThreadPinned;
-        void (pinned ? unpinThread(activeThreadRef) : pinThread(activeThreadRef)).then((result) => {
-          if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
-          const error = squashAtomCommandFailure(result);
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: pinned ? "Failed to unpin thread" : "Failed to pin thread",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            }),
-          );
-        });
+        void (pinned ? confirmAndUnpinThread(activeThreadRef) : pinThread(activeThreadRef)).then(
+          (result) => {
+            if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: pinned ? "Failed to unpin thread" : "Failed to pin thread",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+          },
+        );
         return;
       }
 
@@ -5284,7 +5288,7 @@ function ChatViewContent(props: ChatViewProps) {
     settleThread,
     supportsPinning,
     supportsSettlement,
-    unpinThread,
+    confirmAndUnpinThread,
     toggleRightPanel,
     toggleRightPanelMaximized,
     toggleTerminalVisibility,
