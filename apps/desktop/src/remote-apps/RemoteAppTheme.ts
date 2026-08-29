@@ -146,17 +146,93 @@ export function resolveRemoteToolbarControlKind(
 export const buildRemoteAppInteractionScript = (
   input: RemoteAppTheme = DEFAULT_REMOTE_APP_THEME,
 ): string => {
-  const { sidebarWidth } = normalizeRemoteAppTheme(input);
+  const { sidebarWidth, colors } = normalizeRemoteAppTheme(input);
+  const inlineThemeVariables = JSON.stringify({
+    "--t3code-remote-canvas": colors.canvas,
+    "--t3code-remote-sidebar": colors.sidebar,
+    "--t3code-remote-sidebar-foreground": colors.sidebarForeground,
+    "--t3code-remote-sidebar-muted-foreground": colors.sidebarMutedForeground,
+    "--t3code-remote-sidebar-row-hover": colors.sidebarRowHover,
+    "--t3code-remote-sidebar-row-selected": colors.sidebarRowSelected,
+    "--t3code-remote-sidebar-border": colors.sidebarBorder,
+    "--t3code-remote-surface": colors.surface,
+    "--t3code-remote-surface-raised": colors.surfaceRaised,
+    "--t3code-remote-surface-overlay": colors.surfaceOverlay,
+    "--t3code-remote-text": colors.text,
+    "--t3code-remote-text-muted": colors.textMuted,
+    "--t3code-remote-muted": colors.muted,
+    "--t3code-remote-muted-foreground": colors.mutedForeground,
+    "--t3code-remote-placeholder": colors.placeholder,
+    "--t3code-remote-border": colors.border,
+    "--t3code-remote-input": colors.input,
+    "--t3code-remote-focus": colors.focus,
+    "--t3code-remote-accent": colors.accent,
+    "--t3code-remote-accent-foreground": colors.accentForeground,
+    "--t3code-remote-secondary": colors.secondary,
+    "--t3code-remote-secondary-foreground": colors.secondaryForeground,
+    "--t3code-remote-toolbar": colors.toolbar,
+    "--t3code-remote-toolbar-foreground": colors.toolbarForeground,
+    "--t3code-remote-toolbar-border": colors.toolbarBorder,
+    "--t3code-remote-toolbar-control": colors.toolbarControl,
+    "--t3code-remote-toolbar-control-foreground": colors.toolbarControlForeground,
+    "--t3code-remote-toolbar-control-hover": colors.toolbarControlHover,
+    "--main-surface-primary": colors.canvas,
+    "--main-surface-secondary": colors.surfaceRaised,
+    "--main-surface-tertiary": colors.surfaceRaised,
+    "--composer-surface": colors.input,
+    "--composer-surface-primary": colors.input,
+    "--composer-surface-secondary": colors.input,
+    "--sidebar-surface-primary": colors.sidebar,
+    "--sidebar-surface-secondary": colors.sidebar,
+    "--text-primary": colors.text,
+    "--text-secondary": colors.textMuted,
+    "--text-tertiary": colors.mutedForeground,
+    "--border-light": colors.border,
+    "--border-medium": colors.border,
+    "--border-heavy": colors.border,
+    "--interactive-bg-secondary-hover": colors.sidebarRowHover,
+    "--stage-art-top": colors.stageArtTop,
+    "--stage-art-mid": colors.stageArtMid,
+    "--stage-art-bottom": colors.stageArtBottom,
+    "--stage-art-highlight": colors.stageArtHighlight,
+    "--stage-art-secondary": colors.stageArtSecondary,
+    "--stage-art-tertiary": colors.stageArtTertiary,
+    "--stage-art-line": colors.stageArtLine,
+    "--stage-art-celeste-highlight": colors.stageArtCelesteHighlight,
+    "--stage-art-celeste-secondary": colors.stageArtCelesteSecondary,
+    "--stage-art-violet-highlight": colors.stageArtVioletHighlight,
+    "--stage-art-grid-line": colors.stageArtGridLine,
+    "--stage-night-top": colors.stageNightTop,
+    "--stage-night-mid": colors.stageNightMid,
+    "--stage-night-bottom": colors.stageNightBottom,
+    "--stage-night-highlight": colors.stageNightHighlight,
+    "--stage-night-secondary": colors.stageNightSecondary,
+    "--stage-night-tertiary": colors.stageNightTertiary,
+    "--stage-night-line": colors.stageNightLine,
+    "--stage-night-glow-highlight": colors.stageNightGlowHighlight,
+    "--stage-night-glow-secondary": colors.stageNightGlowSecondary,
+    "--stage-night-sparkle": colors.stageNightSparkle,
+  });
   return `
 (() => {
   const key = "__t3codeRemoteAppInteraction";
   const nextSidebarWidth = ${sidebarWidth === null ? "null" : Math.round(sidebarWidth)};
+  const inlineThemeVariables = ${inlineThemeVariables};
+  const applyInlineTheme = () => {
+    const root = document.documentElement;
+    if (!(root instanceof HTMLElement)) return;
+    for (const [property, value] of Object.entries(inlineThemeVariables)) {
+      root.style.setProperty(property, value, "important");
+    }
+  };
   const existing = window[key];
   if (existing && typeof existing.setSidebarWidth === "function") {
+    applyInlineTheme();
     existing.setSidebarWidth(nextSidebarWidth);
     return;
   }
   if (existing && typeof existing.setPresentation === "function") {
+    applyInlineTheme();
     existing.setPresentation(nextSidebarWidth, "none", "");
     return;
   }
@@ -353,6 +429,7 @@ export const buildRemoteAppInteractionScript = (
       applySemanticMarkers();
     }, 80);
   };
+  applyInlineTheme();
   applySidebarGeometry();
   applySemanticMarkers();
   for (const delay of [0, 120, 500, 1_200, 3_000, 6_000, 10_000]) {

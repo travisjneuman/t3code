@@ -100,6 +100,9 @@ describe("RemoteAppTheme", () => {
     });
 
     expect(script).toContain("__t3codeRemoteAppInteraction");
+    expect(script).toContain("applyInlineTheme");
+    expect(script).toContain('root.style.setProperty(property, value, "important")');
+    expect(script).toContain('"--main-surface-primary":"#192531"');
     expect(script).toContain("targetSidebarWidth");
     expect(script).toContain("dataset.t3codeRemoteSidebar");
     expect(script).toContain("dataset.t3codeRemoteSidebarRoot");
