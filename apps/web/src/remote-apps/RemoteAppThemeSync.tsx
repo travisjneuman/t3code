@@ -1,6 +1,6 @@
 import type { RemoteAppThemeColors } from "@t3tools/contracts";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   getDefaultThemeColors,
@@ -83,6 +83,27 @@ const REMOTE_STAGE_COLOR_VARIABLES = {
 type ComputedRemoteThemeColors = Partial<Record<keyof RemoteAppThemeColors, string>>;
 
 /**
+ * Keep renderer-to-main theme updates ordered. Theme changes can arrive in a
+ * burst (for example while selecting both halves of an automatic mix), and
+ * Electron may finish an older IPC call after a newer one. Only the latest
+ * queued payload is allowed to start once the current call settles.
+ */
+export function enqueueLatestRemoteThemeSync(
+  queue: Promise<void>,
+  sequence: number,
+  latestSequence: () => number,
+  sync: () => Promise<void>,
+): Promise<void> {
+  return queue
+    .catch(() => undefined)
+    .then(async () => {
+      if (sequence !== latestSequence()) return;
+      await sync();
+    })
+    .catch(() => undefined);
+}
+
+/**
  * Resolve the remote palette from the same theme definition that paints the
  * native renderer. Computed CSS remains the source for stage artwork (whose
  * channel pigments are declared in index.css), but the ChatGPT surfaces must
@@ -149,20 +170,31 @@ export function RemoteAppThemeSync() {
     useSidebarStageBackdropVariant(environmentIdentificationMode === "artwork") ?? "none";
   const lightThemeHalf = themeHalves?.light ?? "";
   const darkThemeHalf = themeHalves?.dark ?? "";
+  const syncSequenceRef = useRef(0);
+  const syncQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
     if (bridge === undefined) return;
     const sync = () => {
-      void bridge
-        .setTheme({
-          appearance: resolvedTheme,
-          stageArt,
-          sidebarWidth: readRemoteSidebarWidth(),
-          colors: readRemoteThemeColors(theme, resolvedTheme, themeHalves),
-        })
-        .catch((cause: unknown) => {
-          console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);
-        });
+      const sequence = ++syncSequenceRef.current;
+      const payload = {
+        appearance: resolvedTheme,
+        stageArt,
+        sidebarWidth: readRemoteSidebarWidth(),
+        colors: readRemoteThemeColors(theme, resolvedTheme, themeHalves),
+      } as const;
+      syncQueueRef.current = enqueueLatestRemoteThemeSync(
+        syncQueueRef.current,
+        sequence,
+        () => syncSequenceRef.current,
+        async () => {
+          try {
+            await bridge.setTheme(payload);
+          } catch (cause: unknown) {
+            console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);
+          }
+        },
+      );
     };
 
     sync();
@@ -187,6 +219,9 @@ export function RemoteAppThemeSync() {
     observeSidebar();
     window.addEventListener("resize", sync);
     return () => {
+      // Invalidate work queued by this effect before a later theme/surface
+      // snapshot starts its own synchronization.
+      syncSequenceRef.current += 1;
       mutationObserver.disconnect();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", sync);

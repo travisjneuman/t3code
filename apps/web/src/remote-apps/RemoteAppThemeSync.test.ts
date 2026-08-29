@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { getDefaultThemeColors, getThemeColorsForMode, OCEAN_THEME } from "../themePalette";
-import { resolveRemoteThemeColors } from "./RemoteAppThemeSync";
+import { enqueueLatestRemoteThemeSync, resolveRemoteThemeColors } from "./RemoteAppThemeSync";
 
 describe("remote app theme synchronization", () => {
   it("uses the rendered T3 palette instead of a ChatGPT-specific fallback", () => {
@@ -53,5 +53,38 @@ describe("remote app theme synchronization", () => {
     });
 
     expect(colors.canvas).toBe(getDefaultThemeColors("light").canvas);
+  });
+
+  it("coalesces queued IPC work so an older palette cannot finish last", async () => {
+    let latest = 1;
+    let resolveFirst: (() => void) | undefined;
+    const first = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const applied: number[] = [];
+
+    const firstQueued = enqueueLatestRemoteThemeSync(
+      Promise.resolve(),
+      1,
+      () => latest,
+      async () => {
+        applied.push(1);
+        await first;
+      },
+    );
+    latest = 2;
+    const secondQueued = enqueueLatestRemoteThemeSync(
+      firstQueued,
+      2,
+      () => latest,
+      async () => {
+        applied.push(2);
+      },
+    );
+
+    resolveFirst?.();
+    await secondQueued;
+
+    expect(applied).toEqual([2]);
   });
 });
