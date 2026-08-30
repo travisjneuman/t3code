@@ -611,19 +611,14 @@ export const buildRemoteAppInteractionScript = (
       .toLowerCase();
     if (accessibleName !== "try it first") return;
 
-    // On the login route this link is currently emitted as a hash anchor. Let
-    // the site's handler run first, then repair only the exact anonymous-home
-    // action when the document is still on an auth path.
+    // On the login route this link is currently emitted as a hash anchor. Take
+    // ownership of that exact inert action before the site's router can turn it
+    // into another nested auth URL, while leaving every other remote link
+    // untouched.
     const targetUrl = resolveTryItFirstUrl();
-    window.setTimeout(() => {
-      try {
-        if (new URL(window.location.href).pathname.startsWith("/auth/")) {
-          window.location.assign(targetUrl);
-        }
-      } catch {
-        // The remote document may have been replaced while the timer ran.
-      }
-    }, 0);
+    event.preventDefault();
+    event.stopPropagation();
+    window.location.assign(targetUrl);
   };
 
   document.addEventListener("click", handleTryItFirst, true);
