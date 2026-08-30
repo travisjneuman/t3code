@@ -145,7 +145,7 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain("dataset.t3codeRemoteAuth");
     expect(script).toContain("continue with ");
     expect(script).toContain("handleTryItFirst");
-    expect(script).toContain("/?slm=1");
+    expect(script).toContain('new URL("/", window.location.origin).href');
     expect(script).toContain("window.location.assign(targetUrl)");
     expect(script).not.toContain("data-t3code-remote-stage-art");
     expect(script).not.toContain("rootSidebar.prepend(");

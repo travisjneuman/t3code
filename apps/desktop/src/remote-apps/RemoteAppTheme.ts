@@ -587,18 +587,10 @@ export const buildRemoteAppInteractionScript = (
   };
 
   const resolveTryItFirstUrl = () => {
-    const homeLink = Array.from(document.querySelectorAll("a[href]")).find((candidate) => {
-      if (!(candidate instanceof HTMLAnchorElement)) return false;
-      try {
-        const url = new URL(candidate.href, window.location.href);
-        return url.hostname === window.location.hostname && url.pathname === "/";
-      } catch {
-        return false;
-      }
-    });
-    return homeLink instanceof HTMLAnchorElement
-      ? homeLink.href
-      : new URL("/?slm=1", window.location.origin).href;
+    // The auth page's logo currently points at /?slm=1; that query is a
+    // login-state marker and redirects the guest entry back to auth. The
+    // plain same-origin root is ChatGPT's signed-out guest entry point.
+    return new URL("/", window.location.origin).href;
   };
 
   const handleTryItFirst = (event) => {
