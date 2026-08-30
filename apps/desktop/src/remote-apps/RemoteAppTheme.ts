@@ -445,9 +445,11 @@ export const buildRemoteAppInteractionScript = (
     if (!isAuthHeading) return;
     root.dataset.t3codeRemoteAuth = "true";
 
-    const main = document.querySelector("main, [role='main']");
-    if (!(main instanceof HTMLElement)) return;
-    for (const control of main.querySelectorAll("button, [role='button']")) {
+    // The login document does not always expose a semantic <main> (the site
+    // has shipped both a centered form shell and a full-page auth layout).
+    // Auth controls are still safe to identify here because the exact
+    // accessible-name match is scoped by the auth heading on this document.
+    for (const control of document.querySelectorAll("button, [role='button']")) {
       if (!(control instanceof HTMLElement) || !isVisible(control)) continue;
       const accessibleName = (
         control.getAttribute("aria-label") ??
