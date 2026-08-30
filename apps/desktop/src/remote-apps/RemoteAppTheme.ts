@@ -425,9 +425,51 @@ export const buildRemoteAppInteractionScript = (
     }
   };
 
+  const applyAuthMarkers = () => {
+    const root = document.documentElement;
+    if (!(root instanceof HTMLElement)) return;
+    delete root.dataset.t3codeRemoteAuth;
+    for (const previous of document.querySelectorAll(
+      "[data-t3code-remote-auth-control], [data-t3code-remote-auth-primary]",
+    )) {
+      delete previous.dataset.t3codeRemoteAuthControl;
+      delete previous.dataset.t3codeRemoteAuthPrimary;
+    }
+
+    const isAuthHeading = Array.from(
+      document.querySelectorAll("h1, h2, h3, [role='heading']"),
+    ).some(
+      (heading) =>
+        heading.textContent?.trim().replace(/\\s+/g, " ").toLowerCase() === "log in or sign up",
+    );
+    if (!isAuthHeading) return;
+    root.dataset.t3codeRemoteAuth = "true";
+
+    const main = document.querySelector("main, [role='main']");
+    if (!(main instanceof HTMLElement)) return;
+    for (const control of main.querySelectorAll("button, [role='button']")) {
+      if (!(control instanceof HTMLElement) || !isVisible(control)) continue;
+      const accessibleName = (
+        control.getAttribute("aria-label") ??
+        control.getAttribute("title") ??
+        control.textContent ??
+        ""
+      )
+        .trim()
+        .replace(/\\s+/g, " ")
+        .toLowerCase();
+      if (accessibleName === "continue" || control.getAttribute("type") === "submit") {
+        control.dataset.t3codeRemoteAuthPrimary = "true";
+      } else if (accessibleName.startsWith("continue with ")) {
+        control.dataset.t3codeRemoteAuthControl = "true";
+      }
+    }
+  };
+
   const applySemanticMarkers = () => {
     applyComposerMarkers();
     applyToolbarControlMarkers();
+    applyAuthMarkers();
   };
   let geometryFrame = 0;
   const scheduleSidebarGeometry = () => {
@@ -541,6 +583,48 @@ export const buildRemoteAppInteractionScript = (
     window.setTimeout(focus, 80);
     window.setTimeout(focus, 160);
   };
+
+  const resolveTryItFirstUrl = () => {
+    const homeLink = Array.from(document.querySelectorAll("a[href]")).find((candidate) => {
+      if (!(candidate instanceof HTMLAnchorElement)) return false;
+      try {
+        const url = new URL(candidate.href, window.location.href);
+        return url.hostname === window.location.hostname && url.pathname === "/";
+      } catch {
+        return false;
+      }
+    });
+    return homeLink instanceof HTMLAnchorElement
+      ? homeLink.href
+      : new URL("/?slm=1", window.location.origin).href;
+  };
+
+  const handleTryItFirst = (event) => {
+    if (!(event.target instanceof Element)) return;
+    const link = event.target.closest("a");
+    if (!(link instanceof HTMLAnchorElement)) return;
+    const accessibleName = (link.getAttribute("aria-label") ?? link.textContent ?? "")
+      .trim()
+      .replace(/\\s+/g, " ")
+      .toLowerCase();
+    if (accessibleName !== "try it first") return;
+
+    // On the login route this link is currently emitted as a hash anchor. Let
+    // the site's handler run first, then repair only the exact anonymous-home
+    // action when the document is still on an auth path.
+    const targetUrl = resolveTryItFirstUrl();
+    window.setTimeout(() => {
+      try {
+        if (new URL(window.location.href).pathname.startsWith("/auth/")) {
+          window.location.assign(targetUrl);
+        }
+      } catch {
+        // The remote document may have been replaced while the timer ran.
+      }
+    }, 0);
+  };
+
+  document.addEventListener("click", handleTryItFirst, true);
 
   for (const eventName of ["pointerdown", "mousedown", "click"]) {
     document.addEventListener(eventName, (event) => focusEditable(event.target), true);
@@ -1025,6 +1109,48 @@ main :where(button, [role="button"]) {
 [data-t3code-remote-toolbar-control]:where(:disabled, [aria-disabled="true"]) {
   cursor: default !important;
   opacity: 0.5 !important;
+}
+
+/* The unauthenticated login surface is still ChatGPT's live document, but
+   its sign-in controls must not fall back to ChatGPT's separate black/white
+   palette. The interaction bridge marks only the visible auth controls, so
+   chat buttons and similarly named sidebar/account actions remain untouched. */
+:root[data-t3code-remote-auth="true"] [data-t3code-remote-auth-control] {
+  background: var(--t3code-remote-secondary) !important;
+  border: 1px solid var(--t3code-remote-border) !important;
+  color: var(--t3code-remote-secondary-foreground) !important;
+}
+
+:root[data-t3code-remote-auth="true"] [data-t3code-remote-auth-control]:hover {
+  background: var(--t3code-remote-toolbar-control-hover) !important;
+}
+
+:root[data-t3code-remote-auth="true"] [data-t3code-remote-auth-primary] {
+  background: var(--t3code-remote-accent) !important;
+  border: 1px solid var(--t3code-remote-accent) !important;
+  color: var(--t3code-remote-accent-foreground) !important;
+}
+
+:root[data-t3code-remote-auth="true"] [data-t3code-remote-auth-primary]:hover {
+  background: var(--t3code-remote-toolbar-control-hover) !important;
+  border-color: var(--t3code-remote-focus) !important;
+}
+
+:root[data-t3code-remote-auth="true"] [data-t3code-remote-auth-control]:focus-visible,
+:root[data-t3code-remote-auth="true"] [data-t3code-remote-auth-primary]:focus-visible {
+  outline: 2px solid var(--t3code-remote-focus) !important;
+  outline-offset: 2px !important;
+}
+
+:root[data-t3code-remote-auth="true"] input[type="email"] {
+  background: var(--t3code-remote-input) !important;
+  border-color: var(--t3code-remote-border) !important;
+  color: var(--t3code-remote-text) !important;
+  caret-color: var(--t3code-remote-accent) !important;
+}
+
+:root[data-t3code-remote-auth="true"] input[type="email"]::placeholder {
+  color: var(--t3code-remote-placeholder) !important;
 }
 
 main :where(a),

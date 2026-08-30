@@ -142,6 +142,11 @@ describe("RemoteAppTheme", () => {
     expect(script).toContain("document.querySelectorAll(\"button, a[role='button']\")");
     expect(script).toContain("insideSidebar");
     expect(script).toContain("inUpperRightContent");
+    expect(script).toContain("dataset.t3codeRemoteAuth");
+    expect(script).toContain("continue with ");
+    expect(script).toContain("handleTryItFirst");
+    expect(script).toContain("/?slm=1");
+    expect(script).toContain("window.location.assign(targetUrl)");
     expect(script).not.toContain("data-t3code-remote-stage-art");
     expect(script).not.toContain("rootSidebar.prepend(");
     expect(script).toContain("button[aria-label*='Add files']");
