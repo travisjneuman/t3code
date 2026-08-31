@@ -1,4 +1,4 @@
-name: TJN macOS Nightly Release
+name: ndev.t3code macOS Nightly Release
 
 on:
   schedule:

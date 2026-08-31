@@ -1,6 +1,6 @@
 # Desktop remote apps
 
-The TJN desktop distribution exposes ChatGPT as a second top-level surface next to T3 Code. The two surfaces share one Electron `BrowserWindow`; ChatGPT is rendered by exactly one `WebContentsView` attached below the 40px T3 titlebar. The view stays alive while the user returns to T3 Code, so switching surfaces does not recreate the remote session.
+The TJN desktop distribution exposes ChatGPT as a second top-level surface next to ndev.t3code. The two surfaces share one Electron `BrowserWindow`; ChatGPT is rendered by exactly one `WebContentsView` attached below the 40px T3 titlebar. The view stays alive while the user returns to ndev.t3code, so switching surfaces does not recreate the remote session.
 
 ChatGPT uses the dedicated persistent Electron partition `persist:tjn-remote-chatgpt-v1`. The renderer receives shell metadata only: the active surface, a sanitized first-party location and title, navigation affordances, zoom, bounded recents, and categorized error state. Cookies, tokens, message bodies, raw exceptions, and query/hash credentials are never placed in the shell state file.
 

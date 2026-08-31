@@ -658,7 +658,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
-        { name: "T3 Code", schemes: ["t3code-tjn", "t3code-tjn-dev"] },
+        { name: "ndev.t3code", schemes: ["t3code-tjn", "t3code-tjn-dev"] },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       assert.notProperty(mac.mac as Record<string, unknown>, "sign");
@@ -1402,11 +1402,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       const mac = config.mac as Record<string, unknown>;
       assert.equal(config.appId, "dev.neuman.t3code");
+      assert.equal(config.productName, "ndev.t3code");
+      assert.equal(config.artifactName, "ndev.t3code-${version}-${arch}.${ext}");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
       assert.deepStrictEqual(mac.protocols, [
-        { name: "T3 Code", schemes: ["t3code-tjn", "t3code-tjn-dev"] },
+        { name: "ndev.t3code", schemes: ["t3code-tjn", "t3code-tjn-dev"] },
       ]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );

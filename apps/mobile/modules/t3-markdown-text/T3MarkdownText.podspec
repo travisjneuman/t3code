@@ -6,8 +6,8 @@ new_arch_enabled = ENV["RCT_NEW_ARCH_ENABLED"] == "1"
 Pod::Spec.new do |s|
   s.name = "T3MarkdownText"
   s.version = package["version"]
-  s.summary = "Native selectable markdown renderer for T3 Code mobile."
-  s.description = "Fabric-backed attributed text and markdown rendering primitives owned by T3 Code."
+  s.summary = "Native selectable markdown renderer for ndev.t3code mobile."
+  s.description = "Fabric-backed attributed text and markdown rendering primitives owned by ndev.t3code."
   s.homepage = "https://t3tools.com"
   s.license = { :type => "MIT", :file => "LICENSE" }
   s.author = { "T3 Tools" => "hello@t3tools.com" }

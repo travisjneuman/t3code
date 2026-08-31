@@ -168,7 +168,7 @@ describe("confirm", () => {
         [
           {
             type: "question",
-            title: "T3 Code",
+            title: "ndev.t3code",
             message: "Install update?",
             detail: "Any running tasks will stop.",
             buttons: ["Cancel", "Confirm"],

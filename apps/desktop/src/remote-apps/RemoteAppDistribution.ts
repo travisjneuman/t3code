@@ -1,5 +1,7 @@
+import { PRODUCT_NAME } from "@t3tools/shared/branding";
+
 export const REMOTE_APP_DISTRIBUTION = {
-  baseName: "ndev.t3code",
+  baseName: PRODUCT_NAME,
   appId: "dev.neuman.t3code",
   packagedUserDataDirName: "t3code-tjn",
   // Keep the fork's packaged server state away from the upstream desktop

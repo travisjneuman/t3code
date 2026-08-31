@@ -697,7 +697,7 @@ export const buildRemoteAppSurfaceMenuHtml = (
     <div role="menu" aria-label="Switch app surface">
       <a role="menuitemradio" aria-checked="${checked("t3code")}" href="${surfaceMenuUrl("t3code")}">
         <span class="check" aria-hidden="true">${activeSurface === "t3code" ? "✓" : ""}</span>
-        <span>T3 Code</span>
+        <span>ndev.t3code</span>
       </a>
       <a role="menuitemradio" aria-checked="${checked("chatgpt")}" href="${surfaceMenuUrl("chatgpt")}">
         <span class="check" aria-hidden="true">${activeSurface === "chatgpt" ? "✓" : ""}</span>
@@ -753,7 +753,7 @@ export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
       ? ""
       : `\n  background-image: url("data:image/svg+xml,${encodeURIComponent(stageArtwork)}") !important;\n  background-position: left -40px !important;\n  background-repeat: no-repeat !important;\n  background-size: 100% 80px !important;`;
   return `
-/* T3 Code scoped theme for the isolated ChatGPT surface. */
+/* ndev.t3code scoped theme for the isolated ChatGPT surface. */
 :root {
   color-scheme: ${colorScheme} !important;
 ${sidebarWidthVariable}

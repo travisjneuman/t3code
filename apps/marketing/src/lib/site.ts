@@ -1,4 +1,9 @@
-export const GITHUB_REPOSITORY_URL = "https://github.com/pingdotgg/t3code";
+export {
+  FORK_REPOSITORY_URL as GITHUB_REPOSITORY_URL,
+  PLANNED_PROJECT_SITE_URL,
+  PRODUCT_NAME,
+  UPSTREAM_REPOSITORY_URL,
+} from "@t3tools/shared/branding";
 
 export const IOS_APP_STORE_URL =
   "https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824";

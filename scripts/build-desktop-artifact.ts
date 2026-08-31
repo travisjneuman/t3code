@@ -796,7 +796,7 @@ interface StagePackageJson {
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
 export const DESKTOP_FILE_EXCLUSIONS = [
-  // T3 Code always passes the user's installed Claude executable to the SDK,
+  // ndev.t3code always passes the user's installed Claude executable to the SDK,
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
@@ -2143,7 +2143,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-TJN-${version}-${arch}.${ext}",
+    artifactName: `${REMOTE_APP_DISTRIBUTION.baseName}-\${version}-\${arch}.\${ext}`,
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
     directories: {
@@ -2186,7 +2186,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "public.app-category.developer-tools",
       protocols: [
         {
-          name: "T3 Code",
+          name: REMOTE_APP_DISTRIBUTION.baseName,
           schemes: [REMOTE_APP_DISTRIBUTION.protocol, `${REMOTE_APP_DISTRIBUTION.protocol}-dev`],
         },
       ],
@@ -2234,7 +2234,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // t3code:// OAuth callbacks to the app.
       protocols: [
         {
-          name: "T3 Code",
+          name: REMOTE_APP_DISTRIBUTION.baseName,
           schemes: [REMOTE_APP_DISTRIBUTION.protocol, `${REMOTE_APP_DISTRIBUTION.protocol}-dev`],
         },
       ],
@@ -3190,7 +3190,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     t3codeCommitHash: commitHash,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "T3 Code desktop build",
+    description: "ndev.t3code desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
@@ -3459,7 +3459,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build a desktop artifact for ndev.t3code."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

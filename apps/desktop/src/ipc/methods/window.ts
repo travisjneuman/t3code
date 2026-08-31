@@ -96,7 +96,7 @@ export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
 
 /**
  * Native confirmations stay above embedded WebContentsViews. Renderer-owned
- * dialogs are intentionally retained for the normal T3 Code surface, but a
+ * dialogs are intentionally retained for the normal ndev.t3code surface, but a
  * remote app can cover that renderer region while it is active.
  */
 export const confirm = DesktopIpc.makeIpcMethod({
@@ -108,7 +108,7 @@ export const confirm = DesktopIpc.makeIpcMethod({
     const copy = splitConfirmDialogMessage(message);
     const result = yield* dialog.showMessageBox({
       type: "question",
-      title: "T3 Code",
+      title: "ndev.t3code",
       message: copy.message,
       ...(copy.detail === undefined ? {} : { detail: copy.detail }),
       buttons: ["Cancel", "Confirm"],

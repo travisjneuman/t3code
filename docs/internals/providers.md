@@ -1,8 +1,8 @@
 # Provider architecture
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using ndev.t3code? See [docs/user](../user/).
 
-A provider is the agent runtime that does the actual work. T3 Code supports several, and the
+A provider is the agent runtime that does the actual work. ndev.t3code supports several, and the
 orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
@@ -74,8 +74,8 @@ active text-generation work can extend process reuse. Changes to the provider co
 environment replace the instance and start a new discovery. Changes to unrelated settings only
 update snapshot enrichment. Other providers retain their existing refresh policy.
 
-T3 Code does not own an external OpenCode process. Native configuration changes there can require
-an external reload or restart before T3 Code's next refresh sees them.
+ndev.t3code does not own an external OpenCode process. Native configuration changes there can require
+an external reload or restart before ndev.t3code's next refresh sees them.
 
 The shared server's idle shutdown does not clear the catalog. Failed discovery keeps the last
 known models, slash commands, and skills through the registry's existing merge rules. A successful

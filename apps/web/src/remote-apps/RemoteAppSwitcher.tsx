@@ -27,7 +27,7 @@ export function RemoteAppSwitcher() {
     <Button
       ref={triggerRef}
       aria-haspopup="menu"
-      aria-label={`Switch app surface, currently ${state.activeSurface === "chatgpt" ? "ChatGPT" : "T3 Code"}`}
+      aria-label={`Switch app surface, currently ${state.activeSurface === "chatgpt" ? "ChatGPT" : "ndev.t3code"}`}
       className={cn(
         "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1 rounded-md px-2 text-sm font-medium tracking-tight",
         "border-transparent bg-transparent text-foreground shadow-none hover:bg-accent",

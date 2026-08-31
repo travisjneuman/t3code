@@ -22,10 +22,10 @@ const makeEnvironment = (overrides: Record<string, unknown> = {}) =>
     platform: "linux",
     isPackaged: true,
     isDevelopment: false,
-    displayName: "T3 Code (Alpha)",
+    displayName: "ndev.t3code (Alpha)",
     linuxWmClass: "t3code",
     linuxApplicationsDir: "/home/alice/.local/share/applications",
-    appImagePath: Option.some("/home/alice/Applications/T3-Code.AppImage"),
+    appImagePath: Option.some("/home/alice/Applications/ndev.t3code.AppImage"),
     path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
     ...overrides,
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
@@ -105,13 +105,13 @@ const emptyRecording = (): RecordedRegistration => ({
 describe("DesktopLinuxUrlHandler", () => {
   it("renders a scheme-handler desktop entry with freedesktop Exec quoting", () => {
     const entry = DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
-      displayName: "T3 Code (Nightly)",
+      displayName: "ndev.t3code (Nightly)",
       execTarget: '/home/al ice/Apps/T3 "100%" $HOME\\x.AppImage',
       scheme: "t3code",
     });
 
     assert.include(entry, "[Desktop Entry]");
-    assert.include(entry, "Name=T3 Code (Nightly)");
+    assert.include(entry, "Name=ndev.t3code (Nightly)");
     // Exec composes both escaping layers: a literal backslash becomes four
     // backslashes in the file, a quote three characters, a dollar sign two
     // backslashes plus the sign.
@@ -165,13 +165,13 @@ describe("DesktopLinuxUrlHandler", () => {
       );
       assert.include(
         recorded.files[0]?.content,
-        'Exec="/home/alice/Applications/T3-Code.AppImage" %U',
+        'Exec="/home/alice/Applications/ndev.t3code.AppImage" %U',
       );
-      assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/t3code;");
+      assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/t3code-tjn;");
       assert.deepEqual(recorded.commands, [
         {
           command: "xdg-mime",
-          args: ["default", "t3code-url-handler.desktop", "x-scheme-handler/t3code"],
+          args: ["default", "t3code-url-handler.desktop", "x-scheme-handler/t3code-tjn"],
         },
       ]);
     });
