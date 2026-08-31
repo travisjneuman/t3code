@@ -1,6 +1,8 @@
-# T3 Code
+# ndev.t3code
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
+ndev.t3code is Travis J. Neuman's active fork of [T3 Code](https://github.com/pingdotgg/t3code), an "agent harness control surface" for controlling coding agents from mobile, web, and desktop clients. This fork adds ChatGPT as a native Electron desktop surface while continuing to track the upstream project.
+
+The upstream T3 Code project provides a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes). The fork's source and releases remain at [github.com/travisjneuman/t3code](https://github.com/travisjneuman/t3code).
 
 Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
 

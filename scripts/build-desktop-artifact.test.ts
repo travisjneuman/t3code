@@ -645,7 +645,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/node_modules/.bin/**",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "T3 Code TJN 1.2.3 Installer",
+        title: "ndev.t3code 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 540, height: 412 },
         contents: [

@@ -1,5 +1,5 @@
 export const REMOTE_APP_DISTRIBUTION = {
-  baseName: "T3 Code TJN",
+  baseName: "ndev.t3code",
   appId: "dev.neuman.t3code",
   packagedUserDataDirName: "t3code-tjn",
   // Keep the fork's packaged server state away from the upstream desktop
