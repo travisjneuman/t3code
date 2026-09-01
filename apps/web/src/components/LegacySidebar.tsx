@@ -128,6 +128,7 @@ import { formatRelativeTimeLabel } from "../timestampFormat";
 import { Kbd } from "./ui/kbd";
 import {
   getArm64IntelBuildWarningDescription,
+  getDesktopUpdateActionLabel,
   getDesktopUpdateActionError,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
@@ -2778,6 +2779,7 @@ function SortableProjectItem({
 interface SidebarProjectsContentProps {
   showArm64IntelBuildWarning: boolean;
   arm64IntelBuildWarningDescription: string | null;
+  desktopUpdateIsSourceUpdate: boolean;
   desktopUpdateButtonAction: "download" | "install" | "none";
   desktopUpdateButtonDisabled: boolean;
   desktopUpdateActionPending: boolean;
@@ -2820,6 +2822,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   const {
     showArm64IntelBuildWarning,
     arm64IntelBuildWarningDescription,
+    desktopUpdateIsSourceUpdate,
     desktopUpdateButtonAction,
     desktopUpdateButtonDisabled,
     desktopUpdateActionPending,
@@ -2919,9 +2922,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                   disabled={desktopUpdateButtonDisabled || desktopUpdateActionPending}
                   onClick={handleDesktopUpdateButtonClick}
                 >
-                  {desktopUpdateButtonAction === "download"
-                    ? "Download ARM build"
-                    : "Install ARM build"}
+                  {desktopUpdateIsSourceUpdate
+                    ? getDesktopUpdateActionLabel({ sourceUpdate: true }, desktopUpdateButtonAction)
+                    : desktopUpdateButtonAction === "download"
+                      ? "Download ARM build"
+                      : "Install ARM build"}
                 </Button>
               </AlertAction>
             ) : null}
@@ -3682,6 +3687,7 @@ export default function LegacySidebar() {
       <SidebarProjectsContent
         showArm64IntelBuildWarning={showArm64IntelBuildWarning}
         arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}
+        desktopUpdateIsSourceUpdate={desktopUpdateState?.sourceUpdate === true}
         desktopUpdateButtonAction={desktopUpdateButtonAction}
         desktopUpdateButtonDisabled={desktopUpdateButtonDisabled}
         desktopUpdateActionPending={desktopUpdateActionPending}

@@ -3,6 +3,7 @@ import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/con
 
 import {
   canCheckForUpdate,
+  getDesktopUpdateActionLabel,
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
@@ -131,6 +132,16 @@ describe("desktop update button state", () => {
     expect(shouldShowDesktopUpdateButton(state)).toBe(true);
     expect(isDesktopUpdateButtonDisabled(state)).toBe(true);
     expect(getDesktopUpdateButtonTooltip(state)).toContain("42%");
+  });
+
+  it("labels source updates as local sync and install actions", () => {
+    expect(getDesktopUpdateActionLabel({ sourceUpdate: true }, "download")).toBe("Sync & Build");
+    expect(getDesktopUpdateActionLabel({ sourceUpdate: true }, "install")).toBe(
+      "Restart & Install",
+    );
+    expect(
+      getDesktopUpdateButtonTooltip({ ...baseState, sourceUpdate: true, status: "available" }),
+    ).toContain("build locally");
   });
 });
 
@@ -279,6 +290,16 @@ describe("desktop update UI helpers", () => {
     ).toBe(
       "Install update 1.1.0 and restart ndev.t3code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
     );
+  });
+
+  it("explains that a source update replaces the installed app from the local build", () => {
+    expect(
+      getDesktopUpdateInstallConfirmationMessage({
+        sourceUpdate: true,
+        availableVersion: "abc123",
+        downloadedVersion: "abc123",
+      }),
+    ).toContain("installed app will be replaced from the local build");
   });
 });
 

@@ -42,6 +42,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly isDevelopment: boolean;
     readonly appVersion: string;
     readonly appPath: string;
+    /** Optional maintainer checkout used by the local source updater. */
+    readonly sourceRepositoryPath: string | undefined;
     readonly resourcesPath: string;
     readonly homeDirectory: string;
     readonly appDataDirectory: string;
@@ -176,6 +178,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
+  const configuredSourceRepositoryPath = Option.getOrUndefined(config.sourceRepositoryPath);
+  const defaultSourceRepositoryPath =
+    input.platform === "darwin" && REMOTE_APP_DISTRIBUTION.distribution === "tjn"
+      ? path.join(homeDirectory, "web-dev", "t3code")
+      : undefined;
   const serverRoot =
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
@@ -210,6 +217,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     isDevelopment,
     appVersion: input.appVersion,
     appPath: input.appPath,
+    sourceRepositoryPath: configuredSourceRepositoryPath ?? defaultSourceRepositoryPath,
     resourcesPath,
     homeDirectory,
     appDataDirectory,
