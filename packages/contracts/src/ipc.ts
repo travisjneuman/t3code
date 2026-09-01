@@ -199,6 +199,8 @@ export const DesktopRuntimeInfoSchema = Schema.Struct({
 
 export interface DesktopUpdateState {
   enabled: boolean;
+  /** True when the desktop update action syncs and builds the configured source checkout. */
+  sourceUpdate?: boolean;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
   currentVersion: string;
@@ -227,6 +229,7 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 
 export const DesktopUpdateStateSchema = Schema.Struct({
   enabled: Schema.Boolean,
+  sourceUpdate: Schema.optionalKey(Schema.Boolean),
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
   currentVersion: Schema.String,

@@ -44,6 +44,7 @@ import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../..
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
+  getDesktopUpdateActionLabel,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
@@ -353,17 +354,20 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
   const statusLabel: Record<string, string> = {
     checking: "Checking…",
     downloading: "Downloading…",
     "up-to-date": "Up to Date",
   };
   const buttonLabel =
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
+    getDesktopUpdateActionLabel(updateState, action) ??
+    statusLabel[updateState?.status ?? ""] ??
+    "Check for Updates";
   const description =
     action === "download" || action === "install"
-      ? "Update available."
+      ? updateState?.sourceUpdate
+        ? "Syncs upstream changes, merges them with this fork, and builds the app locally."
+        : "Update available."
       : "Current version of the application.";
 
   return (

@@ -21,10 +21,12 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
+import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
@@ -187,10 +189,12 @@ function createBaseUpdateState(
   channel: DesktopUpdateChannel,
   enabled: boolean,
   environment: DesktopEnvironment.DesktopEnvironment["Service"],
+  sourceUpdate = false,
 ): DesktopUpdateState {
   return {
     ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
     enabled,
+    sourceUpdate,
     status: enabled ? "idle" : "disabled",
   };
 }
@@ -247,11 +251,14 @@ function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean 
 export const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   const desktopState = yield* DesktopState.DesktopState;
+  const electronApp = yield* ElectronApp.ElectronApp;
   const electronUpdater = yield* ElectronUpdater.ElectronUpdater;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const localSourceUpdates = yield* LocalSourceUpdates.LocalSourceUpdates;
+  const localSourceUpdateEnabled = yield* localSourceUpdates.enabled;
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -295,13 +302,15 @@ export const make = Effect.gen(function* () {
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
     Effect.map(
       (appUpdateYmlConfig) =>
-        (!environment.isPackaged || environment.autoUpdateEnabled !== false) &&
-        (Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
+        localSourceUpdateEnabled ||
+        ((!environment.isPackaged || environment.autoUpdateEnabled !== false) &&
+          (Option.isSome(appUpdateYmlConfig) || config.mockUpdates)),
     ),
   );
 
   const resolveDisabledReason = Effect.gen(function* () {
     const hasFeedConfig = yield* hasUpdateFeedConfig;
+    if (localSourceUpdateEnabled) return Option.none<string>();
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
         isDevelopment: environment.isDevelopment,
@@ -375,6 +384,45 @@ export const make = Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
+      if (localSourceUpdateEnabled) {
+        return yield* localSourceUpdates.inspect.pipe(
+          Effect.flatMap(
+            Effect.fn("desktop.updates.handleLocalSourceCheck")(function* (inspection) {
+              const checkedAt = yield* currentIsoTimestamp;
+              if (inspection.behind === 0) {
+                yield* setState(reduceDesktopUpdateStateOnNoUpdate(state, checkedAt));
+                return true;
+              }
+              const version = `source (${inspection.behind} upstream commit${inspection.behind === 1 ? "" : "s"})`;
+              yield* setState(
+                reduceDesktopUpdateStateOnUpdateAvailable(state, version, checkedAt, []),
+              );
+              yield* logUpdaterInfo("local source update available", {
+                ahead: inspection.ahead,
+                behind: inspection.behind,
+                currentCommit: inspection.currentCommit,
+                upstreamCommit: inspection.upstreamCommit,
+              });
+              return true;
+            }),
+          ),
+          Effect.catchTag(
+            "LocalSourceUpdateError",
+            Effect.fn("desktop.updates.handleLocalSourceCheckFailure")(function* (error) {
+              const failedAt = yield* currentIsoTimestamp;
+              yield* updateState((current) =>
+                reduceDesktopUpdateStateOnCheckFailure(current, error.message, failedAt),
+              );
+              yield* logUpdaterError(error.message, {
+                errorTag: error._tag,
+                operation: error.operation,
+              });
+              return true;
+            }),
+          ),
+        );
+      }
+
       return yield* electronUpdater.checkForUpdates.pipe(
         Effect.as(true),
         Effect.catchTags({
@@ -408,6 +456,31 @@ export const make = Effect.gen(function* () {
 
     if (!(yield* tryStartUpdateAction("download"))) {
       return { accepted: false, completed: false };
+    }
+
+    if (localSourceUpdateEnabled) {
+      return yield* Effect.gen(function* () {
+        yield* setState(reduceDesktopUpdateStateOnDownloadStart(state));
+        yield* logUpdaterInfo("syncing and building local source update");
+        const build = yield* localSourceUpdates.syncAndBuild;
+        yield* setState(reduceDesktopUpdateStateOnDownloadComplete(state, build.version));
+        return { accepted: true, completed: true };
+      }).pipe(
+        Effect.catchTag(
+          "LocalSourceUpdateError",
+          Effect.fn("desktop.updates.handleLocalSourceDownloadFailure")(function* (error) {
+            yield* updateState((current) =>
+              reduceDesktopUpdateStateOnDownloadFailure(current, error.message),
+            );
+            yield* logUpdaterError(error.message, {
+              errorTag: error._tag,
+              operation: error.operation,
+            });
+            return { accepted: true, completed: false };
+          }),
+        ),
+        Effect.ensuring(finishUpdateAction("download")),
+      );
     }
 
     return yield* Effect.gen(function* () {
@@ -492,13 +565,31 @@ export const make = Effect.gen(function* () {
       // handler is gone, leaving a disconnected, unrecoverable app. The normal
       // lifecycle handles the actual application quit after quitAndInstall is
       // accepted; a failed handoff stays in this scope so the user can retry.
-      yield* electronUpdater.quitAndInstall({
-        isSilent: true,
-        isForceRunAfter: true,
-      });
+      if (localSourceUpdateEnabled) {
+        yield* localSourceUpdates.install;
+        yield* electronApp.quit;
+      } else {
+        yield* electronUpdater.quitAndInstall({
+          isSilent: true,
+          isForceRunAfter: true,
+        });
+      }
       return { accepted: true, completed: false };
     }).pipe(
       Effect.catchTags({
+        LocalSourceUpdateError: Effect.fn("desktop.updates.handleLocalSourceInstallFailure")(
+          function* (error) {
+            yield* resetInstallAction;
+            yield* updateState((current) =>
+              reduceDesktopUpdateStateOnInstallFailure(current, error.message),
+            );
+            yield* logUpdaterError(error.message, {
+              errorTag: error._tag,
+              operation: error.operation,
+            });
+            return { accepted: true, completed: false };
+          },
+        ),
         ElectronUpdaterQuitAndInstallError: Effect.fn("desktop.updates.handleInstallFailure")(
           function* (error) {
             yield* resetInstallAction;
@@ -725,6 +816,28 @@ export const make = Effect.gen(function* () {
         void Effect.runPromiseWith(context)(effect);
       };
 
+      const settings = yield* desktopSettings.get;
+      const enabled = yield* shouldEnableAutoUpdates;
+      yield* setState(
+        createBaseUpdateState(
+          settings.updateChannel,
+          enabled,
+          environment,
+          localSourceUpdateEnabled,
+        ),
+      );
+      if (!enabled) {
+        return;
+      }
+      yield* Ref.set(updaterConfiguredRef, true);
+
+      if (localSourceUpdateEnabled) {
+        yield* logUpdaterInfo("using local source update mode", {
+          repositoryPath: environment.sourceRepositoryPath ?? null,
+        });
+        return;
+      }
+
       const appUpdateYmlConfig = yield* readAppUpdateYml;
       yield* Ref.set(appUpdateYmlConfigRef, appUpdateYmlConfig);
 
@@ -734,14 +847,6 @@ export const make = Effect.gen(function* () {
           url: `http://localhost:${config.mockUpdateServerPort}`,
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
       }
-
-      const settings = yield* desktopSettings.get;
-      const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
-      if (!enabled) {
-        return;
-      }
-      yield* Ref.set(updaterConfiguredRef, true);
 
       yield* electronUpdater.setAutoDownload(false);
       yield* electronUpdater.setAutoInstallOnAppQuit(false);
@@ -808,9 +913,15 @@ export const make = Effect.gen(function* () {
           );
 
         const enabled = yield* shouldEnableAutoUpdates;
-        yield* setState(createBaseUpdateState(nextChannel, enabled, environment));
+        yield* setState(
+          createBaseUpdateState(nextChannel, enabled, environment, localSourceUpdateEnabled),
+        );
 
         if (!enabled || !(yield* Ref.get(updaterConfiguredRef))) {
+          return yield* Ref.get(updateStateRef);
+        }
+
+        if (localSourceUpdateEnabled) {
           return yield* Ref.get(updateStateRef);
         }
 

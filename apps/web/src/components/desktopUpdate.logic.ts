@@ -75,23 +75,46 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
   return "This Mac has Apple Silicon, but ndev.t3code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.";
 }
 
+export function getDesktopUpdateActionLabel(
+  state: Pick<DesktopUpdateState, "sourceUpdate"> | null,
+  action: DesktopUpdateButtonAction,
+): string | null {
+  if (action === "none") return null;
+  if (state?.sourceUpdate) {
+    return action === "download" ? "Sync & Build" : "Restart & Install";
+  }
+  return action === "download" ? "Download" : "Install";
+}
+
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
   if (state.status === "available") {
+    if (state.sourceUpdate) {
+      return `Local source update available${state.availableVersion ? ` (${state.availableVersion})` : ""}. Click to sync upstream, merge, and build locally.`;
+    }
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
   if (state.status === "downloading") {
     const progress =
       typeof state.downloadPercent === "number" ? ` (${Math.floor(state.downloadPercent)}%)` : "";
-    return `Downloading update${progress}`;
+    return `${state.sourceUpdate ? "Building local update" : "Downloading update"}${progress}`;
   }
   if (state.status === "downloaded") {
+    if (state.sourceUpdate) {
+      return `Local build ${state.downloadedVersion ?? state.availableVersion ?? "ready"}. Click to restart and replace the installed app.`;
+    }
     return `Update ${state.downloadedVersion ?? state.availableVersion ?? "ready"} downloaded. Click to restart and install.`;
   }
   if (state.status === "error") {
     if (state.errorContext === "download" && state.availableVersion) {
+      if (state.sourceUpdate) {
+        return `Local sync/build failed for ${state.availableVersion}. Click to retry.`;
+      }
       return `Download failed for ${state.availableVersion}. Click to retry.`;
     }
     if (state.errorContext === "install" && state.downloadedVersion) {
+      if (state.sourceUpdate) {
+        return `Local install failed for ${state.downloadedVersion}. Click to retry.`;
+      }
       return `Install failed for ${state.downloadedVersion}. Click to retry.`;
     }
     if (state.downloadedVersion) {
@@ -103,9 +126,13 @@ export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string
 }
 
 export function getDesktopUpdateInstallConfirmationMessage(
-  state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion">,
+  state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion"> &
+    Partial<Pick<DesktopUpdateState, "sourceUpdate">>,
 ): string {
   const version = state.downloadedVersion ?? state.availableVersion;
+  if (state.sourceUpdate) {
+    return `Install the locally built source update${version ? ` ${version}` : ""} and restart ndev.t3code?\n\nAny running tasks will be interrupted. The installed app will be replaced from the local build.`;
+  }
   return `Install update${version ? ` ${version}` : ""} and restart ndev.t3code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.`;
 }
 
