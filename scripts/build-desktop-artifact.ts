@@ -1582,7 +1582,7 @@ const hasNativeLoaderMarkers = Effect.fn("hasNativeLoaderMarkers")(function* (pa
 });
 
 export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservingSymlinks")(
-  function* (source: string, destination: string) {
+  function* (source: string, destination: string, linkStyle: "absolute" | "relative" = "absolute") {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
@@ -1616,10 +1616,19 @@ export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservin
                 output: `Refusing to copy symlink ${sourceEntry}: its target ${absoluteSourceTarget} escapes the packaged tree.`,
               });
             }
-            const target = path.join(destination, sourceRelativeTarget);
+            const targetPath = path.join(destination, sourceRelativeTarget);
+            const target =
+              linkStyle === "relative"
+                ? path.relative(path.dirname(destinationEntry), targetPath)
+                : targetPath;
             yield* fs.remove(destinationEntry, { recursive: true, force: true });
             yield* Effect.tryPromise({
-              try: () => NodeFSP.symlink(target, destinationEntry, "junction"),
+              try: () =>
+                NodeFSP.symlink(
+                  target,
+                  destinationEntry,
+                  linkStyle === "relative" ? undefined : "junction",
+                ),
               catch: (cause) =>
                 new BundleNotSelfContainedError({
                   exitCode: -1,
@@ -3384,7 +3393,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
     const to = path.join(options.outputDir, entry);
     if (options.platform === "mac" && options.target === "dir" && stat.type === "Directory") {
-      yield* copyDirectoryPreservingSymlinks(from, to);
+      yield* copyDirectoryPreservingSymlinks(from, to, "relative");
       copiedArtifacts.push(to);
       continue;
     }
