@@ -3380,9 +3380,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   for (const entry of stageEntries) {
     const from = path.join(stageDistDir, entry);
     const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
-    if (!stat || stat.type !== "File") continue;
+    if (!stat) continue;
 
     const to = path.join(options.outputDir, entry);
+    if (options.platform === "mac" && options.target === "dir" && stat.type === "Directory") {
+      yield* copyDirectoryPreservingSymlinks(from, to);
+      copiedArtifacts.push(to);
+      continue;
+    }
+    if (stat.type !== "File") continue;
     yield* fs.copyFile(from, to);
     copiedArtifacts.push(to);
   }
