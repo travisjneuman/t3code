@@ -79,15 +79,17 @@ checkout, the update button and **Settings → General → About** offer
 **Sync & Build** and name that nightly's version.
 
 **Sync & Build** merges the nightly into your fork, builds the app on this Mac,
-then pushes the merge to your fork. Your fork's changes are kept. Conflicts
-caused only by the ndev.t3code product rename are resolved for you; anything
-else stops the update and lists the conflicted files. Then **Restart &
-Install** replaces the installed app with the new build.
+then pushes the merge to your fork. Every upstream change up to that nightly
+is merged in, and your fork's additions are kept. Conflicts and build breaks
+are resolved for you, by Claude Code when needed, so it must be installed and
+signed in. Nothing is pushed unless the new build succeeds. Then **Restart &
+Install** replaces the installed app with the new build and removes the old
+copy and the build files.
 
 The update refuses to start while the checkout has uncommitted changes, is
-not on `main`, or is in the middle of another merge. If it stops on conflicts
-or the build fails, the checkout is left as it was before the update. Merge
-the named nightly by hand, push it, and run **Sync & Build** again.
+not on `main`, or is in the middle of another merge. If it still cannot merge
+or build, the checkout is left as it was before the update and the message
+lists the files involved.
 
 ## Update providers
 

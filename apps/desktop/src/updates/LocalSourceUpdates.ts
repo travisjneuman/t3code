@@ -16,6 +16,16 @@ const COMMAND_OUTPUT_LIMIT = 16_000;
 const LOCAL_UPDATE_HELPER_PATH = "local-source-update-helper.sh";
 // Holds at most one build: cleared before each build, after a failed build, and by the install helper.
 const SOURCE_UPDATE_BUILDS_DIR = "source-updates";
+const LOCKFILE_PATH = "pnpm-lock.yaml";
+const MERGE_AGENT_TIMEOUT = "20 minutes";
+const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
+const MERGE_AGENT_RULES = [
+  "You are finishing a merge of the upstream T3 Code nightly (pingdotgg/t3code) into the ndev.t3code fork.",
+  "The fork is an add-on: keep every upstream change and every fork addition.",
+  "Never drop fork features (the ChatGPT, Claude, Grok, and Gemini remote app tabs, the local source updater, the ndev.t3code branding) and never revert upstream changes.",
+  "Where upstream renamed or reshaped code the fork uses, adapt the fork code to the new upstream shape.",
+  'Product text stays "ndev.t3code". Change only what the task needs.',
+].join(" ");
 const NIGHTLY_TAG_GLOB = "v*-nightly.*";
 const NIGHTLY_TAG_PATTERN = /^v\d+\.\d+\.\d+-nightly\.\d+\.\d+$/u;
 const UNRESOLVED_PATH_LIST_LIMIT = 10;
@@ -482,9 +492,7 @@ export const make = Effect.gen(function* () {
   const writeWorkingFile = (repo: string, path: string, contents: string) =>
     fileSystem
       .writeFileString(environment.path.join(repo, path), contents)
-      .pipe(
-        Effect.mapError((cause) => makeError("merge", `could not write ${path}`, cause, repo)),
-      );
+      .pipe(Effect.mapError((cause) => makeError("merge", `could not write ${path}`, cause, repo)));
 
   const stagePath = (repo: string, path: string) =>
     runChecked({ operation: "merge", command: "git", args: ["add", "--", path], cwd: repo });
@@ -546,6 +554,18 @@ export const make = Effect.gen(function* () {
   const resolveForkConflicts = Effect.fn("desktop.localSourceUpdates.resolveForkConflicts")(
     function* (repo: string): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
       for (const entry of yield* listUnmergedPaths(repo)) {
+        if (entry.path === LOCKFILE_PATH) {
+          // Take upstream's lockfile; the install before the build regenerates
+          // it from the merged package manifests.
+          yield* runChecked({
+            operation: "merge",
+            command: "git",
+            args: ["checkout", "--theirs", "--", entry.path],
+            cwd: repo,
+          });
+          yield* stagePath(repo, entry.path);
+          continue;
+        }
         yield* resolveWholeFile(repo, entry);
       }
       for (const entry of yield* listUnmergedPaths(repo)) {
@@ -554,6 +574,67 @@ export const make = Effect.gen(function* () {
       return (yield* listUnmergedPaths(repo)).map((entry) => entry.path);
     },
   );
+
+  // Whatever the rename pass cannot settle (real conflicts, or a merge that no
+  // longer builds) goes to a headless Claude Code run limited to file tools: it
+  // can edit the checkout but cannot run git or shells or reach the network.
+  // The build remains the gate, and nothing is committed before it passes.
+  const runMergeAgent = (repo: string, task: string) =>
+    runCommand({
+      operation: "merge",
+      command: "claude",
+      args: [
+        "-p",
+        `${MERGE_AGENT_RULES}\n\n${task}`,
+        "--permission-mode",
+        "acceptEdits",
+        "--disallowedTools",
+        "Bash",
+        "WebFetch",
+        "WebSearch",
+        "--allowedTools",
+        "Read",
+        "Edit",
+        "Write",
+        "Grep",
+        "Glob",
+      ],
+      cwd: repo,
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: MERGE_AGENT_TIMEOUT,
+        orElse: () => makeError("merge", "the merge agent did not finish in time"),
+      }),
+      Effect.asVoid,
+    );
+
+  /** Hands remaining conflicts to the agent and returns the paths it left unresolved. */
+  const resolveWithAgent = Effect.fn("desktop.localSourceUpdates.resolveWithAgent")(function* (
+    repo: string,
+    paths: ReadonlyArray<string>,
+  ): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
+    yield* runMergeAgent(
+      repo,
+      `These files still have merge conflicts: ${paths.join(", ")}. Resolve every conflict so no file contains conflict markers.`,
+    );
+    const left: Array<string> = [];
+    for (const path of paths) {
+      const text = yield* fileSystem
+        .readFileString(environment.path.join(repo, path))
+        .pipe(Effect.option);
+      if (text._tag === "Some" && CONFLICT_MARKER_PATTERN.test(text.value)) {
+        left.push(path);
+        continue;
+      }
+      yield* runChecked({
+        operation: "merge",
+        command: "git",
+        args: text._tag === "Some" ? ["add", "--", path] : ["rm", "--quiet", "--", path],
+        cwd: repo,
+      });
+    }
+    return left;
+  });
 
   const abortMerge = (repo: string) =>
     runCommand({ operation: "merge", command: "git", args: ["merge", "--abort"], cwd: repo }).pipe(
@@ -614,11 +695,15 @@ export const make = Effect.gen(function* () {
             repo,
           );
         }
-        const unresolved = yield* resolveForkConflicts(repo);
+        const unresolved = yield* resolveForkConflicts(repo).pipe(
+          Effect.flatMap((paths) =>
+            paths.length > 0 ? resolveWithAgent(repo, paths) : Effect.succeed(paths),
+          ),
+        );
         if (unresolved.length > 0) {
           return yield* makeError(
             "merge",
-            `merging ${inspection.upstreamTag} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that ${unresolved.length === 1 ? "is" : "are"} not rename-only, so the merge was aborted. Merge ${inspection.upstreamTag} into main by hand, push it, then update again. Conflicted: ${describeUnresolvedPaths(unresolved)}`,
+            `merging ${inspection.upstreamTag} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. Merge ${inspection.upstreamTag} into main by hand, push it, then update again. Conflicted: ${describeUnresolvedPaths(unresolved)}`,
             new Error(output),
             repo,
           );
@@ -649,31 +734,45 @@ export const make = Effect.gen(function* () {
           inspection.repositoryPath,
         );
       }
-      yield* runChecked({
+      // Upstream nightlies change dependencies, so install before building.
+      yield* runChecked({ operation: "build", command: "vp", args: ["i"], cwd: repo });
+      const buildArgs = [
+        "run",
+        "dist:desktop:artifact",
+        "--platform",
+        "mac",
+        "--target",
+        "dir",
+        "--arch",
+        arch,
+        "--build-version",
+        inspection.upstreamVersion,
+        "--output-dir",
+        outputDir,
+      ];
+      const firstBuild = yield* runCommand({
         operation: "build",
         command: "vp",
-        args: [
-          "run",
-          "dist:desktop:artifact",
-          "--platform",
-          "mac",
-          "--target",
-          "dir",
-          "--arch",
-          arch,
-          "--build-version",
-          inspection.upstreamVersion,
-          "--output-dir",
-          outputDir,
-        ],
+        args: buildArgs,
         cwd: repo,
       });
+      if (firstBuild.exitCode !== 0) {
+        // Upstream reshaped code the fork builds on; give the agent one pass at it.
+        yield* runMergeAgent(
+          repo,
+          `The merged checkout no longer builds. Fix the code so it builds again. Build output (tail):\n${trimOutput(firstBuild)}`,
+        );
+        yield* runChecked({ operation: "build", command: "vp", args: buildArgs, cwd: repo });
+      }
       const applicationBundlePath = yield* findAppBundle(outputDir);
-      // Records the staged merge result; the author comes from the repo config.
+      // Records the merge result, including the regenerated lockfile and any
+      // agent fixes; the author comes from the repo config. Hooks are skipped so
+      // the formatter does not rewrite upstream files inside the merge commit.
+      yield* runChecked({ operation: "merge", command: "git", args: ["add", "-A"], cwd: repo });
       yield* runChecked({
         operation: "merge",
         command: "git",
-        args: ["commit", "--no-edit", "-m", mergeMessage],
+        args: ["commit", "--no-verify", "--no-edit", "-m", mergeMessage],
         cwd: repo,
       });
       return { applicationBundlePath };
@@ -740,12 +839,13 @@ export const make = Effect.gen(function* () {
               environment.path.join(environment.stateDir, SOURCE_UPDATE_BUILDS_DIR),
             ],
             {
-            cwd: environment.stateDir,
-            stdin: "ignore",
-            stdout: "ignore",
-            stderr: "ignore",
-            detached: true,
-          }),
+              cwd: environment.stateDir,
+              stdin: "ignore",
+              stdout: "ignore",
+              stderr: "ignore",
+              detached: true,
+            },
+          ),
         )
         .pipe(
           Effect.flatMap((child) => child.unref),

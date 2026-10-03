@@ -43,6 +43,21 @@ changes are never rewritten. Any path still unmerged aborts the whole update wit
 the list, because a partially auto-merged fork is worse than a clean manual merge.
 Extending `FORK_RENAMES` widens what counts as rename-only.
 
+`pnpm-lock.yaml` conflicts always take upstream's file; `vp i` runs before every
+build and regenerates it from the merged manifests.
+
+## Agent fallback
+
+Conflicts the rename pass leaves, and a merge that no longer builds (upstream
+reshaped something the fork imports), go to a headless `claude -p` run in the
+checkout. It is limited to file tools (no Bash, git, or network), told to keep
+both upstream changes and fork additions, and capped at 20 minutes. A path that
+still has conflict markers afterwards aborts the update; a build fix gets one agent
+pass and one rebuild. The build stays the gate: nothing is committed or pushed
+unless it passes, and the merge commit skips hooks so the formatter cannot rewrite
+upstream files. It needs the Claude CLI installed and signed in where the desktop
+app can find it on `PATH`.
+
 ## Guards and installation
 
 The updater is guarded by the custom packaged macOS distribution and defaults to the
