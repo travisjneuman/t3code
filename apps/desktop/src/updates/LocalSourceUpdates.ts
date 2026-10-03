@@ -375,11 +375,31 @@ export const make = Effect.gen(function* () {
         repo,
       );
     }
-    const status = yield* gitChecked("inspect", [
-      "status",
-      "--porcelain=v1",
-      "--untracked-files=all",
+    const readStatus = gitChecked("inspect", ["status", "--porcelain=v1", "--untracked-files=all"]);
+    let status = yield* readStatus;
+    // Quitting mid-build skips the build's own restore and leaves the version
+    // stamp behind; that alone must not block the next update.
+    const stampedOnly = yield* git("inspect", [
+      "diff",
+      "--numstat",
+      "--",
+      ...RELEASE_PACKAGE_FILES,
     ]);
+    const dirtyPaths = status.stdout
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => line.slice(3));
+    if (
+      dirtyPaths.length > 0 &&
+      dirtyPaths.every((path) => (RELEASE_PACKAGE_FILES as ReadonlyArray<string>).includes(path)) &&
+      stampedOnly.stdout
+        .trim()
+        .split("\n")
+        .every((line) => line.startsWith("1\t1\t"))
+    ) {
+      yield* restoreReleaseVersion(repo);
+      status = yield* readStatus;
+    }
     if (status.stdout.trim().length > 0) {
       return yield* makeError(
         "inspect",
