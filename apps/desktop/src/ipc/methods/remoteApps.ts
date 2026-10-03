@@ -1,5 +1,6 @@
 import {
   DesktopSurfaceSchema,
+  RemoteAppAvailableSitesSchema,
   RemoteAppSurfaceMenuAnchorSchema,
   RemoteAppStateSchema,
   RemoteAppThemeSchema,
@@ -49,6 +50,17 @@ export const openSurfaceMenu = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.remoteApp.openSurfaceMenu")(function* (anchor) {
     const manager = yield* RemoteAppManager.RemoteAppManager;
     yield* manager.openSurfaceMenu(anchor);
+  }),
+});
+
+export const setAvailableSites = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.REMOTE_APP_SET_AVAILABLE_SITES_CHANNEL,
+  payload: RemoteAppAvailableSitesSchema,
+  result: Schema.Void,
+  authorize,
+  handler: Effect.fn("desktop.ipc.remoteApp.setAvailableSites")(function* (sites) {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    yield* manager.setAvailableSites(sites);
   }),
 });
 
@@ -129,6 +141,7 @@ export const methods = [
   setTheme,
   getState,
   openSurfaceMenu,
+  setAvailableSites,
   setActiveSurface,
   goBack,
   goForward,

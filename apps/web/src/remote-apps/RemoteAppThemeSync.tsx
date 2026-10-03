@@ -163,7 +163,7 @@ function readRemoteSidebarWidth(): number | null {
   return Number.isFinite(width) && width >= 160 && width <= 512 ? Math.round(width) : null;
 }
 
-/** Keeps the isolated native ChatGPT surface visually aligned with T3's live palette. */
+/** Keeps the isolated native remote surfaces visually aligned with T3's live palette. */
 export function RemoteAppThemeSync() {
   const { bridge, state } = useRemoteAppState();
   const { theme, resolvedTheme, appearanceMode, themeHalves } = useTheme();
@@ -225,7 +225,7 @@ export function RemoteAppThemeSync() {
             } as const;
             await bridge.setTheme(payload);
           } catch (cause: unknown) {
-            console.error("Failed to sync the T3 theme to the isolated ChatGPT surface.", cause);
+            console.error("Failed to sync the T3 theme to the isolated remote surfaces.", cause);
           }
         },
       );

@@ -5,6 +5,7 @@ import { PreviewAutomationHosts } from "./components/preview/PreviewAutomationHo
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import { RemoteAppProvider } from "./remote-apps/useRemoteAppState";
+import { RemoteAppSiteSync } from "./remote-apps/RemoteAppSiteSync";
 import { RemoteAppThemeSync } from "./remote-apps/RemoteAppThemeSync";
 import type { AppRouter } from "./router";
 
@@ -18,6 +19,7 @@ export function AppRoot({ router }: { readonly router: AppRouter }) {
     <AppAtomRegistryProvider>
       <RemoteAppProvider>
         <RemoteAppThemeSync />
+        <RemoteAppSiteSync />
         <RouterProvider router={router} />
         <PreviewAutomationHosts />
         <ElectronBrowserHost />

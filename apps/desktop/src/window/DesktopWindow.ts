@@ -445,10 +445,10 @@ export const make = Effect.gen(function* () {
         ),
       );
       const remoteAppState = yield* remoteAppManager.value.getState;
-      if (remoteAppState.activeSurface === "chatgpt") {
-        yield* remoteAppManager.value.setActiveSurface("chatgpt").pipe(
+      if (remoteAppState.activeSurface !== "t3code") {
+        yield* remoteAppManager.value.setActiveSurface(remoteAppState.activeSurface).pipe(
           Effect.catch((error) =>
-            logWindowWarning("failed to restore ChatGPT surface", {
+            logWindowWarning("failed to restore remote app surface", {
               error: error.message,
             }),
           ),

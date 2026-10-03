@@ -15,7 +15,7 @@ import * as Semaphore from "effect/Semaphore";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import {
-  REMOTE_APP_ENTRY_URL,
+  REMOTE_APP_SITE_DEFINITIONS,
   sanitizePersistedUrl,
   sanitizeRemoteTitle,
 } from "./RemoteAppPolicy.ts";
@@ -28,7 +28,7 @@ export const DEFAULT_REMOTE_APP_STATE: RemoteAppState = {
   schemaVersion: 1,
   activeSurface: "t3code",
   loadState: "not-created",
-  currentUrl: REMOTE_APP_ENTRY_URL,
+  currentUrl: REMOTE_APP_SITE_DEFINITIONS.chatgpt.entryUrl,
   currentTitle: "ChatGPT",
   canGoBack: false,
   canGoForward: false,

@@ -1,7 +1,38 @@
 import * as Schema from "effect/Schema";
 
-export const DesktopSurfaceSchema = Schema.Literals(["t3code", "chatgpt"]);
+/** Web apps the desktop shell can host in their own isolated, persistent session. */
+export const RemoteAppSiteSchema = Schema.Literals(["chatgpt", "claude", "grok", "gemini"]);
+export type RemoteAppSite = typeof RemoteAppSiteSchema.Type;
+
+export const REMOTE_APP_SITES = RemoteAppSiteSchema.literals;
+
+export const REMOTE_APP_SITE_LABELS: Record<RemoteAppSite, string> = {
+  chatgpt: "ChatGPT",
+  claude: "Claude",
+  grok: "Grok",
+  gemini: "Gemini",
+};
+
+/**
+ * The provider driver whose signed-in, enabled instance makes a site appear in
+ * the surface menu. Each site's web session still signs in on its own.
+ */
+export const REMOTE_APP_SITE_PROVIDER_DRIVERS: Record<RemoteAppSite, string> = {
+  chatgpt: "codex",
+  claude: "claudeAgent",
+  grok: "grok",
+  gemini: "antigravity",
+};
+
+export const isRemoteAppSite = (value: unknown): value is RemoteAppSite =>
+  typeof value === "string" && (REMOTE_APP_SITES as ReadonlyArray<string>).includes(value);
+
+export const DesktopSurfaceSchema = Schema.Literals(["t3code", ...REMOTE_APP_SITES]);
 export type DesktopSurface = typeof DesktopSurfaceSchema.Type;
+
+export const RemoteAppAvailableSitesSchema = Schema.Array(RemoteAppSiteSchema).check(
+  Schema.isMaxLength(REMOTE_APP_SITES.length),
+);
 
 export const RemoteAppSurfaceMenuAnchorSchema = Schema.Struct({
   x: Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 20_000 })),
@@ -150,6 +181,7 @@ export interface DesktopRemoteAppBridge {
   getState: () => Promise<RemoteAppState>;
   setTheme: (theme: RemoteAppTheme) => Promise<void>;
   openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) => Promise<void>;
+  setAvailableSites: (sites: ReadonlyArray<RemoteAppSite>) => Promise<void>;
   setActiveSurface: (surface: DesktopSurface) => Promise<RemoteAppState>;
   goBack: () => Promise<RemoteAppState>;
   goForward: () => Promise<RemoteAppState>;
