@@ -1,8 +1,12 @@
-import type {
-  DesktopSurface,
-  RemoteAppState,
-  RemoteAppSurfaceMenuAnchor,
-  RemoteAppTheme,
+import {
+  isRemoteAppSite,
+  REMOTE_APP_SITE_LABELS,
+  REMOTE_APP_SITES,
+  type DesktopSurface,
+  type RemoteAppSite,
+  type RemoteAppState,
+  type RemoteAppSurfaceMenuAnchor,
+  type RemoteAppTheme,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -19,10 +23,12 @@ import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import { getDesktopOrigin } from "../electron/ElectronProtocol.ts";
 import {
-  REMOTE_APP_ENTRY_URL,
+  REMOTE_APP_SITE_DEFINITIONS,
+  canUseRemoteAppControl,
   classifyRemoteAppNavigation,
   isAllowedPermission,
   isTrustedRemoteUrl,
+  resolveRemoteAppSiteForUrl,
   sanitizePersistedUrl,
   sanitizeRemoteTitle,
 } from "./RemoteAppPolicy.ts";
@@ -34,6 +40,8 @@ import {
   buildRemoteAppSurfaceMenuHtml,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
+  REMOTE_APP_SURFACE_MENU_WIDTH,
+  resolveRemoteAppSurfaceMenuHeight,
 } from "./RemoteAppTheme.ts";
 import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
@@ -43,7 +51,7 @@ const REMOTE_APP_VIEW_LAYER_INDEX = 0;
 // SidebarChromeFooter is a 32px utility row with 8px padding on each side.
 // Keep the live remote document above the host footer's exact 48px strip so
 // the native Settings, Pull Requests, Usage, and update controls remain both
-// visible and interactive on the ChatGPT surface.
+// visible and interactive on a remote surface.
 export const REMOTE_APP_HOST_FOOTER_HEIGHT = 48;
 export const REMOTE_APP_THEME_DOCUMENT_EVENTS = ["did-finish-load"] as const;
 export const REMOTE_APP_THEME_NAVIGATION_EVENTS = ["did-navigate-in-page"] as const;
@@ -85,13 +93,32 @@ export const parseRemoteAppSurfaceMenuUrl = (url: string): DesktopSurface | unde
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "t3code-surface:" || parsed.hostname !== "select") return undefined;
-    if (parsed.pathname === "/t3code") return "t3code";
-    if (parsed.pathname === "/chatgpt") return "chatgpt";
-    return undefined;
+    const surface = parsed.pathname.slice(1);
+    if (surface === "t3code") return "t3code";
+    return isRemoteAppSite(surface) ? surface : undefined;
   } catch {
     return undefined;
   }
 };
+
+/**
+ * The menu lists T3 plus every available site in a stable order. The active
+ * site stays listed after its provider signs out so the current choice is
+ * always visible.
+ */
+export const resolveRemoteAppMenuSurfaces = (
+  availableSites: ReadonlyArray<RemoteAppSite>,
+  activeSurface: DesktopSurface,
+): ReadonlyArray<DesktopSurface> => [
+  "t3code",
+  ...REMOTE_APP_SITES.filter((site) => availableSites.includes(site) || site === activeSurface),
+];
+
+/** The URL to open for a site: its last persisted page when it belongs to that site. */
+export const resolveRemoteAppSiteUrl = (site: RemoteAppSite, persistedUrl: string | null): string =>
+  persistedUrl !== null && resolveRemoteAppSiteForUrl(persistedUrl) === site
+    ? persistedUrl
+    : REMOTE_APP_SITE_DEFINITIONS[site].entryUrl;
 
 export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppManagerError>()(
   "RemoteAppManagerError",
@@ -110,7 +137,7 @@ export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppMana
   },
 ) {
   override get message(): string {
-    return `The isolated ChatGPT surface failed during ${this.operation}.`;
+    return `The isolated remote app surface failed during ${this.operation}.`;
   }
 }
 
@@ -124,6 +151,7 @@ export class RemoteAppManager extends Context.Service<
     ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly getState: Effect.Effect<RemoteAppState>;
     readonly setTheme: (theme: RemoteAppTheme) => Effect.Effect<void, RemoteAppManagerError>;
+    readonly setAvailableSites: (sites: ReadonlyArray<RemoteAppSite>) => Effect.Effect<void>;
     readonly openSurfaceMenu: (
       anchor: RemoteAppSurfaceMenuAnchor,
     ) => Effect.Effect<void, RemoteAppManagerError>;
@@ -152,11 +180,11 @@ const safeFilename = (filename: string): string => {
     .join("")
     .replace(/[\\/:*?"<>|]/g, "-")
     .trim();
-  return normalized.length > 0 ? normalized.slice(0, 180) : "ChatGPT download";
+  return normalized.length > 0 ? normalized.slice(0, 180) : "download";
 };
 
-const isTrustedMainFrame = (webContents: Electron.WebContents): boolean =>
-  isTrustedRemoteUrl(webContents.getURL());
+const activeSiteOf = (state: RemoteAppState): RemoteAppSite | undefined =>
+  canUseRemoteAppControl(state.activeSurface) ? state.activeSurface : undefined;
 
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -164,13 +192,17 @@ export const make = Effect.gen(function* () {
   const sessionService = yield* RemoteAppSession.RemoteAppSession;
   const stateStore = yield* RemoteAppStateStore.RemoteAppStateStore;
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
-  const viewRef = yield* Ref.make<Option.Option<Electron.WebContentsView>>(Option.none());
   const attachedRef = yield* Ref.make(false);
-  const recoveryCountRef = yield* Ref.make(0);
   const stateChangeLock = yield* Semaphore.make(1);
   const themeCssLock = yield* Semaphore.make(1);
   const remoteThemeRef = yield* Ref.make<RemoteAppTheme>(DEFAULT_REMOTE_APP_THEME);
-  const insertedThemeKeyRef = yield* Ref.make<Option.Option<string>>(Option.none());
+  const availableSitesRef = yield* Ref.make<ReadonlyArray<RemoteAppSite>>([]);
+  // Views are created on first activation and kept while hidden, so switching
+  // sites is instant. Hidden views are detached and background-throttled.
+  const views = new Map<RemoteAppSite, Electron.WebContentsView>();
+  const recoveryCounts = new Map<RemoteAppSite, number>();
+  const insertedThemeKeys = new Map<RemoteAppSite, string>();
+  const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
   const popupWindows = new Set<Electron.BrowserWindow>();
   let surfaceMenuWindow: Electron.BrowserWindow | null = null;
 
@@ -198,12 +230,25 @@ export const make = Effect.gen(function* () {
     return Option.fromNullishOr(fallback ?? null);
   });
 
-  const getLiveView = Effect.gen(function* () {
-    const view = yield* Ref.get(viewRef);
-    if (Option.isNone(view) || view.value.webContents.isDestroyed())
-      return Option.none<Electron.WebContentsView>();
-    return view;
-  });
+  const getLiveView = (site: RemoteAppSite) =>
+    Effect.sync(() => {
+      const view = views.get(site);
+      return view === undefined || view.webContents.isDestroyed()
+        ? Option.none<Electron.WebContentsView>()
+        : Option.some(view);
+    });
+
+  const closeView = (site: RemoteAppSite, window: Option.Option<Electron.BrowserWindow>) => {
+    const view = views.get(site);
+    views.delete(site);
+    insertedThemeKeys.delete(site);
+    recoveryCounts.delete(site);
+    if (view === undefined) return;
+    if (Option.isSome(window) && !window.value.isDestroyed()) {
+      window.value.contentView.removeChildView(view);
+    }
+    if (!view.webContents.isDestroyed()) view.webContents.close();
+  };
 
   const publish = (state: RemoteAppState): Effect.Effect<void> =>
     getLiveWindow.pipe(
@@ -229,14 +274,19 @@ export const make = Effect.gen(function* () {
         Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
       ),
     );
-  const resetState = (): Effect.Effect<RemoteAppState, RemoteAppManagerError> =>
-    stateChangeLock.withPermit(
-      stateStore.get.pipe(
-        Effect.flatMap((state) => stateStore.reset(state.activeSurface)),
-        Effect.tap(publish),
-        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "state", cause })),
-      ),
-    );
+
+  /**
+   * The persisted state describes the active site. Events from hidden views
+   * are ignored here and reconciled when that site is activated again.
+   */
+  const updateSiteState = (
+    site: RemoteAppSite,
+    update: (state: RemoteAppState) => RemoteAppState,
+  ): Effect.Effect<void, RemoteAppManagerError> =>
+    Effect.gen(function* () {
+      if (activeSiteOf(yield* stateStore.get) !== site) return;
+      yield* updateState((state) => (activeSiteOf(state) === site ? update(state) : state));
+    });
 
   const updateNavigationState = (view: Electron.WebContentsView, state: RemoteAppState) => {
     const rawUrl = view.webContents.getURL();
@@ -260,11 +310,11 @@ export const make = Effect.gen(function* () {
     } satisfies RemoteAppState;
   };
 
-  const syncNavigation = (view: Electron.WebContentsView) =>
-    updateState((current) => updateNavigationState(view, current)).pipe(Effect.asVoid);
+  const syncNavigation = (site: RemoteAppSite, view: Electron.WebContentsView) =>
+    updateSiteState(site, (current) => updateNavigationState(view, current));
 
-  const setLoadingState = (loadState: RemoteAppState["loadState"]) =>
-    updateState((current) => ({ ...current, loadState, error: null })).pipe(Effect.asVoid);
+  const setLoadingState = (site: RemoteAppSite, loadState: RemoteAppState["loadState"]) =>
+    updateSiteState(site, (current) => ({ ...current, loadState, error: null }));
 
   const positionView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) =>
     Effect.try({
@@ -282,25 +332,33 @@ export const make = Effect.gen(function* () {
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
+  /**
+   * Every site follows the app's light/dark choice through prefers-color-scheme,
+   * which the host already drives via nativeTheme. ChatGPT additionally gets the
+   * full T3 palette as a scoped user stylesheet.
+   */
   const applyRemoteTheme = Effect.fn("remote-app.applyTheme")(function* (
+    site: RemoteAppSite,
     view: Electron.WebContentsView,
   ): Effect.fn.Return<void, RemoteAppManagerError> {
     yield* themeCssLock.withPermit(
       Effect.gen(function* () {
-        const previousKey = yield* Ref.getAndSet(insertedThemeKeyRef, Option.none());
-        if (Option.isSome(previousKey)) {
+        const theme = yield* Ref.get(remoteThemeRef);
+        view.setBackgroundColor(theme.colors.canvas);
+        const previousKey = insertedThemeKeys.get(site);
+        insertedThemeKeys.delete(site);
+        if (previousKey !== undefined) {
           yield* Effect.tryPromise({
-            try: () => view.webContents.removeInsertedCSS(previousKey.value),
+            try: () => view.webContents.removeInsertedCSS(previousKey),
             catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
           }).pipe(Effect.catch(() => Effect.void));
         }
-        if (!isChatGptRemoteAppUrl(view.webContents.getURL())) return;
-        const theme = yield* Ref.get(remoteThemeRef);
+        if (site !== "chatgpt" || !isChatGptRemoteAppUrl(view.webContents.getURL())) return;
         const key = yield* Effect.tryPromise({
           try: () => view.webContents.insertCSS(buildRemoteAppThemeCss(theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         });
-        yield* Ref.set(insertedThemeKeyRef, Option.some(key));
+        insertedThemeKeys.set(site, key);
         yield* Effect.tryPromise({
           try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
@@ -309,13 +367,17 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const configureView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) => {
+  const configureView = (
+    site: RemoteAppSite,
+    window: Electron.BrowserWindow,
+    view: Electron.WebContentsView,
+  ) => {
     const contents = view.webContents;
     contents.on("input-event", (_event, input) => {
       if (input.type === "mouseDown") contents.focus();
     });
     contents.setWindowOpenHandler(({ url }) => {
-      const decision = classifyRemoteAppNavigation(url, { authFlowActive: true });
+      const decision = classifyRemoteAppNavigation(site, url, { authFlowActive: true });
       if (decision.kind === "external") {
         openExternal(decision.url);
         return { action: "deny" };
@@ -327,7 +389,7 @@ export const make = Effect.gen(function* () {
             parent: window,
             modal: false,
             webPreferences: {
-              partition: sessionService.partition,
+              partition: sessionService.partition(site),
               sandbox: true,
               contextIsolation: true,
               nodeIntegration: false,
@@ -346,35 +408,39 @@ export const make = Effect.gen(function* () {
     });
 
     contents.on("will-navigate", (event, url) => {
-      const decision = classifyRemoteAppNavigation(url);
-      if (decision.kind !== "embed") {
+      // A top-level redirect to the site's identity provider is its own
+      // sign-in flow; let it finish in place.
+      const decision = classifyRemoteAppNavigation(site, url, { authFlowActive: true });
+      if (decision.kind !== "embed" && decision.kind !== "auth") {
         event.preventDefault();
         if (decision.kind === "external") openExternal(decision.url);
       }
     });
-    contents.on("did-start-loading", () => runSafely(setLoadingState("loading")));
+    contents.on("did-start-loading", () => runSafely(setLoadingState(site, "loading")));
     for (const event of REMOTE_APP_THEME_DOCUMENT_EVENTS) {
-      contents.on(event, () => runSafely(applyRemoteTheme(view)));
+      contents.on(event, () => runSafely(applyRemoteTheme(site, view)));
     }
     contents.on("did-stop-loading", () =>
-      runSafely(syncNavigation(view).pipe(Effect.andThen(setLoadingState("ready")))),
+      runSafely(syncNavigation(site, view).pipe(Effect.andThen(setLoadingState(site, "ready")))),
     );
-    contents.on("did-navigate", () => runSafely(syncNavigation(view)));
+    contents.on("did-navigate", () => runSafely(syncNavigation(site, view)));
     for (const event of REMOTE_APP_THEME_NAVIGATION_EVENTS) {
       contents.on(event, () =>
-        runSafely(syncNavigation(view).pipe(Effect.andThen(applyRemoteTheme(view)))),
+        runSafely(syncNavigation(site, view).pipe(Effect.andThen(applyRemoteTheme(site, view)))),
       );
     }
     contents.on("page-title-updated", (event, title) => {
       event.preventDefault();
-      runSafely(updateState((state) => ({ ...state, currentTitle: sanitizeRemoteTitle(title) })));
+      runSafely(
+        updateSiteState(site, (state) => ({ ...state, currentTitle: sanitizeRemoteTitle(title) })),
+      );
     });
     contents.on(
       "did-fail-load",
       (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
         if (!isMainFrame) return;
         runSafely(
-          updateState((state) => ({
+          updateSiteState(site, (state) => ({
             ...state,
             loadState: "failed",
             error: { category: "network", code: "load-failed" },
@@ -385,20 +451,21 @@ export const make = Effect.gen(function* () {
     contents.on("render-process-gone", () => {
       runSafely(
         Effect.gen(function* () {
-          const recoveryCount = yield* Ref.get(recoveryCountRef);
+          const recoveryCount = recoveryCounts.get(site) ?? 0;
           if (shouldAutomaticallyRecoverRenderer(recoveryCount)) {
-            yield* Ref.update(recoveryCountRef, (count) => count + 1);
-            const next = yield* updateState((state) => ({
+            recoveryCounts.set(site, recoveryCount + 1);
+            yield* updateSiteState(site, (state) => ({
               ...state,
               loadState: "recovering",
               error: null,
             }));
+            const state = yield* stateStore.get;
             yield* Effect.tryPromise({
-              try: () => contents.loadURL(next.currentUrl ?? REMOTE_APP_ENTRY_URL),
+              try: () => contents.loadURL(resolveRemoteAppSiteUrl(site, state.currentUrl)),
               catch: () => undefined,
             });
           } else {
-            yield* updateState((state) => ({
+            yield* updateSiteState(site, (state) => ({
               ...state,
               loadState: "crashed",
               error: { category: "renderer", code: "render-process-gone" },
@@ -408,20 +475,18 @@ export const make = Effect.gen(function* () {
       );
     });
     contents.on("destroyed", () => {
+      if (views.get(site) === view) views.delete(site);
       runSafely(
-        Effect.gen(function* () {
-          yield* Ref.set(viewRef, Option.none());
-          yield* updateState((state) => ({
-            ...state,
-            loadState: "crashed",
-            error: { category: "renderer", code: "destroyed" },
-          }));
-        }),
+        updateSiteState(site, (state) => ({
+          ...state,
+          loadState: "crashed",
+          error: { category: "renderer", code: "destroyed" },
+        })),
       );
     });
     contents.on("context-menu", (event) => event.preventDefault());
     contents.on("did-create-window", (childWindow, details) => {
-      const decision = classifyRemoteAppNavigation(details.url, { authFlowActive: true });
+      const decision = classifyRemoteAppNavigation(site, details.url, { authFlowActive: true });
       if (decision.kind !== "auth") {
         if (!childWindow.isDestroyed()) childWindow.close();
         return;
@@ -429,13 +494,13 @@ export const make = Effect.gen(function* () {
       popupWindows.add(childWindow);
       childWindow.on("closed", () => popupWindows.delete(childWindow));
       childWindow.webContents.on("will-navigate", (event, url) => {
-        const childDecision = classifyRemoteAppNavigation(url, { authFlowActive: true });
+        const childDecision = classifyRemoteAppNavigation(site, url, { authFlowActive: true });
         if (childDecision.kind === "auth" || childDecision.kind === "embed") return;
         event.preventDefault();
         if (childDecision.kind === "external") openExternal(childDecision.url);
       });
       childWindow.webContents.setWindowOpenHandler(({ url }) => {
-        const childDecision = classifyRemoteAppNavigation(url, { authFlowActive: true });
+        const childDecision = classifyRemoteAppNavigation(site, url, { authFlowActive: true });
         if (childDecision.kind === "external") {
           openExternal(childDecision.url);
         }
@@ -445,26 +510,28 @@ export const make = Effect.gen(function* () {
   };
 
   const configureSession = (
+    site: RemoteAppSite,
     session: Electron.Session,
     view: Electron.WebContentsView,
     owner: Electron.BrowserWindow,
   ) => {
+    const isTrustedMainFrame = (webContents: Electron.WebContents): boolean =>
+      webContents === view.webContents && isTrustedRemoteUrl(site, webContents.getURL());
+    // Handlers replace earlier ones, so a recreated view rebinds them.
     session.setPermissionRequestHandler((webContents, permission, callback) => {
-      callback(
-        webContents === view.webContents &&
-          isTrustedMainFrame(webContents) &&
-          isAllowedPermission(permission, true),
-      );
+      callback(isTrustedMainFrame(webContents) && isAllowedPermission(permission, true));
     });
     session.setPermissionCheckHandler(
       (webContents, permission) =>
-        webContents === view.webContents &&
+        webContents !== null &&
         isTrustedMainFrame(webContents) &&
         isAllowedPermission(permission, true),
     );
-    session.on("will-download", (event, item) => {
-      void event;
-      if (!isTrustedRemoteUrl(item.getURL())) {
+    // Listeners accumulate, so each session gets exactly one download handler.
+    if (sessionsWithDownloadHandler.has(session)) return;
+    sessionsWithDownloadHandler.add(session);
+    session.on("will-download", (_event, item) => {
+      if (!isTrustedRemoteUrl(site, item.getURL())) {
         item.cancel();
         return;
       }
@@ -484,16 +551,20 @@ export const make = Effect.gen(function* () {
   };
 
   const createView = Effect.fn("remote-app.createView")(function* (
+    site: RemoteAppSite,
     window: Electron.BrowserWindow,
   ): Effect.fn.Return<Electron.WebContentsView, RemoteAppManagerError> {
-    const session = yield* sessionService.get.pipe(
-      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "create-view", cause })),
-    );
+    const session = yield* sessionService
+      .get(site)
+      .pipe(
+        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "create-view", cause })),
+      );
+    const theme = yield* Ref.get(remoteThemeRef);
     const view = yield* Effect.try({
       try: () =>
         new Electron.WebContentsView({
           webPreferences: {
-            partition: sessionService.partition,
+            partition: sessionService.partition(site),
             sandbox: true,
             contextIsolation: true,
             nodeIntegration: false,
@@ -508,86 +579,83 @@ export const make = Effect.gen(function* () {
         }),
       catch: (cause) => new RemoteAppManagerError({ operation: "create-view", cause }),
     });
-    // Keep the live remote page beneath the host renderer. The renderer owns
-    // the shared title bar and the native sidebar footer; when the ChatGPT
-    // surface is active it makes only those host regions opaque/interactive.
-    addRemoteAppViewBelowHostRenderer(window, view);
-    configureView(window, view);
-    configureSession(session, view, window);
+    // Paint the T3 canvas behind the page so first load never flashes white.
+    view.setBackgroundColor(theme.colors.canvas);
+    configureView(site, window, view);
+    configureSession(site, session, view, window);
     yield* positionView(window, view);
     view.setVisible(false);
-    yield* Ref.set(viewRef, Option.some(view));
+    views.set(site, view);
     return view;
   });
 
-  const ensureView = Effect.fn("remote-app.ensureView")(function* (): Effect.fn.Return<
-    Electron.WebContentsView,
-    RemoteAppManagerError
-  > {
-    const window = yield* getLiveWindow.pipe(
+  const requireLiveWindow = (operation: "attach" | "surface-menu") =>
+    getLiveWindow.pipe(
       Effect.flatMap(
         Option.match({
           onNone: () =>
             Effect.fail(
-              new RemoteAppManagerError({ operation: "attach", cause: "main window unavailable" }),
+              new RemoteAppManagerError({ operation, cause: "main window unavailable" }),
             ),
           onSome: Effect.succeed,
         }),
       ),
     );
+
+  const ensureView = Effect.fn("remote-app.ensureView")(function* (
+    site: RemoteAppSite,
+  ): Effect.fn.Return<Electron.WebContentsView, RemoteAppManagerError> {
+    const window = yield* requireLiveWindow("attach");
     yield* attachMainWindow(window);
-    const existing = yield* getLiveView;
+    const existing = yield* getLiveView(site);
     if (Option.isSome(existing)) {
       yield* positionView(window, existing.value);
       return existing.value;
     }
-    return yield* createView(window);
+    return yield* createView(site, window);
   });
 
   const showSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
       closeSurfaceMenu();
       const window = yield* getLiveWindow;
-      const view = yield* getLiveView;
-      if (Option.isSome(view) && Option.isSome(window)) {
-        if (surface === "chatgpt") {
-          // Reattach before making it visible while preserving the host shell
-          // above the remote page.
-          window.value.contentView.removeChildView(view.value);
-          addRemoteAppViewBelowHostRenderer(window.value, view.value);
-          yield* positionView(window.value, view.value);
-          view.value.setVisible(true);
-          // Surface switches can happen while the renderer is still
-          // reconciling its theme snapshot. Reapply the manager's current
-          // validated palette at the activation boundary so a reused
-          // WebContentsView cannot display the previous theme.
-          yield* applyRemoteTheme(view.value);
-          view.value.webContents.focus();
-        } else {
-          view.value.setVisible(false);
-          // Remove the hidden child so the host renderer owns the surface and
-          // the next ChatGPT activation can reinsert a clean topmost layer.
-          window.value.contentView.removeChildView(view.value);
-          window.value.webContents.focus();
-        }
+      if (Option.isNone(window)) return;
+      // Detach every other view so the host renderer owns the surface and the
+      // next activation reinserts a clean layer beneath it.
+      for (const [site, view] of views) {
+        if (site === surface || view.webContents.isDestroyed()) continue;
+        view.setVisible(false);
+        window.value.contentView.removeChildView(view);
       }
+      const view = canUseRemoteAppControl(surface)
+        ? yield* getLiveView(surface)
+        : Option.none<Electron.WebContentsView>();
+      if (Option.isNone(view) || !canUseRemoteAppControl(surface)) {
+        window.value.webContents.focus();
+        return;
+      }
+      // Reattach before making it visible while preserving the host shell
+      // above the remote page.
+      window.value.contentView.removeChildView(view.value);
+      addRemoteAppViewBelowHostRenderer(window.value, view.value);
+      yield* positionView(window.value, view.value);
+      view.value.setVisible(true);
+      // Surface switches can happen while the renderer is still reconciling
+      // its theme snapshot. Reapply the manager's current validated palette at
+      // the activation boundary so a reused view cannot show the old theme.
+      yield* applyRemoteTheme(surface, view.value);
+      view.value.webContents.focus();
     });
 
   const syncLayout = Effect.gen(function* () {
     const state = yield* stateStore.get;
-    if (state.activeSurface === "chatgpt") {
-      // Startup can finish adding the host renderer after the remote view was
-      // created. Reconcile visibility and z-order from the current persisted
-      // intent without changing that intent; a user switch made during boot
-      // must not be overwritten by a late startup reassertion.
-      yield* ensureView();
-    }
+    const site = activeSiteOf(state);
+    // Startup can finish adding the host renderer after the remote view was
+    // created. Reconcile visibility and z-order from the current persisted
+    // intent without changing that intent; a user switch made during boot
+    // must not be overwritten by a late startup reassertion.
+    if (site !== undefined) yield* ensureView(site);
     yield* showSurface(state.activeSurface);
-    const window = yield* getLiveWindow;
-    const view = yield* getLiveView;
-    if (Option.isSome(window) && Option.isSome(view)) {
-      yield* positionView(window.value, view.value);
-    }
   });
 
   const attachMainWindow = Effect.fn("remote-app.attachMainWindow")(function* (
@@ -600,7 +668,10 @@ export const make = Effect.gen(function* () {
     const reposition = () => {
       runSafely(
         Effect.gen(function* () {
-          const view = yield* getLiveView;
+          // Hidden views are repositioned when they are shown again.
+          const site = activeSiteOf(yield* stateStore.get);
+          if (site === undefined) return;
+          const view = yield* getLiveView(site);
           if (Option.isSome(view)) yield* positionView(window, view.value);
         }),
       );
@@ -609,9 +680,9 @@ export const make = Effect.gen(function* () {
       reposition();
       runSafely(Effect.sleep("100 millis").pipe(Effect.andThen(Effect.sync(reposition))));
     };
-    for (const event of ["resize", "maximize", "unmaximize"] as const) {
-      window.on(event as any, reposition);
-    }
+    window.on("resize", reposition);
+    window.on("maximize", reposition);
+    window.on("unmaximize", reposition);
     window.on("enter-full-screen", repositionAfterFullscreenTransition);
     window.on("leave-full-screen", repositionAfterFullscreenTransition);
     window.on("closed", () => {
@@ -620,16 +691,8 @@ export const make = Effect.gen(function* () {
         if (!popup.isDestroyed()) popup.close();
       }
       popupWindows.clear();
-      runSafely(
-        Effect.gen(function* () {
-          const view = yield* Ref.get(viewRef);
-          if (Option.isSome(view)) {
-            view.value.webContents.close();
-            yield* Ref.set(viewRef, Option.none());
-          }
-          yield* Ref.set(mainWindowRef, Option.none());
-        }),
-      );
+      for (const site of [...views.keys()]) closeView(site, Option.none());
+      runSafely(Ref.set(mainWindowRef, Option.none()));
     });
   });
 
@@ -637,8 +700,10 @@ export const make = Effect.gen(function* () {
   const setTheme = (theme: RemoteAppTheme) =>
     Effect.gen(function* () {
       yield* Ref.set(remoteThemeRef, theme);
-      const view = yield* getLiveView;
-      if (Option.isSome(view)) yield* applyRemoteTheme(view.value);
+      for (const site of [...views.keys()]) {
+        const view = yield* getLiveView(site);
+        if (Option.isSome(view)) yield* applyRemoteTheme(site, view.value);
+      }
     }).pipe(
       Effect.mapError((cause) =>
         isRemoteAppManagerError(cause)
@@ -646,25 +711,29 @@ export const make = Effect.gen(function* () {
           : new RemoteAppManagerError({ operation: "theme", cause }),
       ),
     );
+
+  const setAvailableSites = (sites: ReadonlyArray<RemoteAppSite>) =>
+    Effect.gen(function* () {
+      yield* Ref.set(availableSitesRef, sites);
+      // Release the memory of hidden sites whose provider was disabled or
+      // signed out. The active site stays until the user switches away.
+      const activeSite = activeSiteOf(yield* stateStore.get);
+      const window = yield* getLiveWindow;
+      for (const site of [...views.keys()]) {
+        if (site !== activeSite && !sites.includes(site)) closeView(site, window);
+      }
+    });
+
   const openSurfaceMenu = Effect.fn("remote-app.openSurfaceMenu")(function* (
     anchor: RemoteAppSurfaceMenuAnchor,
   ): Effect.fn.Return<void, RemoteAppManagerError> {
-    const owner = yield* getLiveWindow.pipe(
-      Effect.flatMap(
-        Option.match({
-          onNone: () =>
-            Effect.fail(
-              new RemoteAppManagerError({
-                operation: "surface-menu",
-                cause: "main window unavailable",
-              }),
-            ),
-          onSome: Effect.succeed,
-        }),
-      ),
-    );
+    const owner = yield* requireLiveWindow("surface-menu");
     const state = yield* stateStore.get;
     const theme = yield* Ref.get(remoteThemeRef);
+    const surfaces = resolveRemoteAppMenuSurfaces(
+      yield* Ref.get(availableSitesRef),
+      state.activeSurface,
+    );
     closeSurfaceMenu();
 
     const menu = yield* Effect.try({
@@ -712,8 +781,8 @@ export const make = Effect.gen(function* () {
     const zoomFactor = owner.webContents.getZoomFactor();
     const scale = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
     const contentBounds = owner.getContentBounds();
-    const menuWidth = 196;
-    const menuHeight = 92;
+    const menuWidth = REMOTE_APP_SURFACE_MENU_WIDTH;
+    const menuHeight = resolveRemoteAppSurfaceMenuHeight(surfaces.length);
     const requestedX = contentBounds.x + Math.round(anchor.x * scale);
     const requestedY = contentBounds.y + Math.round((anchor.y + anchor.height) * scale) + 4;
     const display = Electron.screen.getDisplayNearestPoint({ x: requestedX, y: requestedY });
@@ -728,7 +797,7 @@ export const make = Effect.gen(function* () {
     );
     menu.setBounds({ x, y, width: menuWidth, height: menuHeight });
     const documentUrl = `data:text/html;charset=utf-8,${encodeURIComponent(
-      buildRemoteAppSurfaceMenuHtml(theme, state.activeSurface),
+      buildRemoteAppSurfaceMenuHtml(theme, state.activeSurface, surfaces),
     )}`;
     yield* Effect.tryPromise({
       try: () => menu.loadURL(documentUrl),
@@ -739,25 +808,52 @@ export const make = Effect.gen(function* () {
       menu.focus();
     }
   });
+
+  const loadUrl = (view: Electron.WebContentsView, url: string) =>
+    Effect.tryPromise({
+      try: () => view.webContents.loadURL(url),
+      catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
+    });
+
+  const activateSite = (site: RemoteAppSite) =>
+    Effect.gen(function* () {
+      const view = yield* ensureView(site);
+      const previous = yield* stateStore.get;
+      yield* showSurface(site);
+      if (view.webContents.getURL().length === 0) {
+        const url = resolveRemoteAppSiteUrl(site, previous.currentUrl);
+        yield* updateState((state) => ({
+          ...state,
+          activeSurface: site,
+          loadState: "loading",
+          currentUrl: url,
+          currentTitle: REMOTE_APP_SITE_LABELS[site],
+          canGoBack: false,
+          canGoForward: false,
+          error: null,
+        }));
+        yield* loadUrl(view, url);
+        return;
+      }
+      // A kept view already holds its page; describe it from the view itself.
+      yield* updateState((state) => {
+        const sameSite = state.activeSurface === site;
+        return {
+          ...updateNavigationState(view, {
+            ...state,
+            currentUrl: sameSite ? state.currentUrl : REMOTE_APP_SITE_DEFINITIONS[site].entryUrl,
+            currentTitle: sameSite ? state.currentTitle : REMOTE_APP_SITE_LABELS[site],
+          }),
+          activeSurface: site,
+          loadState: view.webContents.isLoading() ? "loading" : "ready",
+        };
+      });
+    });
+
   const setActiveSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
-      if (surface === "chatgpt") {
-        const view = yield* ensureView();
-        yield* showSurface(surface);
-        if (view.webContents.getURL().length === 0) {
-          const next = yield* updateState((state) => ({
-            ...state,
-            activeSurface: surface,
-            loadState: "loading",
-            error: null,
-          }));
-          yield* Effect.tryPromise({
-            try: () => view.webContents.loadURL(next.currentUrl ?? REMOTE_APP_ENTRY_URL),
-            catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
-          });
-        } else {
-          yield* updateState((state) => ({ ...state, activeSurface: surface }));
-        }
+      if (canUseRemoteAppControl(surface)) {
+        yield* activateSite(surface);
       } else {
         yield* showSurface(surface);
         yield* updateState((state) => ({ ...state, activeSurface: surface }));
@@ -765,60 +861,74 @@ export const make = Effect.gen(function* () {
       return yield* stateStore.get;
     });
 
-  const viewNavigation = (operation: (contents: Electron.WebContents) => void) =>
+  const withActiveView = (
+    operation: (site: RemoteAppSite, view: Electron.WebContentsView) => void,
+  ) =>
     Effect.gen(function* () {
-      const view = yield* getLiveView;
-      if (Option.isSome(view) && (yield* stateStore.get).activeSurface === "chatgpt")
-        operation(view.value.webContents);
+      const site = activeSiteOf(yield* stateStore.get);
+      if (site !== undefined) {
+        const view = yield* getLiveView(site);
+        if (Option.isSome(view)) operation(site, view.value);
+      }
       return yield* stateStore.get;
     });
 
-  const reload = viewNavigation((contents) => contents.reload());
+  const reload = withActiveView((_site, view) => view.webContents.reload());
   const retry = Effect.gen(function* () {
-    const view = yield* ensureView();
+    const state = yield* stateStore.get;
+    const site = activeSiteOf(state);
+    if (site === undefined) return state;
+    const view = yield* ensureView(site);
     const next = yield* updateState((current) => ({
       ...current,
-      activeSurface: "chatgpt",
       loadState: "loading",
       error: null,
     }));
-    yield* showSurface("chatgpt");
-    yield* Effect.tryPromise({
-      try: () => view.webContents.loadURL(next.currentUrl ?? REMOTE_APP_ENTRY_URL),
-      catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
-    });
+    yield* showSurface(site);
+    yield* loadUrl(view, resolveRemoteAppSiteUrl(site, next.currentUrl));
     return yield* stateStore.get;
   });
 
   const zoom = (delta: number | null) =>
     Effect.gen(function* () {
-      const view = yield* getLiveView;
       const state = yield* stateStore.get;
+      const site = activeSiteOf(state);
+      if (site === undefined) return state;
+      const view = yield* getLiveView(site);
       if (Option.isNone(view)) return state;
       const nextZoom = resolveRemoteAppZoomFactor(state.zoomFactor, delta);
       view.value.webContents.setZoomFactor(nextZoom);
       return yield* updateState((current) => ({ ...current, zoomFactor: nextZoom }));
     });
 
+  /** Signs the active site out by wiping only its own partition. */
   const clearData = Effect.gen(function* () {
     const state = yield* stateStore.get;
+    const site = activeSiteOf(state);
+    if (site === undefined) return state;
     yield* updateState((current) => ({ ...current, loadState: "clearing", error: null }));
-    yield* sessionService.clearData.pipe(
-      Effect.mapError((cause) => new RemoteAppManagerError({ operation: "clear-data", cause })),
-    );
-    const reset = yield* resetState().pipe(
+    yield* sessionService
+      .clearData(site)
+      .pipe(
+        Effect.mapError((cause) => new RemoteAppManagerError({ operation: "clear-data", cause })),
+      );
+    const entryUrl = REMOTE_APP_SITE_DEFINITIONS[site].entryUrl;
+    const reset = yield* updateState((current) => ({
+      ...RemoteAppStateStore.DEFAULT_REMOTE_APP_STATE,
+      activeSurface: current.activeSurface,
+      currentUrl: entryUrl,
+      currentTitle: REMOTE_APP_SITE_LABELS[site],
+      recents: current.recents.filter(
+        (recent) => resolveRemoteAppSiteForUrl(recent.url) !== site,
+      ),
+    })).pipe(
       Effect.mapError(
         (error) => new RemoteAppManagerError({ operation: "clear-data", cause: error }),
       ),
     );
-    yield* Ref.set(recoveryCountRef, 0);
-    const view = yield* getLiveView;
-    if (Option.isSome(view) && state.activeSurface === "chatgpt") {
-      yield* Effect.tryPromise({
-        try: () => view.value.webContents.loadURL(REMOTE_APP_ENTRY_URL),
-        catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
-      });
-    }
+    recoveryCounts.delete(site);
+    const view = yield* getLiveView(site);
+    if (Option.isSome(view)) yield* loadUrl(view.value, entryUrl);
     return reset;
   });
 
@@ -826,11 +936,16 @@ export const make = Effect.gen(function* () {
     attachMainWindow,
     getState,
     setTheme,
+    setAvailableSites,
     openSurfaceMenu,
     syncLayout,
     setActiveSurface,
-    goBack: viewNavigation((contents) => contents.canGoBack() && contents.goBack()),
-    goForward: viewNavigation((contents) => contents.canGoForward() && contents.goForward()),
+    goBack: withActiveView(
+      (_site, view) => view.webContents.canGoBack() && view.webContents.goBack(),
+    ),
+    goForward: withActiveView(
+      (_site, view) => view.webContents.canGoForward() && view.webContents.goForward(),
+    ),
     reload,
     zoomIn: zoom(0.1),
     zoomOut: zoom(-0.1),

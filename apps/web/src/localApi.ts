@@ -83,7 +83,7 @@ export function createLocalApi(): LocalApi {
 
 /**
  * Remote WebContentsViews are composited above the host renderer. Use the
- * native confirmation surface for update installation while ChatGPT is active
+ * native confirmation surface for update installation while a remote site is active
  * so the prompt remains visible and clickable without changing surface state.
  */
 export async function confirmDesktopUpdateInstall(message: string): Promise<boolean> {
@@ -93,7 +93,7 @@ export async function confirmDesktopUpdateInstall(message: string): Promise<bool
   if (typeof nativeConfirm === "function" && remoteApps) {
     try {
       const state = await remoteApps.getState();
-      if (state.activeSurface === "chatgpt") return nativeConfirm(message);
+      if (state.activeSurface !== "t3code") return nativeConfirm(message);
     } catch {
       // Fall through to the renderer confirmation if an older shell or a
       // transient remote-app state lookup cannot provide the native prompt.

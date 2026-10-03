@@ -192,7 +192,10 @@ describe("RemoteAppTheme", () => {
   });
 
   it("builds a self-contained themed surface picker with one active option", () => {
-    const html = buildRemoteAppSurfaceMenuHtml(DEFAULT_REMOTE_APP_THEME, "chatgpt");
+    const html = buildRemoteAppSurfaceMenuHtml(DEFAULT_REMOTE_APP_THEME, "chatgpt", [
+      "t3code",
+      "chatgpt",
+    ]);
 
     expect(html).toContain('role="menu" aria-label="Switch app surface"');
     expect(html).toContain('aria-checked="false" href="t3code-surface://select/t3code"');

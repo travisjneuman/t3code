@@ -1,9 +1,11 @@
 import {
+  REMOTE_APP_SITE_LABELS,
   REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH,
   type DesktopSurface,
   type RemoteAppTheme,
   type RemoteAppThemeColors,
 } from "@t3tools/contracts";
+import { PRODUCT_NAME } from "@t3tools/shared/branding";
 import { buildSidebarStageArtworkSvg } from "@t3tools/shared/sidebarStageArtwork";
 
 const SAFE_THEME_COLOR = /^[a-zA-Z0-9#(),.%/ +*-]+$/;
@@ -634,17 +636,37 @@ const surfaceMenuUrl = (surface: DesktopSurface): string => `t3code-surface://se
 /**
  * The surface picker is rendered in a small host-owned window. A remote
  * WebContentsView is composited above the renderer, so a renderer popover
- * cannot reliably appear over ChatGPT. Keep this document intentionally small
+ * cannot reliably appear over a remote site. Keep this document intentionally small
  * and self-contained so it remains available while the remote surface is
  * loading or offline.
  */
+export const REMOTE_APP_SURFACE_MENU_WIDTH = 196;
+const SURFACE_MENU_ITEM_HEIGHT = 32;
+// Body padding (2 * 6px), menu padding (2 * 5px), border (2 * 1px), and slack.
+const SURFACE_MENU_CHROME_HEIGHT = 28;
+
+export const resolveRemoteAppSurfaceMenuHeight = (itemCount: number): number =>
+  SURFACE_MENU_CHROME_HEIGHT + SURFACE_MENU_ITEM_HEIGHT * itemCount;
+
+const surfaceLabel = (surface: DesktopSurface): string =>
+  surface === "t3code" ? PRODUCT_NAME : REMOTE_APP_SITE_LABELS[surface];
+
 export const buildRemoteAppSurfaceMenuHtml = (
   input: RemoteAppTheme,
   activeSurface: DesktopSurface,
+  surfaces: ReadonlyArray<DesktopSurface>,
 ): string => {
   const { appearance, colors } = normalizeRemoteAppTheme(input);
-  const checked = (surface: DesktopSurface): string =>
-    activeSurface === surface ? "true" : "false";
+  const items = surfaces
+    .map((surface) => {
+      const active = activeSurface === surface;
+      return `
+      <a role="menuitemradio" aria-checked="${active ? "true" : "false"}" href="${surfaceMenuUrl(surface)}">
+        <span class="check" aria-hidden="true">${active ? "✓" : ""}</span>
+        <span>${surfaceLabel(surface)}</span>
+      </a>`;
+    })
+    .join("");
   return `<!doctype html>
 <html lang="en" data-theme="${appearance}">
   <head>
@@ -694,15 +716,7 @@ export const buildRemoteAppSurfaceMenuHtml = (
     </style>
   </head>
   <body>
-    <div role="menu" aria-label="Switch app surface">
-      <a role="menuitemradio" aria-checked="${checked("t3code")}" href="${surfaceMenuUrl("t3code")}">
-        <span class="check" aria-hidden="true">${activeSurface === "t3code" ? "✓" : ""}</span>
-        <span>ndev.t3code</span>
-      </a>
-      <a role="menuitemradio" aria-checked="${checked("chatgpt")}" href="${surfaceMenuUrl("chatgpt")}">
-        <span class="check" aria-hidden="true">${activeSurface === "chatgpt" ? "✓" : ""}</span>
-        <span>ChatGPT</span>
-      </a>
+    <div role="menu" aria-label="Switch app surface">${items}
     </div>
   </body>
 </html>`;

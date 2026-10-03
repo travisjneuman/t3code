@@ -1,6 +1,6 @@
 # ndev.t3code
 
-ndev.t3code is Travis J. Neuman's active fork of [T3 Code](https://github.com/pingdotgg/t3code), an "agent harness control surface" for controlling coding agents from mobile, web, and desktop clients. This fork adds ChatGPT as a native Electron desktop surface while continuing to track the upstream project.
+ndev.t3code is Travis J. Neuman's active fork of [T3 Code](https://github.com/pingdotgg/t3code), an "agent harness control surface" for controlling coding agents from mobile, web, and desktop clients. This fork adds the ChatGPT, Claude, Grok, and Gemini web apps as native Electron desktop surfaces, shown when their provider is signed in, while continuing to track the upstream project.
 
 The upstream T3 Code project provides a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes). The fork's source and releases remain at [github.com/travisjneuman/t3code](https://github.com/travisjneuman/t3code).
 

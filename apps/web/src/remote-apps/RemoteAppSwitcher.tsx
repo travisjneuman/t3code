@@ -1,3 +1,4 @@
+import { REMOTE_APP_SITE_LABELS } from "@t3tools/contracts";
 import { ChevronDownIcon, MessageSquareIcon } from "lucide-react";
 import { useRef } from "react";
 
@@ -5,12 +6,15 @@ import { Button } from "~/components/ui/button";
 import { T3Wordmark } from "~/components/T3Wordmark";
 import { cn } from "~/lib/utils";
 
+import { activeRemoteAppSite } from "./remoteAppState";
 import { useRemoteAppState } from "./useRemoteAppState";
 
 export function RemoteAppSwitcher() {
   const { state, bridge } = useRemoteAppState();
   const triggerRef = useRef<HTMLButtonElement>(null);
   if (bridge === undefined) return null;
+  const site = activeRemoteAppSite(state);
+  const siteLabel = site === undefined ? undefined : REMOTE_APP_SITE_LABELS[site];
 
   const openMenu = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -27,7 +31,7 @@ export function RemoteAppSwitcher() {
     <Button
       ref={triggerRef}
       aria-haspopup="menu"
-      aria-label={`Switch app surface, currently ${state.activeSurface === "chatgpt" ? "ChatGPT" : "ndev.t3code"}`}
+      aria-label={`Switch app surface, currently ${siteLabel ?? "ndev.t3code"}`}
       className={cn(
         "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1 rounded-md px-2 text-sm font-medium tracking-tight",
         "border-transparent bg-transparent text-foreground shadow-none hover:bg-accent",
@@ -37,8 +41,12 @@ export function RemoteAppSwitcher() {
       data-remote-app-switcher
       onClick={openMenu}
     >
-      {state.activeSurface === "chatgpt" ? <MessageSquareIcon /> : <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />}
-      <span className="truncate">{state.activeSurface === "chatgpt" ? "ChatGPT" : "Code"}</span>
+      {siteLabel === undefined ? (
+        <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
+      ) : (
+        <MessageSquareIcon />
+      )}
+      <span className="truncate">{siteLabel ?? "Code"}</span>
       <ChevronDownIcon className="size-3 opacity-60" />
     </Button>
   );

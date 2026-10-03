@@ -14,12 +14,16 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
 
+// Mirrors RemoteAppSiteSchema; the preload imports contract types only.
+const REMOTE_APP_SURFACES = new Set(["t3code", "chatgpt", "claude", "grok", "gemini"]);
+
 function isRemoteAppState(value: unknown): value is RemoteAppState {
   if (typeof value !== "object" || value === null) return false;
   const state = value as Partial<RemoteAppState>;
   return (
     state.schemaVersion === 1 &&
-    (state.activeSurface === "t3code" || state.activeSurface === "chatgpt") &&
+    typeof state.activeSurface === "string" &&
+    REMOTE_APP_SURFACES.has(state.activeSurface) &&
     typeof state.currentTitle === "string" &&
     typeof state.zoomFactor === "number" &&
     Array.isArray(state.recents)
@@ -307,6 +311,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_THEME_CHANNEL, theme),
     openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL, anchor),
+    setAvailableSites: (sites) =>
+      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_AVAILABLE_SITES_CHANNEL, sites),
     setActiveSurface: (surface) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL, surface),
     goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),

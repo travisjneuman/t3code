@@ -1,15 +1,24 @@
-# ChatGPT in ndev.t3code
+# Provider web apps in ndev.t3code
 
-ndev.t3code includes ChatGPT as a top-level desktop surface. Use the app switcher in the desktop titlebar to move between ndev.t3code and ChatGPT. Returning to ndev.t3code keeps the ChatGPT session available for the next switch.
+ndev.t3code can show the ChatGPT, Claude, Grok, and Gemini web apps as top-level desktop surfaces. Use the app switcher in the desktop titlebar to move between ndev.t3code and a site. Switching away keeps each site loaded, so returning is instant and you stay where you were.
 
-Sign in using the normal ChatGPT page. Supported sign-in windows are kept inside the desktop app for the authentication flow; unrelated links open in your default browser. ChatGPT page content remains owned and rendered by ChatGPT.
+A site appears in the switcher when its matching provider is enabled and signed in under **Settings → Providers**:
 
-When ChatGPT is active, the titlebar provides back, forward, reload, retry, zoom, and reset-zoom controls. Downloads always ask where to save the file and are not opened automatically.
+| Site    | Provider    |
+| ------- | ----------- |
+| ChatGPT | Codex       |
+| Claude  | Claude      |
+| Grok    | Grok Build  |
+| Gemini  | Antigravity |
 
-Use “Clear ChatGPT session data” in the ChatGPT controls to remove the dedicated local session data and shell metadata for this surface. This does not remove ndev.t3code projects or server data.
+Disabling a provider or signing it out removes its site from the switcher. A site you are currently viewing stays until you switch away.
 
-ndev.t3code's maintainer desktop build updates from its configured local source checkout rather than from GitHub Releases. Open **Settings → About** and use **Check for Updates**. When upstream changes are available, **Sync & Build** fetches the upstream source, merges it with the fork's local commits, and builds a new app on the same Mac. **Restart & Install** then replaces the installed app from that local build and reopens ndev.t3code.
+Sign in on each site's normal page. Every site keeps its own saved session, separate from the others and from your default browser. Sign-in steps through Google, Microsoft, Apple, or X stay inside the desktop app; unrelated links open in your default browser. Page content remains owned and rendered by each site.
 
-The local update is deliberately fail-closed. It pauses when the checkout is not on the maintainer branch, has uncommitted or untracked files, is already in a merge, or does not have the expected fork and upstream remotes. A merge conflict is aborted and leaves the checkout unchanged. Running tasks are interrupted only after the local build has completed and you confirm the restart. This path does not use GitHub Actions, hosted runners, release publishing, or deployment workflows.
+Sites follow ndev.t3code's light or dark theme. ChatGPT also picks up ndev.t3code's colors; the other sites keep their own look in the matching theme.
 
-The fork remains based on [the original T3 Code repository](https://github.com/pingdotgg/t3code), and the local update can push the completed merge back to the fork's `main` branch. All GitHub Actions workflows for this fork are disabled; source synchronization and app builds happen on the maintainer's Mac. Fork packages without Apple Developer signing remain unnotarized, so macOS may reject a directly downloaded copy even when the bundle passes structural validation.
+When a site is active, the titlebar provides back, forward, reload, retry, zoom, and reset-zoom controls. Downloads always ask where to save the file and are not opened automatically.
+
+Use the clear-session-data control in a site's titlebar (for example “Clear Claude session data”) to sign out of that site and remove its local session data and history. Other sites, ndev.t3code projects, and server data are not affected.
+
+ndev.t3code's maintainer desktop build updates from its configured local source checkout rather than from GitHub Releases. See [Updating ndev.t3code](./updating.md) for how **Check for Updates** follows the upstream nightly release.
