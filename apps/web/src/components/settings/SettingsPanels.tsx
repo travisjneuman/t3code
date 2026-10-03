@@ -409,7 +409,7 @@ function AboutVersionSection() {
   const description =
     action === "download" || action === "install"
       ? updateState?.sourceUpdate
-        ? "Syncs upstream changes, merges them with this fork, and builds the app locally."
+        ? "Merges the latest upstream nightly into this fork and builds the app locally."
         : "Update available."
       : "Current version of the application.";
 

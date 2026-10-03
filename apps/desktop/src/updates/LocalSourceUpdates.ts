@@ -10,9 +10,14 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import { resolveRenameOnlyConflict, resolveRenameOnlyHunks } from "./forkMergeResolution.ts";
 
 const COMMAND_OUTPUT_LIMIT = 16_000;
 const LOCAL_UPDATE_HELPER_PATH = "local-source-update-helper.sh";
+const NIGHTLY_TAG_GLOB = "v*-nightly.*";
+const NIGHTLY_TAG_PATTERN = /^v\d+\.\d+\.\d+-nightly\.\d+\.\d+$/u;
+const UNRESOLVED_PATH_LIST_LIMIT = 10;
+const REGULAR_FILE_MODES: ReadonlySet<string> = new Set(["100644", "100755"]);
 
 const LocalSourceUpdateOperation = Schema.Literals([
   "configuration",
@@ -42,6 +47,11 @@ export class LocalSourceUpdateError extends Schema.TaggedErrorClass<LocalSourceU
 export interface LocalSourceUpdateInspection {
   readonly repositoryPath: string;
   readonly currentCommit: string;
+  /** Newest upstream nightly tag reachable from upstream/main, e.g. `v0.0.46-nightly.20261003.2610`. */
+  readonly upstreamTag: string;
+  /** The tag without its leading `v`; used as the local build version. */
+  readonly upstreamVersion: string;
+  /** Commit the nightly tag points at. */
   readonly upstreamCommit: string;
   readonly ahead: number;
   readonly behind: number;
@@ -99,8 +109,8 @@ fi
 exit 1
 `;
 
-function tailOutput(value: string): string {
-  return value.length <= COMMAND_OUTPUT_LIMIT ? value : value.slice(-COMMAND_OUTPUT_LIMIT);
+function tailOutput(value: string, limit = COMMAND_OUTPUT_LIMIT): string {
+  return value.length <= limit ? value : value.slice(-limit);
 }
 
 function trimOutput(result: CommandResult): string {
@@ -124,6 +134,63 @@ function normalizeRemoteUrl(value: string): string {
     .replace(/^ssh:\/\/git@github\.com\//u, "")
     .replace(/\/+$/u, "")
     .toLowerCase();
+}
+
+/**
+ * Picks the newest nightly tag from `git tag --list --sort=v:refname` output
+ * (ascending, so the newest is last and survives output tail truncation).
+ */
+export function selectNewestNightlyTag(output: string): string | null {
+  const tags = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => NIGHTLY_TAG_PATTERN.test(line));
+  return tags.at(-1) ?? null;
+}
+
+export const nightlyVersionFromTag = (tag: string): string => tag.replace(/^v/u, "");
+
+export interface UnmergedPath {
+  readonly path: string;
+  /** Index stage (1 base, 2 ours, 3 theirs) to file mode. A missing stage was deleted on that side. */
+  readonly stages: ReadonlyMap<number, string>;
+}
+
+/** Parses `git ls-files -u -z` records: `<mode> <object> <stage>\t<path>\0`. */
+export function parseUnmergedPaths(output: string): ReadonlyArray<UnmergedPath> {
+  const byPath = new Map<string, Map<number, string>>();
+  for (const record of output.split("\0")) {
+    const tab = record.indexOf("\t");
+    if (tab < 0) continue;
+    const [mode, , stageText] = record.slice(0, tab).split(" ");
+    const stage = Number(stageText);
+    if (!mode || (stage !== 1 && stage !== 2 && stage !== 3)) continue;
+    const path = record.slice(tab + 1);
+    const stages = byPath.get(path) ?? new Map<number, string>();
+    stages.set(stage, mode);
+    byPath.set(path, stages);
+  }
+  return Array.from(byPath, ([path, stages]) => ({ path, stages }));
+}
+
+// Only plain text files whose mode both sides agree on are rewritten; links,
+// submodules, and mode changes are left for a human.
+const isRewritableConflict = (entry: UnmergedPath): boolean => {
+  const modes = Array.from(entry.stages.values());
+  const ours = entry.stages.get(2);
+  const theirs = entry.stages.get(3);
+  return (
+    modes.every((mode) => REGULAR_FILE_MODES.has(mode)) &&
+    (ours === undefined || theirs === undefined || ours === theirs)
+  );
+};
+
+const isBinaryText = (value: string | null): boolean => value !== null && value.includes("\u0000");
+
+function describeUnresolvedPaths(paths: ReadonlyArray<string>): string {
+  const listed = paths.slice(0, UNRESOLVED_PATH_LIST_LIMIT).join(", ");
+  const rest = paths.length - UNRESOLVED_PATH_LIST_LIMIT;
+  return rest > 0 ? `${listed}, and ${rest} more` : listed;
 }
 
 export function resolveMacApplicationBundlePath(
@@ -170,7 +237,10 @@ export const make = Effect.gen(function* () {
     readonly command: string;
     readonly args: ReadonlyArray<string>;
     readonly cwd: string;
+    /** Characters of stdout/stderr kept (from the end). File reads pass Infinity. */
+    readonly outputLimit?: number;
   }): Effect.fn.Return<CommandResult, LocalSourceUpdateError> {
+    const outputLimit = input.outputLimit ?? COMMAND_OUTPUT_LIMIT;
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const handle = yield* spawner.spawn(
@@ -194,7 +264,7 @@ export const make = Effect.gen(function* () {
               Stream.decodeText(),
               Stream.runFold(
                 () => "",
-                (all, chunk) => tailOutput(all + chunk),
+                (all, chunk) => tailOutput(all + chunk, outputLimit),
               ),
             ),
             handle.stderr.pipe(
@@ -222,6 +292,7 @@ export const make = Effect.gen(function* () {
     readonly command: string;
     readonly args: ReadonlyArray<string>;
     readonly cwd: string;
+    readonly outputLimit?: number;
   }) {
     const result = yield* runCommand(input);
     if (result.exitCode !== 0) {
@@ -301,12 +372,41 @@ export const make = Effect.gen(function* () {
         repo,
       );
     }
-    yield* gitChecked("fetch", ["fetch", "--prune", "upstream", "main"]);
+    // --tags brings upstream's nightly tags along with main. Tags fetched
+    // through --tags are not subject to --prune, so fork-local tags survive,
+    // and a tag that would move is refused rather than clobbered.
+    yield* gitChecked("fetch", ["fetch", "--prune", "--tags", "upstream", "main"]);
+    // Nightly tags encode version, date, and run number, so version order is
+    // release order. Creator date is not: lightweight tags report the commit
+    // date, and a re-tagged run can sort out of order. --merged keeps tags
+    // that upstream/main actually contains.
+    const tagList = yield* gitChecked("inspect", [
+      "tag",
+      "--list",
+      NIGHTLY_TAG_GLOB,
+      "--merged",
+      "upstream/main",
+      "--sort=v:refname",
+    ]);
+    const upstreamTag = selectNewestNightlyTag(tagList.stdout);
+    if (!upstreamTag) {
+      return yield* makeError(
+        "inspect",
+        "no upstream nightly tag is reachable from upstream/main",
+        new Error("no nightly tag"),
+        repo,
+      );
+    }
+    const upstreamCommit = yield* gitChecked("inspect", [
+      "rev-parse",
+      "--verify",
+      `refs/tags/${upstreamTag}^{commit}`,
+    ]);
     const counts = yield* gitChecked("inspect", [
       "rev-list",
       "--left-right",
       "--count",
-      "HEAD...upstream/main",
+      `HEAD...${upstreamCommit.stdout.trim()}`,
     ]);
     const countPair = parseCountPair(counts.stdout);
     if (!countPair) {
@@ -318,10 +418,11 @@ export const make = Effect.gen(function* () {
       );
     }
     const currentCommit = yield* gitChecked("inspect", ["rev-parse", "HEAD"]);
-    const upstreamCommit = yield* gitChecked("inspect", ["rev-parse", "upstream/main"]);
     return {
       repositoryPath: repo,
       currentCommit: currentCommit.stdout.trim(),
+      upstreamTag,
+      upstreamVersion: nightlyVersionFromTag(upstreamTag),
       upstreamCommit: upstreamCommit.stdout.trim(),
       ahead: countPair[0],
       behind: countPair[1],
@@ -352,8 +453,111 @@ export const make = Effect.gen(function* () {
     return yield* makeError("build", `no macOS application bundle was produced under ${root}`);
   });
 
+  const listUnmergedPaths = (repo: string) =>
+    runChecked({
+      operation: "merge",
+      command: "git",
+      args: ["ls-files", "--unmerged", "-z"],
+      cwd: repo,
+      outputLimit: Number.POSITIVE_INFINITY,
+    }).pipe(Effect.map((result) => parseUnmergedPaths(result.stdout)));
+
+  // A stage missing from the index means the file was deleted on that side.
+  const readStage = (repo: string, entry: UnmergedPath, stage: 1 | 2 | 3) =>
+    entry.stages.has(stage)
+      ? runChecked({
+          operation: "merge",
+          command: "git",
+          args: ["show", `:${stage}:${entry.path}`],
+          cwd: repo,
+          outputLimit: Number.POSITIVE_INFINITY,
+        }).pipe(Effect.map((result): string | null => result.stdout))
+      : Effect.succeed<string | null>(null);
+
+  const writeWorkingFile = (repo: string, path: string, contents: string) =>
+    fileSystem
+      .writeFileString(environment.path.join(repo, path), contents)
+      .pipe(
+        Effect.mapError((cause) => makeError("merge", `could not write ${path}`, cause, repo)),
+      );
+
+  const stagePath = (repo: string, path: string) =>
+    runChecked({ operation: "merge", command: "git", args: ["add", "--", path], cwd: repo });
+
+  // Whole-file pass: the fork's entire change to the file is the rename.
+  const resolveWholeFile = Effect.fn("desktop.localSourceUpdates.resolveWholeFile")(function* (
+    repo: string,
+    entry: UnmergedPath,
+  ): Effect.fn.Return<boolean, LocalSourceUpdateError> {
+    if (!isRewritableConflict(entry)) return false;
+    const base = yield* readStage(repo, entry, 1);
+    const ours = yield* readStage(repo, entry, 2);
+    const theirs = yield* readStage(repo, entry, 3);
+    if ([base, ours, theirs].some(isBinaryText)) return false;
+    const resolution = resolveRenameOnlyConflict({ base, ours, theirs });
+    if (resolution === null) return false;
+    if (resolution.kind === "delete") {
+      yield* runChecked({
+        operation: "merge",
+        command: "git",
+        args: ["rm", "--quiet", "--", entry.path],
+        cwd: repo,
+      });
+      return true;
+    }
+    yield* writeWorkingFile(repo, entry.path, resolution.contents);
+    yield* stagePath(repo, entry.path);
+    return true;
+  });
+
+  // Hunk pass: rewrite the file with diff3 markers and resolve each
+  // rename-only hunk. The file is written and staged only when no hunk is
+  // left; any leftover aborts the whole merge anyway.
+  const resolveHunks = Effect.fn("desktop.localSourceUpdates.resolveHunks")(function* (
+    repo: string,
+    entry: UnmergedPath,
+  ): Effect.fn.Return<boolean, LocalSourceUpdateError> {
+    if (!isRewritableConflict(entry) || entry.stages.size !== 3) return false;
+    yield* runChecked({
+      operation: "merge",
+      command: "git",
+      args: ["checkout", "--conflict=diff3", "--", entry.path],
+      cwd: repo,
+    });
+    const text = yield* fileSystem
+      .readFileString(environment.path.join(repo, entry.path))
+      .pipe(
+        Effect.mapError((cause) => makeError("merge", `could not read ${entry.path}`, cause, repo)),
+      );
+    if (isBinaryText(text)) return false;
+    const { contents, unresolved } = resolveRenameOnlyHunks(text);
+    if (unresolved > 0) return false;
+    yield* writeWorkingFile(repo, entry.path, contents);
+    yield* stagePath(repo, entry.path);
+    return true;
+  });
+
+  /** Resolves rename-only conflicts and returns the paths a human still has to merge. */
+  const resolveForkConflicts = Effect.fn("desktop.localSourceUpdates.resolveForkConflicts")(
+    function* (repo: string): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
+      for (const entry of yield* listUnmergedPaths(repo)) {
+        yield* resolveWholeFile(repo, entry);
+      }
+      for (const entry of yield* listUnmergedPaths(repo)) {
+        yield* resolveHunks(repo, entry);
+      }
+      return (yield* listUnmergedPaths(repo)).map((entry) => entry.path);
+    },
+  );
+
+  const abortMerge = (repo: string) =>
+    runCommand({ operation: "merge", command: "git", args: ["merge", "--abort"], cwd: repo }).pipe(
+      Effect.ignore,
+    );
+
   const syncAndBuild = Effect.gen(function* () {
     const inspection = yield* inspect;
+    const repo = inspection.repositoryPath;
     if (inspection.behind === 0) {
       const pendingBuild = yield* Ref.get(builtUpdateRef);
       if (pendingBuild) {
@@ -361,39 +565,54 @@ export const make = Effect.gen(function* () {
           operation: "push",
           command: "git",
           args: ["push", "origin", "HEAD:main"],
-          cwd: inspection.repositoryPath,
+          cwd: repo,
         });
         return pendingBuild;
       }
       return yield* makeError(
         "merge",
-        "the fork is already current with upstream/main",
+        `the fork already contains upstream nightly ${inspection.upstreamTag}`,
         new Error("no upstream commits"),
-        inspection.repositoryPath,
+        repo,
       );
     }
+    const mergeMessage = `chore(sync): merge upstream nightly ${inspection.upstreamTag}`;
+    // --no-commit leaves the merge open so a failed resolution or build can
+    // still be undone with `git merge --abort`. The commit follows the build.
+    // The peeled commit is merged (not the tag) so it matches what inspect counted.
     const merge = yield* runCommand({
       operation: "merge",
       command: "git",
-      args: ["merge", "--no-edit", "--no-ff", "upstream/main"],
-      cwd: inspection.repositoryPath,
+      args: ["merge", "--no-ff", "--no-commit", "-m", mergeMessage, inspection.upstreamCommit],
+      cwd: repo,
     });
-    if (merge.exitCode !== 0) {
-      yield* runCommand({
-        operation: "merge",
-        command: "git",
-        args: ["merge", "--abort"],
-        cwd: inspection.repositoryPath,
-      }).pipe(Effect.ignore);
-      const output = trimOutput(merge);
-      return yield* makeError(
-        "merge",
-        `upstream merge failed${output ? `: ${output}` : ""}`,
-        new Error(output),
-        inspection.repositoryPath,
-      );
-    }
     const built = yield* Effect.gen(function* () {
+      if (merge.exitCode !== 0) {
+        const output = trimOutput(merge);
+        const mergeHead = yield* runCommand({
+          operation: "merge",
+          command: "git",
+          args: ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+          cwd: repo,
+        });
+        if (mergeHead.exitCode !== 0) {
+          return yield* makeError(
+            "merge",
+            `upstream merge of ${inspection.upstreamTag} failed${output ? `: ${output}` : ""}`,
+            new Error(output),
+            repo,
+          );
+        }
+        const unresolved = yield* resolveForkConflicts(repo);
+        if (unresolved.length > 0) {
+          return yield* makeError(
+            "merge",
+            `merging ${inspection.upstreamTag} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that ${unresolved.length === 1 ? "is" : "are"} not rename-only, so the merge was aborted. Merge ${inspection.upstreamTag} into main by hand, push it, then update again. Conflicted: ${describeUnresolvedPaths(unresolved)}`,
+            new Error(output),
+            repo,
+          );
+        }
+      }
       const timestamp = yield* Clock.currentTimeMillis;
       const outputDir = environment.path.join(
         environment.stateDir,
@@ -434,26 +653,28 @@ export const make = Effect.gen(function* () {
           "--arch",
           arch,
           "--build-version",
-          environment.appVersion,
+          inspection.upstreamVersion,
           "--output-dir",
           outputDir,
         ],
-        cwd: inspection.repositoryPath,
+        cwd: repo,
       });
       const applicationBundlePath = yield* findAppBundle(outputDir);
+      // Records the staged merge result; the author comes from the repo config.
+      yield* runChecked({
+        operation: "merge",
+        command: "git",
+        args: ["commit", "--no-edit", "-m", mergeMessage],
+        cwd: repo,
+      });
       return { applicationBundlePath };
     }).pipe(
-      Effect.catchCause((cause) =>
-        runCommand({
-          operation: "merge",
-          command: "git",
-          args: ["merge", "--abort"],
-          cwd: inspection.repositoryPath,
-        }).pipe(Effect.ignore, Effect.andThen(Effect.failCause(cause))),
-      ),
+      // Nothing is committed until the build succeeds, so any failure or
+      // interruption before the commit still aborts the merge cleanly.
+      Effect.catchCause((cause) => abortMerge(repo).pipe(Effect.andThen(Effect.failCause(cause)))),
     );
     const build = {
-      version: inspection.upstreamCommit,
+      version: inspection.upstreamVersion,
       applicationBundlePath: built.applicationBundlePath,
     } satisfies LocalSourceUpdateBuild;
     yield* Ref.set(builtUpdateRef, build);

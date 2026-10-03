@@ -84,7 +84,7 @@ export function getDesktopUpdateActionLabel(
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
   if (state.status === "available") {
     if (state.sourceUpdate) {
-      return `Local source update available${state.availableVersion ? ` (${state.availableVersion})` : ""}. Click to sync upstream, merge, and build locally.`;
+      return `Upstream nightly${state.availableVersion ? ` ${state.availableVersion}` : ""} available. Click to merge the upstream nightly into this fork and build locally.`;
     }
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
@@ -102,7 +102,7 @@ export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string
   if (state.status === "error") {
     if (state.errorContext === "download" && state.availableVersion) {
       if (state.sourceUpdate) {
-        return `Local sync/build failed for ${state.availableVersion}. Click to retry.`;
+        return `Merging or building ${state.availableVersion} failed. Click to retry.`;
       }
       return `Download failed for ${state.availableVersion}. Click to retry.`;
     }

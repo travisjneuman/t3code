@@ -71,6 +71,24 @@ update can roll back to the previous version. If the update still fails:
 2. Check that you updated the server's machine, not only the device you are using.
 3. For a command-line server, stop it and relaunch the exact version shown in the notice.
 
+## Updating the fork from upstream nightly
+
+The ndev.t3code macOS app updates from its own source checkout instead of a
+download feed. When the latest upstream T3 Code nightly is newer than your
+checkout, the update button and **Settings → General → About** offer
+**Sync & Build** and name that nightly's version.
+
+**Sync & Build** merges the nightly into your fork, builds the app on this Mac,
+then pushes the merge to your fork. Your fork's changes are kept. Conflicts
+caused only by the ndev.t3code product rename are resolved for you; anything
+else stops the update and lists the conflicted files. Then **Restart &
+Install** replaces the installed app with the new build.
+
+The update refuses to start while the checkout has uncommitted changes, is
+not on `main`, or is in the middle of another merge. If it stops on conflicts
+or the build fails, the checkout is left as it was before the update. Merge
+the named nightly by hand, push it, and run **Sync & Build** again.
+
 ## Update providers
 
 **Settings → Providers** shows provider updates for the selected environment.
