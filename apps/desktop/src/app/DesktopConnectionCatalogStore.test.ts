@@ -274,7 +274,7 @@ describe("DesktopConnectionCatalogStore", () => {
       const baseDir = yield* baseFileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-connection-catalog-test-",
       });
-      const catalogPath = path.join(baseDir, ".t3-tjn", "userdata", "connection-catalog.json");
+      const catalogPath = path.join(baseDir, ".t3", "userdata", "connection-catalog.json");
       const permissionError = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
@@ -313,7 +313,7 @@ describe("DesktopConnectionCatalogStore", () => {
       const baseDir = yield* baseFileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-connection-catalog-test-",
       });
-      const stateDir = path.join(baseDir, ".t3-tjn", "userdata");
+      const stateDir = path.join(baseDir, ".t3", "userdata");
       const permissionError = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
@@ -414,7 +414,7 @@ describe("DesktopConnectionCatalogStore", () => {
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-connection-catalog-test-",
       });
-      const catalogPath = path.join(baseDir, ".t3-tjn", "userdata", "connection-catalog.json");
+      const catalogPath = path.join(baseDir, ".t3", "userdata", "connection-catalog.json");
       const failDecrypt = yield* Ref.make(false);
       const layer = makeLayer(baseDir, true, failDecrypt);
       const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore.pipe(

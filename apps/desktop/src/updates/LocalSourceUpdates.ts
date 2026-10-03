@@ -5,6 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -74,6 +75,12 @@ export interface LocalSourceUpdateBuild {
   readonly applicationBundlePath: string;
 }
 
+export interface LocalSourceSyncResult {
+  /** Upstream commits the sync merged; 0 when the fork already had them all. */
+  readonly merged: number;
+  readonly upstreamTag: string;
+}
+
 export class LocalSourceUpdates extends Context.Service<
   LocalSourceUpdates,
   {
@@ -81,6 +88,7 @@ export class LocalSourceUpdates extends Context.Service<
     readonly inspect: Effect.Effect<LocalSourceUpdateInspection, LocalSourceUpdateError>;
     readonly syncAndBuild: Effect.Effect<LocalSourceUpdateBuild, LocalSourceUpdateError>;
     readonly install: Effect.Effect<void, LocalSourceUpdateError>;
+    readonly syncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
   }
 >()("@t3tools/desktop/updates/LocalSourceUpdates") {}
 
@@ -641,73 +649,116 @@ export const make = Effect.gen(function* () {
       Effect.ignore,
     );
 
-  const syncAndBuild = Effect.gen(function* () {
-    const inspection = yield* inspect;
-    const repo = inspection.repositoryPath;
-    if (inspection.behind === 0) {
-      const pendingBuild = yield* Ref.get(builtUpdateRef);
-      if (pendingBuild) {
-        yield* runChecked({
-          operation: "push",
-          command: "git",
-          args: ["push", "origin", "HEAD:main"],
-          cwd: repo,
-        });
-        return pendingBuild;
-      }
-      return yield* makeError(
-        "merge",
-        `the fork already contains upstream nightly ${inspection.upstreamTag}`,
-        new Error("no upstream commits"),
-        repo,
-      );
-    }
-    const mergeMessage = `chore(sync): merge upstream nightly ${inspection.upstreamTag}`;
+  /**
+   * Merges `target` without committing and settles conflicts (rename pass, then
+   * the agent). Fails with the merge still open; callers abort it.
+   */
+  const mergeUpstream = Effect.fn("desktop.localSourceUpdates.mergeUpstream")(function* (
+    repo: string,
+    target: string,
+    label: string,
+    message: string,
+  ): Effect.fn.Return<void, LocalSourceUpdateError> {
     // --no-commit leaves the merge open so a failed resolution or build can
-    // still be undone with `git merge --abort`. The commit follows the build.
-    // The peeled commit is merged (not the tag) so it matches what inspect counted.
+    // still be undone with `git merge --abort`.
     const merge = yield* runCommand({
       operation: "merge",
       command: "git",
-      args: ["merge", "--no-ff", "--no-commit", "-m", mergeMessage, inspection.upstreamCommit],
+      args: ["merge", "--no-ff", "--no-commit", "-m", message, target],
       cwd: repo,
     });
+    if (merge.exitCode === 0) return;
+    const output = trimOutput(merge);
+    const mergeHead = yield* runCommand({
+      operation: "merge",
+      command: "git",
+      args: ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+      cwd: repo,
+    });
+    if (mergeHead.exitCode !== 0) {
+      return yield* makeError(
+        "merge",
+        `upstream merge of ${label} failed${output ? `: ${output}` : ""}`,
+        new Error(output),
+        repo,
+      );
+    }
+    const unresolved = yield* resolveForkConflicts(repo).pipe(
+      Effect.flatMap((paths) =>
+        paths.length > 0 ? resolveWithAgent(repo, paths) : Effect.succeed(paths),
+      ),
+    );
+    if (unresolved.length > 0) {
+      return yield* makeError(
+        "merge",
+        `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. Merge ${label} into main by hand, push it, then try again. Conflicted: ${describeUnresolvedPaths(unresolved)}`,
+        new Error(output),
+        repo,
+      );
+    }
+  });
+
+  const hasStagedChanges = (repo: string) =>
+    runCommand({
+      operation: "merge",
+      command: "git",
+      args: ["diff", "--cached", "--quiet"],
+      cwd: repo,
+    }).pipe(Effect.map((result) => result.exitCode !== 0));
+
+  const pushFork = (repo: string) =>
+    runChecked({
+      operation: "push",
+      command: "git",
+      args: ["push", "origin", "HEAD:main"],
+      cwd: repo,
+    });
+
+  // Sync and update both rewrite the checkout, so they never overlap.
+  const repositoryLock = yield* Semaphore.make(1);
+
+  const syncAndBuild = Effect.gen(function* () {
+    const inspection = yield* inspect;
+    const repo = inspection.repositoryPath;
+    const merging = inspection.behind > 0;
+    if (!merging) {
+      const pendingBuild = yield* Ref.get(builtUpdateRef);
+      if (pendingBuild) {
+        yield* pushFork(repo);
+        return pendingBuild;
+      }
+      // Sync already merged this nightly; it still needs building when the
+      // running app predates it.
+      if (environment.appVersion === inspection.upstreamVersion) {
+        return yield* makeError(
+          "merge",
+          `this build already runs upstream nightly ${inspection.upstreamTag}`,
+          new Error("no upstream commits"),
+          repo,
+        );
+      }
+    }
+    const mergeMessage = `chore(sync): merge upstream nightly ${inspection.upstreamTag}`;
     const buildsDir = environment.path.join(environment.stateDir, SOURCE_UPDATE_BUILDS_DIR);
     // Forgets the pending build too, so install never points at a deleted bundle.
     const removeBuilds = Ref.set(builtUpdateRef, null).pipe(
       Effect.andThen(fileSystem.remove(buildsDir, { recursive: true, force: true })),
       Effect.ignore,
     );
-    const built = yield* Effect.gen(function* () {
-      if (merge.exitCode !== 0) {
-        const output = trimOutput(merge);
-        const mergeHead = yield* runCommand({
-          operation: "merge",
+    // Without a merge to abort, uncommitted agent build fixes are stashed so the
+    // checkout stays clean for the next attempt.
+    const restoreCheckout = merging
+      ? abortMerge(repo)
+      : runCommand({
+          operation: "build",
           command: "git",
-          args: ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+          args: ["stash", "push", "--include-untracked", "-m", "ndev.t3code: unbuilt update fixes"],
           cwd: repo,
-        });
-        if (mergeHead.exitCode !== 0) {
-          return yield* makeError(
-            "merge",
-            `upstream merge of ${inspection.upstreamTag} failed${output ? `: ${output}` : ""}`,
-            new Error(output),
-            repo,
-          );
-        }
-        const unresolved = yield* resolveForkConflicts(repo).pipe(
-          Effect.flatMap((paths) =>
-            paths.length > 0 ? resolveWithAgent(repo, paths) : Effect.succeed(paths),
-          ),
-        );
-        if (unresolved.length > 0) {
-          return yield* makeError(
-            "merge",
-            `merging ${inspection.upstreamTag} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. Merge ${inspection.upstreamTag} into main by hand, push it, then update again. Conflicted: ${describeUnresolvedPaths(unresolved)}`,
-            new Error(output),
-            repo,
-          );
-        }
+        }).pipe(Effect.ignore);
+    const built = yield* Effect.gen(function* () {
+      if (merging) {
+        // The peeled commit is merged (not the tag) so it matches what inspect counted.
+        yield* mergeUpstream(repo, inspection.upstreamCommit, inspection.upstreamTag, mergeMessage);
       }
       const timestamp = yield* Clock.currentTimeMillis;
       // A new build supersedes any earlier one that was never installed.
@@ -717,12 +768,7 @@ export const make = Effect.gen(function* () {
         .makeDirectory(outputDir, { recursive: true })
         .pipe(
           Effect.mapError((cause) =>
-            makeError(
-              "build",
-              `could not create local build output ${outputDir}`,
-              cause,
-              inspection.repositoryPath,
-            ),
+            makeError("build", `could not create local build output ${outputDir}`, cause, repo),
           ),
         );
       const arch = environment.runtimeInfo.appArch;
@@ -731,7 +777,7 @@ export const make = Effect.gen(function* () {
           "build",
           `unsupported desktop architecture ${arch}`,
           new Error("unsupported architecture"),
-          inspection.repositoryPath,
+          repo,
         );
       }
       // Upstream nightlies change dependencies, so install before building.
@@ -765,25 +811,32 @@ export const make = Effect.gen(function* () {
         yield* runChecked({ operation: "build", command: "vp", args: buildArgs, cwd: repo });
       }
       const applicationBundlePath = yield* findAppBundle(outputDir);
-      // Records the merge result, including the regenerated lockfile and any
-      // agent fixes; the author comes from the repo config. Hooks are skipped so
-      // the formatter does not rewrite upstream files inside the merge commit.
+      // Records the merge result (or, without a merge, the regenerated lockfile
+      // and agent fixes); the author comes from the repo config. Hooks are
+      // skipped so the formatter does not rewrite upstream files.
       yield* runChecked({ operation: "merge", command: "git", args: ["add", "-A"], cwd: repo });
-      yield* runChecked({
-        operation: "merge",
-        command: "git",
-        args: ["commit", "--no-verify", "--no-edit", "-m", mergeMessage],
-        cwd: repo,
-      });
+      if (merging || (yield* hasStagedChanges(repo))) {
+        yield* runChecked({
+          operation: "merge",
+          command: "git",
+          args: [
+            "commit",
+            "--no-verify",
+            "--no-edit",
+            "-m",
+            merging
+              ? mergeMessage
+              : `fix(desktop): build upstream nightly ${inspection.upstreamTag}`,
+          ],
+          cwd: repo,
+        });
+      }
       return { applicationBundlePath };
     }).pipe(
       // Nothing is committed until the build succeeds, so any failure or
-      // interruption before the commit still aborts the merge cleanly.
+      // interruption before the commit still restores the checkout.
       Effect.catchCause((cause) =>
-        abortMerge(repo).pipe(
-          Effect.andThen(removeBuilds),
-          Effect.andThen(Effect.failCause(cause)),
-        ),
+        restoreCheckout.pipe(Effect.andThen(removeBuilds), Effect.andThen(Effect.failCause(cause))),
       ),
     );
     const build = {
@@ -791,14 +844,42 @@ export const make = Effect.gen(function* () {
       applicationBundlePath: built.applicationBundlePath,
     } satisfies LocalSourceUpdateBuild;
     yield* Ref.set(builtUpdateRef, build);
-    yield* runChecked({
-      operation: "push",
-      command: "git",
-      args: ["push", "origin", "HEAD:main"],
-      cwd: inspection.repositoryPath,
-    });
+    yield* pushFork(repo);
     return build;
-  }).pipe(Effect.withSpan("desktop.localSourceUpdates.syncAndBuild"));
+  }).pipe(
+    repositoryLock.withPermits(1),
+    Effect.withSpan("desktop.localSourceUpdates.syncAndBuild"),
+  );
+
+  // Brings every upstream/main commit into the fork without building; the
+  // update button builds the result once a newer nightly is contained.
+  const syncSource = Effect.gen(function* () {
+    const inspection = yield* inspect;
+    const repo = inspection.repositoryPath;
+    const git = (args: ReadonlyArray<string>) =>
+      runChecked({ operation: "merge", command: "git", args, cwd: repo });
+    // inspect just fetched upstream/main.
+    const upstreamMain = (yield* git([
+      "rev-parse",
+      "--verify",
+      "upstream/main^{commit}",
+    ])).stdout.trim();
+    const count = yield* git(["rev-list", "--count", `HEAD..${upstreamMain}`]);
+    const behind = Number(count.stdout.trim());
+    if (behind === 0) {
+      return { merged: 0, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
+    }
+    const label = `upstream main ${upstreamMain.slice(0, 10)}`;
+    const message = `chore(sync): merge ${label}`;
+    yield* Effect.gen(function* () {
+      yield* mergeUpstream(repo, upstreamMain, label, message);
+      yield* git(["commit", "--no-verify", "--no-edit", "-m", message]);
+    }).pipe(
+      Effect.catchCause((cause) => abortMerge(repo).pipe(Effect.andThen(Effect.failCause(cause)))),
+    );
+    yield* pushFork(repo);
+    return { merged: behind, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
+  }).pipe(repositoryLock.withPermits(1), Effect.withSpan("desktop.localSourceUpdates.syncSource"));
 
   const install = Effect.gen(function* () {
     const builtUpdate = yield* Ref.get(builtUpdateRef);
@@ -865,6 +946,7 @@ export const make = Effect.gen(function* () {
     inspect,
     syncAndBuild,
     install,
+    syncSource,
   });
 });
 

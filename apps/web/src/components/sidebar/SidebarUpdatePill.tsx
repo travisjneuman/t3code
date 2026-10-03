@@ -348,7 +348,8 @@ function SidebarUpdateControl() {
   );
 
   return (
-    <SidebarMenuItem className="ml-auto shrink-0">
+    // The sync button, when shown, takes the auto margin so the pair stays together.
+    <SidebarMenuItem className="ml-auto shrink-0 [[data-source-sync]+&]:ml-0">
       <Popover
         handle={releaseNotesPopoverHandle}
         onOpenChange={(open, details) => {

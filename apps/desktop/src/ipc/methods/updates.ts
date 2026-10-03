@@ -2,6 +2,7 @@ import {
   DesktopUpdateActionResultSchema,
   DesktopUpdateChannelSchema,
   DesktopUpdateCheckResultSchema,
+  DesktopSourceSyncResultSchema,
   DesktopUpdateStateSchema,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -58,5 +59,15 @@ export const checkForUpdate = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.updates.check")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
     return yield* updates.check("web-ui");
+  }),
+});
+
+export const syncSource = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.UPDATE_SYNC_SOURCE_CHANNEL,
+  payload: Schema.Void,
+  result: DesktopSourceSyncResultSchema,
+  handler: Effect.fn("desktop.ipc.updates.syncSource")(function* () {
+    const updates = yield* DesktopUpdates.DesktopUpdates;
+    return yield* updates.syncSource;
   }),
 });

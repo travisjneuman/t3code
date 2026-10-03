@@ -36,6 +36,7 @@ import {
   getUpdateState,
   installUpdate,
   setUpdateChannel,
+  syncSource,
 } from "./methods/updates.ts";
 import {
   getAppBranding,
@@ -146,6 +147,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(downloadUpdate);
   yield* ipc.handle(installUpdate);
   yield* ipc.handle(checkForUpdate);
+  yield* ipc.handle(syncSource);
   for (const previewMethod of PreviewIpc.methods) {
     yield* ipc.handle(previewMethod);
   }

@@ -86,7 +86,13 @@ signed in. Nothing is pushed unless the new build succeeds. Then **Restart &
 Install** replaces the installed app with the new build and removes the old
 copy and the build files.
 
-The update refuses to start while the checkout has uncommitted changes, is
+The merge button beside the update button (**Sync fork with official T3 Code**)
+merges everything on the official `main` branch into your fork and pushes it,
+without building. Use it to keep the fork's GitHub page current between
+nightlies. Once a synced fork contains a nightly newer than the app you are
+running, the update button offers **Sync & Build** for it.
+
+Sync and update refuse to start while the checkout has uncommitted changes, is
 not on `main`, or is in the middle of another merge. If it still cannot merge
 or build, the checkout is left as it was before the update and the message
 lists the files involved.

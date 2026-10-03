@@ -121,13 +121,13 @@ describe("DesktopEarlyElectronStartup", () => {
     assert.equal(preference, "gnome-libsecret");
   });
 
-  it("keeps packaged fork settings under the fork-specific base directory", () => {
+  it("keeps packaged fork settings under the official base directory", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
       env: {},
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3-tjn/userdata/desktop-settings.json");
+        assert.equal(path, "/home/user/.t3/userdata/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "auto" });
       },
     });
