@@ -20,6 +20,10 @@ version label and `--build-version` (tag without the leading `v`).
   date, and run number, while a lightweight tag's creator date is its commit date.
   The list is ascending and the last line wins, so tail-truncated command output
   still contains the newest tag.
+- The build stamps the tag's version into the release package manifests, as
+  upstream's release workflow does, and restores them afterwards. The server
+  reports its own package version, so an unstamped build shows a client/server
+  mismatch and offers a server update that does not exist.
 - "Behind" is counted against the tag's commit. A fork that already contains it is
   up to date even if `upstream/main` has moved on.
 

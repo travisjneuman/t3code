@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getDefaultThemeColors, getThemeColorsForMode, OCEAN_THEME } from "../themePalette";
+import { getStandardThemeColors, getThemeColorsForMode, OCEAN_THEME } from "../themePalette";
 import { enqueueLatestRemoteThemeSync, resolveRemoteThemeColors } from "./RemoteAppThemeSync";
 
 describe("remote app theme synchronization", () => {
@@ -67,7 +67,7 @@ describe("remote app theme synchronization", () => {
       computed: { canvas: "" },
     });
 
-    expect(colors.canvas).toBe(getDefaultThemeColors("light").canvas);
+    expect(colors.canvas).toBe(getStandardThemeColors("light").canvas);
   });
 
   it("coalesces queued IPC work so an older palette cannot finish last", async () => {
