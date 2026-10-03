@@ -27,6 +27,7 @@ import {
   canUseRemoteAppControl,
   classifyRemoteAppNavigation,
   isAllowedPermission,
+  isTrustedRemoteHost,
   isTrustedRemoteUrl,
   resolveRemoteAppSiteForUrl,
   sanitizePersistedUrl,
@@ -34,8 +35,8 @@ import {
 } from "./RemoteAppPolicy.ts";
 import * as RemoteAppSession from "./RemoteAppSession.ts";
 import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
+import { buildRemoteSiteThemeCss } from "./RemoteAppSiteTheme.ts";
 import {
-  buildRemoteAppThemeCss,
   buildRemoteAppInteractionScript,
   buildRemoteAppSurfaceMenuHtml,
   DEFAULT_REMOTE_APP_THEME,
@@ -335,10 +336,19 @@ export const make = Effect.gen(function* () {
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
+  const isThemeableSiteUrl = (site: RemoteAppSite, url: string): boolean => {
+    if (site === "chatgpt") return isChatGptRemoteAppUrl(url);
+    try {
+      return isTrustedRemoteHost(site, new URL(url).hostname);
+    } catch {
+      return false;
+    }
+  };
+
   /**
-   * Every site follows the app's light/dark choice through prefers-color-scheme,
-   * which the host already drives via nativeTheme. ChatGPT additionally gets the
-   * full T3 palette as a scoped user stylesheet.
+   * Every site gets the active T3 palette as a user stylesheet that repaints its
+   * own design tokens; auth pages on other hosts are left alone. ChatGPT also
+   * gets the interaction script that tidies its chrome.
    */
   const applyRemoteTheme = Effect.fn("remote-app.applyTheme")(function* (
     site: RemoteAppSite,
@@ -356,12 +366,13 @@ export const make = Effect.gen(function* () {
             catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
           }).pipe(Effect.catch(() => Effect.void));
         }
-        if (site !== "chatgpt" || !isChatGptRemoteAppUrl(view.webContents.getURL())) return;
+        if (!isThemeableSiteUrl(site, view.webContents.getURL())) return;
         const key = yield* Effect.tryPromise({
-          try: () => view.webContents.insertCSS(buildRemoteAppThemeCss(theme)),
+          try: () => view.webContents.insertCSS(buildRemoteSiteThemeCss(site, theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         });
         insertedThemeKeys.set(site, key);
+        if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
           try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
