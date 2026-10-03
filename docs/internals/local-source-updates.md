@@ -54,4 +54,6 @@ merges, branch mismatches, and remote mismatches. Builds use a directory target 
 packages are ad-hoc sealed so local bundle validation can run, but stay unnotarized.
 The installed bundle is replaced only by a detached helper after the parent process
 exits; it keeps the prior app at a `.previous-<pid>` path and restores it if the
-replacement move fails.
+replacement move fails. On success it deletes that backup and the build output, so
+an update leaves exactly one installed app. At most one build is kept on disk: each
+new build and each failed build clears the `source-updates` directory.
