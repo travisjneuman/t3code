@@ -141,6 +141,29 @@ export function resolveRemoteThemeColors({
   ]) as RemoteAppThemeColors;
 }
 
+let colorProbe: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * Resolves any CSS color (oklch, color-mix, named) to `#rrggbb` or `#rrggbbaa`,
+ * so the remote surfaces can derive their own token formats from it.
+ */
+function toHexColor(value: string): string {
+  if (value === "" || value.startsWith("#") || !CSS.supports("color", value)) return value;
+  if (colorProbe === undefined) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    colorProbe = canvas.getContext("2d", { willReadFrequently: true });
+  }
+  if (colorProbe === null) return value;
+  colorProbe.clearRect(0, 0, 1, 1);
+  colorProbe.fillStyle = value;
+  colorProbe.fillRect(0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0, a = 0] = colorProbe.getImageData(0, 0, 1, 1).data;
+  const hex = (channel: number) => channel.toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}${a === 255 ? "" : hex(a)}`;
+}
+
 function readRemoteThemeColors(
   theme: ThemePreference,
   resolvedTheme: ThemeAppearance,
@@ -155,7 +178,11 @@ function readRemoteThemeColors(
       ([role, variable]) => [role, styles.getPropertyValue(variable).trim()] as const,
     ),
   ]) as ComputedRemoteThemeColors;
-  return resolveRemoteThemeColors({ theme, resolvedTheme, themeHalves, computed });
+  const colors = resolveRemoteThemeColors({ theme, resolvedTheme, themeHalves, computed });
+  return {
+    ...colors,
+    ...Object.fromEntries(REMOTE_THEME_ROLES.map((role) => [role, toHexColor(colors[role])])),
+  };
 }
 
 function readRemoteSidebarWidth(): number | null {

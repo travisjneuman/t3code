@@ -221,9 +221,15 @@ function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
   const { bridge, state } = useRemoteAppState();
   if (!isElectron || bridge === undefined) return null;
 
+  // Electron resolves drag regions in DOM order, ignoring pointer-events, so a
+  // draggable strip here would swallow clicks on the chat header's controls.
+  // It only drags while a web tab hides that header.
   return (
     <div
-      className="drag-region pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center border-b border-border/60 bg-transparent"
+      className={cn(
+        "pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center border-b border-border/60 bg-transparent",
+        state.activeSurface !== "t3code" && "drag-region",
+      )}
       data-remote-app-titlebar
       data-remote-app-active-surface={state.activeSurface}
     >

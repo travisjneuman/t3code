@@ -28,7 +28,15 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     entryUrl: "https://grok.com/",
     partition: "persist:tjn-remote-grok-v1",
     hosts: ["grok.com", "x.ai"],
-    authHosts: ["x.com", "twitter.com", "api.x.com"],
+    // Sign-in hops the whole tab through each xAI property's auth.*/set-cookie to seed first-party cookies.
+    authHosts: [
+      "x.com",
+      "twitter.com",
+      "api.x.com",
+      "auth.grokipedia.com",
+      "auth.grokusercontent.com",
+      "auth.cursor.com",
+    ],
   },
   gemini: {
     entryUrl: "https://gemini.google.com/app",
