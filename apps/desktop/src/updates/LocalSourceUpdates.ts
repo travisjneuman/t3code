@@ -14,6 +14,8 @@ import { resolveRenameOnlyConflict, resolveRenameOnlyHunks } from "./forkMergeRe
 
 const COMMAND_OUTPUT_LIMIT = 16_000;
 const LOCAL_UPDATE_HELPER_PATH = "local-source-update-helper.sh";
+// Holds at most one build: cleared before each build, after a failed build, and by the install helper.
+const SOURCE_UPDATE_BUILDS_DIR = "source-updates";
 const NIGHTLY_TAG_GLOB = "v*-nightly.*";
 const NIGHTLY_TAG_PATTERN = /^v\d+\.\d+\.\d+-nightly\.\d+\.\d+$/u;
 const UNRESOLVED_PATH_LIST_LIMIT = 10;
@@ -84,6 +86,7 @@ set -eu
 source_app="$1"
 target_app="$2"
 parent_pid="$3"
+builds_dir="$4"
 backup_app="\${target_app}.previous-\${parent_pid}"
 
 while kill -0 "$parent_pid" 2>/dev/null; do
@@ -99,6 +102,8 @@ if [ -e "$target_app" ]; then
 fi
 
 if mv "$source_app" "$target_app"; then
+  # Keep exactly one installed app and no leftover build output.
+  rm -rf "$backup_app" "$builds_dir"
   /usr/bin/open "$target_app"
   exit 0
 fi
@@ -586,6 +591,12 @@ export const make = Effect.gen(function* () {
       args: ["merge", "--no-ff", "--no-commit", "-m", mergeMessage, inspection.upstreamCommit],
       cwd: repo,
     });
+    const buildsDir = environment.path.join(environment.stateDir, SOURCE_UPDATE_BUILDS_DIR);
+    // Forgets the pending build too, so install never points at a deleted bundle.
+    const removeBuilds = Ref.set(builtUpdateRef, null).pipe(
+      Effect.andThen(fileSystem.remove(buildsDir, { recursive: true, force: true })),
+      Effect.ignore,
+    );
     const built = yield* Effect.gen(function* () {
       if (merge.exitCode !== 0) {
         const output = trimOutput(merge);
@@ -614,11 +625,9 @@ export const make = Effect.gen(function* () {
         }
       }
       const timestamp = yield* Clock.currentTimeMillis;
-      const outputDir = environment.path.join(
-        environment.stateDir,
-        "source-updates",
-        `${timestamp}-${process.pid}`,
-      );
+      // A new build supersedes any earlier one that was never installed.
+      yield* removeBuilds;
+      const outputDir = environment.path.join(buildsDir, `${timestamp}-${process.pid}`);
       yield* fileSystem
         .makeDirectory(outputDir, { recursive: true })
         .pipe(
@@ -671,7 +680,12 @@ export const make = Effect.gen(function* () {
     }).pipe(
       // Nothing is committed until the build succeeds, so any failure or
       // interruption before the commit still aborts the merge cleanly.
-      Effect.catchCause((cause) => abortMerge(repo).pipe(Effect.andThen(Effect.failCause(cause)))),
+      Effect.catchCause((cause) =>
+        abortMerge(repo).pipe(
+          Effect.andThen(removeBuilds),
+          Effect.andThen(Effect.failCause(cause)),
+        ),
+      ),
     );
     const build = {
       version: inspection.upstreamVersion,
@@ -716,7 +730,16 @@ export const make = Effect.gen(function* () {
     yield* Effect.scoped(
       spawner
         .spawn(
-          ChildProcess.make("/bin/sh", [helperPath, sourceApp, targetApp, String(process.pid)], {
+          ChildProcess.make(
+            "/bin/sh",
+            [
+              helperPath,
+              sourceApp,
+              targetApp,
+              String(process.pid),
+              environment.path.join(environment.stateDir, SOURCE_UPDATE_BUILDS_DIR),
+            ],
+            {
             cwd: environment.stateDir,
             stdin: "ignore",
             stdout: "ignore",
