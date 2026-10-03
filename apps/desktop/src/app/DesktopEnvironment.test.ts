@@ -155,13 +155,13 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("isolates packaged fork state from the upstream desktop state", () =>
+  it.effect("keeps packaged fork state in the official ~/.t3 directory", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment({ isPackaged: true });
 
-      assert.equal(environment.baseDir, "/Users/alice/.t3-tjn");
-      assert.equal(environment.stateDir, "/Users/alice/.t3-tjn/userdata");
-      assert.equal(environment.serverSettingsPath, "/Users/alice/.t3-tjn/userdata/settings.json");
+      assert.equal(environment.baseDir, "/Users/alice/.t3");
+      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(environment.serverSettingsPath, "/Users/alice/.t3/userdata/settings.json");
     }),
   );
 
@@ -169,11 +169,11 @@ describe("DesktopEnvironment", () => {
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(
         { isPackaged: true },
-        { T3CODE_HOME: "/Users/alice/.t3" },
+        { T3CODE_HOME: "/Users/alice/elsewhere" },
       );
 
-      assert.equal(environment.baseDir, "/Users/alice/.t3-tjn");
-      assert.equal(environment.stateDir, "/Users/alice/.t3-tjn/userdata");
+      assert.equal(environment.baseDir, "/Users/alice/.t3");
+      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
     }),
   );
 

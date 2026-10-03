@@ -69,6 +69,7 @@ const desktopUpdatesLayer = Layer.succeed(DesktopUpdates.DesktopUpdates, {
   download: Effect.die("unexpected download"),
   install: Effect.die("unexpected install"),
   installPrepared: () => Effect.die("unexpected installPrepared"),
+  syncSource: Effect.die("unexpected syncSource"),
 } satisfies DesktopUpdates.DesktopUpdates["Service"]);
 
 const makeDesktopWindowLayer = (selectedAction: Deferred.Deferred<string>) =>

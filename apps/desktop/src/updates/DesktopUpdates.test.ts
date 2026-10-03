@@ -531,7 +531,7 @@ describe("DesktopUpdates", () => {
           syncAndBuildCalls += 1;
           return {
             version: "0.0.46-nightly.20261003.2610",
-            applicationBundlePath: "/Users/alice/.t3-tjn/userdata/source-updates/ndev.t3code.app",
+            applicationBundlePath: "/Users/alice/.t3/userdata/source-updates/ndev.t3code.app",
           };
         }),
         install: Effect.die("unexpected local source update install"),

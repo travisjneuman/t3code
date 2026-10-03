@@ -277,6 +277,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
         inspect: localSourceUpdates.inspect,
         syncAndBuild: localSourceUpdates.syncAndBuild,
         install: localSourceUpdates.install,
+        syncSource: Effect.die("unexpected syncSource"),
       }),
     ),
     Layer.provideMerge(environmentLayer),

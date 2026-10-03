@@ -31,6 +31,16 @@ interruption) ends in `git merge --abort` and leaves the checkout as it was. Onl
 after the commit is the build remembered and `origin HEAD:main` pushed; a failed push
 is retried by the next update, which finds the fork current and a build pending.
 
+## Sync without building
+
+`syncSource` (the sidebar merge button) merges `upstream/main` itself, commits,
+and pushes, with the same conflict handling but no build gate. Update then has two
+triggers: the fork is behind the newest nightly, or the fork already contains it
+(merged by a sync) while the running app's version is older. The second case
+builds without merging and commits only what the build changed (lockfile, agent
+fixes); on failure those edits are stashed so the checkout stays clean. Sync and
+update share one lock because both rewrite the checkout.
+
 ## Rename-only conflict resolution
 
 The fork renames the product text, which collides with most upstream edits to the

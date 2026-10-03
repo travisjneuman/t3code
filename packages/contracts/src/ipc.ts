@@ -352,6 +352,20 @@ export const DesktopUpdateCheckResultSchema = Schema.Struct({
   state: DesktopUpdateStateSchema,
 });
 
+/** Outcome of merging upstream/main into a local source checkout without building. */
+export interface DesktopSourceSyncResult {
+  ok: boolean;
+  /** Upstream commits merged; 0 when the checkout already had them all. */
+  merged: number;
+  message: string;
+}
+
+export const DesktopSourceSyncResultSchema = Schema.Struct({
+  ok: Schema.Boolean,
+  merged: Schema.Number,
+  message: Schema.String,
+});
+
 // Stable id for the Windows-native primary backend. Desktop side wraps
 // this with a brand inside DesktopBackendManager; web side keeps it as
 // a plain string so the env-runtime can compare against it without
@@ -1253,6 +1267,8 @@ export interface DesktopBridge {
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
   installUpdate: () => Promise<DesktopUpdateActionResult>;
+  /** Merges the official upstream into a local source build's checkout and pushes it. */
+  syncSource: () => Promise<DesktopSourceSyncResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
   /** Present when the desktop shell accepts `t3 app` activation requests. */
   appActivation?: {

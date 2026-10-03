@@ -5,6 +5,7 @@ import {
   type DesktopUpdateActionResult,
   type DesktopUpdateChannel,
   type DesktopUpdateCheckResult,
+  type DesktopSourceSyncResult,
   type DesktopUpdateState,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -189,6 +190,8 @@ export class DesktopUpdates extends Context.Service<
     readonly installPrepared: (
       expectedVersion: string,
     ) => Effect.Effect<DesktopPreparedUpdateInstallResult>;
+    /** Merges upstream/main into the local source checkout, then rechecks for updates. */
+    readonly syncSource: Effect.Effect<DesktopSourceSyncResult>;
   }
 >()("@t3tools/desktop/updates/DesktopUpdates") {}
 
@@ -448,7 +451,12 @@ export const make = Effect.gen(function* () {
           Effect.flatMap(
             Effect.fn("desktop.updates.handleLocalSourceCheck")(function* (inspection) {
               const checkedAt = yield* currentIsoTimestamp;
-              if (inspection.behind === 0) {
+              // A sync can merge a nightly before it is built, so a contained
+              // nightly newer than this build still counts as available.
+              if (
+                inspection.behind === 0 &&
+                environment.appVersion === inspection.upstreamVersion
+              ) {
                 yield* setState(reduceDesktopUpdateStateOnNoUpdate(state, checkedAt));
                 return true;
               }
@@ -1156,6 +1164,32 @@ export const make = Effect.gen(function* () {
       Effect.map(({ accepted, completed, state }) => ({ accepted, completed, state })),
     ),
     installPrepared: (expectedVersion) => installWithExpectedVersion(expectedVersion),
+    syncSource: Effect.gen(function* () {
+      if (!localSourceUpdateEnabled) {
+        return {
+          ok: false,
+          merged: 0,
+          message: "Syncing is only available in local source builds.",
+        };
+      }
+      const result = yield* localSourceUpdates.syncSource;
+      yield* checkForUpdates("source-sync");
+      return {
+        ok: true,
+        merged: result.merged,
+        message:
+          result.merged === 0
+            ? "Already includes everything from the official repository."
+            : `Merged ${result.merged} official commit${result.merged === 1 ? "" : "s"} and pushed the fork.`,
+      };
+    }).pipe(
+      Effect.catchTag("LocalSourceUpdateError", (error) =>
+        logUpdaterError(error.message, { errorTag: error._tag, operation: error.operation }).pipe(
+          Effect.as({ ok: false, merged: 0, message: error.message }),
+        ),
+      ),
+      Effect.withSpan("desktop.updates.syncSource"),
+    ),
   });
 });
 
