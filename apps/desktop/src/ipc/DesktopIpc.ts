@@ -5,8 +5,8 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 export interface DesktopIpcInvokeEvent {
-  readonly sender?: {
-    readonly id?: number;
+  readonly sender: {
+    readonly id: number;
     readonly getURL?: () => string;
   };
 }
@@ -29,7 +29,7 @@ export interface DesktopIpcMain {
   on(channel: string, listener: DesktopIpcSyncListener): void;
 }
 
-export class DesktopIpcRegistrationError extends Schema.TaggedErrorClass<DesktopIpcRegistrationError>()(
+export class DesktopIpcRegistrationError extends Schema.TaggedError<DesktopIpcRegistrationError>()(
   "DesktopIpcRegistrationError",
   {
     handlerKind: Schema.Literals(["invoke", "sync"]),
@@ -42,7 +42,7 @@ export class DesktopIpcRegistrationError extends Schema.TaggedErrorClass<Desktop
   }
 }
 
-export class DesktopIpcUnregistrationError extends Schema.TaggedErrorClass<DesktopIpcUnregistrationError>()(
+export class DesktopIpcUnregistrationError extends Schema.TaggedError<DesktopIpcUnregistrationError>()(
   "DesktopIpcUnregistrationError",
   {
     handlerKind: Schema.Literals(["invoke", "sync"]),
@@ -60,11 +60,10 @@ export const DesktopIpcError = Schema.Union([
   DesktopIpcUnregistrationError,
 ]);
 export type DesktopIpcError = typeof DesktopIpcError.Type;
-export const isDesktopIpcError = Schema.is(DesktopIpcError);
 
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
-  readonly handler: (raw: unknown) => Effect.Effect<unknown, E, R>;
+  readonly handler: (raw: unknown, event?: DesktopIpcInvokeEvent) => Effect.Effect<unknown, E, R>;
   readonly authorize?: (event: DesktopIpcInvokeEvent) => Effect.Effect<boolean, never, R>;
 }
 
@@ -110,7 +109,7 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
                       new Error(`Rejected unauthorized desktop IPC invocation for ${channel}.`),
                     );
                   }
-                  return yield* handler(raw);
+                  return yield* handler(raw, event);
                 }).pipe(Effect.annotateLogs({ channel }), Effect.withSpan("desktop.ipc.invoke")),
               ),
             );
@@ -195,7 +194,7 @@ export interface DesktopIpcMethodRegistration<
     ResultDecodingServices,
     ResultEncodingServices
   >;
-  readonly handler: (input: Payload) => Effect.Effect<Result, E, R>;
+  readonly handler: (input: Payload, event?: DesktopIpcInvokeEvent) => Effect.Effect<Result, E, R>;
   readonly authorize?: (event: DesktopIpcInvokeEvent) => Effect.Effect<boolean, never, R>;
 }
 
@@ -235,9 +234,9 @@ export const makeIpcMethod = <
     PayloadDecodingServices | R | ResultEncodingServices
   > = {
     channel: method.channel,
-    handler: (raw) =>
+    handler: (raw, event) =>
       decode(raw).pipe(
-        Effect.flatMap(method.handler),
+        Effect.flatMap((input) => method.handler(input, event)),
         Effect.flatMap(encode),
         Effect.withSpan("desktop.ipc.method", { attributes: { channel: method.channel } }),
       ),

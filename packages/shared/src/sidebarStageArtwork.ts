@@ -53,7 +53,7 @@ const buildNightlyArtwork = (idPrefix: string, compact: boolean): string => {
       `<g><path d="M${x - 1.5} ${y}H${x + 1.5}"/><path d="M${x} ${y - 1.5}V${y + 1.5}"/></g>`,
   ).join("");
 
-  return `<svg class="stage-art stage-nightly h-full w-full" fill="none" preserveAspectRatio="xMinYMin slice" viewBox="${compact ? "96 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}" xmlns="http://www.w3.org/2000/svg">
+  return `<svg data-stage-art="nightly" class="h-full w-full" fill="none" preserveAspectRatio="xMinYMin slice" viewBox="${compact ? "96 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}" xmlns="http://www.w3.org/2000/svg">
 <defs>
 <linearGradient id="${skyId}" x1="24" y1="0" x2="264" y2="96" gradientUnits="userSpaceOnUse" spreadMethod="reflect"><stop style="stop-color:var(--stage-night-bottom)"/><stop offset="0.5" style="stop-color:var(--stage-night-mid)"/><stop offset="1" style="stop-color:var(--stage-night-top)"/></linearGradient>
 <radialGradient id="${glowId}" cx="0" cy="0" r="1" gradientTransform="translate(216 18) rotate(137) scale(120 84)" gradientUnits="userSpaceOnUse"><stop style="stop-color:var(--stage-night-glow-highlight)" stop-opacity="0.4"/><stop offset="0.5" style="stop-color:var(--stage-night-glow-secondary)" stop-opacity="0.16"/><stop offset="1" style="stop-color:var(--stage-night-bottom)" stop-opacity="0"/></radialGradient>
@@ -79,7 +79,7 @@ const buildDevArtwork = (idPrefix: string, compact: boolean): string => {
   const glowsId = `${idPrefix}-stage-bp-glows`;
   const annotationsId = `${idPrefix}-stage-bp-annotations`;
 
-  return `<svg class="stage-art stage-blueprint h-full w-full" fill="none" preserveAspectRatio="xMinYMin slice" viewBox="${compact ? "64 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}" xmlns="http://www.w3.org/2000/svg">
+  return `<svg data-stage-art="blueprint" class="h-full w-full" fill="none" preserveAspectRatio="xMinYMin slice" viewBox="${compact ? "64 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}" xmlns="http://www.w3.org/2000/svg">
 <defs>
 <linearGradient id="${paperId}" x1="60" y1="0" x2="220" y2="96" gradientUnits="userSpaceOnUse" spreadMethod="reflect"><stop style="stop-color:var(--stage-art-bottom)"/><stop offset="0.5" style="stop-color:var(--stage-art-mid)"/><stop offset="1" style="stop-color:var(--stage-art-top)"/></linearGradient>
 <radialGradient id="${glowId}" cx="0" cy="0" r="1" gradientTransform="translate(216 14) rotate(137) scale(120 84)" gradientUnits="userSpaceOnUse"><stop style="stop-color:var(--stage-art-highlight)" stop-opacity="0.4"/><stop offset="0.52" style="stop-color:var(--stage-art-secondary)" stop-opacity="0.16"/><stop offset="1" style="stop-color:var(--stage-art-bottom)" stop-opacity="0"/></radialGradient>

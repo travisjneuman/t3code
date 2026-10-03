@@ -2,7 +2,7 @@ import { ChevronDownIcon, MessageSquareIcon } from "lucide-react";
 import { useRef } from "react";
 
 import { Button } from "~/components/ui/button";
-import { T3Wordmark } from "~/components/sidebar/SidebarChrome";
+import { T3Wordmark } from "~/components/T3Wordmark";
 import { cn } from "~/lib/utils";
 
 import { useRemoteAppState } from "./useRemoteAppState";
@@ -37,7 +37,7 @@ export function RemoteAppSwitcher() {
       data-remote-app-switcher
       onClick={openMenu}
     >
-      {state.activeSurface === "chatgpt" ? <MessageSquareIcon /> : <T3Wordmark />}
+      {state.activeSurface === "chatgpt" ? <MessageSquareIcon /> : <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />}
       <span className="truncate">{state.activeSurface === "chatgpt" ? "ChatGPT" : "Code"}</span>
       <ChevronDownIcon className="size-3 opacity-60" />
     </Button>
