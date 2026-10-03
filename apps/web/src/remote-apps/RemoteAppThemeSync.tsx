@@ -185,9 +185,13 @@ function readRemoteThemeColors(
   };
 }
 
+const sidebarStateOf = (sidebar: HTMLElement) =>
+  sidebar.closest<HTMLElement>('[data-slot="sidebar"]');
+
 function readRemoteSidebarWidth(): number | null {
   const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
-  if (sidebar === null) return null;
+  // A collapsed offcanvas sidebar keeps its width offscreen; report no sidebar.
+  if (sidebar === null || sidebarStateOf(sidebar)?.dataset.state === "collapsed") return null;
   const width = sidebar.getBoundingClientRect().width;
   return Number.isFinite(width) && width >= 160 && width <= 512 ? Math.round(width) : null;
 }
@@ -280,10 +284,12 @@ export function RemoteAppThemeSync() {
     sync();
     let observedSidebar: HTMLElement | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    const collapseObserver = new MutationObserver(sync);
     const observeSidebar = () => {
       const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
       if (sidebar === observedSidebar) return;
       resizeObserver?.disconnect();
+      collapseObserver.disconnect();
       observedSidebar = sidebar;
       if (sidebar === null) {
         resizeObserver = null;
@@ -291,6 +297,13 @@ export function RemoteAppThemeSync() {
       }
       resizeObserver = new ResizeObserver(sync);
       resizeObserver.observe(sidebar);
+      const stateHolder = sidebarStateOf(sidebar);
+      if (stateHolder !== null) {
+        collapseObserver.observe(stateHolder, {
+          attributes: true,
+          attributeFilter: ["data-state"],
+        });
+      }
       sync();
     };
 
@@ -312,6 +325,7 @@ export function RemoteAppThemeSync() {
       mutationObserver.disconnect();
       themeObserver.disconnect();
       resizeObserver?.disconnect();
+      collapseObserver.disconnect();
       if (pendingThemeFrame !== null && typeof window.cancelAnimationFrame === "function") {
         window.cancelAnimationFrame(pendingThemeFrame);
       }

@@ -109,10 +109,18 @@ export const resolveRemoteAppSiteForUrl = (rawUrl: string): RemoteAppSite | unde
   return REMOTE_APP_SITES.find((site) => isTrustedRemoteHost(site, url.hostname));
 };
 
+// First-party sign-in steps (auth.openai.com, accounts.x.ai, /auth/logout,
+// /login, /mfa-challenge/...) are one-shot pages that must never be replayed.
+const FIRST_PARTY_AUTH_HOST = /^(auth|accounts|login)\./;
+const FIRST_PARTY_AUTH_PATH =
+  /\/(auth|log-?in|log-?out|sign-?in|sign-?up|sign-?out|mfa[\w-]*)(\/|$)/;
+
 const isAuthOrCallbackUrl = (site: RemoteAppSite, url: URL): boolean => {
   const haystack = `${url.hostname}${url.pathname}`.toLowerCase();
   return (
     isAuthProviderHost(site, url.hostname) ||
+    FIRST_PARTY_AUTH_HOST.test(url.hostname.toLowerCase()) ||
+    FIRST_PARTY_AUTH_PATH.test(url.pathname.toLowerCase()) ||
     haystack.includes("callback") ||
     haystack.includes("oauth") ||
     haystack.includes("authorize")
@@ -127,7 +135,7 @@ export const sanitizePersistedUrl = (rawUrl: string): string | null => {
   const url = parseHttpsUrl(rawUrl);
   if (url === null) return null;
   const site = resolveRemoteAppSiteForUrl(url.href);
-  if (site === undefined || isAuthOrCallbackUrl(site, url)) return null;
+  if (site === undefined || url.port !== "" || isAuthOrCallbackUrl(site, url)) return null;
   url.search = "";
   url.hash = "";
   return url.href;

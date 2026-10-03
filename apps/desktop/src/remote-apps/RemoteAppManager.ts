@@ -75,10 +75,13 @@ export const resolveRemoteAppViewZoomFactor = (mainZoomFactor: number): number =
 export const resolveRemoteAppViewBounds = (
   contentBounds: Pick<Electron.Rectangle, "width" | "height">,
   mainZoomFactor: number,
+  hostFooterVisible = true,
 ): Electron.Rectangle => {
   const normalizedZoomFactor = resolveRemoteAppViewZoomFactor(mainZoomFactor);
   const titlebarHeight = Math.round(TITLEBAR_HEIGHT * normalizedZoomFactor);
-  const hostFooterHeight = Math.round(REMOTE_APP_HOST_FOOTER_HEIGHT * normalizedZoomFactor);
+  const hostFooterHeight = hostFooterVisible
+    ? Math.round(REMOTE_APP_HOST_FOOTER_HEIGHT * normalizedZoomFactor)
+    : 0;
   return {
     x: 0,
     y: titlebarHeight,
@@ -205,6 +208,9 @@ export const make = Effect.gen(function* () {
   // sites is instant. Hidden views are detached and background-throttled.
   const views = new Map<RemoteAppSite, Electron.WebContentsView>();
   const recoveryCounts = new Map<RemoteAppSite, number>();
+  // Sites whose page failed to load or crashed for good; switching back to one
+  // reloads it, since no toolbar offers a retry.
+  const brokenSites = new Set<RemoteAppSite>();
   const insertedThemeKeys = new Map<RemoteAppSite, string>();
   const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
   const popupWindows = new Set<Electron.BrowserWindow>();
@@ -247,6 +253,7 @@ export const make = Effect.gen(function* () {
     views.delete(site);
     insertedThemeKeys.delete(site);
     recoveryCounts.delete(site);
+    brokenSites.delete(site);
     if (view === undefined) return;
     if (Option.isSome(window) && !window.value.isDestroyed()) {
       window.value.contentView.removeChildView(view);
@@ -321,18 +328,23 @@ export const make = Effect.gen(function* () {
     updateSiteState(site, (current) => ({ ...current, loadState, error: null }));
 
   const positionView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) =>
-    Effect.try({
-      try: () => {
-        const bounds = window.getContentBounds();
-        const zoomFactor = resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor());
-        // The native shell owns application zoom. Keep the live remote page on
-        // that same scale so its sidebar width, typography, and responsive
-        // breakpoints continue to line up with the host at every zoom level.
-        view.webContents.setZoomFactor(zoomFactor);
-        view.setBounds(resolveRemoteAppViewBounds(bounds, zoomFactor));
-      },
-      catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
-    });
+    Effect.flatMap(Ref.get(remoteThemeRef), (theme) =>
+      Effect.try({
+        try: () => {
+          const bounds = window.getContentBounds();
+          const zoomFactor = resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor());
+          // The native shell owns application zoom. Keep the live remote page on
+          // that same scale so its sidebar width, typography, and responsive
+          // breakpoints continue to line up with the host at every zoom level.
+          view.webContents.setZoomFactor(zoomFactor);
+          // The host footer lives in the sidebar; a collapsed sidebar reports no width.
+          view.setBounds(
+            resolveRemoteAppViewBounds(bounds, zoomFactor, theme.sidebarWidth !== null),
+          );
+        },
+        catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
+      }),
+    );
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
@@ -430,12 +442,20 @@ export const make = Effect.gen(function* () {
         if (decision.kind === "external") openExternal(decision.url);
       }
     });
-    contents.on("did-start-loading", () => runSafely(setLoadingState(site, "loading")));
+    contents.on("did-start-loading", () => {
+      brokenSites.delete(site);
+      runSafely(setLoadingState(site, "loading"));
+    });
     for (const event of REMOTE_APP_THEME_DOCUMENT_EVENTS) {
       contents.on(event, () => runSafely(applyRemoteTheme(site, view)));
     }
+    // A failed load also stops loading; keep its failed state instead of "ready".
     contents.on("did-stop-loading", () =>
-      runSafely(syncNavigation(site, view).pipe(Effect.andThen(setLoadingState(site, "ready")))),
+      runSafely(
+        syncNavigation(site, view).pipe(
+          Effect.andThen(brokenSites.has(site) ? Effect.void : setLoadingState(site, "ready")),
+        ),
+      ),
     );
     // Chromium keys zoom by host, so a cross-document navigation (including
     // the first load from about:blank) drops the app scale positionView set.
@@ -455,8 +475,10 @@ export const make = Effect.gen(function* () {
     });
     contents.on(
       "did-fail-load",
-      (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
-        if (!isMainFrame) return;
+      (_event, errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+        // ERR_ABORTED (-3) is a navigation superseded by another, not a failure.
+        if (!isMainFrame || errorCode === -3) return;
+        brokenSites.add(site);
         runSafely(
           updateSiteState(site, (state) => ({
             ...state,
@@ -483,6 +505,7 @@ export const make = Effect.gen(function* () {
               catch: () => undefined,
             });
           } else {
+            brokenSites.add(site);
             yield* updateSiteState(site, (state) => ({
               ...state,
               loadState: "crashed",
@@ -502,7 +525,55 @@ export const make = Effect.gen(function* () {
         })),
       );
     });
-    contents.on("context-menu", (event) => event.preventDefault());
+    // Same native menu the T3 window shows, plus a way out to the browser.
+    contents.on("context-menu", (event, params) => {
+      event.preventDefault();
+      if (contents.isDestroyed() || window.isDestroyed()) return;
+      const template: Electron.MenuItemConstructorOptions[] = [];
+      if (params.misspelledWord) {
+        for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+          template.push({
+            label: suggestion,
+            click: () => {
+              if (!contents.isDestroyed()) contents.replaceMisspelling(suggestion);
+            },
+          });
+        }
+        if (params.dictionarySuggestions.length === 0) {
+          template.push({ label: "No suggestions", enabled: false });
+        }
+        template.push({ type: "separator" });
+      }
+      const link = ElectronShell.parseSafeExternalUrl(params.linkURL);
+      if (Option.isSome(link)) {
+        template.push(
+          { label: "Open Link in Browser", click: () => openExternal(link.value) },
+          { label: "Copy Link", click: () => runSafely(shell.copyText(link.value)) },
+          { type: "separator" },
+        );
+      }
+      if (params.mediaType === "image") {
+        template.push(
+          {
+            label: "Copy Image",
+            click: () => {
+              if (!contents.isDestroyed()) contents.copyImageAt(params.x, params.y);
+            },
+          },
+          { type: "separator" },
+        );
+      }
+      template.push(
+        { role: "cut", enabled: params.editFlags.canCut },
+        { role: "copy", enabled: params.editFlags.canCopy },
+        { role: "paste", enabled: params.editFlags.canPaste },
+        { role: "selectAll", enabled: params.editFlags.canSelectAll },
+      );
+      Electron.Menu.buildFromTemplate(template).popup({
+        window,
+        ...(params.frame ? { frame: params.frame } : {}),
+      });
+    });
     contents.on("did-create-window", (childWindow, details) => {
       const decision = classifyRemoteAppNavigation(site, details.url, { authFlowActive: true });
       if (decision.kind !== "auth") {
@@ -715,10 +786,18 @@ export const make = Effect.gen(function* () {
   const getState = stateStore.get;
   const setTheme = (theme: RemoteAppTheme) =>
     Effect.gen(function* () {
-      yield* Ref.set(remoteThemeRef, theme);
+      const previous = yield* Ref.getAndSet(remoteThemeRef, theme);
       for (const site of [...views.keys()]) {
         const view = yield* getLiveView(site);
         if (Option.isSome(view)) yield* applyRemoteTheme(site, view.value);
+      }
+      if ((previous.sidebarWidth === null) !== (theme.sidebarWidth === null)) {
+        const window = yield* getLiveWindow;
+        const site = activeSiteOf(yield* stateStore.get);
+        const view = site === undefined ? Option.none() : yield* getLiveView(site);
+        if (Option.isSome(window) && Option.isSome(view)) {
+          yield* positionView(window.value, view.value);
+        }
       }
     }).pipe(
       Effect.mapError((cause) =>
@@ -836,6 +915,19 @@ export const make = Effect.gen(function* () {
       const view = yield* ensureView(site);
       const previous = yield* stateStore.get;
       yield* showSurface(site);
+      if (brokenSites.has(site)) {
+        brokenSites.delete(site);
+        const url = resolveRemoteAppSiteUrl(site, view.webContents.getURL() || previous.currentUrl);
+        yield* updateState((state) => ({
+          ...state,
+          activeSurface: site,
+          loadState: "loading",
+          currentUrl: url,
+          error: null,
+        }));
+        yield* loadUrl(view, url);
+        return;
+      }
       if (view.webContents.getURL().length === 0) {
         const url = resolveRemoteAppSiteUrl(site, previous.currentUrl);
         yield* updateState((state) => ({
@@ -901,6 +993,7 @@ export const make = Effect.gen(function* () {
       error: null,
     }));
     yield* showSurface(site);
+    brokenSites.delete(site);
     yield* loadUrl(view, resolveRemoteAppSiteUrl(site, next.currentUrl));
     return yield* stateStore.get;
   });
