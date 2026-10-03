@@ -100,10 +100,20 @@ body {
 
 const buildClaudeCss = (palette: Palette, colorScheme: string): string => {
   const h = toHslTriplet;
+  // Claude re-declares its tokens on nested .cds-root wrappers and its frame
+  // tokens on .dframe-root/.dframe-sidebar, so the override lands there too.
   return `/* ndev.t3code theme for the isolated Claude surface. */
 :root,
-body {
+body,
+.cds-root,
+.dframe-root,
+.dframe-sidebar,
+.dframe-card {
 ${declarations({
+  "--df-bg-page-hsl": h(palette.canvas),
+  "--df-bg-page": toHex(palette.canvas),
+  "--df-sidebar-bg": toHex(palette.sidebar),
+  "--df-hover": toHex(palette.hover),
   "--cds-page-bg": toHex(palette.canvas),
   "--background-color-page": toHex(palette.canvas),
   "--cds-surface-0": toHex(palette.sidebar),
@@ -174,10 +184,10 @@ ${declarations({
   "--surface-l4": h(palette.active),
   "--surface-l4-hover": h(palette.active),
   "--surface-elevated": h(palette.surfaceOverlay),
-  "--surface-composer": h(palette.surface),
+  "--surface-composer": h(palette.surfaceRaised),
   "--surface-user-bubble": h(palette.message),
   "--warm-white": h(palette.surface),
-  "--input-background": toHex(palette.surface),
+  "--input-background": toHex(palette.surfaceRaised),
   "--input-hover": toHex(palette.hover),
   "--input-button-background": toHex(palette.hover),
   "--input-button-background-hover": toHex(palette.active),
@@ -264,11 +274,6 @@ const SITE_THEME_BUILDERS: Record<
   gemini: buildGeminiCss,
 };
 
-/**
- * CSS that repaints a site's own design tokens with the active T3 palette.
- * ChatGPT keeps its fuller treatment; the others only remap their tokens, so
- * their layouts stay as the sites ship them.
- */
 /* Pins each site's sidebar to the T3 sidebar width so the host's titlebar and
    footer columns line up with the page's own sidebar edge. A stylesheet
    !important beats the inline custom properties Grok and ChatGPT set. */
@@ -293,6 +298,11 @@ bard-sidenav {
 }`,
 };
 
+/**
+ * CSS that repaints a site's own design tokens with the active T3 palette.
+ * ChatGPT keeps its fuller treatment; the others only remap their tokens, so
+ * their layouts stay as the sites ship them.
+ */
 export const buildRemoteSiteThemeCss = (site: RemoteAppSite, input: RemoteAppTheme): string => {
   const theme = normalizeRemoteAppTheme(input);
   const colorScheme = theme.appearance === "dark" ? "dark" : "light";

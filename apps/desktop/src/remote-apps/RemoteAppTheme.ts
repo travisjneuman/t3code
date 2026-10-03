@@ -197,9 +197,9 @@ export const buildRemoteAppInteractionScript = (
     "--main-surface-primary": colors.canvas,
     "--main-surface-secondary": colors.surfaceRaised,
     "--main-surface-tertiary": colors.surfaceRaised,
-    "--composer-surface": colors.input,
-    "--composer-surface-primary": colors.input,
-    "--composer-surface-secondary": colors.input,
+    "--composer-surface": colors.surfaceRaised,
+    "--composer-surface-primary": colors.surfaceRaised,
+    "--composer-surface-secondary": colors.surfaceRaised,
     "--sidebar-surface-primary": colors.sidebar,
     "--sidebar-surface-secondary": colors.sidebar,
     "--text-primary": colors.text,
@@ -823,9 +823,9 @@ ${sidebarWidthVariable}
   --main-surface-primary: var(--t3code-remote-canvas) !important;
   --main-surface-secondary: var(--t3code-remote-surface-raised) !important;
   --main-surface-tertiary: var(--t3code-remote-surface-raised) !important;
-  --composer-surface: var(--t3code-remote-input) !important;
-  --composer-surface-primary: var(--t3code-remote-input) !important;
-  --composer-surface-secondary: var(--t3code-remote-input) !important;
+  --composer-surface: var(--t3code-remote-surface-raised) !important;
+  --composer-surface-primary: var(--t3code-remote-surface-raised) !important;
+  --composer-surface-secondary: var(--t3code-remote-surface-raised) !important;
   --sidebar-surface-primary: var(--t3code-remote-sidebar) !important;
   --sidebar-surface-secondary: var(--t3code-remote-sidebar) !important;
   --text-primary: var(--t3code-remote-text) !important;
@@ -1042,18 +1042,13 @@ ${stageArtworkRule}
   color: var(--t3code-remote-text) !important;
 }
 
+/* Matches the T3 composer: raised surface with the toolbar outline. The
+   theme's input role is a field border tone, too heavy for a fill. */
 [data-t3code-remote-composer-shell="true"] {
-  background: var(--t3code-remote-input) !important;
-  border: 1px solid var(--t3code-remote-border) !important;
+  background: var(--t3code-remote-surface-raised) !important;
+  border: 1px solid var(--t3code-remote-toolbar-border) !important;
   box-shadow: 0 1px 0 rgb(255 255 255 / 5%) inset !important;
   color: var(--t3code-remote-text) !important;
-}
-
-[data-t3code-remote-composer-shell="true"]:focus-within {
-  border-color: var(--t3code-remote-focus) !important;
-  box-shadow:
-    0 0 0 1px var(--t3code-remote-focus),
-    0 1px 0 rgb(255 255 255 / 5%) inset !important;
 }
 
 main :where(button, [role="button"]) {
@@ -1146,8 +1141,8 @@ main :where(button, [role="button"]) {
 }
 
 :root[data-t3code-remote-auth="true"] input[type="email"] {
-  background: var(--t3code-remote-input) !important;
-  border-color: var(--t3code-remote-border) !important;
+  background: var(--t3code-remote-surface-raised) !important;
+  border-color: var(--t3code-remote-input) !important;
   color: var(--t3code-remote-text) !important;
   caret-color: var(--t3code-remote-accent) !important;
 }
