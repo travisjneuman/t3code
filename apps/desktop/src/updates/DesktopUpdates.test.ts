@@ -375,12 +375,12 @@ describe("DesktopUpdates", () => {
           const checkResult = yield* updates.check("manual");
           assert.isFalse(checkResult.checked);
           assert.equal(harness.checkCount(), 0);
-          assert.equal(harness.quitAndInstallCount(), 1);
+          assert.equal(harness.quitAndInstalls(), 1);
 
           yield* Deferred.succeed(releaseInstall, undefined);
           const installResult = yield* Fiber.join(installFiber);
           assert.isTrue(installResult.accepted);
-          assert.equal(harness.quitAndInstallCount(), 1);
+          assert.equal(harness.quitAndInstalls(), 1);
         }),
       ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
     }),
