@@ -53,11 +53,9 @@ export const make = Effect.sync(() => {
                   "indexdb",
                   "localstorage",
                   "shadercache",
-                  "websql",
                   "serviceworkers",
                   "cachestorage",
                 ],
-                quotas: ["temporary"],
               });
               await session.clearCache();
             },
