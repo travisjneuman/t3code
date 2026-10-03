@@ -278,9 +278,22 @@ const SITE_THEME_BUILDERS: Record<
    footer columns line up with the page's own sidebar edge. A stylesheet
    !important beats the inline custom properties Grok and ChatGPT set. */
 const SIDEBAR_WIDTH_RULES: Record<RemoteAppSite, (width: number) => string> = {
-  chatgpt: (width) => `:root,
-[style*="--app-shell-left-panel-width"] {
+  // Only while ChatGPT's own panel is open, so its collapse still works. The
+  // inner panel carries an inline width from --codex-sidebar-preferred-width.
+  // Beside the icon rail a narrow panel can't fit the header's "ChatGPT" Home
+  // title as well as its buttons; the rail already has Home.
+  chatgpt: (width) => `:root {
+  --codex-sidebar-preferred-width: ${width}px !important;
+}
+[data-app-shell-sidebar-open="true"] [style*="--app-shell-left-panel-width"] {
   --app-shell-left-panel-width: ${width}px !important;
+}
+[data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div > div {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+#app-shell-sidebar [class*="@container/navigation-header"] > a[href="/"] {
+  display: none !important;
 }`,
   claude: (width) => `aside.dframe-sidebar {
   width: ${width}px !important;
