@@ -6,7 +6,7 @@ import * as Path from "effect/Path";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../src/persistence/Migrations.ts";
-import * as NodeSqliteClient from "../src/persistence/NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { runMigrateDevDb } from "./migrate-dev-db.ts";
 
 const withDatabase = <A, E>(
@@ -77,7 +77,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { sharedHome: sourceDir },
       );
 
-      assert.equal(result.databasePath, path.join(destDir, "userdata", "state.sqlite"));
+      assert.equal(result.databasePath, path.join(destDir, "userdata", "statev2.sqlite"));
       const kept = yield* withDatabase(
         result.databasePath,
         Effect.gen(function* () {
@@ -166,7 +166,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
       const destDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-overlap-dest-" });
       // A leftover snapshot from a prior failed run, passed as --source: it
       // must not be deleted before it is read.
-      const leftoverSnapshot = path.join(destDir, "userdata", "state.sqlite.migrate-dev-db-tmp");
+      const leftoverSnapshot = path.join(destDir, "userdata", "statev2.sqlite.migrate-dev-db-tmp");
       yield* fs.makeDirectory(path.dirname(leftoverSnapshot), { recursive: true });
       yield* fs.writeFileString(leftoverSnapshot, "not a real db");
 
