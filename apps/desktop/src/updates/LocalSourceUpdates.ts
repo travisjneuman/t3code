@@ -42,7 +42,7 @@ const LocalSourceUpdateOperation = Schema.Literals([
 ]);
 type LocalSourceUpdateOperation = typeof LocalSourceUpdateOperation.Type;
 
-export class LocalSourceUpdateError extends Schema.TaggedErrorClass<LocalSourceUpdateError>()(
+export class LocalSourceUpdateError extends Schema.TaggedError<LocalSourceUpdateError>()(
   "LocalSourceUpdateError",
   {
     operation: LocalSourceUpdateOperation,

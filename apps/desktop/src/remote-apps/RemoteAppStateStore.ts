@@ -51,7 +51,7 @@ export const normalizeRemoteAppState = (state: RemoteAppState): RemoteAppState =
     .slice(0, 20),
 });
 
-export class RemoteAppStateStoreWriteError extends Schema.TaggedErrorClass<RemoteAppStateStoreWriteError>()(
+export class RemoteAppStateStoreWriteError extends Schema.TaggedError<RemoteAppStateStoreWriteError>()(
   "RemoteAppStateStoreWriteError",
   {
     operation: Schema.Literals(["create-directory", "encode", "write-temporary", "replace"]),
