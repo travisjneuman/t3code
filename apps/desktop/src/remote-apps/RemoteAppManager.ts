@@ -115,12 +115,15 @@ export const resolveRemoteAppMenuSurfaces = (
 ];
 
 /** The URL to open for a site: its last persisted page when it belongs to that site. */
-export const resolveRemoteAppSiteUrl = (site: RemoteAppSite, persistedUrl: string | null): string =>
+export const resolveRemoteAppSiteUrl = (
+  site: RemoteAppSite,
+  persistedUrl: string | null,
+): string =>
   persistedUrl !== null && resolveRemoteAppSiteForUrl(persistedUrl) === site
     ? persistedUrl
     : REMOTE_APP_SITE_DEFINITIONS[site].entryUrl;
 
-export class RemoteAppManagerError extends Schema.TaggedErrorClass<RemoteAppManagerError>()(
+export class RemoteAppManagerError extends Schema.TaggedError<RemoteAppManagerError>()(
   "RemoteAppManagerError",
   {
     operation: Schema.Literals([
@@ -594,9 +597,7 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(
         Option.match({
           onNone: () =>
-            Effect.fail(
-              new RemoteAppManagerError({ operation, cause: "main window unavailable" }),
-            ),
+            Effect.fail(new RemoteAppManagerError({ operation, cause: "main window unavailable" })),
           onSome: Effect.succeed,
         }),
       ),
@@ -918,9 +919,7 @@ export const make = Effect.gen(function* () {
       activeSurface: current.activeSurface,
       currentUrl: entryUrl,
       currentTitle: REMOTE_APP_SITE_LABELS[site],
-      recents: current.recents.filter(
-        (recent) => resolveRemoteAppSiteForUrl(recent.url) !== site,
-      ),
+      recents: current.recents.filter((recent) => resolveRemoteAppSiteForUrl(recent.url) !== site),
     })).pipe(
       Effect.mapError(
         (error) => new RemoteAppManagerError({ operation: "clear-data", cause: error }),

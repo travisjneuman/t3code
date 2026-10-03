@@ -8,7 +8,7 @@ import * as Electron from "electron";
 
 import { REMOTE_APP_SITE_DEFINITIONS } from "./RemoteAppPolicy.ts";
 
-export class RemoteAppSessionError extends Schema.TaggedErrorClass<RemoteAppSessionError>()(
+export class RemoteAppSessionError extends Schema.TaggedError<RemoteAppSessionError>()(
   "RemoteAppSessionError",
   {
     operation: Schema.Literals(["create", "clear"]),
@@ -41,29 +41,30 @@ export const make = Effect.sync(() => {
   return RemoteAppSession.of({
     partition,
     get,
-    clearData: (site) => get(site).pipe(
-      Effect.flatMap((session) =>
-        Effect.tryPromise({
-          try: async () => {
-            await session.clearStorageData({
-              storages: [
-                "cookies",
-                "filesystem",
-                "indexdb",
-                "localstorage",
-                "shadercache",
-                "websql",
-                "serviceworkers",
-                "cachestorage",
-              ],
-              quotas: ["temporary"],
-            });
-            await session.clearCache();
-          },
-          catch: (cause) => new RemoteAppSessionError({ operation: "clear", cause }),
-        }),
+    clearData: (site) =>
+      get(site).pipe(
+        Effect.flatMap((session) =>
+          Effect.tryPromise({
+            try: async () => {
+              await session.clearStorageData({
+                storages: [
+                  "cookies",
+                  "filesystem",
+                  "indexdb",
+                  "localstorage",
+                  "shadercache",
+                  "websql",
+                  "serviceworkers",
+                  "cachestorage",
+                ],
+                quotas: ["temporary"],
+              });
+              await session.clearCache();
+            },
+            catch: (cause) => new RemoteAppSessionError({ operation: "clear", cause }),
+          }),
+        ),
       ),
-    ),
   });
 });
 
