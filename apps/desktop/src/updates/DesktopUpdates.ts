@@ -449,14 +449,20 @@ export const make = Effect.gen(function* () {
                 yield* setState(reduceDesktopUpdateStateOnNoUpdate(state, checkedAt));
                 return true;
               }
-              const version = `source (${inspection.behind} upstream commit${inspection.behind === 1 ? "" : "s"})`;
+              // The fork's version is the upstream nightly it would merge.
               yield* setState(
-                reduceDesktopUpdateStateOnUpdateAvailable(state, version, checkedAt, []),
+                reduceDesktopUpdateStateOnUpdateAvailable(
+                  state,
+                  inspection.upstreamVersion,
+                  checkedAt,
+                  [],
+                ),
               );
-              yield* logUpdaterInfo("local source update available", {
+              yield* logUpdaterInfo("upstream nightly available for the local source build", {
                 ahead: inspection.ahead,
                 behind: inspection.behind,
                 currentCommit: inspection.currentCommit,
+                upstreamTag: inspection.upstreamTag,
                 upstreamCommit: inspection.upstreamCommit,
               });
               return true;
@@ -520,7 +526,7 @@ export const make = Effect.gen(function* () {
     if (localSourceUpdateEnabled) {
       return yield* Effect.gen(function* () {
         yield* setState(reduceDesktopUpdateStateOnDownloadStart(state));
-        yield* logUpdaterInfo("syncing and building local source update");
+        yield* logUpdaterInfo("merging upstream nightly and building local source update");
         const build = yield* localSourceUpdates.syncAndBuild;
         yield* setState(reduceDesktopUpdateStateOnDownloadComplete(state, build.version));
         return { accepted: true, completed: true };

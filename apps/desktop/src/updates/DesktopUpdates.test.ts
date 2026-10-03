@@ -521,6 +521,8 @@ describe("DesktopUpdates", () => {
         inspect: Effect.succeed({
           repositoryPath: "/Users/alice/web-dev/t3code",
           currentCommit: "current",
+          upstreamTag: "v0.0.46-nightly.20261003.2610",
+          upstreamVersion: "0.0.46-nightly.20261003.2610",
           upstreamCommit: "upstream",
           ahead: 112,
           behind: 47,
@@ -528,7 +530,7 @@ describe("DesktopUpdates", () => {
         syncAndBuild: Effect.sync(() => {
           syncAndBuildCalls += 1;
           return {
-            version: "upstream",
+            version: "0.0.46-nightly.20261003.2610",
             applicationBundlePath: "/Users/alice/.t3-tjn/userdata/source-updates/ndev.t3code.app",
           };
         }),
@@ -545,7 +547,7 @@ describe("DesktopUpdates", () => {
         assert.isTrue(checked.checked);
         assert.equal(checked.state.sourceUpdate, true);
         assert.equal(checked.state.status, "available");
-        assert.equal(checked.state.availableVersion, "source (47 upstream commits)");
+        assert.equal(checked.state.availableVersion, "0.0.46-nightly.20261003.2610");
         assert.equal(harness.checkCount(), 0);
         assert.equal(harness.feedUrls().length, 0);
 
