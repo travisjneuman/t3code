@@ -3,7 +3,7 @@ import type { RemoteAppThemeColors } from "@t3tools/contracts";
 import { useEffect, useRef } from "react";
 
 import {
-  getDefaultThemeColors,
+  getStandardThemeColors,
   getThemeColorVariable,
   getThemeColorsForMode,
   getThemeDefinition,
@@ -127,7 +127,9 @@ export function resolveRemoteThemeColors({
   const definition = getThemeDefinition(activePreference);
   const activeColors = definition
     ? (getThemeColorsForMode(definition, resolvedTheme) ?? definition.colors)
-    : getDefaultThemeColors(resolvedTheme);
+    : // No installed theme means the stock T3 Code palette; the "default"
+      // colors are T3 Chat's, which only fill roles omitted by theme files.
+      getStandardThemeColors(resolvedTheme);
 
   return Object.fromEntries([
     ...REMOTE_THEME_ROLES.map(

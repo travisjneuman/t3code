@@ -31,6 +31,17 @@ const NIGHTLY_TAG_GLOB = "v*-nightly.*";
 const NIGHTLY_TAG_PATTERN = /^v\d+\.\d+\.\d+-nightly\.\d+\.\d+$/u;
 const UNRESOLVED_PATH_LIST_LIMIT = 10;
 const REGULAR_FILE_MODES: ReadonlySet<string> = new Set(["100644", "100755"]);
+// Upstream's release workflow stamps the nightly version into these manifests
+// before building (scripts/update-release-package-versions.ts). The server
+// reports its own package version, so an unstamped build shows a client/server
+// mismatch and offers a server update that cannot exist.
+const RELEASE_PACKAGE_FILES = [
+  "apps/server/package.json",
+  "apps/desktop/package.json",
+  "apps/web/package.json",
+  "packages/contracts/package.json",
+] as const;
+const PACKAGE_VERSION_PATTERN = /("version":\s*")[^"]*(")/u;
 
 const LocalSourceUpdateOperation = Schema.Literals([
   "configuration",
@@ -698,6 +709,36 @@ export const make = Effect.gen(function* () {
     }
   });
 
+  // Only the working tree is stamped; restoring from the index keeps a pending
+  // merge's staged result.
+  const stampReleaseVersion = (repo: string, version: string) =>
+    Effect.forEach(
+      RELEASE_PACKAGE_FILES,
+      (file) => {
+        const filePath = environment.path.join(repo, file);
+        return fileSystem.readFileString(filePath).pipe(
+          Effect.flatMap((text) =>
+            fileSystem.writeFileString(
+              filePath,
+              text.replace(PACKAGE_VERSION_PATTERN, `$1${version}$2`),
+            ),
+          ),
+          Effect.mapError((cause) =>
+            makeError("build", `could not stamp ${version} into ${file}`, cause, repo),
+          ),
+        );
+      },
+      { discard: true },
+    );
+
+  const restoreReleaseVersion = (repo: string) =>
+    runCommand({
+      operation: "build",
+      command: "git",
+      args: ["checkout", "--", ...RELEASE_PACKAGE_FILES],
+      cwd: repo,
+    }).pipe(Effect.ignore);
+
   const hasStagedChanges = (repo: string) =>
     runCommand({
       operation: "merge",
@@ -796,20 +837,23 @@ export const make = Effect.gen(function* () {
         "--output-dir",
         outputDir,
       ];
-      const firstBuild = yield* runCommand({
-        operation: "build",
-        command: "vp",
-        args: buildArgs,
-        cwd: repo,
-      });
-      if (firstBuild.exitCode !== 0) {
-        // Upstream reshaped code the fork builds on; give the agent one pass at it.
-        yield* runMergeAgent(
-          repo,
-          `The merged checkout no longer builds. Fix the code so it builds again. Build output (tail):\n${trimOutput(firstBuild)}`,
-        );
-        yield* runChecked({ operation: "build", command: "vp", args: buildArgs, cwd: repo });
-      }
+      yield* Effect.gen(function* () {
+        yield* stampReleaseVersion(repo, inspection.upstreamVersion);
+        const firstBuild = yield* runCommand({
+          operation: "build",
+          command: "vp",
+          args: buildArgs,
+          cwd: repo,
+        });
+        if (firstBuild.exitCode !== 0) {
+          // Upstream reshaped code the fork builds on; give the agent one pass at it.
+          yield* runMergeAgent(
+            repo,
+            `The merged checkout no longer builds. Fix the code so it builds again. Build output (tail):\n${trimOutput(firstBuild)}`,
+          );
+          yield* runChecked({ operation: "build", command: "vp", args: buildArgs, cwd: repo });
+        }
+      }).pipe(Effect.ensuring(restoreReleaseVersion(repo)));
       const applicationBundlePath = yield* findAppBundle(outputDir);
       // Records the merge result (or, without a merge, the regenerated lockfile
       // and agent fixes); the author comes from the repo config. Hooks are

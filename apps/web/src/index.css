@@ -1726,10 +1726,17 @@ body:has([data-remote-app-surface="remote"]) [data-remote-app-host-workspace] {
   visibility: hidden !important;
 }
 
-[data-remote-app-surface="remote"] [data-chat-header],
-[data-remote-app-surface="remote"] [data-chat-header] [data-workspace-titlebar-controls] {
+/* The header stays as the window's drag strip, but its breadcrumb and panel
+   toggles belong to the hidden chat: the panels they open sit behind the
+   remote page. */
+[data-remote-app-surface="remote"] [data-chat-header] {
   pointer-events: auto !important;
   visibility: visible !important;
+}
+
+[data-remote-app-surface="remote"] [data-chat-header] > * {
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 pre,

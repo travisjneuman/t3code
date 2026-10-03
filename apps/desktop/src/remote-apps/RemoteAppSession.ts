@@ -29,12 +29,30 @@ export class RemoteAppSession extends Context.Service<
   }
 >()("@t3tools/desktop/remote-apps/RemoteAppSession") {}
 
+/**
+ * Electron's default user agent names Electron and this app, which sign-in
+ * device checks (xAI's, for one) treat as an untrusted embedded browser. The
+ * sites get the plain Chrome agent of the bundled Chromium instead.
+ */
+const resolveRemoteAppUserAgent = (): string => {
+  const appToken = `${Electron.app.getName()}/`;
+  return Electron.app.userAgentFallback
+    .split(" ")
+    .filter((token) => !token.startsWith("Electron/") && !token.startsWith(appToken))
+    .join(" ");
+};
+
 export const make = Effect.sync(() => {
   const partition = (site: RemoteAppSite) => REMOTE_APP_SITE_DEFINITIONS[site].partition;
   // Electron caches sessions per partition, so repeated lookups are cheap.
   const get = (site: RemoteAppSite) =>
     Effect.try({
-      try: () => Electron.session.fromPartition(partition(site)),
+      try: () => {
+        const session = Electron.session.fromPartition(partition(site));
+        const userAgent = resolveRemoteAppUserAgent();
+        if (session.getUserAgent() !== userAgent) session.setUserAgent(userAgent);
+        return session;
+      },
       catch: (cause) => new RemoteAppSessionError({ operation: "create", cause }),
     });
 

@@ -426,7 +426,11 @@ export const make = Effect.gen(function* () {
     contents.on("did-stop-loading", () =>
       runSafely(syncNavigation(site, view).pipe(Effect.andThen(setLoadingState(site, "ready")))),
     );
-    contents.on("did-navigate", () => runSafely(syncNavigation(site, view)));
+    // Chromium keys zoom by host, so a cross-document navigation (including
+    // the first load from about:blank) drops the app scale positionView set.
+    contents.on("did-navigate", () =>
+      runSafely(positionView(window, view).pipe(Effect.andThen(syncNavigation(site, view)))),
+    );
     for (const event of REMOTE_APP_THEME_NAVIGATION_EVENTS) {
       contents.on(event, () =>
         runSafely(syncNavigation(site, view).pipe(Effect.andThen(applyRemoteTheme(site, view)))),
