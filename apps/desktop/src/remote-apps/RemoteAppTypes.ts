@@ -9,4 +9,7 @@ export interface RemoteAppBounds {
   readonly height: number;
 }
 
-export const TITLEBAR_HEIGHT = 40;
+// Matches the host's --workspace-topbar-height so site views start below the
+// shared header line: the macOS inset titlebar is 52px, the title bar overlay
+// elsewhere is 40px.
+export const TITLEBAR_HEIGHT = process.platform === "darwin" ? 52 : 40;

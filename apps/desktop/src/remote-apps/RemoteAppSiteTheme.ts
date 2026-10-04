@@ -214,6 +214,11 @@ ${declarations({
   "--cookie-consent-surface": toHex(palette.canvas),
 })}
 }
+/* Grok's composer hint uses this class without shipping a rule for it, so it
+   inherits the light prose body gray. */
+.text-fg-secondary {
+  color: hsl(var(--fg-secondary));
+}
 ${pageBase(palette, colorScheme)}`;
 };
 
@@ -274,14 +279,23 @@ const SITE_THEME_BUILDERS: Record<
   gemini: buildGeminiCss,
 };
 
+/* Sites ship app-region CSS for their own desktop apps (ChatGPT marks its whole
+   52px header draggable). Inside a view that turns their header controls into
+   window drag handles; the host titlebar already drags the window. */
+const SITE_NO_DRAG_CSS = `*, *::before, *::after {
+  -webkit-app-region: no-drag !important;
+}`;
+
 /* Pins each site's sidebar to the T3 sidebar width so the host's titlebar and
    footer columns line up with the page's own sidebar edge. A stylesheet
    !important beats the inline custom properties Grok and ChatGPT set. */
 const SIDEBAR_WIDTH_RULES: Record<RemoteAppSite, (width: number) => string> = {
   // Only while ChatGPT's own panel is open, so its collapse still works. The
   // inner panel carries an inline width from --codex-sidebar-preferred-width.
-  // Beside the icon rail a narrow panel can't fit the header's "ChatGPT" Home
-  // title as well as its buttons; the rail already has Home.
+  // Beside the icon rail a narrow panel can't fit a section's header title
+  // ("ChatGPT", "Space", "Scheduled") as well as its buttons, and clips it; the
+  // rail already marks the active section, so the title goes and the buttons
+  // stay right-aligned as on Home.
   chatgpt: (width) => `:root {
   --codex-sidebar-preferred-width: ${width}px !important;
 }
@@ -292,8 +306,11 @@ const SIDEBAR_WIDTH_RULES: Record<RemoteAppSite, (width: number) => string> = {
   width: 100% !important;
   min-width: 0 !important;
 }
-#app-shell-sidebar [class*="@container/navigation-header"] > a[href="/"] {
+#app-shell-sidebar [class*="@container/navigation-header"] > :first-child:not(:last-child) {
   display: none !important;
+}
+#app-shell-sidebar [class*="@container/navigation-header"] > :last-child {
+  margin-inline-start: auto !important;
 }`,
   claude: (width) => `aside.dframe-sidebar {
   width: ${width}px !important;
@@ -319,10 +336,11 @@ bard-sidenav {
 export const buildRemoteSiteThemeCss = (site: RemoteAppSite, input: RemoteAppTheme): string => {
   const theme = normalizeRemoteAppTheme(input);
   const colorScheme = theme.appearance === "dark" ? "dark" : "light";
-  const css =
+  const css = `${SITE_NO_DRAG_CSS}\n${
     site === "chatgpt"
       ? buildRemoteAppThemeCss(input)
-      : SITE_THEME_BUILDERS[site](resolvePalette(theme.colors), colorScheme);
+      : SITE_THEME_BUILDERS[site](resolvePalette(theme.colors), colorScheme)
+  }`;
   return theme.sidebarWidth === null
     ? css
     : `${css}\n\n${SIDEBAR_WIDTH_RULES[site](theme.sidebarWidth)}\n`;
