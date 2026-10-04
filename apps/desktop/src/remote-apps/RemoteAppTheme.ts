@@ -6,7 +6,8 @@ import {
   type RemoteAppThemeColors,
 } from "@t3tools/contracts";
 import { PRODUCT_NAME } from "@t3tools/shared/branding";
-import { buildSidebarStageArtworkSvg } from "@t3tools/shared/sidebarStageArtwork";
+
+import { REMOTE_APP_SURFACE_ICONS } from "./RemoteAppSurfaceIcons.ts";
 
 const SAFE_THEME_COLOR = /^[a-zA-Z0-9#(),.%/ +*-]+$/;
 const REMOTE_APP_THEME_COLOR_MAX_LENGTH = 128;
@@ -164,7 +165,7 @@ export function resolveRemoteToolbarControlKind(
 export const buildRemoteAppInteractionScript = (
   input: RemoteAppTheme = DEFAULT_REMOTE_APP_THEME,
 ): string => {
-  const { sidebarWidth, colors } = normalizeRemoteAppTheme(input);
+  const { colors } = normalizeRemoteAppTheme(input);
   const inlineThemeVariables = JSON.stringify({
     "--t3code-remote-canvas": colors.canvas,
     "--t3code-remote-sidebar": colors.sidebar,
@@ -234,7 +235,6 @@ export const buildRemoteAppInteractionScript = (
   return `
 (() => {
   const key = "__t3codeRemoteAppInteraction";
-  const nextSidebarWidth = ${sidebarWidth === null ? "null" : Math.round(sidebarWidth)};
   const inlineThemeVariables = ${inlineThemeVariables};
   const applyInlineTheme = () => {
     const root = document.documentElement;
@@ -244,18 +244,13 @@ export const buildRemoteAppInteractionScript = (
     }
   };
   const existing = window[key];
-  if (existing && typeof existing.setSidebarWidth === "function") {
+  if (existing && typeof existing.refresh === "function") {
     applyInlineTheme();
-    existing.setSidebarWidth(nextSidebarWidth);
+    existing.refresh();
     return;
   }
-  if (existing && typeof existing.setPresentation === "function") {
-    applyInlineTheme();
-    existing.setPresentation(nextSidebarWidth, "none", "");
-    return;
-  }
-  let targetSidebarWidth = nextSidebarWidth;
 
+  // Marks ChatGPT's sidebar for the stylesheet; its width stays the site's own.
   const applySidebarGeometry = () => {
     const utilityHrefs = ["/images", "/library", "/scheduled", "/plugins", "/projects"];
     const sidebarLinks = Array.from(document.querySelectorAll("a[href]")).filter((link) => {
@@ -277,9 +272,6 @@ export const buildRemoteAppInteractionScript = (
     )) {
       delete previousSidebar.dataset.t3codeRemoteSidebar;
       delete previousSidebar.dataset.t3codeRemoteSidebarRoot;
-      for (const property of ["box-sizing", "width", "min-width", "flex-basis", "overflow-x"]) {
-        previousSidebar.style.removeProperty(property);
-      }
     }
 
     const candidates = [];
@@ -311,12 +303,6 @@ export const buildRemoteAppInteractionScript = (
     if (rootSidebar instanceof HTMLElement) {
       rootSidebar.dataset.t3codeRemoteSidebar = "true";
       rootSidebar.dataset.t3codeRemoteSidebarRoot = "true";
-      rootSidebar.style.setProperty("box-sizing", "border-box", "important");
-      if (targetSidebarWidth !== null) {
-        rootSidebar.style.setProperty("width", \`\${targetSidebarWidth}px\`, "important");
-        rootSidebar.style.setProperty("min-width", \`\${targetSidebarWidth}px\`, "important");
-      }
-      rootSidebar.style.setProperty("overflow-x", "hidden", "important");
     }
   };
 
@@ -390,7 +376,11 @@ export const buildRemoteAppInteractionScript = (
       delete previous.dataset.t3codeRemoteToolbarControl;
     }
     const main = document.querySelector("main, [role='main']");
-    const contentBoundary = targetSidebarWidth ?? window.innerWidth * 0.45;
+    const markedSidebar = document.querySelector("[data-t3code-remote-sidebar-root='true']");
+    const contentBoundary =
+      markedSidebar instanceof HTMLElement
+        ? markedSidebar.getBoundingClientRect().right
+        : window.innerWidth * 0.45;
     const sidebarSelector =
       "[data-t3code-remote-sidebar-root='true'], nav, [role='complementary'], [data-testid='sidebar'], [data-testid*='sidebar'], aside, [aria-label='Chat history'], [class~='group/sidebar']";
     for (const control of document.querySelectorAll("button, a[role='button']")) {
@@ -621,8 +611,7 @@ export const buildRemoteAppInteractionScript = (
     document.addEventListener(eventName, (event) => focusEditable(event.target), true);
   }
   window[key] = {
-    setSidebarWidth(value) {
-      targetSidebarWidth = value;
+    refresh() {
       scheduleSidebarGeometry();
       scheduleSemanticMarkers();
     },
@@ -638,18 +627,29 @@ const surfaceMenuUrl = (surface: DesktopSurface): string => `t3code-surface://se
  * WebContentsView is composited above the renderer, so a renderer popover
  * cannot reliably appear over a remote site. Keep this document intentionally small
  * and self-contained so it remains available while the remote surface is
- * loading or offline.
+ * loading or offline. It mirrors T3's own menu popup: radius, shadow, 28px rows,
+ * a leading mark and a trailing check.
  */
-export const REMOTE_APP_SURFACE_MENU_WIDTH = 196;
-const SURFACE_MENU_ITEM_HEIGHT = 32;
-// Body padding (2 * 6px), menu padding (2 * 5px), border (2 * 1px), and slack.
-const SURFACE_MENU_CHROME_HEIGHT = 28;
+export const REMOTE_APP_SURFACE_MENU_WIDTH = 208;
+// Transparent margin around the popup that leaves room for its shadow; the
+// manager offsets the window by it so the popup itself sits under the trigger.
+export const REMOTE_APP_SURFACE_MENU_INSET = 8;
+const SURFACE_MENU_ITEM_HEIGHT = 28;
+// Popup padding (2 * 4px) and border (2 * 1px) inside the inset on both sides.
+const SURFACE_MENU_CHROME_HEIGHT = REMOTE_APP_SURFACE_MENU_INSET * 2 + 10;
+// T3 is separated from the sites by a 1px rule with 4px above and below.
+const SURFACE_MENU_SEPARATOR_HEIGHT = 9;
 
 export const resolveRemoteAppSurfaceMenuHeight = (itemCount: number): number =>
-  SURFACE_MENU_CHROME_HEIGHT + SURFACE_MENU_ITEM_HEIGHT * itemCount;
+  SURFACE_MENU_CHROME_HEIGHT +
+  SURFACE_MENU_ITEM_HEIGHT * itemCount +
+  (itemCount > 1 ? SURFACE_MENU_SEPARATOR_HEIGHT : 0);
 
 const surfaceLabel = (surface: DesktopSurface): string =>
   surface === "t3code" ? PRODUCT_NAME : REMOTE_APP_SITE_LABELS[surface];
+
+const SURFACE_MENU_CHECK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
 export const buildRemoteAppSurfaceMenuHtml = (
   input: RemoteAppTheme,
@@ -658,15 +658,21 @@ export const buildRemoteAppSurfaceMenuHtml = (
 ): string => {
   const { appearance, colors } = normalizeRemoteAppTheme(input);
   const items = surfaces
-    .map((surface) => {
+    .map((surface, index) => {
       const active = activeSurface === surface;
-      return `
+      const separator = index === 1 ? '\n      <div class="separator" role="separator"></div>' : "";
+      return `${separator}
       <a role="menuitemradio" aria-checked="${active ? "true" : "false"}" href="${surfaceMenuUrl(surface)}">
-        <span class="check" aria-hidden="true">${active ? "✓" : ""}</span>
-        <span>${surfaceLabel(surface)}</span>
+        <span class="mark">${REMOTE_APP_SURFACE_ICONS[surface]}</span>
+        <span class="label">${surfaceLabel(surface)}</span>
+        <span class="check">${active ? SURFACE_MENU_CHECK_ICON : ""}</span>
       </a>`;
     })
     .join("");
+  const shadow =
+    appearance === "dark"
+      ? "0 18px 44px -18px rgb(0 0 0 / 80%)"
+      : "0 12px 32px -12px rgb(0 0 0 / 28%), 0 2px 6px -2px rgb(0 0 0 / 10%)";
   return `<!doctype html>
 <html lang="en" data-theme="${appearance}">
   <head>
@@ -676,48 +682,73 @@ export const buildRemoteAppSurfaceMenuHtml = (
       * { box-sizing: border-box; }
       html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
       body {
-        padding: 6px;
+        padding: ${REMOTE_APP_SURFACE_MENU_INSET}px;
         background: transparent;
         color: ${colors.text};
-        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        font-family: -apple-system, "system-ui", "Segoe UI", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
       }
       [role="menu"] {
-        width: 184px;
-        padding: 5px;
-        border: 1px solid ${colors.toolbarBorder};
-        border-radius: 12px;
-        background: ${colors.surfaceOverlay};
-        box-shadow: 0 14px 32px rgb(0 0 0 / 32%), 0 1px 0 rgb(255 255 255 / 8%) inset;
+        padding: 4px;
+        border: 1px solid color-mix(in srgb, ${colors.text} 10%, transparent);
+        border-radius: 10px;
+        background: color-mix(in srgb, ${colors.surfaceOverlay} 97%, transparent);
+        box-shadow: ${shadow};
       }
       [role="menuitemradio"] {
         display: flex;
         align-items: center;
-        min-height: 32px;
         gap: 8px;
-        padding: 5px 8px;
-        border-radius: 8px;
+        height: 28px;
+        padding: 4px 8px;
+        border-radius: 6px;
         color: ${colors.text};
         font-size: 13px;
-        font-weight: 500;
         line-height: 20px;
         text-decoration: none;
         outline: none;
+        cursor: default;
       }
-      [role="menuitemradio"]:hover,
-      [role="menuitemradio"]:focus-visible,
       [role="menuitemradio"][aria-checked="true"] {
-        background: ${colors.sidebarRowSelected};
+        background: color-mix(in srgb, ${colors.text} 8%, transparent);
       }
-      [role="menuitemradio"]:focus-visible {
-        box-shadow: 0 0 0 2px ${colors.focus} inset;
+      /* Focus is the highlight: pointer movement and arrow keys both move it. */
+      [role="menuitemradio"]:focus {
+        background: ${colors.sidebarRowHover};
       }
-      .check { width: 14px; color: ${colors.accent}; font-size: 14px; text-align: center; }
-      .check[aria-hidden="true"] { flex: 0 0 14px; }
+      .mark, .check { display: inline-flex; flex: none; align-items: center; justify-content: center; }
+      .mark { width: 16px; height: 16px; color: ${colors.text}; }
+      .mark svg { width: 16px; height: 16px; }
+      .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .check { width: 14px; height: 14px; color: ${colors.textMuted}; }
+      .check svg { width: 14px; height: 14px; }
+      .separator {
+        height: 1px;
+        margin: 4px 4px;
+        background: color-mix(in srgb, ${colors.text} 10%, transparent);
+      }
     </style>
   </head>
   <body>
     <div role="menu" aria-label="Switch app surface">${items}
     </div>
+    <script>
+      const items = Array.from(document.querySelectorAll('[role="menuitemradio"]'));
+      const focusAt = (index) => items[(index + items.length) % items.length]?.focus();
+      focusAt(Math.max(0, items.findIndex((item) => item.getAttribute("aria-checked") === "true")));
+      for (const item of items) item.addEventListener("mousemove", () => item.focus());
+      document.addEventListener("keydown", (event) => {
+        const index = items.indexOf(document.activeElement);
+        if (event.key === "ArrowDown") focusAt(index + 1);
+        else if (event.key === "ArrowUp") focusAt(index - 1);
+        else if (event.key === "Home") focusAt(0);
+        else if (event.key === "End") focusAt(items.length - 1);
+        else if (event.key === "Escape") window.location.href = "t3code-surface://close";
+        else return;
+        event.preventDefault();
+      });
+    </script>
   </body>
 </html>`;
 };
@@ -730,47 +761,12 @@ export const buildRemoteAppSurfaceMenuHtml = (
  * if those implementation classes change.
  */
 export const buildRemoteAppThemeCss = (input: RemoteAppTheme): string => {
-  const { appearance, stageArt, sidebarWidth, colors } = normalizeRemoteAppTheme(input);
+  const { appearance, colors } = normalizeRemoteAppTheme(input);
   const colorScheme = appearance === "dark" ? "dark" : "light";
-  const sidebarWidthVariable =
-    sidebarWidth === null ? "" : `\n  --sidebar-width: ${sidebarWidth}px !important;`;
-  const stageArtwork =
-    stageArt === "none"
-      ? null
-      : buildSidebarStageArtworkSvg({
-          variant: stageArt,
-          idPrefix: "t3code-remote-sidebar-stage",
-        })
-          .replaceAll("var(--stage-art-top)", colors.stageArtTop)
-          .replaceAll("var(--stage-art-mid)", colors.stageArtMid)
-          .replaceAll("var(--stage-art-bottom)", colors.stageArtBottom)
-          .replaceAll("var(--stage-art-highlight)", colors.stageArtHighlight)
-          .replaceAll("var(--stage-art-secondary)", colors.stageArtSecondary)
-          .replaceAll("var(--stage-art-tertiary)", colors.stageArtTertiary)
-          .replaceAll("var(--stage-art-line)", colors.stageArtLine)
-          .replaceAll("var(--stage-art-celeste-highlight)", colors.stageArtCelesteHighlight)
-          .replaceAll("var(--stage-art-celeste-secondary)", colors.stageArtCelesteSecondary)
-          .replaceAll("var(--stage-art-violet-highlight)", colors.stageArtVioletHighlight)
-          .replaceAll("var(--stage-art-grid-line)", colors.stageArtGridLine)
-          .replaceAll("var(--stage-night-top)", colors.stageNightTop)
-          .replaceAll("var(--stage-night-mid)", colors.stageNightMid)
-          .replaceAll("var(--stage-night-bottom)", colors.stageNightBottom)
-          .replaceAll("var(--stage-night-highlight)", colors.stageNightHighlight)
-          .replaceAll("var(--stage-night-secondary)", colors.stageNightSecondary)
-          .replaceAll("var(--stage-night-tertiary)", colors.stageNightTertiary)
-          .replaceAll("var(--stage-night-line)", colors.stageNightLine)
-          .replaceAll("var(--stage-night-glow-highlight)", colors.stageNightGlowHighlight)
-          .replaceAll("var(--stage-night-glow-secondary)", colors.stageNightGlowSecondary)
-          .replaceAll("var(--stage-night-sparkle)", colors.stageNightSparkle);
-  const stageArtworkRule =
-    stageArtwork === null
-      ? ""
-      : `\n  background-image: url("data:image/svg+xml,${encodeURIComponent(stageArtwork)}") !important;\n  background-position: left -40px !important;\n  background-repeat: no-repeat !important;\n  background-size: 100% 80px !important;`;
   return `
 /* ndev.t3code scoped theme for the isolated ChatGPT surface. */
 :root {
   color-scheme: ${colorScheme} !important;
-${sidebarWidthVariable}
   --t3code-remote-canvas: ${colors.canvas};
   --t3code-remote-sidebar: ${colors.sidebar};
   --t3code-remote-sidebar-foreground: ${colors.sidebarForeground};
@@ -867,21 +863,9 @@ aside,
   border-color: var(--t3code-remote-sidebar-border) !important;
 }
 
-[data-t3code-remote-sidebar="true"] {
-  box-sizing: border-box !important;
-  width: ${sidebarWidth === null ? "auto" : `${Math.round(sidebarWidth)}px`} !important;
-  min-width: ${sidebarWidth === null ? "0" : `${Math.round(sidebarWidth)}px`} !important;
-  overflow-x: hidden !important;
-}
-
-/* Match the first remote row to the native Search row instead of letting it
-   hug the shared titlebar. Only the outer detected sidebar receives this
-   inset; nested width containers stay untouched. */
 [data-t3code-remote-sidebar-root="true"] {
   position: relative !important;
-  padding-top: 9px !important;
   background-color: var(--t3code-remote-sidebar) !important;
-${stageArtworkRule}
 }
 
 /* ChatGPT nests opaque sidebar wrappers inside the detected outer boundary.

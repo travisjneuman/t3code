@@ -1748,6 +1748,26 @@ body:has([data-remote-app-surface="remote"]) [data-remote-app-host-workspace] {
   visibility: hidden !important;
 }
 
+/* A site keeps its own sidebar width; the host column follows it. !important
+   outranks the --sidebar-width the resize rail writes inline. */
+[data-remote-app-surface="remote"][style*="--remote-app-site-sidebar-width"] {
+  --sidebar-width: var(--remote-app-site-sidebar-width) !important;
+}
+
+/* The site resizes its own sidebar; dragging T3's rail there would only change
+   T3's hidden width. */
+[data-remote-app-surface="remote"] [data-slot="sidebar-rail"] {
+  display: none;
+}
+
+/* Site views start level with the Search row (8px under the header line), so
+   the stage artwork finishes fading in that strip instead of being cut off by
+   the page. Keep in sync with REMOTE_APP_VIEW_TOP_INSET. */
+[data-remote-app-surface="remote"] .sidebar-stage-backdrop {
+  mask-image: linear-gradient(to bottom, black 0, black 44px, transparent 60px);
+  -webkit-mask-image: linear-gradient(to bottom, black 0, black 44px, transparent 60px);
+}
+
 /* The surface switcher sits at the titlebar content inset, so with the sidebar
    collapsed the page headers start after it instead of underneath it. 5rem
    covers the switcher's "T3 Code" label at any font size. */
