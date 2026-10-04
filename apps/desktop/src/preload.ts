@@ -312,8 +312,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_THEME_CHANNEL, theme),
     openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL, anchor),
-    setAvailableSites: (sites) =>
-      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_AVAILABLE_SITES_CHANNEL, sites),
+    setAvailableSites: (availability) =>
+      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_AVAILABLE_SITES_CHANNEL, availability),
     setActiveSurface: (surface) =>
       ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL, surface),
     goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),

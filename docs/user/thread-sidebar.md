@@ -230,8 +230,9 @@ several selected threads together. Choose **Wake thread** to bring a thread back
 T3, such as Claude Code or Codex in a terminal, a desktop app, or an IDE. Open one to follow it
 live.
 
-To keep working on a Claude or Codex session in T3, stop it in the other app, then choose
-**Continue in T3**. The session becomes a regular thread in its folder's project, with its
-history, and leaves the Other agents list. Running both at once would mix two conversations into
-one session, so T3 waits until the other app has stopped. Grok, Pi and Antigravity sessions can
-be followed but not continued.
+To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then
+choose **Continue in T3**. The session becomes a regular thread in its folder's project, with its
+history, and leaves the Other agents list. It stays where it is: T3 resumes the same session, so
+you can go back to the other app later and pick it up there. Send from one app at a time;
+messages sent elsewhere after you continue don't appear in the T3 thread. Antigravity sessions
+can be followed but not continued, because T3 runs Antigravity with its own session store.

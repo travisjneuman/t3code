@@ -3,6 +3,7 @@ import {
   REMOTE_APP_SITE_LABELS,
   REMOTE_APP_SITES,
   type DesktopSurface,
+  type RemoteAppAvailability,
   type RemoteAppSite,
   type RemoteAppState,
   type RemoteAppSurfaceMenuAnchor,
@@ -10,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -51,6 +53,13 @@ import { REMOTE_APP_VIEW_TOP_INSET, TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts"
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
 const REMOTE_APP_VIEW_LAYER_INDEX = 0;
+// Background preload pacing. The first site waits until T3 has painted and
+// settled; each later one waits for the previous page to load and hydrate, so
+// at most one site is loading at a time.
+const REMOTE_APP_PRELOAD_START_DELAY_MS = 4_000;
+const REMOTE_APP_PRELOAD_RESCHEDULE_DELAY_MS = 1_000;
+const REMOTE_APP_PRELOAD_LOAD_TIMEOUT = "20 seconds";
+const REMOTE_APP_PRELOAD_SETTLE_DELAY = "2 seconds";
 // SidebarChromeFooter is a 32px utility row with 8px padding on each side.
 // Keep the live remote document above the host footer's exact 48px strip so
 // the native Settings, Pull Requests, Usage, and update controls remain both
@@ -161,7 +170,7 @@ export class RemoteAppManager extends Context.Service<
     ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly getState: Effect.Effect<RemoteAppState>;
     readonly setTheme: (theme: RemoteAppTheme) => Effect.Effect<void, RemoteAppManagerError>;
-    readonly setAvailableSites: (sites: ReadonlyArray<RemoteAppSite>) => Effect.Effect<void>;
+    readonly setAvailableSites: (availability: RemoteAppAvailability) => Effect.Effect<void>;
     readonly openSurfaceMenu: (
       anchor: RemoteAppSurfaceMenuAnchor,
     ) => Effect.Effect<void, RemoteAppManagerError>;
@@ -204,12 +213,24 @@ export const make = Effect.gen(function* () {
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
   const attachedRef = yield* Ref.make(false);
   const stateChangeLock = yield* Semaphore.make(1);
+  // Serializes get-or-create, so an activation and a background preload never
+  // both create a view for the same site.
+  const viewCreationLock = yield* Semaphore.make(1);
   const themeCssLock = yield* Semaphore.make(1);
   const remoteThemeRef = yield* Ref.make<RemoteAppTheme>(DEFAULT_REMOTE_APP_THEME);
   const availableSitesRef = yield* Ref.make<ReadonlyArray<RemoteAppSite>>([]);
-  // Views are created on first activation and kept while hidden, so switching
-  // sites is instant. Hidden views are detached and background-throttled.
+  // Views are created on first activation or by the background preload, and
+  // kept while hidden, so switching sites is instant. Hidden views are detached
+  // and background-throttled.
   const views = new Map<RemoteAppSite, Electron.WebContentsView>();
+  // Preloaded views that have never been on screen; their first show forces a
+  // repaint instead of trusting a frame produced while detached.
+  const unseenViews = new WeakSet<Electron.WebContentsView>();
+  let preloadFiber: Fiber.Fiber<void> | undefined;
+  // The load the preload is waiting on. It outlives a rescheduled preload run,
+  // so a restart never starts a second site while one is still loading.
+  let preloadLoad: { readonly site: RemoteAppSite; readonly done: Promise<unknown> } | undefined;
+  let preloadNotBefore: number | undefined;
   const recoveryCounts = new Map<RemoteAppSite, number>();
   // Sites whose page failed to load or crashed for good; switching back to one
   // reloads it, since no toolbar offers a retry.
@@ -257,6 +278,7 @@ export const make = Effect.gen(function* () {
     insertedThemeKeys.delete(site);
     recoveryCounts.delete(site);
     brokenSites.delete(site);
+    if (preloadLoad?.site === site) preloadLoad = undefined;
     if (view === undefined) return;
     if (Option.isSome(window) && !window.value.isDestroyed()) {
       window.value.contentView.removeChildView(view);
@@ -387,19 +409,25 @@ export const make = Effect.gen(function* () {
         const theme = yield* Ref.get(remoteThemeRef);
         view.setBackgroundColor(theme.colors.canvas);
         const previousKey = insertedThemeKeys.get(site);
-        insertedThemeKeys.delete(site);
+        const themeable = isThemeableSiteUrl(site, view.webContents.getURL());
+        // Insert the new sheet before removing the old one, so a reapply on a
+        // visible page never paints a frame without the T3 palette.
+        if (themeable) {
+          const key = yield* Effect.tryPromise({
+            try: () => view.webContents.insertCSS(buildRemoteSiteThemeCss(site, theme)),
+            catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+          });
+          insertedThemeKeys.set(site, key);
+        } else {
+          insertedThemeKeys.delete(site);
+        }
         if (previousKey !== undefined) {
           yield* Effect.tryPromise({
             try: () => view.webContents.removeInsertedCSS(previousKey),
             catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
           }).pipe(Effect.catch(() => Effect.void));
         }
-        if (!isThemeableSiteUrl(site, view.webContents.getURL())) return;
-        const key = yield* Effect.tryPromise({
-          try: () => view.webContents.insertCSS(buildRemoteSiteThemeCss(site, theme)),
-          catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
-        });
-        insertedThemeKeys.set(site, key);
+        if (!themeable) return;
         yield* applySidebarWidth(view);
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
@@ -711,13 +739,89 @@ export const make = Effect.gen(function* () {
   ): Effect.fn.Return<Electron.WebContentsView, RemoteAppManagerError> {
     const window = yield* requireLiveWindow("attach");
     yield* attachMainWindow(window);
-    const existing = yield* getLiveView(site);
-    if (Option.isSome(existing)) {
-      yield* positionView(window, existing.value);
-      return existing.value;
-    }
-    return yield* createView(site, window);
+    return yield* viewCreationLock.withPermit(
+      Effect.gen(function* () {
+        const existing = yield* getLiveView(site);
+        if (Option.isSome(existing)) {
+          yield* positionView(window, existing.value);
+          return existing.value;
+        }
+        return yield* createView(site, window);
+      }),
+    );
   });
+
+  /**
+   * Creates and starts loading a hidden site's view without touching the
+   * persisted shell state, which describes only the active site. The view
+   * stays detached and throttled; it is themed and pinned on load like any
+   * other. Returns whether a load was started.
+   */
+  const preloadSite = (site: RemoteAppSite) =>
+    Effect.gen(function* () {
+      const window = yield* requireLiveWindow("attach");
+      yield* attachMainWindow(window);
+      return yield* viewCreationLock.withPermit(
+        Effect.gen(function* () {
+          const state = yield* stateStore.get;
+          const available = yield* Ref.get(availableSitesRef);
+          if (activeSiteOf(state) === site || !available.includes(site)) return false;
+          if (Option.isSome(yield* getLiveView(site))) return false;
+          const view = yield* createView(site, window);
+          unseenViews.add(view);
+          // Resolves on did-finish-load; a failed load is left to brokenSites,
+          // so activating the site reloads it.
+          const done: Promise<unknown> = view.webContents
+            .loadURL(resolveRemoteAppSiteUrl(site, state.currentUrl))
+            .catch(() => undefined)
+            .finally(() => {
+              if (preloadLoad?.done === done) preloadLoad = undefined;
+            });
+          preloadLoad = { site, done };
+          return true;
+        }),
+      );
+    });
+
+  const awaitPreloadLoad = Effect.suspend(() => {
+    const load = preloadLoad;
+    return load === undefined
+      ? Effect.void
+      : Effect.promise(() => load.done).pipe(
+          Effect.timeoutOption(REMOTE_APP_PRELOAD_LOAD_TIMEOUT),
+          Effect.asVoid,
+        );
+  });
+
+  const runPreload = (delayMs: number) =>
+    Effect.gen(function* () {
+      yield* Effect.sleep(delayMs);
+      // Each site is rechecked at its turn; a later availability change
+      // reschedules the whole run.
+      for (const site of yield* Ref.get(availableSitesRef)) {
+        yield* awaitPreloadLoad;
+        const started = yield* preloadSite(site).pipe(Effect.catch(() => Effect.succeed(false)));
+        if (!started) continue;
+        yield* awaitPreloadLoad;
+        yield* Effect.sleep(REMOTE_APP_PRELOAD_SETTLE_DELAY);
+      }
+    });
+
+  const cancelPreload = () => {
+    preloadFiber?.interruptUnsafe();
+    preloadFiber = undefined;
+  };
+
+  /** Restarts the background preload; the first run waits for T3's startup to settle. */
+  const schedulePreload = (enabled: boolean) => {
+    cancelPreload();
+    if (!enabled) return;
+    const now = Date.now();
+    preloadNotBefore ??= now + REMOTE_APP_PRELOAD_START_DELAY_MS;
+    preloadFiber = Effect.runFork(
+      runPreload(Math.max(REMOTE_APP_PRELOAD_RESCHEDULE_DELAY_MS, preloadNotBefore - now)),
+    );
+  };
 
   const showSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
@@ -744,6 +848,7 @@ export const make = Effect.gen(function* () {
       addRemoteAppViewBelowHostRenderer(window.value, view.value);
       yield* positionView(window.value, view.value);
       view.value.setVisible(true);
+      if (unseenViews.delete(view.value)) view.value.webContents.invalidate();
       // Surface switches can happen while the renderer is still reconciling
       // its theme snapshot. Reapply the manager's current validated palette at
       // the activation boundary so a reused view cannot show the old theme.
@@ -790,6 +895,7 @@ export const make = Effect.gen(function* () {
     window.on("enter-full-screen", repositionAfterFullscreenTransition);
     window.on("leave-full-screen", repositionAfterFullscreenTransition);
     window.on("closed", () => {
+      cancelPreload();
       closeSurfaceMenu();
       for (const popup of popupWindows) {
         if (!popup.isDestroyed()) popup.close();
@@ -833,16 +939,20 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const setAvailableSites = (sites: ReadonlyArray<RemoteAppSite>) =>
+  const setAvailableSites = ({ sites, backgroundLoad }: RemoteAppAvailability) =>
     Effect.gen(function* () {
       yield* Ref.set(availableSitesRef, sites);
-      // Release the memory of hidden sites that are no longer available. The
-      // renderer moves off an active site that became unavailable.
+      // Release the memory of hidden sites that are no longer available,
+      // including one still preloading. The renderer moves off an active site
+      // that became unavailable.
       const activeSite = activeSiteOf(yield* stateStore.get);
       const window = yield* getLiveWindow;
       for (const site of [...views.keys()]) {
         if (site !== activeSite && !sites.includes(site)) closeView(site, window);
       }
+      // Turning background loading off stops further preloads; views already
+      // created stay until their site is unavailable.
+      schedulePreload(backgroundLoad);
     });
 
   const openSurfaceMenu = Effect.fn("remote-app.openSurfaceMenu")(function* (
@@ -976,7 +1086,8 @@ export const make = Effect.gen(function* () {
         yield* loadUrl(view, url);
         return;
       }
-      if (view.webContents.getURL().length === 0) {
+      // A preload that has not committed yet is already loading the right page.
+      if (view.webContents.getURL().length === 0 && !view.webContents.isLoading()) {
         const url = resolveRemoteAppSiteUrl(site, previous.currentUrl);
         yield* updateState((state) => ({
           ...state,

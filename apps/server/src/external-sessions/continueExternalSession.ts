@@ -1,11 +1,13 @@
 /**
- * Continue an external session in T3: a single-session version of
- * `AgentSessionImporter.importRecentAgentThreads`. It writes the same records
- * the importer writes (thread, messages, provider thread, provider runtime,
- * imported transcript), so the thread resumes the provider's own session on
- * its next turn, exactly like an imported one. Unlike the importer, the
- * thread starts active rather than settled, because the user just asked to
- * keep working in it. Fork add-on; see docs/internals/external-sessions.md.
+ * Continue an external session in T3, in place: the thread binds the
+ * provider's own session (same id, same files, same config home), so its next
+ * turn resumes that session and the user can go back to the other app later.
+ * Claude and Codex threads match `AgentSessionImporter` (same thread id,
+ * runtime row, imported-transcript record); Grok and Pi threads are built the
+ * same way from this add-on's own transcript parsers. Unlike the importer,
+ * the thread starts active rather than settled, and its history is "native"
+ * so the first turn resumes instead of also replaying it as a context
+ * handoff. Fork add-on; see docs/internals/external-sessions.md.
  *
  * @module external-sessions/continueExternalSession
  */
@@ -58,6 +60,7 @@ import {
 import * as ProjectService from "../project/ProjectService.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { asString, parseJsonObject, type TranscriptParser } from "./ExternalSessionSource.ts";
 
 // Same prefix and id shapes as AgentSessionImporter, so a session continued
 // here and one imported during onboarding are the same thread.
@@ -66,20 +69,38 @@ const CLAUDE_SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // The parser holds the whole transcript in memory; past this it is not worth it.
 const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+// Same retention as the importer: the first prompt plus the newest messages.
+const MAX_HISTORY_MESSAGES = 200;
 
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
 const decodeCodexSettings = Schema.decodeUnknownOption(CodexSettings);
 
+export type ContinueDriver = "claudeAgent" | "codex" | "grok" | "pi";
+
 export interface ContinueTarget {
   readonly key: string;
-  readonly driver: "claudeAgent" | "codex";
+  readonly driver: ContinueDriver;
   readonly sessionId: string;
   readonly title: string;
   readonly cwd: string;
   readonly model: string | null;
   readonly transcriptPath: string;
   readonly updatedAtMs: number;
+  /** The listing's own parser; history for drivers the importer does not read. */
+  readonly createParser: () => TranscriptParser;
 }
+
+interface ContinueHistory {
+  readonly providerSessionId: string;
+  readonly model: string | null;
+  readonly title: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly messages: ReadonlyArray<AgentSessionThreadMessage>;
+}
+
+export const isContinueDriver = (driver: string): driver is ContinueDriver =>
+  driver === "claudeAgent" || driver === "codex" || driver === "grok" || driver === "pi";
 
 const failed = (cause: unknown) =>
   new ExternalSessionError({ message: "Could not continue this session in T3.", cause });
@@ -162,6 +183,91 @@ function messageEvents(input: {
   ];
 }
 
+const threadCreated = (
+  threadId: ThreadId,
+  providerInstanceId: ProviderInstanceId,
+  appThread: OrchestrationV2AppThread,
+): OrchestrationV2DomainEvent => ({
+  id: EventId.make(`${IMPORT_EVENT_PREFIX}:thread:${threadId}:created`),
+  type: "thread.created",
+  threadId,
+  providerInstanceId,
+  occurredAt: appThread.createdAt,
+  payload: appThread,
+});
+
+const providerThreadUpdated = (
+  threadId: ThreadId,
+  driver: ProviderDriverKind,
+  providerInstanceId: ProviderInstanceId,
+  providerThread: OrchestrationV2ProviderThread,
+): OrchestrationV2DomainEvent => ({
+  id: EventId.make(`${IMPORT_EVENT_PREFIX}:provider-thread:${providerThread.id}`),
+  type: "provider-thread.updated",
+  threadId,
+  driver,
+  providerInstanceId,
+  occurredAt: providerThread.updatedAt,
+  payload: providerThread,
+});
+
+/**
+ * History for Grok and Pi from the listing's parser: user and assistant
+ * messages only, upserted by id the way the live view upserts them.
+ */
+function parsedHistory(target: ContinueTarget, contents: string): ContinueHistory | null {
+  const parser = target.createParser();
+  const byId = new Map<string, AgentSessionThreadMessage>();
+  for (const line of contents.split("\n")) {
+    for (const message of parser.push(line)) {
+      if (message.role === "tool") continue;
+      byId.set(message.id, {
+        role: message.role,
+        text: message.text,
+        createdAt: message.createdAt,
+      });
+    }
+  }
+  const all = [...byId.values()];
+  if (all.length === 0) return null;
+  const firstUser = all.find((message) => message.role === "user");
+  const messages =
+    all.length <= MAX_HISTORY_MESSAGES
+      ? all
+      : firstUser === undefined || all.indexOf(firstUser) >= all.length - MAX_HISTORY_MESSAGES
+        ? all.slice(-MAX_HISTORY_MESSAGES)
+        : [firstUser, ...all.slice(-(MAX_HISTORY_MESSAGES - 1))];
+  const updatedAt = new Date(target.updatedAtMs).toISOString();
+  return {
+    providerSessionId: target.sessionId,
+    model: target.model,
+    title: target.title,
+    createdAt: messages[0]?.createdAt ?? updatedAt,
+    updatedAt,
+    messages,
+  };
+}
+
+/**
+ * The newest main-chain entry of a Claude transcript. Resuming at it makes
+ * the first T3 turn `resume` the session itself; without a head, the adapter
+ * opens a session it has no turns for with `sessionId`, which Claude refuses
+ * for an id that already exists.
+ */
+function claudeLeafUuid(contents: string): string | null {
+  let end = contents.length;
+  while (end > 0) {
+    const start = contents.lastIndexOf("\n", end - 1) + 1;
+    const record = parseJsonObject(contents.slice(start, end).trim());
+    end = start - 1;
+    if (record === null || record.isSidechain === true) continue;
+    if (record.type !== "user" && record.type !== "assistant") continue;
+    const uuid = asString(record.uuid);
+    if (uuid !== null) return uuid;
+  }
+  return null;
+}
+
 const isUnder = (path: Path.Path, child: string, root: string) => {
   const relative = path.relative(root, child);
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
@@ -183,9 +289,11 @@ export const make = Effect.gen(function* () {
     fileSystem.realPath(target).pipe(Effect.orElseSucceed(() => path.resolve(target)));
 
   /**
-   * The provider instance whose home holds this transcript, chosen the way
-   * AgentSessionScanner chooses the owner of a shared home: enabled
-   * instances of the driver, the built-in one first.
+   * The provider instance that resumes this session, chosen the way
+   * AgentSessionScanner chooses the owner of a shared home: enabled instances
+   * of the driver, the built-in one first, and the first whose home holds
+   * the transcript. Pi has no home setting (its state is always
+   * `~/.pi/agent`), so any enabled Pi instance can resume it.
    */
   const resolveInstance = Effect.fn("ExternalSessions.resolveInstance")(function* (
     target: ContinueTarget,
@@ -210,38 +318,55 @@ export const make = Effect.gen(function* () {
     instances.sort(
       (left, right) => (left.instanceId === source ? 0 : 1) - (right.instanceId === source ? 0 : 1),
     );
+    if (source === "pi") {
+      const first = instances[0];
+      if (first !== undefined) return first.instanceId;
+      return yield* new ExternalSessionUnsupportedError({ key: target.key, reason: "no-instance" });
+    }
 
     const transcript = yield* realPath(target.transcriptPath);
     for (const { instanceId, config: instance } of instances) {
-      const homeVariable = source === "claudeAgent" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME";
+      const homeVariable =
+        source === "claudeAgent"
+          ? "CLAUDE_CONFIG_DIR"
+          : source === "codex"
+            ? "CODEX_HOME"
+            : "GROK_HOME";
+      // The spawned CLI sees the instance environment over the host's.
       const environmentHome =
         instance.environment?.findLast((variable) => variable.name === homeVariable)?.value ??
         hostEnvironment[homeVariable];
+      const fromEnvironment = environmentHome?.trim() ?? "";
       let homePath: string;
       if (source === "claudeAgent") {
         const config = decodeClaudeSettings(instance.config ?? {});
         if (Option.isNone(config)) continue;
         const configured = config.value.homePath.trim();
-        const fromEnvironment = environmentHome?.trim() ?? "";
         homePath =
           configured.length > 0
             ? path.resolve(expandHomePath(configured))
             : fromEnvironment.length > 0
               ? path.resolve(expandHomePath(fromEnvironment))
               : path.join(NodeOS.homedir(), ".claude");
-      } else {
+      } else if (source === "codex") {
         const config = decodeCodexSettings(instance.config ?? {});
         if (Option.isNone(config)) continue;
         const codexSettings =
           config.value.homePath.trim().length === 0 &&
           config.value.shadowHomePath.trim().length === 0 &&
-          environmentHome?.trim()
-            ? { ...config.value, homePath: environmentHome }
+          fromEnvironment.length > 0
+            ? { ...config.value, homePath: environmentHome ?? "" }
             : config.value;
         const layout = yield* resolveCodexHomeLayout(codexSettings).pipe(
           Effect.provideService(Path.Path, path),
         );
         homePath = layout.sharedHomePath;
+      } else {
+        // Grok has no home setting; GROK_HOME or `~/.grok`, as UsageService reads it.
+        homePath =
+          fromEnvironment.length > 0
+            ? path.resolve(expandHomePath(fromEnvironment))
+            : path.join(NodeOS.homedir(), ".grok");
       }
       if (isUnder(path, transcript, yield* realPath(homePath))) return instanceId;
     }
@@ -298,23 +423,26 @@ export const make = Effect.gen(function* () {
     const contents = yield* fileSystem
       .readFileString(target.transcriptPath)
       .pipe(Effect.mapError(failed));
-    const thread = parseAgentSessionTranscript({
-      source: target.driver,
-      providerInstanceId,
-      fallbackSessionId: target.sessionId,
-      lastActiveAtMs: target.updatedAtMs,
-      contents,
-    });
-    if (thread === null) return yield* unsupported("empty");
+    const history: ContinueHistory | null =
+      target.driver === "claudeAgent" || target.driver === "codex"
+        ? parseAgentSessionTranscript({
+            source: target.driver,
+            providerInstanceId,
+            fallbackSessionId: target.sessionId,
+            lastActiveAtMs: target.updatedAtMs,
+            contents,
+          })
+        : parsedHistory(target, contents);
+    if (history === null) return yield* unsupported("empty");
     // Claude resumes only by a UUID session id.
     if (
-      thread.source === "claudeAgent" &&
-      !CLAUDE_SESSION_ID_PATTERN.test(thread.providerSessionId)
+      target.driver === "claudeAgent" &&
+      !CLAUDE_SESSION_ID_PATTERN.test(history.providerSessionId)
     ) {
       return yield* unsupported("provider");
     }
 
-    const threadId = ThreadId.make(`import:${providerInstanceId}:${thread.providerSessionId}`);
+    const threadId = ThreadId.make(`import:${providerInstanceId}:${history.providerSessionId}`);
     const existing = yield* Effect.option(orchestrator.getThreadRecords(threadId, []));
     if (Option.isSome(existing)) {
       if (existing.value.thread.deletedAt !== null) {
@@ -329,16 +457,28 @@ export const make = Effect.gen(function* () {
     }
 
     const projectId = yield* resolveProject(target);
-    const driver = ProviderDriverKind.make(thread.source);
+    const driver = ProviderDriverKind.make(target.driver);
+    // Grok and Pi keep the session's own model: their default ids mean
+    // "whatever the session uses", while a listed id may not be one T3 knows.
     const model =
-      thread.model ?? target.model ?? DEFAULT_MODEL_BY_PROVIDER[driver] ?? DEFAULT_MODEL;
+      target.driver === "grok" || target.driver === "pi"
+        ? (DEFAULT_MODEL_BY_PROVIDER[driver] ?? DEFAULT_MODEL)
+        : (history.model ?? target.model ?? DEFAULT_MODEL_BY_PROVIDER[driver] ?? DEFAULT_MODEL);
+    // What the adapter resumes: Pi switches sessions by file path, the others by session id.
+    const nativeThreadId =
+      target.driver === "pi" ? target.transcriptPath : history.providerSessionId;
+    // Each adapter's own id for this native thread, so its first turn updates
+    // this provider thread instead of creating a second one. ACP adapters
+    // (Grok) scope it by instance; Claude, Codex, and Pi do not.
     const providerThreadId = idAllocator.derive.providerThread({
       driver,
-      nativeThreadId: thread.providerSessionId,
+      ...(target.driver === "grok" ? { providerInstanceId } : {}),
+      nativeThreadId,
     });
-    const createdAt = DateTime.makeUnsafe(thread.createdAt);
-    const updatedAt = DateTime.makeUnsafe(thread.updatedAt);
-    const title = target.title.trim() || thread.title.trim() || "Untitled thread";
+    const claudeHead = target.driver === "claudeAgent" ? claudeLeafUuid(contents) : null;
+    const createdAt = DateTime.makeUnsafe(history.createdAt);
+    const updatedAt = DateTime.makeUnsafe(history.updatedAt);
+    const title = target.title.trim() || history.title.trim() || "Untitled thread";
     const appThread: OrchestrationV2AppThread = {
       createdBy: "system",
       creationSource: "server",
@@ -354,8 +494,12 @@ export const make = Effect.gen(function* () {
       linkedPullRequest: null,
       branchPullRequest: null,
       activeProviderThreadId: providerThreadId,
-      // Imported history hands off to the provider as context, as for onboarding imports.
-      historyOrigin: "v1_import",
+      // The provider resumes its own session, which already holds this
+      // history. "v1_import" would also hand it over as context on the first
+      // turn (Orchestrator prepareLegacyImport), duplicating it. If the
+      // resume fails, the fresh-session fallback still carries these runless
+      // items in its summary handoff.
+      historyOrigin: "native",
       lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
       forkedFrom: null,
       createdAt,
@@ -380,71 +524,72 @@ export const make = Effect.gen(function* () {
       providerSessionId: null,
       appThreadId: threadId,
       ownerNodeId: null,
-      nativeThreadRef: { driver, nativeId: thread.providerSessionId, strength: "strong" },
-      nativeConversationHeadRef: null,
+      nativeThreadRef: { driver, nativeId: nativeThreadId, strength: "strong" },
+      // Claude: resume at the transcript's newest entry (see claudeLeafUuid).
+      // The adapter clears it after the first completed turn.
+      nativeConversationHeadRef:
+        claudeHead === null ? null : { driver, nativeId: claudeHead, strength: "weak" },
       status: "idle",
       firstRunOrdinal: null,
       lastRunOrdinal: null,
       handoffIds: [],
       forkedFrom: null,
       pendingBackgroundTasks: [],
+      // ACP adapters scope item ids by instance for threads they create; match that.
+      ...(target.driver === "grok"
+        ? { contextUsage: null, nativeMetadata: { itemIdentityVersion: 2 as const } }
+        : {}),
       createdAt,
       updatedAt,
     };
 
-    yield* runtimes
-      .upsert(
-        {
-          threadId,
-          providerName: driver,
-          providerInstanceId,
-          adapterKey: driver,
-          runtimeMode: DEFAULT_RUNTIME_MODE,
-          status: "stopped",
-          lastSeenAt: thread.updatedAt,
-          resumeCursor:
-            thread.source === "codex"
-              ? { threadId: thread.providerSessionId }
-              : { threadId, resume: thread.providerSessionId },
-          runtimePayload: { cwd: target.cwd },
-        },
-        { onConflict: "ignore" },
-      )
-      .pipe(Effect.mapError(failed));
+    // The importer reads only Claude and Codex; for Grok and Pi the provider
+    // thread alone marks the session as T3's (ExternalSessions.refreshOwned).
+    const importerSource =
+      target.driver === "claudeAgent" || target.driver === "codex" ? target.driver : null;
+    if (importerSource !== null) {
+      yield* runtimes
+        .upsert(
+          {
+            threadId,
+            providerName: driver,
+            providerInstanceId,
+            adapterKey: driver,
+            runtimeMode: DEFAULT_RUNTIME_MODE,
+            status: "stopped",
+            lastSeenAt: history.updatedAt,
+            resumeCursor:
+              importerSource === "codex"
+                ? { threadId: history.providerSessionId }
+                : { threadId, resume: history.providerSessionId },
+            runtimePayload: { cwd: target.cwd },
+          },
+          { onConflict: "ignore" },
+        )
+        .pipe(Effect.mapError(failed));
+    }
     yield* eventSink
       .write({
         events: [
-          {
-            id: EventId.make(`${IMPORT_EVENT_PREFIX}:thread:${threadId}:created`),
-            type: "thread.created",
-            threadId,
-            providerInstanceId,
-            occurredAt: createdAt,
-            payload: appThread,
-          },
-          ...thread.messages.flatMap((message, index) =>
+          threadCreated(threadId, providerInstanceId, appThread),
+          ...history.messages.flatMap((message, index) =>
             messageEvents({ threadId, index, message }),
           ),
-          {
-            id: EventId.make(`${IMPORT_EVENT_PREFIX}:provider-thread:${providerThreadId}`),
-            type: "provider-thread.updated",
-            threadId,
-            driver,
-            providerInstanceId,
-            occurredAt: updatedAt,
-            payload: providerThread,
-          },
+          providerThreadUpdated(threadId, driver, providerInstanceId, providerThread),
         ],
       })
       .pipe(Effect.mapError(failed));
+    if (importerSource === null) {
+      return { threadId, projectId } satisfies ExternalSessionContinueResult;
+    }
     // Best-effort, as in the importer: it only lets onboarding skip this file later.
     yield* runtimes
       .recordImportedTranscript({
         threadId,
         source: {
-          provider: thread.source,
+          provider: importerSource,
           providerInstanceId,
-          providerSessionId: thread.providerSessionId,
+          providerSessionId: history.providerSessionId,
           filePath: target.transcriptPath,
           size: Number(stats.size),
           mtimeMs: Option.match(stats.mtime, { onNone: () => null, onSome: (d) => d.getTime() }),

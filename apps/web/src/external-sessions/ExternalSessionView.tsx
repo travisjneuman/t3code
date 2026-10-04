@@ -16,8 +16,16 @@ import {
 import { formatModelSlugName } from "@t3tools/shared/model";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDownIcon } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChevronDownIcon, CircleDashedIcon, PlayIcon } from "lucide-react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
@@ -30,9 +38,10 @@ import {
   WorkspaceBreadcrumbSeparator,
   WorkspaceBreadcrumbText,
 } from "../components/WorkspaceBreadcrumb";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { SidebarInset } from "../components/ui/sidebar";
+import { Spinner } from "../components/ui/spinner";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { isElectron } from "../env";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
@@ -51,6 +60,8 @@ import {
   externalSessionProductName,
   externalSessionTitle,
   externalSessionTranscript,
+  LIVENESS_LABEL,
+  shortModelLabel,
 } from "./atoms";
 
 const EMPTY_MESSAGES: ReadonlyArray<ExternalSessionMessage> = [];
@@ -61,11 +72,19 @@ const NO_RUNS: [] = [];
 const TOOL_LABEL_MAX_CHARS = 240;
 const SCROLL_KEYS = new Set(["ArrowUp", "PageUp", "Home"]);
 
-const LIVENESS_BADGE_VARIANT = {
-  running: "info",
-  idle: "secondary",
-  recent: "secondary",
+const LIVENESS_DESCRIPTION = {
+  running: "A turn is in progress",
+  idle: "Active in the last hour",
+  recent: "No activity in the last hour",
 } as const satisfies Record<ExternalSessionSummary["liveness"], string>;
+
+/**
+ * A composer toolbar control's look at its expanded size, without the button
+ * behavior, since these chips only describe the session. Mirrors
+ * `composerControlClassName(size: "sm")` in components/chat/ComposerControl.tsx.
+ */
+const SESSION_CHIP_CLASS_NAME =
+  "relative inline-flex h-7 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-(--control-radius) border border-transparent px-2.5 text-base font-medium text-secondary-label sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:-mx-0.5 [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4";
 
 const noop = () => {};
 const noopAsync = async () => {};
@@ -133,9 +152,9 @@ function toTimelineEntries(
 
 /**
  * An agent session running outside T3, shown the way a T3 thread is: the same
- * header, timeline and docked bar. The bar stands in for the composer; an
- * idle session can be continued as a T3 thread from there. Key it by
- * environment and session so switching sessions starts fresh.
+ * layout, header, timeline and composer-shaped block. The block stands in for
+ * the composer; an idle session can be continued as a T3 thread from there.
+ * Key it by environment and session so switching sessions starts fresh.
  */
 export function ExternalSessionView(props: { environmentId: EnvironmentId; sessionKey: string }) {
   const { environmentId, sessionKey } = props;
@@ -261,7 +280,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
     };
   }, [hasEntries, stopFollowing]);
 
-  // The docked bar floats over the timeline; keep the end clear of it.
+  // The docked block floats over the timeline; keep the end clear of it.
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null);
   const [overlayHeight, setOverlayHeight] = useState(0);
   useLayoutEffect(() => {
@@ -275,109 +294,118 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <ExternalSessionHeader environmentId={environmentId} summary={summary} />
-        <div className="relative flex min-h-0 min-w-0 flex-1">
-          <ChatCanvas composerOverlayElement={overlayElement}>
-            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
-              <MessagesTimeline
-                isWorking={running}
-                runlessWorkActive={running}
-                activeTurnInProgress={running}
-                activeTurnStartedAt={activeTurnStartedAt}
-                listRef={listRef}
-                timelineEntries={timelineEntries}
-                latestRun={null}
-                turnDiffSummaries={NO_TURN_DIFFS}
-                routeThreadKey={`external:${environmentId}:${sessionKey}`}
-                onOpenTurnDiff={noop}
-                onOpenThread={noop}
-                onForkFromRun={noopAsync}
-                onRollbackCheckpoint={noop}
-                supportsConversationRollback={false}
-                onRevertToTurnCount={noop}
-                isRevertingCheckpoint={false}
-                onImageExpand={noop}
-                activeThreadEnvironmentId={environmentId}
-                markdownCwd={cwd}
-                resolvedTheme={resolvedTheme}
-                timestampFormat={timestampFormat}
-                workspaceRoot={cwd}
-                providerStatuses={EMPTY_PROVIDERS}
-                runs={NO_RUNS}
-                anchorMessageId={null}
-                onAnchorReady={noop}
-                onAnchorSizeChanged={noop}
-                contentInsetEndAdjustment={overlayHeight}
-                onIsAtEndChange={onIsAtEndChange}
-                liveFollowEnabled={liveFollowEnabled}
-                onManualNavigation={stopFollowing}
-                hideEmptyPlaceholder={!hasEntries}
-                topFadeEnabled
-              />
-              {showScrollToEnd ? (
-                <div
-                  className="chat-scroll-to-bottom pointer-events-none absolute z-30 flex justify-center py-1.5"
-                  style={{ bottom: overlayHeight + 4 }}
-                >
-                  <Button
-                    aria-label="Scroll to end"
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => scrollToEnd(true)}
-                    className="pointer-events-auto"
-                    size="xs"
-                    variant="glass"
+      {/* ChatView's workspace row and chat column, so the column, header and
+          composer land where a thread's do in the same window. */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+          <ExternalSessionHeader environmentId={environmentId} summary={summary} />
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            <ChatCanvas composerOverlayElement={overlayElement}>
+              <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+                <MessagesTimeline
+                  isWorking={running}
+                  runlessWorkActive={running}
+                  activeTurnInProgress={running}
+                  activeTurnStartedAt={activeTurnStartedAt}
+                  listRef={listRef}
+                  timelineEntries={timelineEntries}
+                  latestRun={null}
+                  turnDiffSummaries={NO_TURN_DIFFS}
+                  routeThreadKey={`external:${environmentId}:${sessionKey}`}
+                  onOpenTurnDiff={noop}
+                  onOpenThread={noop}
+                  onForkFromRun={noopAsync}
+                  onRollbackCheckpoint={noop}
+                  supportsConversationRollback={false}
+                  onRevertToTurnCount={noop}
+                  isRevertingCheckpoint={false}
+                  onImageExpand={noop}
+                  activeThreadEnvironmentId={environmentId}
+                  markdownCwd={cwd}
+                  resolvedTheme={resolvedTheme}
+                  timestampFormat={timestampFormat}
+                  workspaceRoot={cwd}
+                  providerStatuses={EMPTY_PROVIDERS}
+                  runs={NO_RUNS}
+                  anchorMessageId={null}
+                  onAnchorReady={noop}
+                  onAnchorSizeChanged={noop}
+                  contentInsetEndAdjustment={overlayHeight}
+                  onIsAtEndChange={onIsAtEndChange}
+                  liveFollowEnabled={liveFollowEnabled}
+                  onManualNavigation={stopFollowing}
+                  hideEmptyPlaceholder={!hasEntries}
+                  topFadeEnabled
+                />
+                {showScrollToEnd ? (
+                  <div
+                    className="chat-scroll-to-bottom pointer-events-none absolute z-30 flex justify-center py-1.5"
+                    style={{ bottom: overlayHeight + 4 }}
                   >
-                    <ChevronDownIcon className="size-3.5" />
-                    Scroll to end
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-            <div
-              ref={setOverlayElement}
-              data-chat-composer-overlay="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
-            >
-              <div className="chat-composer-lane w-full">
-                <div
-                  data-chat-composer-stack="true"
-                  className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
-                >
-                  <div className="relative z-10">
-                    <ComposerSurface.Shell>
-                      <ComposerSurface.Host>
-                        <div className="relative z-10">
-                          <ExternalSessionBar
-                            environmentId={environmentId}
-                            sessionKey={sessionKey}
-                            summary={summary}
-                            hasMessages={hasEntries}
-                            truncated={data?.truncated ?? false}
-                            loaded={data !== null}
-                            error={error}
-                            connected={connected}
-                            onRetry={refresh}
-                          />
-                        </div>
-                      </ComposerSurface.Host>
-                    </ComposerSurface.Shell>
-                    <div
-                      aria-hidden
-                      className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-                    />
+                    <Button
+                      aria-label="Scroll to end"
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => scrollToEnd(true)}
+                      className="pointer-events-auto"
+                      size="xs"
+                      variant="glass"
+                    >
+                      <ChevronDownIcon className="size-3.5" />
+                      Scroll to end
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              {/* ChatView's docked composer overlay, lane, stack and surface. */}
+              <div
+                ref={setOverlayElement}
+                data-chat-composer-overlay="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
+              >
+                <div className="chat-composer-lane w-full">
+                  <div
+                    data-chat-composer-stack="true"
+                    className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
+                  >
+                    <div className="relative z-10">
+                      <ComposerSurface.Shell>
+                        <ComposerSurface.Host>
+                          <div className="relative z-10">
+                            <ExternalSessionComposerBlock
+                              environmentId={environmentId}
+                              sessionKey={sessionKey}
+                              summary={summary}
+                              hasMessages={hasEntries}
+                              truncated={data?.truncated ?? false}
+                              loaded={data !== null}
+                              error={error}
+                              connected={connected}
+                              onRetry={refresh}
+                            />
+                          </div>
+                        </ComposerSurface.Host>
+                      </ComposerSurface.Shell>
+                      <div
+                        aria-hidden
+                        className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </ChatCanvas>
+            </ChatCanvas>
+          </div>
         </div>
       </div>
     </SidebarInset>
   );
 }
 
-/** The chat header's layout: folder / title, then provider, model and state. */
+/**
+ * The thread header's layout (ChatView's header plus ChatHeader's breadcrumb
+ * row): folder / title. Session details live in the composer-shaped block,
+ * and the right side stays empty where a thread keeps its panel toggles.
+ */
 function ExternalSessionHeader(props: {
   environmentId: EnvironmentId;
   summary: ExternalSessionSummary | null;
@@ -385,7 +413,6 @@ function ExternalSessionHeader(props: {
   const { summary } = props;
   const title = summary === null ? "Session" : externalSessionTitle(summary);
   const folder = summary === null ? null : cwdBasename(summary.cwd);
-  const model = summary?.model ? formatModelSlugName(summary.model) : null;
   const project =
     summary?.cwd != null && folder !== null
       ? { environmentId: props.environmentId, workspaceRoot: summary.cwd, title: folder }
@@ -395,14 +422,15 @@ function ExternalSessionHeader(props: {
     <header
       data-chat-header
       className={cn(
-        "relative bg-background",
+        "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
         isElectron
-          ? "drag-region flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center px-3 sm:px-5"
+          ? "drag-region flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center px-3 sm:px-5 wco:pr-(--workspace-native-controls-inset)"
           : "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center pl-(--workspace-gutter-start) pr-(--workspace-gutter-end)",
         COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+      {/* ChatHeader's row; pr-24 is the room a thread reserves for its panel toggles. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 pr-24 sm:gap-3">
         <WorkspaceBreadcrumb
           ariaLabel="Session breadcrumb"
           className="flex-1 overflow-clip [overflow-clip-margin:2px]"
@@ -424,50 +452,79 @@ function ExternalSessionHeader(props: {
             </>
           ) : null}
           <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
-            <h2 className="min-w-0" title={title}>
-              <WorkspaceBreadcrumbText>{title}</WorkspaceBreadcrumbText>
-            </h2>
+            <Tooltip>
+              <TooltipTrigger render={<h2 aria-label={title} className="min-w-0 flex-1" />}>
+                <WorkspaceBreadcrumbText>{title}</WorkspaceBreadcrumbText>
+              </TooltipTrigger>
+              <TooltipPopup side="top">{title}</TooltipPopup>
+            </Tooltip>
           </WorkspaceBreadcrumbItem>
         </WorkspaceBreadcrumb>
-        {summary !== null ? (
-          <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            <ProviderInstanceIcon
-              driverKind={summary.driver}
-              displayName={externalSessionProductName(summary)}
-              className="size-4 shrink-0"
-              iconClassName="size-4"
-            />
-            {model !== null ? (
-              <span className="max-w-40 truncate max-sm:hidden">{model}</span>
-            ) : null}
-            <Badge variant={LIVENESS_BADGE_VARIANT[summary.liveness]} size="sm">
-              {livenessLine(summary)}
-            </Badge>
-          </span>
-        ) : null}
       </div>
     </header>
   );
 }
 
-/** "Running in Claude Desktop", "Idle · Codex CLI". */
-function livenessLine(summary: ExternalSessionSummary): string {
-  const origin = externalSessionOriginLabel(summary);
-  switch (summary.liveness) {
-    case "running":
-      return `Running in ${origin}`;
-    case "idle":
-      return `Idle · ${origin}`;
-    case "recent":
-      return `Inactive · ${origin}`;
+interface ComposerBlockState {
+  /** The one-line explanation in the prompt area. */
+  readonly message: string;
+  readonly tone: "muted" | "error";
+  /** Why "Continue in T3" is unavailable; null when it can run. */
+  readonly blockedReason: string | null;
+}
+
+function resolveComposerBlockState(input: {
+  summary: ExternalSessionSummary | null;
+  hasMessages: boolean;
+  loaded: boolean;
+  error: string | null;
+  connected: boolean;
+  continueError: string | null;
+}): ComposerBlockState {
+  const { summary } = input;
+  if (input.error !== null) {
+    const message = `Could not load this session. ${input.error}`;
+    return { message, tone: "error", blockedReason: message };
   }
+  if (!input.connected) {
+    const message = input.loaded ? "Disconnected. Reconnecting…" : "Waiting for the environment…";
+    return { message, tone: "muted", blockedReason: message };
+  }
+  if (summary === null) {
+    return { message: "Loading session…", tone: "muted", blockedReason: "Loading session…" };
+  }
+  const origin = externalSessionOriginLabel(summary);
+  const unsupported = externalSessionUnsupportedReason(summary);
+  let message: string;
+  let blockedReason: string | null = null;
+  if (summary.liveness === "running") {
+    message = `Running in ${origin} — stop it there to continue here.`;
+    blockedReason = `Stop the session in ${origin} first.`;
+  } else if (unsupported === "provider") {
+    message = `${externalSessionProductName(summary)} sessions can't be continued in T3 yet.`;
+    blockedReason = message;
+  } else if (unsupported !== null) {
+    message = EXTERNAL_SESSION_UNSUPPORTED_MESSAGES[unsupported];
+    blockedReason = message;
+  } else if (!input.hasMessages) {
+    message = "No messages yet.";
+    blockedReason = "Nothing to continue yet.";
+  } else {
+    message = `Continue this ${origin} session in T3 to reply here.`;
+  }
+  return input.continueError !== null
+    ? { message: input.continueError, tone: "error", blockedReason }
+    : { message, tone: "muted", blockedReason };
 }
 
 /**
- * Stands in for the composer, as the subagent bar does: what the session is
- * doing, and either "Continue in T3" or why it cannot be continued yet.
+ * Stands in for the composer and keeps its shape. The prompt area explains the
+ * session's state in the placeholder's style, the toolbar row shows the model
+ * and status where the composer's pickers sit, and "Continue in T3" sits where
+ * the send button does. The classes mirror ChatComposer's expanded layout;
+ * each part names its source.
  */
-function ExternalSessionBar(props: {
+function ExternalSessionComposerBlock(props: {
   environmentId: EnvironmentId;
   sessionKey: string;
   summary: ExternalSessionSummary | null;
@@ -510,80 +567,128 @@ function ExternalSessionBar(props: {
     await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(threadRef) });
   }, [environmentId, navigate, runContinue, sessionKey]);
 
-  const model = summary?.model ? formatModelSlugName(summary.model) : null;
-  const unsupported = summary === null ? null : externalSessionUnsupportedReason(summary);
-  const canContinue =
-    summary !== null &&
-    summary.liveness !== "running" &&
-    unsupported === null &&
-    props.hasMessages &&
-    props.connected;
-
-  let status: string;
-  let tone: "muted" | "error" = "muted";
-  if (props.error !== null) {
-    status = `Could not load this session. ${props.error}`;
-    tone = "error";
-  } else if (!props.connected) {
-    status = props.loaded ? "Disconnected. Reconnecting…" : "Waiting for the environment…";
-  } else if (summary === null) {
-    status = "Loading session…";
-  } else if (continueError !== null) {
-    status = continueError;
-    tone = "error";
-  } else if (summary.liveness === "running") {
-    status = `Running in ${externalSessionOriginLabel(summary)}. Stop it there to continue here.`;
-  } else if (unsupported !== null) {
-    status = EXTERNAL_SESSION_UNSUPPORTED_MESSAGES[unsupported];
-  } else if (!props.hasMessages) {
-    status = "No messages yet.";
-  } else {
-    status = props.truncated
-      ? `${livenessLine(summary)} · Older messages are not shown`
-      : livenessLine(summary);
-  }
+  const { message, tone, blockedReason } = resolveComposerBlockState({
+    summary,
+    hasMessages: props.hasMessages,
+    loaded: props.loaded,
+    error: props.error,
+    connected: props.connected,
+    continueError,
+  });
+  const continueTooltip = continuing
+    ? "Opening this session as a T3 thread…"
+    : (blockedReason ?? "Open this session as a T3 thread and reply here");
 
   return (
-    <div className="flex min-h-12 items-center gap-3 rounded-3xl py-2 ps-5 pe-2 text-sm">
-      {summary !== null ? (
-        <span className="flex min-w-0 shrink-0 items-center gap-2">
-          <ProviderInstanceIcon
-            driverKind={summary.driver}
-            displayName={externalSessionProductName(summary)}
-            className="size-4 shrink-0"
-            iconClassName="size-4"
-          />
-          {model !== null ? (
-            <span className="max-w-40 truncate font-medium text-foreground max-sm:hidden">
-              {model}
-            </span>
-          ) : null}
-        </span>
-      ) : null}
-      <span
-        role="status"
-        title={status}
-        className={cn(
-          "min-w-0 flex-1 truncate",
-          tone === "error" ? "text-destructive-foreground" : "text-muted-foreground",
-        )}
-      >
-        {status}
-      </span>
-      {props.error !== null ? (
-        <Button size="sm" variant="ghost" onClick={props.onRetry}>
-          Retry
-        </Button>
-      ) : canContinue ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={continuing}
-          onClick={() => void handleContinue()}
-        >
-          {continuing ? "Continuing…" : "Continue in T3"}
-        </Button>
-      ) : null}
+    // ChatComposer's <form> and the wrapper around its main surface.
+    <div className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width)">
+      <div className="relative">
+        <ComposerSurface.Main>
+          <div className="rounded-3xl">
+            {/* ChatComposer's body padding, then ComposerPromptEditorTiptap's
+                container and editor classes, so the prompt area keeps the
+                empty composer's height and type. Text only: nothing here
+                accepts typing. */}
+            <div className="relative px-3 pt-3.5 pb-2 sm:px-4 sm:pt-4">
+              <div className="relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)">
+                <p
+                  role="status"
+                  className={cn(
+                    "-m-1 block max-h-52 min-h-19.5 overflow-y-auto p-1 whitespace-pre-wrap wrap-break-word leading-relaxed",
+                    tone === "error" ? "text-destructive-foreground" : "text-placeholder/75",
+                  )}
+                >
+                  {message}
+                </p>
+              </div>
+            </div>
+            {/* ChatComposer's bottom toolbar: controls left, primary action right. */}
+            <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:gap-0 sm:px-4 sm:pb-4">
+              <div className="relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {summary !== null ? (
+                  <>
+                    {/* ProviderModelPicker's trigger content, without the menu. */}
+                    <SessionChip
+                      tooltip={
+                        summary.model
+                          ? formatModelSlugName(summary.model)
+                          : externalSessionProductName(summary)
+                      }
+                      className="-ms-2.5 min-w-13 shrink"
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <ProviderInstanceIcon
+                          driverKind={summary.driver}
+                          displayName={externalSessionProductName(summary)}
+                          className="size-4"
+                          iconClassName="size-4"
+                        />
+                        <span className="min-w-0 flex-1 overflow-hidden truncate">
+                          {shortModelLabel(summary.model) ?? externalSessionProductName(summary)}
+                        </span>
+                      </span>
+                    </SessionChip>
+                    <SessionChip tooltip={`Session from ${externalSessionOriginLabel(summary)}`}>
+                      {externalSessionOriginLabel(summary)}
+                    </SessionChip>
+                    <SessionChip tooltip={LIVENESS_DESCRIPTION[summary.liveness]}>
+                      {summary.liveness === "running" ? (
+                        <CircleDashedIcon aria-hidden className="text-info" />
+                      ) : null}
+                      {LIVENESS_LABEL[summary.liveness]}
+                    </SessionChip>
+                    {props.truncated && props.hasMessages ? (
+                      <span className="min-w-0 truncate ps-1.5 text-xs text-muted-foreground/70 @max-[480px]/composer-surface:hidden">
+                        Older messages not shown
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
+                {props.error !== null ? (
+                  <Button variant="default" size="default" onClick={props.onRetry}>
+                    Retry
+                  </Button>
+                ) : (
+                  <Tooltip>
+                    {/* A disabled button gets no pointer events; the span keeps the reason reachable. */}
+                    <TooltipTrigger render={<span className="inline-flex" />}>
+                      <Button
+                        variant="default"
+                        size="default"
+                        disabled={blockedReason !== null || continuing}
+                        aria-busy={continuing || undefined}
+                        onClick={() => void handleContinue()}
+                      >
+                        {continuing ? (
+                          <Spinner aria-hidden />
+                        ) : (
+                          <PlayIcon aria-hidden className="fill-current" />
+                        )}
+                        Continue in T3
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipPopup>{continueTooltip}</TooltipPopup>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+          </div>
+        </ComposerSurface.Main>
+      </div>
     </div>
+  );
+}
+
+/** A read-only toolbar chip; see SESSION_CHIP_CLASS_NAME. */
+function SessionChip(props: { tooltip: string; className?: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className={cn(SESSION_CHIP_CLASS_NAME, props.className)} />}>
+        {props.children}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{props.tooltip}</TooltipPopup>
+    </Tooltip>
   );
 }

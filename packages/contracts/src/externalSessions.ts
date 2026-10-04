@@ -108,13 +108,16 @@ export type ExternalSessionContinueResult = typeof ExternalSessionContinueResult
 
 /**
  * Why a session cannot be continued in T3. `provider`: its runtime cannot
- * resume a session from disk here. `no-folder`: the session has no working
- * folder. `folder-missing`: that folder no longer exists. `no-instance`: no
- * enabled provider instance reads this session store. `too-large`: the
- * transcript is too big to import. `empty`: nothing to continue yet.
+ * resume a session from disk here. `separate-store`: T3 runs this agent with
+ * its own private session store, which cannot see the session. `no-folder`:
+ * the session has no working folder. `folder-missing`: that folder no longer
+ * exists. `no-instance`: no enabled provider instance reads this session
+ * store. `too-large`: the transcript is too big to import. `empty`: nothing
+ * to continue yet.
  */
 export const ExternalSessionUnsupportedReason = Schema.Literals([
   "provider",
+  "separate-store",
   "no-folder",
   "folder-missing",
   "no-instance",
@@ -128,6 +131,8 @@ export const EXTERNAL_SESSION_UNSUPPORTED_MESSAGES: Record<
   string
 > = {
   provider: "This provider's sessions can be watched here but not continued.",
+  "separate-store":
+    "T3 runs this agent with its own session store, so it cannot pick up this session here.",
   "no-folder": "This session has no working folder to open as a project.",
   "folder-missing": "This session's working folder no longer exists.",
   "no-instance": "No enabled provider in T3 reads this session's folder.",
@@ -135,7 +140,9 @@ export const EXTERNAL_SESSION_UNSUPPORTED_MESSAGES: Record<
   empty: "This session has no messages to continue yet.",
 };
 
-const CONTINUABLE_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex"]);
+const CONTINUABLE_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex", "grok", "pi"]);
+// Antigravity in T3 keeps conversations in a private per-instance GEMINI_HOME.
+const SEPARATE_STORE_DRIVERS: ReadonlySet<string> = new Set(["antigravity"]);
 
 /**
  * What can be known from a summary alone. The server checks again, along
@@ -144,6 +151,7 @@ const CONTINUABLE_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex"
 export function externalSessionUnsupportedReason(
   summary: Pick<ExternalSessionSummary, "driver" | "cwd">,
 ): ExternalSessionUnsupportedReason | null {
+  if (SEPARATE_STORE_DRIVERS.has(summary.driver)) return "separate-store";
   if (!CONTINUABLE_DRIVERS.has(summary.driver)) return "provider";
   if (summary.cwd === null) return "no-folder";
   return null;
