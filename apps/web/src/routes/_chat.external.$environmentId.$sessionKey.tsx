@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { ExternalSessionView } from "../external-sessions/ExternalSessionView";
 
-// Read-only transcript of an agent session running outside T3 (fork add-on).
+// Live view of an agent session running outside T3 (fork add-on).
 export const Route = createFileRoute("/_chat/external/$environmentId/$sessionKey")({
   component: ExternalSessionRouteView,
 });

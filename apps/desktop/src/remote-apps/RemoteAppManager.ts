@@ -35,19 +35,16 @@ import {
 } from "./RemoteAppPolicy.ts";
 import * as RemoteAppSession from "./RemoteAppSession.ts";
 import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
-import { buildRemoteSiteThemeCss } from "./RemoteAppSiteTheme.ts";
-import {
-  buildRemoteAppSidebarProbeScript,
-  parseRemoteAppSidebarProbeMessage,
-} from "./RemoteAppSidebarProbe.ts";
+import { buildRemoteAppSidebarWidthScript, buildRemoteSiteThemeCss } from "./RemoteAppSiteTheme.ts";
 import {
   buildRemoteAppInteractionScript,
   buildRemoteAppSurfaceMenuHtml,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
-  REMOTE_APP_SURFACE_MENU_INSET,
   REMOTE_APP_SURFACE_MENU_WIDTH,
+  resolveRemoteAppSurfaceMenuBackground,
   resolveRemoteAppSurfaceMenuHeight,
+  type RemoteAppSurfaceMenuMaterial,
 } from "./RemoteAppTheme.ts";
 import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import { REMOTE_APP_VIEW_TOP_INSET, TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
@@ -111,17 +108,18 @@ export const parseRemoteAppSurfaceMenuUrl = (url: string): DesktopSurface | unde
 };
 
 /**
- * The menu lists T3 plus every available site in a stable order. The active
- * site stays listed after its provider signs out so the current choice is
- * always visible.
+ * The surfaces the menu offers, in a stable order: T3 first, then the
+ * available sites. The active surface is never listed; there is nothing to
+ * switch to there.
  */
 export const resolveRemoteAppMenuSurfaces = (
   availableSites: ReadonlyArray<RemoteAppSite>,
   activeSurface: DesktopSurface,
-): ReadonlyArray<DesktopSurface> => [
-  "t3code",
-  ...REMOTE_APP_SITES.filter((site) => availableSites.includes(site) || site === activeSurface),
-];
+): ReadonlyArray<DesktopSurface> =>
+  (["t3code", ...REMOTE_APP_SITES] as const).filter(
+    (surface) =>
+      surface !== activeSurface && (surface === "t3code" || availableSites.includes(surface)),
+  );
 
 /** The URL to open for a site: its last persisted page when it belongs to that site. */
 export const resolveRemoteAppSiteUrl = (
@@ -217,8 +215,6 @@ export const make = Effect.gen(function* () {
   // reloads it, since no toolbar offers a retry.
   const brokenSites = new Set<RemoteAppSite>();
   const insertedThemeKeys = new Map<RemoteAppSite, string>();
-  // Last width each site's probe reported; null while it has no sidebar.
-  const siteSidebarWidths = new Map<RemoteAppSite, number | null>();
   const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
   const popupWindows = new Set<Electron.BrowserWindow>();
   let surfaceMenuWindow: Electron.BrowserWindow | null = null;
@@ -259,7 +255,6 @@ export const make = Effect.gen(function* () {
     const view = views.get(site);
     views.delete(site);
     insertedThemeKeys.delete(site);
-    siteSidebarWidths.delete(site);
     recoveryCounts.delete(site);
     brokenSites.delete(site);
     if (view === undefined) return;
@@ -356,15 +351,18 @@ export const make = Effect.gen(function* () {
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
-  const recordSiteSidebarWidth = (site: RemoteAppSite, width: number | null) => {
-    if (siteSidebarWidths.has(site) && siteSidebarWidths.get(site) === width) return;
-    siteSidebarWidths.set(site, width);
-    runSafely(
-      updateSiteState(site, (state) =>
-        state.siteSidebarWidth === width ? state : { ...state, siteSidebarWidth: width },
-      ),
+  /**
+   * Pins the page's sidebar to T3's current width. The inserted site CSS reads
+   * the width from a custom property, so width changes never reinsert it.
+   */
+  const applySidebarWidth = (view: Electron.WebContentsView) =>
+    Effect.flatMap(Ref.get(remoteThemeRef), (theme) =>
+      Effect.tryPromise({
+        try: () =>
+          view.webContents.executeJavaScript(buildRemoteAppSidebarWidthScript(theme.sidebarWidth)),
+        catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+      }).pipe(Effect.catch(() => Effect.void)),
     );
-  };
 
   const isThemeableSiteUrl = (site: RemoteAppSite, url: string): boolean => {
     if (site === "chatgpt") return isChatGptRemoteAppUrl(url);
@@ -396,20 +394,13 @@ export const make = Effect.gen(function* () {
             catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
           }).pipe(Effect.catch(() => Effect.void));
         }
-        if (!isThemeableSiteUrl(site, view.webContents.getURL())) {
-          // Sign-in pages on other hosts have no site sidebar to follow.
-          recordSiteSidebarWidth(site, null);
-          return;
-        }
+        if (!isThemeableSiteUrl(site, view.webContents.getURL())) return;
         const key = yield* Effect.tryPromise({
           try: () => view.webContents.insertCSS(buildRemoteSiteThemeCss(site, theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         });
         insertedThemeKeys.set(site, key);
-        yield* Effect.tryPromise({
-          try: () => view.webContents.executeJavaScript(buildRemoteAppSidebarProbeScript(site)),
-          catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
-        }).pipe(Effect.catch(() => Effect.void));
+        yield* applySidebarWidth(view);
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
           try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme)),
@@ -427,11 +418,6 @@ export const make = Effect.gen(function* () {
     const contents = view.webContents;
     contents.on("input-event", (_event, input) => {
       if (input.type === "mouseDown") contents.focus();
-    });
-    contents.on("console-message", (event) => {
-      if (event.frame !== contents.mainFrame) return;
-      const width = parseRemoteAppSidebarProbeMessage(event.message);
-      if (width !== undefined) recordSiteSidebarWidth(site, width);
     });
     contents.setWindowOpenHandler(({ url }) => {
       const decision = classifyRemoteAppNavigation(site, url, { authFlowActive: true });
@@ -818,14 +804,18 @@ export const make = Effect.gen(function* () {
   const setTheme = (theme: RemoteAppTheme) =>
     Effect.gen(function* () {
       const previous = yield* Ref.getAndSet(remoteThemeRef, theme);
-      // The host sidebar follows the site's width, so width-only updates are
-      // frequent and must not reinsert every site's stylesheet.
-      const presentationChanged =
-        JSON.stringify({ ...previous, sidebarWidth: null }) !==
-        JSON.stringify({ ...theme, sidebarWidth: null });
-      for (const site of presentationChanged ? [...views.keys()] : []) {
+      // Dragging T3's sidebar sends a stream of width-only updates; those just
+      // move every site's pin. The menu colors are read when the menu opens.
+      const presentationOf = (value: RemoteAppTheme) =>
+        JSON.stringify({ ...value, sidebarWidth: null, menu: null });
+      const presentationChanged = presentationOf(previous) !== presentationOf(theme);
+      const widthChanged = previous.sidebarWidth !== theme.sidebarWidth;
+      for (const site of presentationChanged || widthChanged ? [...views.keys()] : []) {
         const view = yield* getLiveView(site);
-        if (Option.isSome(view)) yield* applyRemoteTheme(site, view.value);
+        if (Option.isNone(view)) continue;
+        // applyRemoteTheme pins the width too.
+        if (presentationChanged) yield* applyRemoteTheme(site, view.value);
+        else yield* applySidebarWidth(view.value);
       }
       if ((previous.sidebarWidth === null) !== (theme.sidebarWidth === null)) {
         const window = yield* getLiveWindow;
@@ -846,8 +836,8 @@ export const make = Effect.gen(function* () {
   const setAvailableSites = (sites: ReadonlyArray<RemoteAppSite>) =>
     Effect.gen(function* () {
       yield* Ref.set(availableSitesRef, sites);
-      // Release the memory of hidden sites whose provider was disabled or
-      // signed out. The active site stays until the user switches away.
+      // Release the memory of hidden sites that are no longer available. The
+      // renderer moves off an active site that became unavailable.
       const activeSite = activeSiteOf(yield* stateStore.get);
       const window = yield* getLiveWindow;
       for (const site of [...views.keys()]) {
@@ -866,22 +856,38 @@ export const make = Effect.gen(function* () {
       state.activeSurface,
     );
     closeSurfaceMenu();
+    // The switcher offers no menu when there is nothing to switch to.
+    if (surfaces.length === 0) return;
 
+    // A transparent window gets neither native rounded corners nor a native
+    // shadow, so the menu is an opaque frameless window the platform rounds
+    // and shadows. On macOS its background is native vibrancy, tinted by the
+    // page like T3's dropdown-glass; elsewhere the page paints the opaque
+    // popover color.
+    const material: RemoteAppSurfaceMenuMaterial =
+      process.platform === "darwin" ? "vibrancy" : "opaque";
+    const materialOptions: Electron.BrowserWindowConstructorOptions =
+      material === "vibrancy"
+        ? { vibrancy: "menu", visualEffectState: "active", backgroundColor: "#00000000" }
+        : { backgroundColor: resolveRemoteAppSurfaceMenuBackground(theme) };
     const menu = yield* Effect.try({
       try: () =>
         new Electron.BrowserWindow({
           parent: owner,
           modal: false,
           frame: false,
-          transparent: true,
+          transparent: false,
+          roundedCorners: true,
+          hasShadow: true,
           resizable: false,
           movable: false,
+          minimizable: false,
+          maximizable: false,
+          fullscreenable: false,
           focusable: true,
           skipTaskbar: true,
-          // The document draws T3's popup shadow inside its transparent inset.
-          hasShadow: false,
           show: false,
-          backgroundColor: "#00000000",
+          ...materialOptions,
           webPreferences: {
             sandbox: true,
             contextIsolation: true,
@@ -913,15 +919,13 @@ export const make = Effect.gen(function* () {
     const zoomFactor = owner.webContents.getZoomFactor();
     const scale = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
     const contentBounds = owner.getContentBounds();
-    const menuWidth = REMOTE_APP_SURFACE_MENU_WIDTH;
-    const menuHeight = resolveRemoteAppSurfaceMenuHeight(surfaces.length);
-    const requestedX =
-      contentBounds.x + Math.round(anchor.x * scale) - REMOTE_APP_SURFACE_MENU_INSET;
-    const requestedY =
-      contentBounds.y +
-      Math.round((anchor.y + anchor.height) * scale) +
-      4 -
-      REMOTE_APP_SURFACE_MENU_INSET;
+    // The menu scales with T3's zoom, as T3's own menus do.
+    const menuWidth = Math.round(REMOTE_APP_SURFACE_MENU_WIDTH * scale);
+    const menuHeight = Math.round(resolveRemoteAppSurfaceMenuHeight(surfaces) * scale);
+    // The window is the popup itself: its left edge aligns with the trigger
+    // and its top sits 4px below it, as T3's menus do.
+    const requestedX = contentBounds.x + Math.round(anchor.x * scale);
+    const requestedY = contentBounds.y + Math.round((anchor.y + anchor.height + 4) * scale);
     const display = Electron.screen.getDisplayNearestPoint({ x: requestedX, y: requestedY });
     const workArea = display.workArea;
     const x = Math.min(
@@ -934,13 +938,15 @@ export const make = Effect.gen(function* () {
     );
     menu.setBounds({ x, y, width: menuWidth, height: menuHeight });
     const documentUrl = `data:text/html;charset=utf-8,${encodeURIComponent(
-      buildRemoteAppSurfaceMenuHtml(theme, state.activeSurface, surfaces),
+      buildRemoteAppSurfaceMenuHtml(theme, surfaces, material),
     )}`;
     yield* Effect.tryPromise({
       try: () => menu.loadURL(documentUrl),
       catch: (cause) => new RemoteAppManagerError({ operation: "surface-menu", cause }),
     }).pipe(Effect.tapError(() => Effect.sync(closeSurfaceMenu)));
     if (!menu.isDestroyed()) {
+      // After load: a navigation can reset a page's zoom.
+      menu.webContents.setZoomFactor(scale);
       menu.show();
       menu.focus();
     }
@@ -965,7 +971,6 @@ export const make = Effect.gen(function* () {
           activeSurface: site,
           loadState: "loading",
           currentUrl: url,
-          siteSidebarWidth: siteSidebarWidths.get(site) ?? null,
           error: null,
         }));
         yield* loadUrl(view, url);
@@ -981,7 +986,6 @@ export const make = Effect.gen(function* () {
           currentTitle: REMOTE_APP_SITE_LABELS[site],
           canGoBack: false,
           canGoForward: false,
-          siteSidebarWidth: siteSidebarWidths.get(site) ?? null,
           error: null,
         }));
         yield* loadUrl(view, url);
@@ -998,7 +1002,6 @@ export const make = Effect.gen(function* () {
           }),
           activeSurface: site,
           loadState: view.webContents.isLoading() ? "loading" : "ready",
-          siteSidebarWidth: siteSidebarWidths.get(site) ?? null,
         };
       });
     });

@@ -14,8 +14,9 @@ export const REMOTE_APP_SITE_LABELS: Record<RemoteAppSite, string> = {
 };
 
 /**
- * The provider driver whose signed-in, enabled instance makes a site appear in
- * the surface menu. Each site's web session still signs in on its own.
+ * The provider driver whose enabled instance makes a site available in the
+ * surface menu, unless the user hides it. Each site's web session signs in on
+ * its own.
  */
 export const REMOTE_APP_SITE_PROVIDER_DRIVERS: Record<RemoteAppSite, string> = {
   chatgpt: "codex",
@@ -90,12 +91,6 @@ export const RemoteAppStateSchema = Schema.Struct({
   zoomFactor: Schema.Number.check(Schema.isBetween({ minimum: 0.5, maximum: 3 })),
   recents: Schema.Array(RemoteAppRecentLocationSchema).check(Schema.isMaxLength(20)),
   error: Schema.NullOr(RemoteAppErrorSchema),
-  // Measured right edge of the active site's own sidebar in CSS px, so the host
-  // titlebar and footer column can follow the site instead of resizing it.
-  // Optional so state persisted before this field still decodes.
-  siteSidebarWidth: Schema.optionalKey(
-    Schema.NullOr(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1_024 }))),
-  ),
 });
 export type RemoteAppState = typeof RemoteAppStateSchema.Type;
 
@@ -173,13 +168,33 @@ export const RemoteAppThemeColorsSchema = Schema.Struct({
 });
 export type RemoteAppThemeColors = typeof RemoteAppThemeColorsSchema.Type;
 
+/**
+ * Resolved colors of T3's glass menus (`dropdown-glass` and `MenuItem`), so the
+ * native surface menu window can match them. `glass` is the translucent tint
+ * drawn over native vibrancy; `popover` is the opaque fallback.
+ */
+export const RemoteAppMenuThemeSchema = Schema.Struct({
+  glass: RemoteAppThemeColorSchema,
+  popover: RemoteAppThemeColorSchema,
+  foreground: RemoteAppThemeColorSchema,
+  mutedForeground: RemoteAppThemeColorSchema,
+  highlight: RemoteAppThemeColorSchema,
+  highlightForeground: RemoteAppThemeColorSchema,
+  border: RemoteAppThemeColorSchema,
+  separator: RemoteAppThemeColorSchema,
+});
+export type RemoteAppMenuTheme = typeof RemoteAppMenuThemeSchema.Type;
+
 export const RemoteAppThemeSchema = Schema.Struct({
   appearance: Schema.Literals(["light", "dark"]),
   stageArt: RemoteAppStageArtSchema,
+  // T3's sidebar width in CSS px; every site's sidebar is pinned to it. Null
+  // while T3's sidebar is collapsed, which leaves sites at their own width.
   sidebarWidth: Schema.NullOr(
     Schema.Number.check(Schema.isBetween({ minimum: 160, maximum: 512 })),
   ),
   colors: RemoteAppThemeColorsSchema,
+  menu: Schema.optionalKey(RemoteAppMenuThemeSchema),
 });
 export type RemoteAppTheme = typeof RemoteAppThemeSchema.Type;
 

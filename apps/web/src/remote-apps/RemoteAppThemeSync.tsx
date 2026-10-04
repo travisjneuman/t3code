@@ -1,4 +1,4 @@
-import type { RemoteAppThemeColors } from "@t3tools/contracts";
+import type { RemoteAppMenuTheme, RemoteAppThemeColors } from "@t3tools/contracts";
 
 import { useEffect, useRef } from "react";
 
@@ -185,6 +185,33 @@ function readRemoteThemeColors(
   };
 }
 
+/**
+ * The colors of T3's glass menus (`dropdown-glass` in index.css and MenuItem in
+ * components/ui/menu.tsx), resolved here because the native surface menu
+ * window cannot load T3's stylesheet. Undefined until the tokens are painted.
+ */
+function readRemoteMenuTheme(): RemoteAppMenuTheme | undefined {
+  const styles = getComputedStyle(document.documentElement);
+  const read = (variable: `--${string}`) => styles.getPropertyValue(variable).trim();
+  const popover = read("--popover");
+  const foreground = read("--foreground");
+  if (popover === "" || foreground === "") return undefined;
+  const glassOpacity = read("--glass-opacity") || "80%";
+  const contrastForeground = read("--contrast-foreground") || foreground;
+  return {
+    glass: toHexColor(
+      `color-mix(in srgb, ${popover} 18%, color-mix(in srgb, ${popover} ${glassOpacity}, transparent))`,
+    ),
+    popover: toHexColor(popover),
+    foreground: toHexColor(foreground),
+    mutedForeground: toHexColor(read("--muted-foreground") || foreground),
+    highlight: toHexColor(read("--accent") || popover),
+    highlightForeground: toHexColor(read("--accent-foreground") || foreground),
+    border: toHexColor(`color-mix(in srgb, ${contrastForeground} 10%, transparent)`),
+    separator: toHexColor(read("--border") || popover),
+  };
+}
+
 const sidebarStateOf = (sidebar: HTMLElement) =>
   sidebar.closest<HTMLElement>('[data-slot="sidebar"]');
 
@@ -246,6 +273,7 @@ export function RemoteAppThemeSync() {
             const renderedAppearance = document.documentElement.classList.contains("dark")
               ? "dark"
               : "light";
+            const menu = readRemoteMenuTheme();
             const payload = {
               appearance: renderedAppearance,
               stageArt: latestTheme.stageArt,
@@ -255,6 +283,7 @@ export function RemoteAppThemeSync() {
                 renderedAppearance,
                 latestTheme.themeHalves,
               ),
+              ...(menu === undefined ? {} : { menu }),
             } as const;
             await bridge.setTheme(payload);
           } catch (cause: unknown) {

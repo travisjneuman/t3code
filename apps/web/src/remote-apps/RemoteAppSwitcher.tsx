@@ -8,14 +8,35 @@ import { cn } from "~/lib/utils";
 
 import { RemoteAppSiteIcon } from "./RemoteAppSiteIcon";
 import { activeRemoteAppSite } from "./remoteAppState";
+import { useAvailableRemoteAppSites } from "./useRemoteAppSites";
 import { useRemoteAppState } from "./useRemoteAppState";
 
 export function RemoteAppSwitcher() {
   const { state, bridge } = useRemoteAppState();
+  const { sites } = useAvailableRemoteAppSites();
   const triggerRef = useRef<HTMLButtonElement>(null);
   if (bridge === undefined) return null;
   const site = activeRemoteAppSite(state);
   const siteLabel = site === undefined ? undefined : REMOTE_APP_SITE_LABELS[site];
+  const current = (
+    <>
+      {site === undefined ? (
+        <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
+      ) : (
+        <RemoteAppSiteIcon site={site} className="size-4 shrink-0" />
+      )}
+      <span className="truncate">{siteLabel ?? "Code"}</span>
+    </>
+  );
+
+  // The menu never lists the active surface; T3 is always there from a site.
+  if (site === undefined && sites.length === 0) {
+    return (
+      <div className="[&_svg]:-mx-0.5 ml-[var(--workspace-titlebar-content-left)] flex h-7 max-w-44 shrink-0 items-center gap-1 border border-transparent px-2 font-medium text-foreground text-sm tracking-tight">
+        {current}
+      </div>
+    );
+  }
 
   const openMenu = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -44,12 +65,7 @@ export function RemoteAppSwitcher() {
       data-remote-app-switcher
       onClick={openMenu}
     >
-      {site === undefined ? (
-        <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
-      ) : (
-        <RemoteAppSiteIcon site={site} className="size-4 shrink-0" />
-      )}
-      <span className="truncate">{siteLabel ?? "Code"}</span>
+      {current}
       <ChevronDownIcon className="size-3 opacity-60" />
     </Button>
   );

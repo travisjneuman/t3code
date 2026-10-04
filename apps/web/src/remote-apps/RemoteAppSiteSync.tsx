@@ -1,25 +1,39 @@
-import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useRef } from "react";
 
-import { primaryServerProvidersAtom } from "~/state/server";
-
-import { resolveAvailableRemoteAppSites } from "./remoteAppState";
+import { activeRemoteAppSite } from "./remoteAppState";
+import { useAvailableRemoteAppSites } from "./useRemoteAppSites";
 import { useRemoteAppState } from "./useRemoteAppState";
 
-/** Tells the desktop shell which sites belong in the surface menu. */
+/**
+ * Tells the desktop shell which sites belong in the surface menu, and returns
+ * to T3 when the site on screen stops being available.
+ */
 export function RemoteAppSiteSync() {
-  const { bridge } = useRemoteAppState();
-  const providers = useAtomValue(primaryServerProvidersAtom);
-  const sites = resolveAvailableRemoteAppSites(providers);
+  const { bridge, state, setActiveSurface } = useRemoteAppState();
+  const { sites, loaded } = useAvailableRemoteAppSites();
   const sitesKey = sites.join(",");
   const sitesRef = useRef(sites);
   sitesRef.current = sites;
+  const setActiveSurfaceRef = useRef(setActiveSurface);
+  setActiveSurfaceRef.current = setActiveSurface;
+  const activeSite = activeRemoteAppSite(state);
+  const activeSiteUnavailable = loaded && activeSite !== undefined && !sites.includes(activeSite);
 
   // Provider snapshots refresh often; only a change in the site list crosses IPC.
   useEffect(() => {
-    if (bridge === undefined) return;
+    if (bridge === undefined || !loaded) return;
     void bridge.setAvailableSites(sitesRef.current).catch(() => undefined);
-  }, [bridge, sitesKey]);
+  }, [bridge, loaded, sitesKey]);
+
+  // The shell keeps the active site's view; once T3 is showing, sending the
+  // list again releases it.
+  useEffect(() => {
+    if (bridge === undefined || !activeSiteUnavailable) return;
+    void setActiveSurfaceRef
+      .current("t3code")
+      .then(() => bridge.setAvailableSites(sitesRef.current))
+      .catch(() => undefined);
+  }, [activeSiteUnavailable, bridge]);
 
   return null;
 }

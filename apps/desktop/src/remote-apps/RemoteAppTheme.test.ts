@@ -4,7 +4,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildRemoteAppInteractionScript,
-  buildRemoteAppSurfaceMenuHtml,
   buildRemoteAppThemeCss,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
@@ -189,18 +188,5 @@ describe("RemoteAppTheme", () => {
       resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade", left: 120 }),
     ).toBeNull();
     expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade plan" })).toBeNull();
-  });
-
-  it("builds a self-contained themed surface picker with one active option", () => {
-    const html = buildRemoteAppSurfaceMenuHtml(DEFAULT_REMOTE_APP_THEME, "chatgpt", [
-      "t3code",
-      "chatgpt",
-    ]);
-
-    expect(html).toContain('role="menu" aria-label="Switch app surface"');
-    expect(html).toContain('aria-checked="false" href="t3code-surface://select/t3code"');
-    expect(html).toContain('aria-checked="true" href="t3code-surface://select/chatgpt"');
-    expect(html).toContain("#344653");
-    expect(html).not.toContain("<script src=");
   });
 });

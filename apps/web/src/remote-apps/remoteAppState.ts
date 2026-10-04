@@ -27,21 +27,22 @@ export const isRemoteAppSurface = (value: unknown): value is RemoteAppState["act
 export const activeRemoteAppSite = (state: RemoteAppState): RemoteAppSite | undefined =>
   state.activeSurface === "t3code" ? undefined : state.activeSurface;
 
-/**
- * A site joins the surface menu once any enabled instance of its provider is
- * signed in on this machine's server.
- */
-export const resolveAvailableRemoteAppSites = (
-  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "enabled" | "auth">>,
+/** The sites whose provider has any enabled instance on this machine's server. */
+export const resolveEnabledRemoteAppSites = (
+  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "enabled">>,
 ): ReadonlyArray<RemoteAppSite> =>
   REMOTE_APP_SITES.filter((site) =>
     providers.some(
-      (provider) =>
-        provider.driver === REMOTE_APP_SITE_PROVIDER_DRIVERS[site] &&
-        provider.enabled &&
-        provider.auth.status === "authenticated",
+      (provider) => provider.driver === REMOTE_APP_SITE_PROVIDER_DRIVERS[site] && provider.enabled,
     ),
   );
+
+/** A site is in the surface menu when its provider is enabled and the user has not hidden it. */
+export const resolveAvailableRemoteAppSites = (
+  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "enabled">>,
+  hiddenSites: ReadonlyArray<RemoteAppSite>,
+): ReadonlyArray<RemoteAppSite> =>
+  resolveEnabledRemoteAppSites(providers).filter((site) => !hiddenSites.includes(site));
 
 export const resolveRemoteAppState = (state: RemoteAppState | null | undefined): RemoteAppState =>
   state ?? DEFAULT_REMOTE_APP_STATE;
@@ -67,12 +68,3 @@ export const shouldAcceptRemoteAppState = (input: {
   readonly next: RemoteAppState;
   readonly initialized: boolean;
 }): boolean => !input.initialized || input.current.activeSurface === input.next.activeSurface;
-
-/**
- * While a site is showing, the host sidebar column (titlebar switcher and
- * footer) follows the site's own sidebar width instead of imposing T3's.
- * Undefined keeps T3's width: T3 itself, or a site whose sidebar is collapsed
- * or not measured yet.
- */
-export const resolveRemoteAppSiteSidebarWidth = (state: RemoteAppState): number | undefined =>
-  state.activeSurface !== "t3code" && state.siteSidebarWidth ? state.siteSidebarWidth : undefined;

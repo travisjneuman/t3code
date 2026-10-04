@@ -1,22 +1,28 @@
 /**
  * External sessions: agent sessions running outside T3 (Claude Code, Codex,
- * Grok, Pi, Antigravity CLIs and desktop apps), streamed read-only from each
- * environment. Fork add-on; the sidebar section and the transcript route read
- * these atoms.
+ * Grok, Pi, Antigravity CLIs and desktop apps), streamed live from each
+ * environment, plus the command that continues an idle one as a T3 thread.
+ * Fork add-on; the sidebar section and the session route read these atoms.
  */
 import {
   EXTERNAL_SESSIONS_WS_METHODS,
+  PROVIDER_DISPLAY_NAMES,
   type EnvironmentId,
   type ExternalSessionEvent,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
 } from "@t3tools/contracts";
-import { createEnvironmentRpcSubscriptionAtomFamily } from "@t3tools/client-runtime/state/runtime";
+import {
+  createEnvironmentRpcCommand,
+  createEnvironmentRpcSubscriptionAtomFamily,
+} from "@t3tools/client-runtime/state/runtime";
+import { formatModelSlugName } from "@t3tools/shared/model";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import { connectionAtomRuntime } from "../connection/runtime";
+import { formatProviderDriverKindLabel } from "../providerModels";
 import { environmentSummaries } from "../state/presentation";
 
 /** Transcripts keep at most this many messages client-side; older ones drop off the top. */
@@ -74,6 +80,12 @@ export const externalSessionTranscript = createEnvironmentRpcSubscriptionAtomFam
       ),
   },
 );
+
+/** Imports an idle session as a T3 thread, or returns the thread it already became. */
+export const externalSessionContinue = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:continue",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.continue,
+});
 
 /**
  * Applies one stream event. Returns the same object when nothing changed, and
@@ -256,3 +268,23 @@ export const LIVENESS_LABEL = {
   idle: "Idle",
   recent: "Inactive",
 } as const satisfies Record<ExternalSessionSummary["liveness"], string>;
+
+/** Product name of the agent, e.g. "Claude" or "Codex". */
+export function externalSessionProductName(session: ExternalSessionSummary): string {
+  return PROVIDER_DISPLAY_NAMES[session.driver] ?? formatProviderDriverKindLabel(session.driver);
+}
+
+/** Where the session runs, e.g. "Claude Desktop" or "Codex CLI". */
+export function externalSessionOriginLabel(session: ExternalSessionSummary): string {
+  const product = externalSessionProductName(session);
+  return session.origin === null || session.origin.length === 0
+    ? product
+    : `${product} ${session.origin}`;
+}
+
+/** Compact model label for tight rows: "claude-opus-5-5" reads "Opus 5.5". */
+export function shortModelLabel(model: string | null): string | null {
+  if (model === null || model.trim().length === 0) return null;
+  const label = formatModelSlugName(model.trim());
+  return label.startsWith("Claude ") ? label.slice("Claude ".length) : label;
+}

@@ -87,6 +87,8 @@ import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
 import { ExpandableText } from "./ExpandableText";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { UsageProviderSettings } from "./UsageProviderSettings";
+// Fork add-on: desktop web-app (remote app) visibility settings.
+import { RemoteAppSitesSettings } from "../../remote-apps/RemoteAppSitesSettings";
 import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 import { CodexSetupSection, CodexManagedRuntimeFields } from "./CodexSetupSection";
@@ -1300,6 +1302,9 @@ export function EnvironmentProviderSettings({
         cursorKeychainUsageEnabled={settings.cursorKeychainUsageEnabled}
         readOnly={readOnly}
       />
+
+      {/* Fork add-on: choose which provider web apps the desktop app switcher lists. */}
+      <RemoteAppSitesSettings environmentId={environmentId} />
 
       <SettingsSection title="Advanced">
         <SettingsRow

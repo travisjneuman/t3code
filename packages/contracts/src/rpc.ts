@@ -337,6 +337,7 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 // Fork add-on: read-only sessions from agents running outside T3.
 import {
+  ExternalSessionsContinueRpc,
   ExternalSessionsSubscribeListRpc,
   ExternalSessionsSubscribeSessionRpc,
 } from "./externalSessions.ts";
@@ -1881,4 +1882,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   ExternalSessionsSubscribeListRpc,
   ExternalSessionsSubscribeSessionRpc,
+  ExternalSessionsContinueRpc,
 ).middleware(RpcScopeAuthorization);
