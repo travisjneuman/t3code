@@ -11,7 +11,7 @@ A site is available when its matching provider is enabled under **Settings → P
 | Grok    | Grok Build  |
 | Gemini  | Antigravity |
 
-To choose which available sites appear in the switcher, use the **Web apps** section further down **Settings → Providers**. Turning a site off there, or disabling its provider, removes it from the switcher; if you are viewing that site, ndev.t3code switches back to itself. The switcher only lists the places you can go, so the surface you are on is not in the list.
+To choose which available sites appear in the switcher, use the **Web apps** section further down **Settings → Providers**. Turning a site off there, or disabling its provider, removes it from the switcher; if you are viewing that site, ndev.t3code switches back to itself. The switcher only lists the places you can go, so the surface you are on is not in the list. **Load web apps in the background**, in the same section, loads the shown sites shortly after startup so opening one for the first time is instant; turn it off to save memory, and each site loads when you first open it.
 
 Sign in on each site's normal page. Every site keeps its own saved session, separate from the others and from your default browser. Sign-in steps through Google, Microsoft, Apple, or X stay inside the desktop app; unrelated links open in your default browser. Page content remains owned and rendered by each site.
 

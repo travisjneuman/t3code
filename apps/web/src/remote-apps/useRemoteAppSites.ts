@@ -12,6 +12,7 @@ import { resolveAvailableRemoteAppSites } from "./remoteAppState";
 const HIDDEN_SITES_STORAGE_KEY = "t3code:remote-app-hidden-sites:v1";
 const HiddenSitesSchema = Schema.Array(RemoteAppSiteSchema);
 const NO_HIDDEN_SITES: ReadonlyArray<RemoteAppSite> = [];
+const BACKGROUND_LOAD_STORAGE_KEY = "t3code:remote-app-background-load:v1";
 
 /** The sites the user turned off in Settings, shared by every component that reads them. */
 export function useHiddenRemoteAppSites() {
@@ -29,6 +30,11 @@ export function useHiddenRemoteAppSites() {
     [setHiddenSites],
   );
   return { hiddenSites, setSiteHidden };
+}
+
+/** Whether the desktop shell loads available sites before their first activation. */
+export function useRemoteAppBackgroundLoad() {
+  return useLocalStorage(BACKGROUND_LOAD_STORAGE_KEY, true, Schema.Boolean);
 }
 
 /**

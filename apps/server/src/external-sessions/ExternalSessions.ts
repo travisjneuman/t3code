@@ -2,9 +2,10 @@
  * Live view of agent sessions running outside T3: Claude Code, Codex, Grok,
  * Pi, and Antigravity, from CLIs, desktop apps, and IDE extensions. Each
  * provider's own session store is watched while anyone subscribes and is
- * never written to. Continuing an idle Claude or Codex session imports it as
- * a T3 thread (continueExternalSession.ts), after which it is listed as that
- * thread instead. Fork add-on; see docs/internals/external-sessions.md.
+ * never written to. Continuing an idle Claude, Codex, Grok, or Pi session
+ * binds a T3 thread to that same session (continueExternalSession.ts), after
+ * which it is listed as that thread instead. Fork add-on; see
+ * docs/internals/external-sessions.md.
  *
  * @module external-sessions/ExternalSessions
  */
@@ -33,6 +34,7 @@ import * as RcRef from "effect/RcRef";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as ServerConfig from "../config.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
@@ -103,6 +105,9 @@ const sessionKey = (source: ExternalSessionSource, id: string) => `${source.driv
 const isUnder = (path: string, root: string) =>
   path === root || path.startsWith(root.endsWith(NodePath.sep) ? root : `${root}${NodePath.sep}`);
 
+// Pi names a session by its file; the listing names it by the id inside.
+const PI_SESSION_FILE = /_([0-9a-f-]{36})\.jsonl$/i;
+
 // Every string in a resume cursor: provider session ids under whatever key the adapter uses.
 const collectStrings = (value: unknown, into: Set<string>, depth = 0): void => {
   if (typeof value === "string") into.add(value);
@@ -115,6 +120,7 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const config = yield* ServerConfig.ServerConfig;
   const providerSessions = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+  const sql = yield* SqlClient.SqlClient;
   const continueExternalSession = yield* ContinueExternalSession.make;
   const sources: ReadonlyArray<ExternalSessionSource> = [
     makeClaudeSource(),
@@ -140,14 +146,43 @@ const make = Effect.gen(function* () {
     let owned = new Set<string>();
     let ownedAt = 0;
 
-    const refreshOwned = providerSessions.list().pipe(
+    // Runtime rows cover imported Claude and Codex sessions, including ones
+    // whose thread later fell back to a fresh native session. Threads T3
+    // started itself, and continued Grok and Pi sessions, have none; their
+    // provider threads name the native session (an id, or Pi's file path).
+    const readRuntimeOwned = providerSessions.list().pipe(
       Effect.map((rows) => {
-        const next = new Set<string>();
-        for (const row of rows) collectStrings(row.resumeCursor, next);
-        owned = next;
+        const ids = new Set<string>();
+        for (const row of rows) collectStrings(row.resumeCursor, ids);
+        return ids;
+      }),
+      Effect.orElseSucceed(() => new Set<string>()),
+    );
+    const readProviderThreadOwned = sql<{ readonly native_id: string | null }>`
+      SELECT json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id
+      FROM orchestration_v2_projection_provider_threads p
+      LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
+      WHERE json_valid(p.payload_json) AND t.deleted_at IS NULL
+    `.pipe(
+      Effect.map((rows) => {
+        const ids = new Set<string>();
+        for (const row of rows) {
+          if (typeof row.native_id !== "string") continue;
+          ids.add(row.native_id);
+          const piId = PI_SESSION_FILE.exec(row.native_id)?.[1];
+          if (piId !== undefined) ids.add(piId);
+        }
+        return ids;
+      }),
+      Effect.orElseSucceed(() => new Set<string>()),
+    );
+    const refreshOwned = Effect.all([readRuntimeOwned, readProviderThreadOwned], {
+      concurrency: 2,
+    }).pipe(
+      Effect.map(([fromRuntime, fromProviderThreads]) => {
+        owned = new Set([...fromRuntime, ...fromProviderThreads]);
         ownedAt = Date.now();
       }),
-      Effect.ignore,
     );
 
     const toSummary = (key: string, entry: Entry, now: number): ExternalSessionSummary => ({
@@ -169,6 +204,7 @@ const make = Effect.gen(function* () {
     const isListed = (entry: Entry, now: number) =>
       now - entry.info.updatedAtMs < LIST_WINDOW_MS &&
       !owned.has(entry.info.id) &&
+      !owned.has(entry.path) &&
       !(entry.info.cwd !== null && excludedRoots.some((root) => isUnder(entry.info.cwd!, root)));
 
     const publish = Effect.gen(function* () {
@@ -386,18 +422,25 @@ const make = Effect.gen(function* () {
         if (summary.liveness === "running") return yield* new ExternalSessionBusyError({ key });
         const reason = externalSessionUnsupportedReason(summary);
         const transcriptPath = entry.source.transcriptPath(entry.path);
-        if (reason !== null || summary.cwd === null || transcriptPath === null) {
+        const driver = summary.driver;
+        if (
+          reason !== null ||
+          summary.cwd === null ||
+          transcriptPath === null ||
+          !ContinueExternalSession.isContinueDriver(driver)
+        ) {
           return yield* new ExternalSessionUnsupportedError({ key, reason: reason ?? "provider" });
         }
         const result = yield* continueExternalSession({
           key,
-          driver: summary.driver === "codex" ? "codex" : "claudeAgent",
+          driver,
           sessionId: entry.info.id,
           title: entry.info.title,
           cwd: summary.cwd,
           model: entry.info.model,
           transcriptPath,
           updatedAtMs: entry.info.updatedAtMs,
+          createParser: entry.source.createParser,
         });
         // The session now belongs to a T3 thread; drop it from the list right away.
         yield* registry.refreshOwned;

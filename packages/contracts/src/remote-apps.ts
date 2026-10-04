@@ -31,9 +31,13 @@ export const isRemoteAppSite = (value: unknown): value is RemoteAppSite =>
 export const DesktopSurfaceSchema = Schema.Literals(["t3code", ...REMOTE_APP_SITES]);
 export type DesktopSurface = typeof DesktopSurfaceSchema.Type;
 
-export const RemoteAppAvailableSitesSchema = Schema.Array(RemoteAppSiteSchema).check(
-  Schema.isMaxLength(REMOTE_APP_SITES.length),
-);
+export const RemoteAppAvailabilitySchema = Schema.Struct({
+  sites: Schema.Array(RemoteAppSiteSchema).check(Schema.isMaxLength(REMOTE_APP_SITES.length)),
+  // Whether the shell loads available sites in the background before their
+  // first activation.
+  backgroundLoad: Schema.Boolean,
+});
+export type RemoteAppAvailability = typeof RemoteAppAvailabilitySchema.Type;
 
 export const RemoteAppSurfaceMenuAnchorSchema = Schema.Struct({
   x: Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 20_000 })),
@@ -202,7 +206,7 @@ export interface DesktopRemoteAppBridge {
   getState: () => Promise<RemoteAppState>;
   setTheme: (theme: RemoteAppTheme) => Promise<void>;
   openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) => Promise<void>;
-  setAvailableSites: (sites: ReadonlyArray<RemoteAppSite>) => Promise<void>;
+  setAvailableSites: (availability: RemoteAppAvailability) => Promise<void>;
   setActiveSurface: (surface: DesktopSurface) => Promise<RemoteAppState>;
   goBack: () => Promise<RemoteAppState>;
   goForward: () => Promise<RemoteAppState>;

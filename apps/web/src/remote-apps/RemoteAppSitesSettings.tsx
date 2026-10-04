@@ -14,7 +14,7 @@ import { primaryServerProvidersAtom } from "~/state/server";
 
 import { RemoteAppSiteIcon } from "./RemoteAppSiteIcon";
 import { resolveEnabledRemoteAppSites } from "./remoteAppState";
-import { useHiddenRemoteAppSites } from "./useRemoteAppSites";
+import { useHiddenRemoteAppSites, useRemoteAppBackgroundLoad } from "./useRemoteAppSites";
 
 const providerLabel = (driver: string): string =>
   DRIVER_OPTIONS.find((option) => option.value === driver)?.label ?? driver;
@@ -32,6 +32,7 @@ export function RemoteAppSitesSettings({
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const { hiddenSites, setSiteHidden } = useHiddenRemoteAppSites();
+  const [backgroundLoad, setBackgroundLoad] = useRemoteAppBackgroundLoad();
   if (window.desktopBridge?.remoteApps === undefined || environmentId !== primaryEnvironmentId) {
     return null;
   }
@@ -68,6 +69,17 @@ export function RemoteAppSitesSettings({
           />
         );
       })}
+      <SettingsRow
+        title="Load web apps in the background"
+        description="Loads the web apps above after startup so switching is instant. Uses more memory."
+        control={
+          <Switch
+            aria-label="Load web apps in the background"
+            checked={backgroundLoad}
+            onCheckedChange={(checked) => setBackgroundLoad(checked)}
+          />
+        }
+      />
     </SettingsSection>
   );
 }
