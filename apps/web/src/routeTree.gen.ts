@@ -34,6 +34,7 @@ import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$proje
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
+import { Route as ChatExternalEnvironmentIdSessionKeyRouteImport } from './routes/_chat.external.$environmentId.$sessionKey'
 
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
@@ -161,6 +162,12 @@ const ChatEnvironmentIdThreadIdRoute =
     path: '/$environmentId/$threadId',
     getParentRoute: () => ChatRoute,
   } as any)
+const ChatExternalEnvironmentIdSessionKeyRoute =
+  ChatExternalEnvironmentIdSessionKeyRouteImport.update({
+    id: '/external/$environmentId/$sessionKey',
+    path: '/external/$environmentId/$sessionKey',
+    getParentRoute: () => ChatRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/settings/storage': typeof SettingsStorageRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
@@ -213,6 +221,7 @@ export interface FileRoutesByTo {
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -241,6 +250,7 @@ export interface FileRoutesById {
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/_chat/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/settings/storage'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/external/$environmentId/$sessionKey'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/external/$environmentId/$sessionKey'
   id:
     | '__root__'
     | '/_chat'
@@ -322,6 +334,7 @@ export interface FileRouteTypes {
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
+    | '/_chat/external/$environmentId/$sessionKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -511,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatEnvironmentIdThreadIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/external/$environmentId/$sessionKey': {
+      id: '/_chat/external/$environmentId/$sessionKey'
+      path: '/external/$environmentId/$sessionKey'
+      fullPath: '/external/$environmentId/$sessionKey'
+      preLoaderRoute: typeof ChatExternalEnvironmentIdSessionKeyRouteImport
+      parentRoute: typeof ChatRoute
+    }
   }
 }
 
@@ -519,6 +539,7 @@ interface ChatRouteChildren {
   ChatIndexRoute: typeof ChatIndexRoute
   ChatEnvironmentIdThreadIdRoute: typeof ChatEnvironmentIdThreadIdRoute
   ChatDraftDraftIdRoute: typeof ChatDraftDraftIdRoute
+  ChatExternalEnvironmentIdSessionKeyRoute: typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
@@ -526,6 +547,8 @@ const ChatRouteChildren: ChatRouteChildren = {
   ChatIndexRoute: ChatIndexRoute,
   ChatEnvironmentIdThreadIdRoute: ChatEnvironmentIdThreadIdRoute,
   ChatDraftDraftIdRoute: ChatDraftDraftIdRoute,
+  ChatExternalEnvironmentIdSessionKeyRoute:
+    ChatExternalEnvironmentIdSessionKeyRoute,
 }
 
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
