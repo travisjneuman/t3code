@@ -1051,7 +1051,9 @@ ${stageArtworkRule}
   color: var(--t3code-remote-text) !important;
 }
 
-main :where(button, [role="button"]) {
+/* Solid primary buttons fill with the text color and pair it with their own
+   contrasting label token, so they keep the site's label color. */
+main :where(button, [role="button"]):not([class~="text-primary-solid"]) {
   color: var(--t3code-remote-text) !important;
 }
 
