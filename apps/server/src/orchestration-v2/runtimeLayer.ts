@@ -8,6 +8,8 @@ import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import { ProviderAuthServiceLive } from "../provider/Layers/ProviderAuthService.ts";
 import { layer as agentSessionImporterLayer } from "../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../project/AgentSessionScanner.ts";
+// Fork add-on: read-only sessions from agents running outside T3.
+import * as ExternalSessions from "../external-sessions/ExternalSessions.ts";
 import { layer as projectServiceLayer } from "../project/ProjectService.ts";
 import { layer as projectSetupScriptRunnerLayer } from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -319,6 +321,7 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
   ),
   providerContinuationWorkerProvided,
   agentSessionImporterProvided,
+  ExternalSessions.layer.pipe(Layer.provide(providerSessionRuntimeLayer)),
 ).pipe(
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(OrchestrationEventInfrastructureLayerLive),

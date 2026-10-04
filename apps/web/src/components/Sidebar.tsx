@@ -277,6 +277,8 @@ import {
   type ComposerThreadDraftState,
   type DraftSessionState,
 } from "../composerDraftStore";
+// Fork add-on: read-only sessions from agents running outside T3.
+import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -5421,6 +5423,7 @@ export default function Sidebar() {
               )}
             </div>
           ) : null}
+          {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null}
         </SidebarGroup>
       </SidebarContent>
       <SidebarChromeFooter />

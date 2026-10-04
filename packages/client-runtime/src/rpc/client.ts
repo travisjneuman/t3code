@@ -1,5 +1,6 @@
 import {
   EnvironmentAuthorizationError,
+  EXTERNAL_SESSIONS_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
 } from "@t3tools/contracts";
@@ -65,7 +66,9 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.subscribeVcsStatus
   | typeof WS_METHODS.subscribeWorktreeSetup
   | typeof WS_METHODS.subscribeProjectClones
-  | typeof WS_METHODS.terminalAttach;
+  | typeof WS_METHODS.terminalAttach
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeList
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeSession;
 
 export type EnvironmentStreamCommandRpcTag =
   | typeof WS_METHODS.chatGptHandoffSubscribe

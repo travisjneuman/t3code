@@ -54,6 +54,7 @@ export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
 export * from "./remote-apps.ts";
+export * from "./externalSessions.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";
