@@ -33,7 +33,9 @@ export function RemoteAppSwitcher() {
       aria-haspopup="menu"
       aria-label={`Switch app surface, currently ${siteLabel ?? "ndev.t3code"}`}
       className={cn(
-        "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1 rounded-md px-2 text-sm font-medium tracking-tight",
+        // Electron resolves drag regions in DOM order and ignores stacking, so without
+        // an explicit no-drag the sidebar header's drag strip underneath eats the click.
+        "pointer-events-auto relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 max-w-44 shrink-0 gap-1 rounded-md px-2 text-sm font-medium tracking-tight [-webkit-app-region:no-drag]",
         "border-transparent bg-transparent text-foreground shadow-none hover:bg-accent",
       )}
       size="sm"

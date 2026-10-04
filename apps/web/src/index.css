@@ -1748,6 +1748,17 @@ body:has([data-remote-app-surface="remote"]) [data-remote-app-host-workspace] {
   visibility: hidden !important;
 }
 
+/* The surface switcher sits at the titlebar content inset, so with the sidebar
+   collapsed the page headers start after it instead of underneath it. 5rem
+   covers the switcher's "T3 Code" label at any font size. */
+[data-remote-app-surface="t3code"][data-sidebar-state="collapsed"]:has([data-remote-app-switcher])
+  [data-slot="sidebar-inset"] {
+  --workspace-titlebar-content-left: calc(
+    var(--workspace-controls-left) + var(--workspace-titlebar-control-size) +
+      var(--workspace-titlebar-control-gap) * 2 + 5rem
+  );
+}
+
 pre,
 code {
   font-family: var(--font-mono);
