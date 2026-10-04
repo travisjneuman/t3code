@@ -286,47 +286,18 @@ const SITE_NO_DRAG_CSS = `*, *::before, *::after {
   -webkit-app-region: no-drag !important;
 }`;
 
-/* Pins each site's sidebar to the T3 sidebar width so the host's titlebar and
-   footer columns line up with the page's own sidebar edge. A stylesheet
-   !important beats the inline custom properties Grok and ChatGPT set. */
-const SIDEBAR_WIDTH_RULES: Record<RemoteAppSite, (width: number) => string> = {
-  // Only while ChatGPT's own panel is open, so its collapse still works. The
-  // inner panel carries an inline width from --codex-sidebar-preferred-width.
-  // Beside the icon rail a narrow panel can't fit a section's header title
-  // ("ChatGPT", "Space", "Scheduled") as well as its buttons, and clips it; the
-  // rail already marks the active section, so the title goes and the buttons
-  // stay right-aligned as on Home.
-  chatgpt: (width) => `:root {
-  --codex-sidebar-preferred-width: ${width}px !important;
+/* Sites keep their own sidebar width; the host follows it instead (see
+   RemoteAppSidebarProbe). In a narrow ChatGPT sidebar its section title stays on
+   the first line and the header buttons wrap below it rather than clipping it. */
+const CHATGPT_HEADER_WRAP_CSS = `#app-shell-sidebar [class*="@container/navigation-header"] {
+  flex-wrap: wrap !important;
+  row-gap: 4px !important;
+  height: auto !important;
+  min-height: var(--sidebar-navigation-header-height, 2rem) !important;
 }
-[data-app-shell-sidebar-open="true"] [style*="--app-shell-left-panel-width"] {
-  --app-shell-left-panel-width: ${width}px !important;
-}
-[data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div > div {
-  width: 100% !important;
-  min-width: 0 !important;
-}
-#app-shell-sidebar [class*="@container/navigation-header"] > :first-child:not(:last-child) {
-  display: none !important;
-}
-#app-shell-sidebar [class*="@container/navigation-header"] > :last-child {
-  margin-inline-start: auto !important;
-}`,
-  claude: (width) => `aside.dframe-sidebar {
-  width: ${width}px !important;
-  min-width: ${width}px !important;
-  max-width: ${width}px !important;
-}`,
-  // Grok's sidebar is content-box with a 1px edge border.
-  grok: (width) => `:root,
-[style*="--sidebar-width"] {
-  --sidebar-width: ${width - 1}px !important;
-}`,
-  gemini: (width) => `:root,
-bard-sidenav {
-  --bard-sidenav-open-width: ${width}px !important;
-}`,
-};
+#app-shell-sidebar [class*="@container/navigation-header"] > a {
+  min-width: max-content !important;
+}`;
 
 /**
  * CSS that repaints a site's own design tokens with the active T3 palette.
@@ -336,12 +307,9 @@ bard-sidenav {
 export const buildRemoteSiteThemeCss = (site: RemoteAppSite, input: RemoteAppTheme): string => {
   const theme = normalizeRemoteAppTheme(input);
   const colorScheme = theme.appearance === "dark" ? "dark" : "light";
-  const css = `${SITE_NO_DRAG_CSS}\n${
+  return `${SITE_NO_DRAG_CSS}\n${
     site === "chatgpt"
-      ? buildRemoteAppThemeCss(input)
+      ? `${buildRemoteAppThemeCss(input)}\n${CHATGPT_HEADER_WRAP_CSS}\n`
       : SITE_THEME_BUILDERS[site](resolvePalette(theme.colors), colorScheme)
   }`;
-  return theme.sidebarWidth === null
-    ? css
-    : `${css}\n\n${SIDEBAR_WIDTH_RULES[site](theme.sidebarWidth)}\n`;
 };

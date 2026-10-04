@@ -67,3 +67,12 @@ export const shouldAcceptRemoteAppState = (input: {
   readonly next: RemoteAppState;
   readonly initialized: boolean;
 }): boolean => !input.initialized || input.current.activeSurface === input.next.activeSurface;
+
+/**
+ * While a site is showing, the host sidebar column (titlebar switcher and
+ * footer) follows the site's own sidebar width instead of imposing T3's.
+ * Undefined keeps T3's width: T3 itself, or a site whose sidebar is collapsed
+ * or not measured yet.
+ */
+export const resolveRemoteAppSiteSidebarWidth = (state: RemoteAppState): number | undefined =>
+  state.activeSurface !== "t3code" && state.siteSidebarWidth ? state.siteSidebarWidth : undefined;

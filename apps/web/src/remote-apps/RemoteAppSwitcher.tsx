@@ -1,11 +1,12 @@
 import { REMOTE_APP_SITE_LABELS } from "@t3tools/contracts";
-import { ChevronDownIcon, MessageSquareIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import { useRef } from "react";
 
 import { Button } from "~/components/ui/button";
 import { T3Wordmark } from "~/components/T3Wordmark";
 import { cn } from "~/lib/utils";
 
+import { RemoteAppSiteIcon } from "./RemoteAppSiteIcon";
 import { activeRemoteAppSite } from "./remoteAppState";
 import { useRemoteAppState } from "./useRemoteAppState";
 
@@ -43,10 +44,10 @@ export function RemoteAppSwitcher() {
       data-remote-app-switcher
       onClick={openMenu}
     >
-      {siteLabel === undefined ? (
+      {site === undefined ? (
         <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
       ) : (
-        <MessageSquareIcon />
+        <RemoteAppSiteIcon site={site} className="size-4 shrink-0" />
       )}
       <span className="truncate">{siteLabel ?? "Code"}</span>
       <ChevronDownIcon className="size-3 opacity-60" />

@@ -37,15 +37,20 @@ import * as RemoteAppSession from "./RemoteAppSession.ts";
 import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
 import { buildRemoteSiteThemeCss } from "./RemoteAppSiteTheme.ts";
 import {
+  buildRemoteAppSidebarProbeScript,
+  parseRemoteAppSidebarProbeMessage,
+} from "./RemoteAppSidebarProbe.ts";
+import {
   buildRemoteAppInteractionScript,
   buildRemoteAppSurfaceMenuHtml,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
+  REMOTE_APP_SURFACE_MENU_INSET,
   REMOTE_APP_SURFACE_MENU_WIDTH,
   resolveRemoteAppSurfaceMenuHeight,
 } from "./RemoteAppTheme.ts";
 import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
-import { TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
+import { REMOTE_APP_VIEW_TOP_INSET, TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
 const REMOTE_APP_VIEW_LAYER_INDEX = 0;
@@ -78,15 +83,15 @@ export const resolveRemoteAppViewBounds = (
   hostFooterVisible = true,
 ): Electron.Rectangle => {
   const normalizedZoomFactor = resolveRemoteAppViewZoomFactor(mainZoomFactor);
-  const titlebarHeight = Math.round(TITLEBAR_HEIGHT * normalizedZoomFactor);
+  const viewTop = Math.round((TITLEBAR_HEIGHT + REMOTE_APP_VIEW_TOP_INSET) * normalizedZoomFactor);
   const hostFooterHeight = hostFooterVisible
     ? Math.round(REMOTE_APP_HOST_FOOTER_HEIGHT * normalizedZoomFactor)
     : 0;
   return {
     x: 0,
-    y: titlebarHeight,
+    y: viewTop,
     width: Math.max(0, contentBounds.width),
-    height: Math.max(0, contentBounds.height - titlebarHeight - hostFooterHeight),
+    height: Math.max(0, contentBounds.height - viewTop - hostFooterHeight),
   };
 };
 
@@ -212,6 +217,8 @@ export const make = Effect.gen(function* () {
   // reloads it, since no toolbar offers a retry.
   const brokenSites = new Set<RemoteAppSite>();
   const insertedThemeKeys = new Map<RemoteAppSite, string>();
+  // Last width each site's probe reported; null while it has no sidebar.
+  const siteSidebarWidths = new Map<RemoteAppSite, number | null>();
   const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
   const popupWindows = new Set<Electron.BrowserWindow>();
   let surfaceMenuWindow: Electron.BrowserWindow | null = null;
@@ -252,6 +259,7 @@ export const make = Effect.gen(function* () {
     const view = views.get(site);
     views.delete(site);
     insertedThemeKeys.delete(site);
+    siteSidebarWidths.delete(site);
     recoveryCounts.delete(site);
     brokenSites.delete(site);
     if (view === undefined) return;
@@ -348,6 +356,16 @@ export const make = Effect.gen(function* () {
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
+  const recordSiteSidebarWidth = (site: RemoteAppSite, width: number | null) => {
+    if (siteSidebarWidths.has(site) && siteSidebarWidths.get(site) === width) return;
+    siteSidebarWidths.set(site, width);
+    runSafely(
+      updateSiteState(site, (state) =>
+        state.siteSidebarWidth === width ? state : { ...state, siteSidebarWidth: width },
+      ),
+    );
+  };
+
   const isThemeableSiteUrl = (site: RemoteAppSite, url: string): boolean => {
     if (site === "chatgpt") return isChatGptRemoteAppUrl(url);
     try {
@@ -378,12 +396,20 @@ export const make = Effect.gen(function* () {
             catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
           }).pipe(Effect.catch(() => Effect.void));
         }
-        if (!isThemeableSiteUrl(site, view.webContents.getURL())) return;
+        if (!isThemeableSiteUrl(site, view.webContents.getURL())) {
+          // Sign-in pages on other hosts have no site sidebar to follow.
+          recordSiteSidebarWidth(site, null);
+          return;
+        }
         const key = yield* Effect.tryPromise({
           try: () => view.webContents.insertCSS(buildRemoteSiteThemeCss(site, theme)),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         });
         insertedThemeKeys.set(site, key);
+        yield* Effect.tryPromise({
+          try: () => view.webContents.executeJavaScript(buildRemoteAppSidebarProbeScript(site)),
+          catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+        }).pipe(Effect.catch(() => Effect.void));
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
           try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme)),
@@ -401,6 +427,11 @@ export const make = Effect.gen(function* () {
     const contents = view.webContents;
     contents.on("input-event", (_event, input) => {
       if (input.type === "mouseDown") contents.focus();
+    });
+    contents.on("console-message", (event) => {
+      if (event.frame !== contents.mainFrame) return;
+      const width = parseRemoteAppSidebarProbeMessage(event.message);
+      if (width !== undefined) recordSiteSidebarWidth(site, width);
     });
     contents.setWindowOpenHandler(({ url }) => {
       const decision = classifyRemoteAppNavigation(site, url, { authFlowActive: true });
@@ -787,7 +818,12 @@ export const make = Effect.gen(function* () {
   const setTheme = (theme: RemoteAppTheme) =>
     Effect.gen(function* () {
       const previous = yield* Ref.getAndSet(remoteThemeRef, theme);
-      for (const site of [...views.keys()]) {
+      // The host sidebar follows the site's width, so width-only updates are
+      // frequent and must not reinsert every site's stylesheet.
+      const presentationChanged =
+        JSON.stringify({ ...previous, sidebarWidth: null }) !==
+        JSON.stringify({ ...theme, sidebarWidth: null });
+      for (const site of presentationChanged ? [...views.keys()] : []) {
         const view = yield* getLiveView(site);
         if (Option.isSome(view)) yield* applyRemoteTheme(site, view.value);
       }
@@ -842,7 +878,8 @@ export const make = Effect.gen(function* () {
           movable: false,
           focusable: true,
           skipTaskbar: true,
-          hasShadow: true,
+          // The document draws T3's popup shadow inside its transparent inset.
+          hasShadow: false,
           show: false,
           backgroundColor: "#00000000",
           webPreferences: {
@@ -864,9 +901,9 @@ export const make = Effect.gen(function* () {
     menu.webContents.on("will-navigate", (event, url) => {
       const surface = parseRemoteAppSurfaceMenuUrl(url);
       event.preventDefault();
-      if (surface === undefined) return;
+      // Escape navigates to a non-surface URL; anything but a surface just closes.
       closeSurfaceMenu();
-      runSafely(setActiveSurface(surface));
+      if (surface !== undefined) runSafely(setActiveSurface(surface));
     });
     menu.on("blur", closeSurfaceMenu);
     menu.on("closed", () => {
@@ -878,8 +915,13 @@ export const make = Effect.gen(function* () {
     const contentBounds = owner.getContentBounds();
     const menuWidth = REMOTE_APP_SURFACE_MENU_WIDTH;
     const menuHeight = resolveRemoteAppSurfaceMenuHeight(surfaces.length);
-    const requestedX = contentBounds.x + Math.round(anchor.x * scale);
-    const requestedY = contentBounds.y + Math.round((anchor.y + anchor.height) * scale) + 4;
+    const requestedX =
+      contentBounds.x + Math.round(anchor.x * scale) - REMOTE_APP_SURFACE_MENU_INSET;
+    const requestedY =
+      contentBounds.y +
+      Math.round((anchor.y + anchor.height) * scale) +
+      4 -
+      REMOTE_APP_SURFACE_MENU_INSET;
     const display = Electron.screen.getDisplayNearestPoint({ x: requestedX, y: requestedY });
     const workArea = display.workArea;
     const x = Math.min(
@@ -923,6 +965,7 @@ export const make = Effect.gen(function* () {
           activeSurface: site,
           loadState: "loading",
           currentUrl: url,
+          siteSidebarWidth: siteSidebarWidths.get(site) ?? null,
           error: null,
         }));
         yield* loadUrl(view, url);
@@ -938,6 +981,7 @@ export const make = Effect.gen(function* () {
           currentTitle: REMOTE_APP_SITE_LABELS[site],
           canGoBack: false,
           canGoForward: false,
+          siteSidebarWidth: siteSidebarWidths.get(site) ?? null,
           error: null,
         }));
         yield* loadUrl(view, url);
@@ -954,6 +998,7 @@ export const make = Effect.gen(function* () {
           }),
           activeSurface: site,
           loadState: view.webContents.isLoading() ? "loading" : "ready",
+          siteSidebarWidth: siteSidebarWidths.get(site) ?? null,
         };
       });
     });

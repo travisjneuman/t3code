@@ -90,6 +90,12 @@ export const RemoteAppStateSchema = Schema.Struct({
   zoomFactor: Schema.Number.check(Schema.isBetween({ minimum: 0.5, maximum: 3 })),
   recents: Schema.Array(RemoteAppRecentLocationSchema).check(Schema.isMaxLength(20)),
   error: Schema.NullOr(RemoteAppErrorSchema),
+  // Measured right edge of the active site's own sidebar in CSS px, so the host
+  // titlebar and footer column can follow the site instead of resizing it.
+  // Optional so state persisted before this field still decodes.
+  siteSidebarWidth: Schema.optionalKey(
+    Schema.NullOr(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1_024 }))),
+  ),
 });
 export type RemoteAppState = typeof RemoteAppStateSchema.Type;
 
