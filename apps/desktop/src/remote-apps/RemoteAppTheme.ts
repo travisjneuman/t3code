@@ -2,6 +2,7 @@ import {
   REMOTE_APP_SITE_LABELS,
   REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH,
   type DesktopSurface,
+  type RemoteAppMenuTheme,
   type RemoteAppTheme,
   type RemoteAppThemeColors,
 } from "@t3tools/contracts";
@@ -98,14 +99,41 @@ const safeColor = (
     : fallback;
 };
 
-export const normalizeRemoteAppTheme = (theme: RemoteAppTheme): RemoteAppTheme => ({
-  appearance: theme.appearance === "light" ? "light" : "dark",
-  stageArt: theme.stageArt === "nightly" || theme.stageArt === "dev" ? theme.stageArt : "none",
-  sidebarWidth:
-    theme.sidebarWidth === null || !Number.isFinite(theme.sidebarWidth)
-      ? null
-      : Math.min(512, Math.max(160, Math.round(theme.sidebarWidth))),
-  colors: Object.fromEntries(
+const MENU_KEYS = [
+  "glass",
+  "popover",
+  "foreground",
+  "mutedForeground",
+  "highlight",
+  "highlightForeground",
+  "border",
+  "separator",
+] as const satisfies ReadonlyArray<keyof RemoteAppMenuTheme>;
+
+/** Menu colors from the palette, for a renderer that has not sent its own yet. */
+const fallbackMenuTheme = (colors: RemoteAppThemeColors): RemoteAppMenuTheme => ({
+  glass: colors.surfaceOverlay,
+  popover: colors.surfaceOverlay,
+  foreground: colors.text,
+  mutedForeground: colors.mutedForeground,
+  highlight: colors.sidebarRowHover,
+  highlightForeground: colors.text,
+  border: colors.border,
+  separator: colors.border,
+});
+
+const normalizeMenuTheme = (
+  menu: RemoteAppMenuTheme,
+  colors: RemoteAppThemeColors,
+): RemoteAppMenuTheme => {
+  const fallback = fallbackMenuTheme(colors);
+  return Object.fromEntries(
+    MENU_KEYS.map((key) => [key, safeColor(menu[key], fallback[key])]),
+  ) as RemoteAppMenuTheme;
+};
+
+export const normalizeRemoteAppTheme = (theme: RemoteAppTheme): RemoteAppTheme => {
+  const colors = Object.fromEntries(
     COLOR_KEYS.map((key) => [
       key,
       safeColor(
@@ -114,8 +142,18 @@ export const normalizeRemoteAppTheme = (theme: RemoteAppTheme): RemoteAppTheme =
         key.startsWith("stage") ? REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH : undefined,
       ),
     ]),
-  ) as RemoteAppThemeColors,
-});
+  ) as RemoteAppThemeColors;
+  return {
+    appearance: theme.appearance === "light" ? "light" : "dark",
+    stageArt: theme.stageArt === "nightly" || theme.stageArt === "dev" ? theme.stageArt : "none",
+    sidebarWidth:
+      theme.sidebarWidth === null || !Number.isFinite(theme.sidebarWidth)
+        ? null
+        : Math.min(512, Math.max(160, Math.round(theme.sidebarWidth))),
+    colors,
+    ...(theme.menu === undefined ? {} : { menu: normalizeMenuTheme(theme.menu, colors) }),
+  };
+};
 
 export const isChatGptRemoteAppUrl = (url: string): boolean => {
   try {
@@ -625,54 +663,80 @@ const surfaceMenuUrl = (surface: DesktopSurface): string => `t3code-surface://se
 /**
  * The surface picker is rendered in a small host-owned window. A remote
  * WebContentsView is composited above the renderer, so a renderer popover
- * cannot reliably appear over a remote site. Keep this document intentionally small
- * and self-contained so it remains available while the remote surface is
- * loading or offline. It mirrors T3's own menu popup: radius, shadow, 28px rows,
- * a leading mark and a trailing check.
+ * cannot reliably appear over a remote site. Keep this document intentionally
+ * small and self-contained so it remains available while the remote surface is
+ * loading or offline. Its rows mirror T3's MenuItem: 28px, 6px radius, 14px
+ * text, a muted 16px icon, and the accent highlight.
  */
-export const REMOTE_APP_SURFACE_MENU_WIDTH = 208;
-// Transparent margin around the popup that leaves room for its shadow; the
-// manager offsets the window by it so the popup itself sits under the trigger.
-export const REMOTE_APP_SURFACE_MENU_INSET = 8;
+// T3's MenuPopup minimum width; every label fits inside it.
+export const REMOTE_APP_SURFACE_MENU_WIDTH = 160;
 const SURFACE_MENU_ITEM_HEIGHT = 28;
-// Popup padding (2 * 4px) and border (2 * 1px) inside the inset on both sides.
-const SURFACE_MENU_CHROME_HEIGHT = REMOTE_APP_SURFACE_MENU_INSET * 2 + 10;
-// T3 is separated from the sites by a 1px rule with 4px above and below.
+// Popup padding (2 * 4px) and border (2 * 1px).
+const SURFACE_MENU_CHROME_HEIGHT = 10;
+// MenuSeparator: a 1px rule with 4px above and below.
 const SURFACE_MENU_SEPARATOR_HEIGHT = 9;
 
-export const resolveRemoteAppSurfaceMenuHeight = (itemCount: number): number =>
+/**
+ * How the menu window is painted. On macOS it sits on native vibrancy, which
+ * blurs what is behind the window the way `dropdown-glass` blurs behind T3's
+ * menus, under the same translucent tint. Elsewhere a page cannot blur the
+ * desktop behind its window, so the menu uses the opaque popover color.
+ */
+export type RemoteAppSurfaceMenuMaterial = "vibrancy" | "opaque";
+
+/** T3 heads the menu and is ruled off from the sites, as in T3's own menus. */
+const hasSurfaceMenuSeparator = (surfaces: ReadonlyArray<DesktopSurface>): boolean =>
+  surfaces[0] === "t3code" && surfaces.length > 1;
+
+export const resolveRemoteAppSurfaceMenuHeight = (
+  surfaces: ReadonlyArray<DesktopSurface>,
+): number =>
   SURFACE_MENU_CHROME_HEIGHT +
-  SURFACE_MENU_ITEM_HEIGHT * itemCount +
-  (itemCount > 1 ? SURFACE_MENU_SEPARATOR_HEIGHT : 0);
+  SURFACE_MENU_ITEM_HEIGHT * surfaces.length +
+  (hasSurfaceMenuSeparator(surfaces) ? SURFACE_MENU_SEPARATOR_HEIGHT : 0);
+
+const resolveSurfaceMenuTheme = (input: RemoteAppTheme) => {
+  const theme = normalizeRemoteAppTheme(input);
+  return { appearance: theme.appearance, menu: theme.menu ?? fallbackMenuTheme(theme.colors) };
+};
+
+const OPAQUE_HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/** The native window background behind the opaque menu, so it never flashes. */
+export const resolveRemoteAppSurfaceMenuBackground = (input: RemoteAppTheme): string => {
+  const { menu } = resolveSurfaceMenuTheme(input);
+  if (OPAQUE_HEX_COLOR.test(menu.popover)) return menu.popover;
+  const { surfaceOverlay } = normalizeRemoteAppTheme(input).colors;
+  return OPAQUE_HEX_COLOR.test(surfaceOverlay)
+    ? surfaceOverlay
+    : DEFAULT_REMOTE_APP_THEME.colors.surfaceOverlay;
+};
 
 const surfaceLabel = (surface: DesktopSurface): string =>
   surface === "t3code" ? PRODUCT_NAME : REMOTE_APP_SITE_LABELS[surface];
 
-const SURFACE_MENU_CHECK_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
-
 export const buildRemoteAppSurfaceMenuHtml = (
   input: RemoteAppTheme,
-  activeSurface: DesktopSurface,
   surfaces: ReadonlyArray<DesktopSurface>,
+  material: RemoteAppSurfaceMenuMaterial,
 ): string => {
-  const { appearance, colors } = normalizeRemoteAppTheme(input);
+  const { appearance, menu } = resolveSurfaceMenuTheme(input);
+  const separated = hasSurfaceMenuSeparator(surfaces);
   const items = surfaces
     .map((surface, index) => {
-      const active = activeSurface === surface;
-      const separator = index === 1 ? '\n      <div class="separator" role="separator"></div>' : "";
+      const separator =
+        separated && index === 1 ? '\n      <div class="separator" role="separator"></div>' : "";
       return `${separator}
-      <a role="menuitemradio" aria-checked="${active ? "true" : "false"}" href="${surfaceMenuUrl(surface)}">
-        <span class="mark">${REMOTE_APP_SURFACE_ICONS[surface]}</span>
+      <a role="menuitem" href="${surfaceMenuUrl(surface)}">
+        <span class="icon">${REMOTE_APP_SURFACE_ICONS[surface]}</span>
         <span class="label">${surfaceLabel(surface)}</span>
-        <span class="check">${active ? SURFACE_MENU_CHECK_ICON : ""}</span>
       </a>`;
     })
     .join("");
-  const shadow =
-    appearance === "dark"
-      ? "0 18px 44px -18px rgb(0 0 0 / 80%)"
-      : "0 12px 32px -12px rgb(0 0 0 / 28%), 0 2px 6px -2px rgb(0 0 0 / 10%)";
+  // The native window clips the corners (roundedCorners) and draws the shadow.
+  // On vibrancy the popup repeats T3's 10px radius so its border follows the
+  // rounded glass; an opaque window is clipped by the platform alone.
+  const radius = material === "vibrancy" ? "10px" : "0";
   return `<!doctype html>
 <html lang="en" data-theme="${appearance}">
   <head>
@@ -680,70 +744,70 @@ export const buildRemoteAppSurfaceMenuHtml = (
     <style>
       :root { color-scheme: ${appearance}; }
       * { box-sizing: border-box; }
-      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
       body {
-        padding: ${REMOTE_APP_SURFACE_MENU_INSET}px;
-        background: transparent;
-        color: ${colors.text};
-        font-family: -apple-system, "system-ui", "Segoe UI", system-ui, sans-serif;
+        color: ${menu.foreground};
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         user-select: none;
       }
       [role="menu"] {
+        height: 100%;
         padding: 4px;
-        border: 1px solid color-mix(in srgb, ${colors.text} 10%, transparent);
-        border-radius: 10px;
-        background: color-mix(in srgb, ${colors.surfaceOverlay} 97%, transparent);
-        box-shadow: ${shadow};
+        border: 1px solid ${menu.border};
+        border-radius: ${radius};
+        background: ${material === "vibrancy" ? menu.glass : menu.popover};
       }
-      [role="menuitemradio"] {
+      [role="menuitem"] {
         display: flex;
         align-items: center;
         gap: 8px;
-        height: 28px;
+        min-height: 28px;
         padding: 4px 8px;
         border-radius: 6px;
-        color: ${colors.text};
-        font-size: 13px;
+        color: ${menu.foreground};
+        font-size: 14px;
         line-height: 20px;
         text-decoration: none;
         outline: none;
-        cursor: default;
-      }
-      [role="menuitemradio"][aria-checked="true"] {
-        background: color-mix(in srgb, ${colors.text} 8%, transparent);
+        cursor: pointer;
       }
       /* Focus is the highlight: pointer movement and arrow keys both move it. */
-      [role="menuitemradio"]:focus {
-        background: ${colors.sidebarRowHover};
+      [role="menuitem"]:focus {
+        background: ${menu.highlight};
+        color: ${menu.highlightForeground};
       }
-      .mark, .check { display: inline-flex; flex: none; align-items: center; justify-content: center; }
-      .mark { width: 16px; height: 16px; color: ${colors.text}; }
-      .mark svg { width: 16px; height: 16px; }
-      .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .check { width: 14px; height: 14px; color: ${colors.textMuted}; }
-      .check svg { width: 14px; height: 14px; }
-      .separator {
-        height: 1px;
-        margin: 4px 4px;
-        background: color-mix(in srgb, ${colors.text} 10%, transparent);
+      .icon {
+        display: inline-flex;
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-inline: -2px;
+        color: ${menu.mutedForeground};
+        opacity: 0.8;
       }
+      .icon svg { width: 16px; height: 16px; }
+      .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .separator { height: 1px; margin: 4px 8px; background: ${menu.separator}; }
     </style>
   </head>
   <body>
     <div role="menu" aria-label="Switch app surface">${items}
     </div>
     <script>
-      const items = Array.from(document.querySelectorAll('[role="menuitemradio"]'));
+      const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
       const focusAt = (index) => items[(index + items.length) % items.length]?.focus();
-      focusAt(Math.max(0, items.findIndex((item) => item.getAttribute("aria-checked") === "true")));
-      for (const item of items) item.addEventListener("mousemove", () => item.focus());
+      for (const item of items) {
+        item.addEventListener("mousemove", () => item.focus());
+        item.addEventListener("mouseleave", () => item.blur());
+      }
       document.addEventListener("keydown", (event) => {
         const index = items.indexOf(document.activeElement);
         if (event.key === "ArrowDown") focusAt(index + 1);
-        else if (event.key === "ArrowUp") focusAt(index - 1);
+        else if (event.key === "ArrowUp") focusAt(index < 0 ? items.length - 1 : index - 1);
         else if (event.key === "Home") focusAt(0);
         else if (event.key === "End") focusAt(items.length - 1);
+        else if (event.key === "Enter" || event.key === " ") items[index]?.click();
         else if (event.key === "Escape") window.location.href = "t3code-surface://close";
         else return;
         event.preventDefault();

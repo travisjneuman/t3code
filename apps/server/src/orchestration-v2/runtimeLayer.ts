@@ -321,7 +321,17 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
   ),
   providerContinuationWorkerProvided,
   agentSessionImporterProvided,
-  ExternalSessions.layer.pipe(Layer.provide(providerSessionRuntimeLayer)),
+  ExternalSessions.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        ProjectServiceLayerLive,
+        orchestratorProvided,
+        eventSinkProvided,
+        idAllocatorLayer,
+        providerSessionRuntimeLayer,
+      ),
+    ),
+  ),
 ).pipe(
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(OrchestrationEventInfrastructureLayerLive),

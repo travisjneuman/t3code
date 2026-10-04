@@ -1,9 +1,10 @@
 /**
- * Read-only view of agent sessions running outside T3: Claude Code, Codex,
- * Grok, Pi, and Antigravity, from CLIs, desktop apps, and IDE extensions.
- * Each provider's own session store is watched while anyone subscribes;
- * nothing is written back and nothing is persisted in T3. Fork add-on; see
- * docs/internals/external-sessions.md.
+ * Live view of agent sessions running outside T3: Claude Code, Codex, Grok,
+ * Pi, and Antigravity, from CLIs, desktop apps, and IDE extensions. Each
+ * provider's own session store is watched while anyone subscribes and is
+ * never written to. Continuing an idle Claude or Codex session imports it as
+ * a T3 thread (continueExternalSession.ts), after which it is listed as that
+ * thread instead. Fork add-on; see docs/internals/external-sessions.md.
  *
  * @module external-sessions/ExternalSessions
  */
@@ -11,7 +12,12 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import {
+  ExternalSessionBusyError,
+  type ExternalSessionContinueResult,
   ExternalSessionError,
+  ExternalSessionNotFoundError,
+  ExternalSessionUnsupportedError,
+  externalSessionUnsupportedReason,
   type ExternalSessionEvent,
   type ExternalSessionListResult,
   type ExternalSessionMessage,
@@ -33,6 +39,7 @@ import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.t
 import { makeAntigravitySource } from "./antigravitySource.ts";
 import { makeClaudeSource } from "./claudeSource.ts";
 import { makeCodexSource } from "./codexSource.ts";
+import * as ContinueExternalSession from "./continueExternalSession.ts";
 import {
   type ExternalSessionInfo,
   type ExternalSessionSource,
@@ -62,6 +69,16 @@ export class ExternalSessions extends Context.Service<
     readonly subscribeSession: (
       key: string,
     ) => Stream.Stream<ExternalSessionEvent, ExternalSessionError>;
+    /** Import an idle session as a T3 thread; returns the existing thread when already done. */
+    readonly continueSession: (
+      key: string,
+    ) => Effect.Effect<
+      ExternalSessionContinueResult,
+      | ExternalSessionNotFoundError
+      | ExternalSessionBusyError
+      | ExternalSessionUnsupportedError
+      | ExternalSessionError
+    >;
   }
 >()("t3/external-sessions/ExternalSessions") {}
 
@@ -77,6 +94,8 @@ interface Registry {
   /** Session paths whose files changed, after each flush. */
   readonly changed: PubSub.PubSub<ReadonlySet<string>>;
   readonly summaryFor: (key: string) => ExternalSessionSummary | null;
+  /** Re-reads which sessions T3 owns and republishes the list. */
+  readonly refreshOwned: Effect.Effect<void>;
 }
 
 const sessionKey = (source: ExternalSessionSource, id: string) => `${source.driver}:${id}`;
@@ -96,6 +115,7 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const config = yield* ServerConfig.ServerConfig;
   const providerSessions = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+  const continueExternalSession = yield* ContinueExternalSession.make;
   const sources: ReadonlyArray<ExternalSessionSource> = [
     makeClaudeSource(),
     makeCodexSource(),
@@ -248,6 +268,7 @@ const make = Effect.gen(function* () {
         const entry = entries.get(key);
         return entry === undefined ? null : toSummary(key, entry, Date.now());
       },
+      refreshOwned: Effect.andThen(refreshOwned, publish),
     };
     return registry;
   });
@@ -353,7 +374,38 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  return ExternalSessions.of({ subscribeList, subscribeSession });
+  const continueSession: ExternalSessions["Service"]["continueSession"] = (key) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* RcRef.get(registryRef);
+        const entry = registry.entries.get(key);
+        const summary = registry.summaryFor(key);
+        if (entry === undefined || summary === null) {
+          return yield* new ExternalSessionNotFoundError({ key });
+        }
+        if (summary.liveness === "running") return yield* new ExternalSessionBusyError({ key });
+        const reason = externalSessionUnsupportedReason(summary);
+        const transcriptPath = entry.source.transcriptPath(entry.path);
+        if (reason !== null || summary.cwd === null || transcriptPath === null) {
+          return yield* new ExternalSessionUnsupportedError({ key, reason: reason ?? "provider" });
+        }
+        const result = yield* continueExternalSession({
+          key,
+          driver: summary.driver === "codex" ? "codex" : "claudeAgent",
+          sessionId: entry.info.id,
+          title: entry.info.title,
+          cwd: summary.cwd,
+          model: entry.info.model,
+          transcriptPath,
+          updatedAtMs: entry.info.updatedAtMs,
+        });
+        // The session now belongs to a T3 thread; drop it from the list right away.
+        yield* registry.refreshOwned;
+        return result;
+      }),
+    );
+
+  return ExternalSessions.of({ subscribeList, subscribeSession, continueSession });
 });
 
 export const layer = Layer.effect(ExternalSessions, make);

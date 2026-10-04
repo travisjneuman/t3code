@@ -58,7 +58,6 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { RemoteAppSwitcher } from "../remote-apps/RemoteAppSwitcher";
 import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
-import { resolveRemoteAppSiteSidebarWidth } from "../remote-apps/remoteAppState";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
 
@@ -277,16 +276,9 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       ? getWindowFullscreenState()
       : false;
   });
-  const siteSidebarWidth = resolveRemoteAppSiteSidebarWidth(remoteAppState);
   const sidebarProviderStyle = {
     "--sidebar-width": `${clampThreadSidebarWidth(sidebarWidth, sidebarMinimumWidth, sidebarMaximumWidth)}px`,
     "--panel-animation-duration": `${panelAnimationDurationMs}ms`,
-    // index.css lets this outrank the --sidebar-width the resize rail writes.
-    ...(siteSidebarWidth === undefined
-      ? {}
-      : {
-          "--remote-app-site-sidebar-width": `${clampThreadSidebarWidth(siteSidebarWidth, sidebarMinimumWidth, sidebarMaximumWidth)}px`,
-        }),
     ...(isMacosDesktop && !isWindowFullscreen
       ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
       : {}),

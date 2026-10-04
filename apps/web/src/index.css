@@ -1748,14 +1748,8 @@ body:has([data-remote-app-surface="remote"]) [data-remote-app-host-workspace] {
   visibility: hidden !important;
 }
 
-/* A site keeps its own sidebar width; the host column follows it. !important
-   outranks the --sidebar-width the resize rail writes inline. */
-[data-remote-app-surface="remote"][style*="--remote-app-site-sidebar-width"] {
-  --sidebar-width: var(--remote-app-site-sidebar-width) !important;
-}
-
-/* The site resizes its own sidebar; dragging T3's rail there would only change
-   T3's hidden width. */
+/* The rail sits under the site view, which would swallow its drags; resize the
+   sidebar from T3 and every site follows. */
 [data-remote-app-surface="remote"] [data-slot="sidebar-rail"] {
   display: none;
 }

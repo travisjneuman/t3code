@@ -286,9 +286,63 @@ const SITE_NO_DRAG_CSS = `*, *::before, *::after {
   -webkit-app-region: no-drag !important;
 }`;
 
-/* Sites keep their own sidebar width; the host follows it instead (see
-   RemoteAppSidebarProbe). In a narrow ChatGPT sidebar its section title stays on
-   the first line and the header buttons wrap below it rather than clipping it. */
+/* Each site's sidebar is pinned to T3's sidebar width so the host titlebar and
+   footer columns line up with the page's own sidebar edge. The rules only read
+   --t3code-sidebar-width, which buildRemoteAppSidebarWidthScript sets on the
+   root element, so resizing T3's sidebar never reinserts the stylesheet; with
+   no width set they match nothing and the site keeps its own width. A
+   stylesheet !important beats the inline custom properties Grok and ChatGPT
+   set. */
+const PINNED = ":root[data-t3code-sidebar-width]";
+const SIDEBAR_WIDTH_CSS: Record<RemoteAppSite, string> = {
+  // Only while ChatGPT's own panel is open, so its collapse still works. The
+  // inner panel carries an inline width from --codex-sidebar-preferred-width.
+  chatgpt: `${PINNED} {
+  --codex-sidebar-preferred-width: var(--t3code-sidebar-width) !important;
+}
+${PINNED} [data-app-shell-sidebar-open="true"] [style*="--app-shell-left-panel-width"] {
+  --app-shell-left-panel-width: var(--t3code-sidebar-width) !important;
+}
+${PINNED} [data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div > div {
+  width: 100% !important;
+  min-width: 0 !important;
+}`,
+  claude: `${PINNED} aside.dframe-sidebar {
+  width: var(--t3code-sidebar-width) !important;
+  min-width: var(--t3code-sidebar-width) !important;
+  max-width: var(--t3code-sidebar-width) !important;
+}`,
+  // Grok's sidebar is content-box with a 1px edge border.
+  grok: `${PINNED},
+${PINNED} [style*="--sidebar-width"] {
+  --sidebar-width: calc(var(--t3code-sidebar-width) - 1px) !important;
+}`,
+  gemini: `${PINNED},
+${PINNED} bard-sidenav {
+  --bard-sidenav-open-width: var(--t3code-sidebar-width) !important;
+}`,
+};
+
+/** Sets or, for null, removes the sidebar width pin on the page's root element. */
+export const buildRemoteAppSidebarWidthScript = (width: number | null): string => {
+  const pinned = width !== null && Number.isFinite(width) ? Math.round(width) : null;
+  return `(() => {
+  const root = document.documentElement;
+  if (!root) return;
+  const width = ${JSON.stringify(pinned)};
+  if (width === null) {
+    root.removeAttribute("data-t3code-sidebar-width");
+    root.style.removeProperty("--t3code-sidebar-width");
+    return;
+  }
+  root.style.setProperty("--t3code-sidebar-width", width + "px");
+  root.setAttribute("data-t3code-sidebar-width", String(width));
+})();`;
+};
+
+/* In a narrow ChatGPT sidebar its section title ("ChatGPT", "Space",
+   "Scheduled") stays on the first line and the header buttons wrap below it,
+   rather than clipping the title beside the icon rail. */
 const CHATGPT_HEADER_WRAP_CSS = `#app-shell-sidebar [class*="@container/navigation-header"] {
   flex-wrap: wrap !important;
   row-gap: 4px !important;
@@ -302,14 +356,14 @@ const CHATGPT_HEADER_WRAP_CSS = `#app-shell-sidebar [class*="@container/navigati
 /**
  * CSS that repaints a site's own design tokens with the active T3 palette.
  * ChatGPT keeps its fuller treatment; the others only remap their tokens, so
- * their layouts stay as the sites ship them.
+ * apart from the pinned sidebar width their layouts stay as the sites ship them.
  */
 export const buildRemoteSiteThemeCss = (site: RemoteAppSite, input: RemoteAppTheme): string => {
   const theme = normalizeRemoteAppTheme(input);
   const colorScheme = theme.appearance === "dark" ? "dark" : "light";
   return `${SITE_NO_DRAG_CSS}\n${
     site === "chatgpt"
-      ? `${buildRemoteAppThemeCss(input)}\n${CHATGPT_HEADER_WRAP_CSS}\n`
+      ? `${buildRemoteAppThemeCss(input)}\n${CHATGPT_HEADER_WRAP_CSS}`
       : SITE_THEME_BUILDERS[site](resolvePalette(theme.colors), colorScheme)
-  }`;
+  }\n\n${SIDEBAR_WIDTH_CSS[site]}\n`;
 };

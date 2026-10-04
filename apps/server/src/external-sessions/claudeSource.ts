@@ -46,7 +46,7 @@ const originFor = (entrypoint: string | null): string | null => {
 
 // Harness-injected blocks the user never typed.
 const INJECTED_BLOCK =
-  /<(system-reminder|local-command-stdout|local-command-stderr|command-message|command-args)>[\s\S]*?<\/\1>/g;
+  /<(system-reminder|task-notification|local-command-stdout|local-command-stderr|command-message|command-args)>[\s\S]*?<\/\1>/g;
 
 const userText = (content: unknown): string => {
   const text = contentText(content, ["text"]).replace(INJECTED_BLOCK, "");

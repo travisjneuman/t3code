@@ -223,3 +223,15 @@ Choose **Snooze → Custom…** from a thread's menu to pick a date and time in 
 local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
+
+## Sessions from other agents
+
+**Other agents**, below your threads in the sidebar, lists recent sessions you started outside
+T3, such as Claude Code or Codex in a terminal, a desktop app, or an IDE. Open one to follow it
+live.
+
+To keep working on a Claude or Codex session in T3, stop it in the other app, then choose
+**Continue in T3**. The session becomes a regular thread in its folder's project, with its
+history, and leaves the Other agents list. Running both at once would mix two conversations into
+one session, so T3 waits until the other app has stopped. Grok, Pi and Antigravity sessions can
+be followed but not continued.
