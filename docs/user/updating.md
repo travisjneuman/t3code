@@ -87,15 +87,17 @@ signed in. Nothing is pushed unless the new build succeeds. Then **Restart &
 Install** replaces the installed app with the new build and removes the old
 copy and the build files.
 
+The app checks for a new official nightly a minute after it starts and every
+15 minutes after that. When one is out, it merges that nightly into your fork
+and pushes it, without building, and the update button then offers **Sync &
+Build** for it. The background check never uses Claude Code: if the official
+changes conflict with the fork's in a way it can't settle by itself, it skips
+that nightly until a newer one is out or you press the merge button.
+
 The merge button beside the update button (**Sync fork with official T3 Code**)
 merges everything on the official `main` branch into your fork and pushes it,
-without building. The app also does this on its own a minute after it starts
-and every 15 minutes after that, so the fork follows the official repository
-without you clicking anything. The background sync never uses Claude Code: if
-the official changes conflict with the fork's in a way it can't settle by
-itself, it skips them until you press the merge button, which can. Once a
-synced fork contains a nightly newer than the app you are running, the update
-button offers **Sync & Build** for it.
+without building, including changes that are not in a nightly yet. The update
+button builds them with the next nightly.
 
 Sync and update refuse to start while the checkout has uncommitted changes, is
 not on `main`, or is in the middle of another merge. If it still cannot merge

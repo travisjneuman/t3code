@@ -47,11 +47,14 @@ update share one lock because both rewrite the checkout, and the exported `inspe
 takes it too, so an update check never reads the checkout mid-merge.
 
 `DesktopUpdates` also runs `autoSyncSource` a minute after startup and every 15
-minutes, then rechecks for updates; it never builds. It is `syncSource` without the
-agent: conflicts the rename pass leaves abort the merge, and that `upstream/main`
-commit is remembered (in memory) and skipped until upstream moves or the button,
-which has the agent, merges it. A dirty checkout fails `inspect`, so a round during
-local edits is a logged skip. Every round that merges pushes the fork; GitHub
+minutes, then rechecks for updates; it never builds. It merges only the newest
+nightly (the same target update uses), not `upstream/main`, because update builds
+are keyed to nightly versions: commits past the nightly would sit unbuilt until
+the next one anyway. It has no agent: conflicts the rename pass leaves abort the
+merge, and that nightly is remembered (in memory) and skipped until a newer one
+lands or the button, which has the agent, merges it. A dirty checkout fails
+`inspect`, so a round during local edits is a logged skip. Every round that
+merges pushes the fork; GitHub
 Actions are disabled on the fork, so a push costs no CI.
 
 ## Rename-only conflict resolution

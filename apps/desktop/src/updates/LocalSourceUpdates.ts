@@ -101,10 +101,10 @@ export class LocalSourceUpdates extends Context.Service<
     readonly install: Effect.Effect<void, LocalSourceUpdateError>;
     readonly syncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
     /**
-     * Fork add-on: `syncSource` for the background poller, without the merge
-     * agent. Conflicts the rename pass cannot settle abort the merge, and that
-     * upstream commit is skipped until upstream moves or the sync button
-     * (which has the agent) merges it.
+     * Fork add-on: for the background poller. Merges only the newest upstream
+     * nightly, without the merge agent. Conflicts the rename pass cannot
+     * settle abort the merge, and that nightly is skipped until a newer one
+     * lands or the sync button (which has the agent) merges it.
      */
     readonly autoSyncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
   }
@@ -924,37 +924,40 @@ export const make = Effect.gen(function* () {
     Effect.withSpan("desktop.localSourceUpdates.syncAndBuild"),
   );
 
-  // The upstream main commit the background sync could not merge cleanly.
+  // The upstream commit the background sync could not merge cleanly.
   const autoSyncBlockedRef = yield* Ref.make<string | null>(null);
 
-  // Brings every upstream/main commit into the fork without building; the
-  // update button builds the result once a newer nightly is contained.
-  const syncUpstreamMain = (agent: boolean) =>
+  // Merges upstream into the fork without building. The sync button (agent)
+  // takes every upstream/main commit; the background sync takes only the
+  // newest nightly, so the fork moves when upstream releases and the update
+  // button then builds that release.
+  const syncUpstream = (agent: boolean) =>
     Effect.gen(function* () {
       const inspection = yield* inspect;
       const repo = inspection.repositoryPath;
       const git = (args: ReadonlyArray<string>) =>
         runChecked({ operation: "merge", command: "git", args, cwd: repo });
-      // inspect just fetched upstream/main.
-      const upstreamMain = (yield* git([
-        "rev-parse",
-        "--verify",
-        "upstream/main^{commit}",
-      ])).stdout.trim();
-      const count = yield* git(["rev-list", "--count", `HEAD..${upstreamMain}`]);
-      const behind = Number(count.stdout.trim());
-      if (behind === 0 || (!agent && (yield* Ref.get(autoSyncBlockedRef)) === upstreamMain)) {
+      // inspect just fetched upstream/main and its nightly tags.
+      const target = agent
+        ? (yield* git(["rev-parse", "--verify", "upstream/main^{commit}"])).stdout.trim()
+        : inspection.upstreamCommit;
+      const behind = agent
+        ? Number((yield* git(["rev-list", "--count", `HEAD..${target}`])).stdout.trim())
+        : inspection.behind;
+      if (behind === 0 || (!agent && (yield* Ref.get(autoSyncBlockedRef)) === target)) {
         return { merged: 0, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
       }
-      const label = `upstream main ${upstreamMain.slice(0, 10)}`;
+      const label = agent
+        ? `upstream main ${target.slice(0, 10)}`
+        : `upstream nightly ${inspection.upstreamTag}`;
       const message = `chore(sync): merge ${label}`;
       yield* Effect.gen(function* () {
-        yield* mergeUpstream(repo, upstreamMain, label, message, agent);
+        yield* mergeUpstream(repo, target, label, message, agent);
         yield* git(["commit", "--no-verify", "--no-edit", "-m", message]);
       }).pipe(
         Effect.catchCause((cause) =>
           abortMerge(repo).pipe(
-            Effect.andThen(agent ? Effect.void : Ref.set(autoSyncBlockedRef, upstreamMain)),
+            Effect.andThen(agent ? Effect.void : Ref.set(autoSyncBlockedRef, target)),
             Effect.andThen(Effect.failCause(cause)),
           ),
         ),
@@ -1039,8 +1042,8 @@ export const make = Effect.gen(function* () {
     inspect: inspect.pipe(repositoryLock.withPermits(1)),
     syncAndBuild,
     install,
-    syncSource: syncUpstreamMain(true),
-    autoSyncSource: syncUpstreamMain(false),
+    syncSource: syncUpstream(true),
+    autoSyncSource: syncUpstream(false),
   });
 });
 
