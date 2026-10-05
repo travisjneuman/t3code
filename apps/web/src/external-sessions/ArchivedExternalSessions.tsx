@@ -33,7 +33,12 @@ import { formatProviderDriverKindLabel } from "../providerModels";
 import { useEnvironmentIdentities } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
 import { formatRelativeTimeLabel } from "../timestampFormat";
-import { cwdBasename, externalSessionUnarchive, externalSessionsArchived } from "./atoms";
+import {
+  cwdBasename,
+  externalSessionTitle,
+  externalSessionUnarchive,
+  externalSessionsArchived,
+} from "./atoms";
 
 /**
  * Replaces the route's component. The upstream panel owns a scroll container;
@@ -129,7 +134,7 @@ function ArchivedSessionRow(props: {
 
   return (
     <SettingsRow
-      title={session.title.length > 0 ? session.title : "Untitled session"}
+      title={externalSessionTitle({ title: session.title })}
       description={
         <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
           <ProviderInstanceIcon

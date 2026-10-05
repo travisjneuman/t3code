@@ -10,6 +10,7 @@ import { memo, useCallback, useState } from "react";
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
 import { useSidebar } from "../components/ui/sidebar";
+import { externalSessionTitle } from "../external-sessions/atoms";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { formatRelativeTimeLabel } from "../timestampFormat";
@@ -119,7 +120,7 @@ const SessionSearchRow = memo(function SessionSearchRow(props: {
   onNavigate: () => void;
 }) {
   const { environmentId, environmentLabel, hit } = props.entry;
-  const title = hit.title.trim().length > 0 ? hit.title.trim() : "Untitled session";
+  const title = externalSessionTitle(hit);
   const product = PROVIDER_DISPLAY_NAMES[hit.driver] ?? formatProviderDriverKindLabel(hit.driver);
   const folder = folderName(hit.cwd);
   const label = [title, product, folder, environmentLabel]

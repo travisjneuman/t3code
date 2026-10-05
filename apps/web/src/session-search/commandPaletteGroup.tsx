@@ -8,6 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
+import { externalSessionTitle } from "../external-sessions/atoms";
 import type { CommandPaletteGroup } from "../components/CommandPalette.logic";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { formatRelativeTimeLabel } from "../timestampFormat";
@@ -34,7 +35,7 @@ export function useSessionSearchPaletteGroup(query: string): CommandPaletteGroup
       value: "other-agents-search",
       label: search.complete ? "Other Agents" : "Other Agents (partial)",
       items: search.entries.map(({ environmentId, environmentLabel, hit }) => {
-        const title = hit.title.trim().length > 0 ? hit.title.trim() : "Untitled session";
+        const title = externalSessionTitle(hit);
         const product =
           PROVIDER_DISPLAY_NAMES[hit.driver] ?? formatProviderDriverKindLabel(hit.driver);
         const { snippet } = hit;
