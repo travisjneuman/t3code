@@ -1,8 +1,8 @@
 /**
  * Compare agents page. Without a pair it is the setup form, one prompt and
  * two models, above the list of earlier comparisons. With a pair it shows
- * both threads' prompts and answers side by side, with Review swap, Stop,
- * and one follow-up box that sends to both.
+ * both threads' prompts and answers side by side, with Review swap and a
+ * docked follow-up box that sends to both, or stops both while they work.
  * Fork add-on: compare agents; see docs/user/compare-agents.md.
  */
 import { useAtomValue } from "@effect/atom-react";
@@ -29,6 +29,7 @@ import { CheckIcon, CopyIcon, PlusIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useMemo, useState } from "react";
 
 import ChatMarkdown from "../components/ChatMarkdown";
+import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import { scheduledTaskDefaultModel } from "../components/settings/scheduledTasksSettings.logic";
@@ -46,6 +47,7 @@ import {
 import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
 import { Textarea } from "../components/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { isElectron } from "../env";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
@@ -110,32 +112,30 @@ export function CompareAgentsView(props: {
             }
           >
             <PlusIcon />
-            New or earlier comparison
+            New comparison
           </Button>
         ) : null}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 sm:px-6">
-        {props.pairId !== undefined ? (
-          <CompareResults environmentId={props.environmentId} pairId={props.pairId} />
-        ) : (
-          <>
-            {props.fromThreadId !== undefined ? (
-              <CompareSetupFromThread
-                environmentId={props.environmentId}
-                threadId={props.fromThreadId}
-              />
-            ) : (
-              <CompareSetup
-                environmentId={props.environmentId}
-                initialProjectId={props.projectId}
-                initialPrompt=""
-                initialLeft={null}
-              />
-            )}
-            <EarlierComparisons environmentId={props.environmentId} />
-          </>
-        )}
-      </div>
+      {props.pairId !== undefined ? (
+        <CompareResults environmentId={props.environmentId} pairId={props.pairId} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 sm:px-6">
+          {props.fromThreadId !== undefined ? (
+            <CompareSetupFromThread
+              environmentId={props.environmentId}
+              threadId={props.fromThreadId}
+            />
+          ) : (
+            <CompareSetup
+              environmentId={props.environmentId}
+              initialProjectId={props.projectId}
+              initialPrompt=""
+              initialLeft={null}
+            />
+          )}
+          <EarlierComparisons environmentId={props.environmentId} />
+        </div>
+      )}
     </SidebarInset>
   );
 }
@@ -494,64 +494,170 @@ function CompareResults(props: { environmentId: EnvironmentId; pairId: string })
   };
 
   return (
-    <div className="space-y-4 pt-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="outline"
-          disabled={pending !== null || working || !finished}
-          onClick={() => void run("swap", () => reviewSwap(environmentId, pairId))}
-        >
-          {pending === "swap" ? <Spinner /> : null}
-          {swapsSent === 0 ? "Review swap" : `Review swap (round ${swapsSent + 1})`}
-        </Button>
-        {working ? (
+    <>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-6 sm:px-6">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
-            variant="ghost"
-            disabled={pending !== null}
-            onClick={() => void run("stop", () => stopComparison(environmentId, pairId))}
+            variant="outline"
+            disabled={pending !== null || working || !finished}
+            onClick={() => void run("swap", () => reviewSwap(environmentId, pairId))}
           >
-            {pending === "stop" ? <Spinner /> : null}
-            Stop both
+            {pending === "swap" ? <Spinner /> : null}
+            {swapsSent === 0 ? "Review swap" : `Review swap (round ${swapsSent + 1})`}
           </Button>
-        ) : null}
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          {working
-            ? "Waiting for both agents to finish."
-            : finished
-              ? "Review swap sends each agent the other's newest answer and asks it to compare and improve."
-              : "Review swap needs a finished answer from both agents."}
-        </p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CompareColumn environmentId={environmentId} threadId={leftId} thread={left} />
-        <CompareColumn environmentId={environmentId} threadId={rightId} thread={right} />
-      </div>
-      <div className="space-y-2 rounded-lg border p-3">
-        <Label htmlFor="compare-agents-follow-up">Follow-up for both agents</Label>
-        <Textarea
-          id="compare-agents-follow-up"
-          placeholder={
-            working ? "Both agents need to finish first." : "Ask both agents the same follow-up…"
-          }
-          value={followUp}
-          onChange={(event) => setFollowUp(event.target.value)}
-          onKeyDown={(event) => {
-            if (!isSendShortcut(event)) return;
-            event.preventDefault();
-            void sendToBoth();
-          }}
-        />
-        <div className="flex items-center justify-end gap-3">
-          <p className="text-xs text-muted-foreground">Each agent sees only its own thread.</p>
-          <Button
-            disabled={pending !== null || working || followUp.trim() === ""}
-            onClick={() => void sendToBoth()}
-          >
-            {pending === "follow-up" ? <Spinner /> : null}
-            Send to both
-          </Button>
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            {working
+              ? "Waiting for both agents to finish."
+              : finished
+                ? "Review swap sends each agent the other's newest answer and asks it to compare and improve."
+                : "Review swap needs a finished answer from both agents."}
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CompareColumn environmentId={environmentId} threadId={leftId} thread={left} />
+          <CompareColumn environmentId={environmentId} threadId={rightId} thread={right} />
         </div>
       </div>
+      <FollowUpComposer
+        value={followUp}
+        onChange={setFollowUp}
+        working={working}
+        pending={pending}
+        onSend={() => void sendToBoth()}
+        onStop={() => void run("stop", () => stopComparison(environmentId, pairId))}
+      />
+    </>
+  );
+}
+
+// ComposerPrimaryActions' round send and stop buttons, without the stage backdrop art.
+const ROUND_ACTION_CLASS =
+  "relative isolate flex size-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:opacity-64 disabled:shadow-none disabled:hover:scale-100 sm:size-8 [&_svg]:pointer-events-none";
+
+/**
+ * The follow-up box, docked under the results in ChatComposer's lane, surface
+ * and toolbar. While either agent works, its round button stops both instead.
+ */
+function FollowUpComposer(props: {
+  value: string;
+  onChange: (value: string) => void;
+  working: boolean;
+  pending: "swap" | "stop" | "follow-up" | null;
+  onSend: () => void;
+  onStop: () => void;
+}) {
+  const { value, working, pending } = props;
+  const canSend = !working && pending === null && value.trim() !== "";
+  return (
+    <div className="chat-composer-lane w-full shrink-0 pt-1.5 sm:pt-2">
+      <ComposerSurface.Shell>
+        <ComposerSurface.Host>
+          <div className="relative z-10">
+            <ComposerSurface.Main>
+              <div className="rounded-3xl">
+                <div className="relative px-3 pt-3.5 pb-2 sm:px-4 sm:pt-4">
+                  <textarea
+                    aria-label="Follow-up for both agents"
+                    className="block field-sizing-content max-h-50 min-h-12 w-full resize-none bg-transparent font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) leading-relaxed text-foreground outline-none placeholder:text-placeholder max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)"
+                    placeholder={
+                      working
+                        ? "Both agents are working. You can send once they finish."
+                        : "Ask both agents the same follow-up…"
+                    }
+                    value={value}
+                    onChange={(event) => props.onChange(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (!isSendShortcut(event)) return;
+                      event.preventDefault();
+                      if (canSend) props.onSend();
+                    }}
+                  />
+                </div>
+                <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2 px-3 pb-3 sm:px-4 sm:pb-4">
+                  <p className="min-w-0 truncate text-xs text-muted-foreground">
+                    Sends to both agents. Each sees only its own thread.
+                  </p>
+                  {working ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            className={cn(
+                              ROUND_ACTION_CLASS,
+                              "bg-destructive/90 text-white shadow-destructive/24 hover:bg-destructive",
+                            )}
+                            disabled={pending !== null}
+                            onClick={props.onStop}
+                            aria-label="Stop both agents"
+                          />
+                        }
+                      >
+                        {pending === "stop" ? (
+                          <Spinner size="sm" aria-hidden="true" />
+                        ) : (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 12 12"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                          </svg>
+                        )}
+                      </TooltipTrigger>
+                      <TooltipPopup>Stop both</TooltipPopup>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            className={cn(
+                              ROUND_ACTION_CLASS,
+                              "bg-message-action text-message-action-foreground enabled:shadow-message-action/24 hover:bg-message-action-hover",
+                            )}
+                            disabled={!canSend}
+                            onClick={props.onSend}
+                            aria-label="Send to both"
+                          />
+                        }
+                      >
+                        {pending === "follow-up" ? (
+                          <Spinner size="sm" aria-hidden="true" />
+                        ) : (
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </TooltipTrigger>
+                      <TooltipPopup>Send to both (Ctrl/⌘ Enter)</TooltipPopup>
+                    </Tooltip>
+                  )}
+                </div>
+              </div>
+            </ComposerSurface.Main>
+          </div>
+        </ComposerSurface.Host>
+      </ComposerSurface.Shell>
+      <div
+        aria-hidden
+        className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
+      />
     </div>
   );
 }
