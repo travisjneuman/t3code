@@ -135,3 +135,5 @@ export const REMOTE_APP_RESET_ZOOM_CHANNEL = "remote-app:reset-zoom";
 export const REMOTE_APP_RETRY_CHANNEL = "remote-app:retry";
 export const REMOTE_APP_CLEAR_DATA_CHANNEL = "remote-app:clear-data";
 export const REMOTE_APP_STATE_CHANGE_CHANNEL = "remote-app:state-change";
+export const TAKE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:take-legacy-local-storage";
+export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-local-storage";
