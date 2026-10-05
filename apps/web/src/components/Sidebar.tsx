@@ -4513,7 +4513,7 @@ export default function Sidebar() {
         );
         if (clicked._tag === "Failure") return;
         if (isForkThreadMenuId(clicked.value))
-          return runForkThreadMenuItem(threadRef, clicked.value); // Fork add-on: thread export, save to notes, hand back.
+          return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on: thread export, save to notes, hand back, open comparison.
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
@@ -4723,6 +4723,7 @@ export default function Sidebar() {
       startThreadRename,
       updateThreadMetadata,
       timestampFormat,
+      router, // Fork add-on: open comparison.
     ],
   );
 

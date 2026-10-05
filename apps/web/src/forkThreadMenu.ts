@@ -1,12 +1,18 @@
 /**
  * The fork's thread action menu items, added to both thread menus (sidebar
- * row and chat header) through one hook each: Export, Save to notes, and the
- * ways back for continued threads. Fork add-on.
+ * row and chat header) through one hook each: Export, Save to notes, the
+ * ways back for continued threads, and Open comparison. Fork add-on.
  *
  * @module forkThreadMenu
  */
 import type { ContextMenuItem, ScopedThreadRef } from "@t3tools/contracts";
 
+import {
+  type CompareThreadMenuId,
+  isCompareThreadMenuId,
+  openComparisonOf,
+  withCompareMenuItem,
+} from "./compare-agents/compareThreadMenu";
 import {
   handBackThread,
   isHandBackMenuId,
@@ -25,23 +31,36 @@ import {
   type ThreadExportMenuId,
   withExportMenuItem,
 } from "./thread-export/threadExport";
+import type { AppRouter } from "./router";
 
-export type ForkThreadMenuId = ThreadExportMenuId | SaveToNotesMenuId | HandBackMenuId;
+export type ForkThreadMenuId =
+  | ThreadExportMenuId
+  | SaveToNotesMenuId
+  | HandBackMenuId
+  | CompareThreadMenuId;
 
 export const withForkThreadMenuItems = <T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
   thread: Parameters<typeof withHandBackMenuItem>[1],
 ): ReadonlyArray<ContextMenuItem<T | ForkThreadMenuId>> =>
-  withHandBackMenuItem(withSaveToNotesMenuItem(withExportMenuItem(items)), thread);
+  withCompareMenuItem(
+    withHandBackMenuItem(withSaveToNotesMenuItem(withExportMenuItem(items)), thread),
+    thread,
+  );
 
 export const isForkThreadMenuId = (value: string | null): value is ForkThreadMenuId =>
-  isExportMenuId(value) || isSaveToNotesMenuId(value) || isHandBackMenuId(value);
+  isExportMenuId(value) ||
+  isSaveToNotesMenuId(value) ||
+  isHandBackMenuId(value) ||
+  isCompareThreadMenuId(value);
 
 export const runForkThreadMenuItem = (
   threadRef: ScopedThreadRef,
   menuId: ForkThreadMenuId,
+  router: Pick<AppRouter, "navigate">,
 ): Promise<void> => {
   if (isExportMenuId(menuId)) return exportThread(threadRef, menuId);
   if (isSaveToNotesMenuId(menuId)) return saveThreadToNotes(threadRef, menuId);
+  if (isCompareThreadMenuId(menuId)) return openComparisonOf(router, threadRef);
   return handBackThread(threadRef, menuId);
 };

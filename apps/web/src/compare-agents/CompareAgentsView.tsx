@@ -22,12 +22,22 @@ import {
 import { createModelSelection } from "@t3tools/shared/model";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, EllipsisIcon, PlusIcon } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import { scheduledTaskDefaultModel } from "../components/settings/scheduledTasksSettings.logic";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../components/settings/settingsLayout";
+import { isTrailingDoubleClick } from "../components/Sidebar.logic";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import {
@@ -51,6 +61,7 @@ import { isElectron } from "../env";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { cn } from "../lib/utils";
+import { readLocalApi } from "../localApi";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
 import type { ProviderInstanceEntry } from "../providerInstances";
 import {
@@ -66,6 +77,7 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 import { startComparison } from "./compareAgents";
 import { CompareComposer, useCompareProviders } from "./CompareComposer";
 import { type ComparePair, comparePromptOf, groupComparePairs } from "./comparePairs";
+import { startCompareRename, stopCompareRename, useCompareRenameStore } from "./compareRenameStore";
 import { CompareThreadColumn } from "./CompareThreadColumn";
 import { useComparePairMenu, useRenameComparison } from "./useComparePairMenu";
 
@@ -86,22 +98,25 @@ export function CompareAgentsView(props: {
     () => void navigate({ to: "/compare/$environmentId", params: { environmentId }, search: {} }),
     [environmentId, navigate],
   );
-  // The comparison being renamed, in the header or its list row. Leaving the
-  // page it started on drops it, like ChatHeader's rename.
-  const [renaming, setRenaming] = useState<{
-    readonly pairId: string;
-    readonly onPage: string | undefined;
-  } | null>(null);
-  if (renaming !== null && renaming.onPage !== pairId) setRenaming(null);
-  const renamingPairId = renaming?.pairId ?? null;
+  // The comparison being renamed, in the header or its list row. It belongs
+  // to the page it started on; leaving that page drops it, like ChatHeader's rename.
+  const renamingPairId = useCompareRenameStore((state) =>
+    state.onPage === pairId ? state.pairId : null,
+  );
+  useEffect(
+    () => () => {
+      if (useCompareRenameStore.getState().onPage === pairId) stopCompareRename();
+    },
+    [pairId],
+  );
   const startRename = useCallback(
-    (renamedPairId: string) => setRenaming({ pairId: renamedPairId, onPage: pairId }),
+    (renamedPairId: string) => startCompareRename(renamedPairId, pairId),
     [pairId],
   );
   const renameComparison = useRenameComparison(environmentId);
   const finishRename = useCallback(
     (renamedPairId: string, name: string | null) => {
-      setRenaming(null);
+      stopCompareRename();
       if (name !== null) renameComparison(renamedPairId, name);
     },
     [renameComparison],
@@ -140,6 +155,7 @@ export function CompareAgentsView(props: {
               pairId={pairId}
               renaming={renamingPairId === pairId}
               onOpenMenu={openMenu}
+              onStartRename={startRename}
               onFinishRename={finishRename}
             />
             <Button size="sm" variant="ghost" onClick={goToStart}>
@@ -186,18 +202,61 @@ const belowElement = (element: Element) => {
   return { x: rect.left, y: rect.bottom + 4 };
 };
 
+/** ChatHeader's wait before a title click opens the menu, so a double-click can rename. */
+const TITLE_MENU_OPEN_DELAY_MS = 500;
+
 /**
  * The thread header's breadcrumb for a comparison: Compare agents / its name.
- * The name opens the comparison's menu, like a thread title does.
+ * The name opens the comparison's menu and double-clicking it renames, like a
+ * thread title.
  */
 function ComparePairTitle(props: {
   environmentId: EnvironmentId;
   pairId: string;
   renaming: boolean;
   onOpenMenu: OpenPairMenu;
+  onStartRename: (pairId: string) => void;
   onFinishRename: FinishRename;
 }) {
-  const { environmentId, pairId } = props;
+  const { environmentId, pairId, onOpenMenu, onStartRename } = props;
+  const titleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuTimerRef = useRef<number | null>(null);
+  const cancelPendingMenu = useCallback(() => {
+    if (menuTimerRef.current === null) return;
+    clearTimeout(menuTimerRef.current);
+    menuTimerRef.current = null;
+  }, []);
+  useEffect(() => cancelPendingMenu, [cancelPendingMenu, pairId]);
+  const openMenuNow = useCallback(() => {
+    cancelPendingMenu();
+    if (titleButtonRef.current !== null) onOpenMenu(pairId, belowElement(titleButtonRef.current));
+  }, [cancelPendingMenu, onOpenMenu, pairId]);
+  const openMenuFromTitle = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (isTrailingDoubleClick(event.detail)) return;
+      // Keyboard, the chevron and the web menu (which a dblclick can close)
+      // open at once; the native menu waits so it can't swallow a second click.
+      const clickedChevron =
+        (event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null;
+      if (event.detail === 0 || clickedChevron || window.desktopBridge === undefined) {
+        openMenuNow();
+        return;
+      }
+      cancelPendingMenu();
+      menuTimerRef.current = window.setTimeout(openMenuNow, TITLE_MENU_OPEN_DELAY_MS);
+    },
+    [cancelPendingMenu, openMenuNow],
+  );
+  const renameFromTitle = useCallback(
+    (event: ReactMouseEvent) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if ((event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null) return;
+      cancelPendingMenu();
+      void readLocalApi()?.contextMenu.close();
+      onStartRename(pairId);
+    },
+    [cancelPendingMenu, onStartRename, pairId],
+  );
   const [leftId, rightId] = compareThreadIds(pairId);
   const left = useThreadShell(scopeThreadRef(environmentId, leftId));
   const right = useThreadShell(scopeThreadRef(environmentId, rightId));
@@ -227,10 +286,13 @@ function ComparePairTitle(props: {
               <TooltipTrigger
                 render={
                   <button
+                    ref={titleButtonRef}
                     type="button"
                     aria-label={`Comparison actions for ${title}`}
                     aria-haspopup="menu"
-                    onClick={(event) => props.onOpenMenu(pairId, belowElement(event.currentTarget))}
+                    onClick={openMenuFromTitle}
+                    onDoubleClick={renameFromTitle}
+                    onBlur={cancelPendingMenu}
                     className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 }
@@ -240,6 +302,7 @@ function ComparePairTitle(props: {
                 </h2>
                 <ChevronDownIcon
                   aria-hidden
+                  data-thread-title-chevron
                   className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
                 />
               </TooltipTrigger>

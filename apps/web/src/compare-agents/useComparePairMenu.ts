@@ -2,7 +2,8 @@
  * A comparison's action menu: the thread action menu (pin, settle, snooze,
  * rename, mark unread, export, save to notes, archive, delete) applied to
  * both of its threads at once, with one confirmation for the pair. Archived
- * comparisons get Unarchive and Delete. Fork add-on: compare agents.
+ * comparisons get Unarchive and Delete. The command palette shares archive
+ * and delete through useComparePairRemoval. Fork add-on: compare agents.
  */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
@@ -19,6 +20,7 @@ import {
   type EnvironmentId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
+import { useRouter } from "@tanstack/react-router";
 import { useCallback } from "react";
 
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
@@ -54,6 +56,7 @@ const LEFT_OUT: ReadonlySet<string> = new Set([
   "project-settings",
   "regenerate-title",
   "copy",
+  "open-comparison",
 ]);
 
 const forPair = <T extends string>(
@@ -61,10 +64,12 @@ const forPair = <T extends string>(
 ): ReadonlyArray<ContextMenuItem<T>> =>
   items
     .filter((item) => !LEFT_OUT.has(item.id))
-    .map((item) => ({
+    .map((item, index) => ({
       ...item,
       label:
         item.id === "delete" ? "Delete comparison" : item.label.replace(/ thread$/, " comparison"),
+      // A separator that followed a left-out first item would open the menu.
+      ...(index === 0 ? { separatorBefore: false } : {}),
     }));
 
 function failureToast(title: string, error: unknown) {
@@ -105,6 +110,54 @@ const confirmed = async (message: string, destructive: boolean): Promise<boolean
 
 const pairRefs = (environmentId: EnvironmentId, pairId: string) =>
   compareThreadIds(pairId).map((threadId) => scopeThreadRef(environmentId, threadId));
+
+/** The pair's sides the thread list holds, left first, and its name; null when it holds none. */
+export const readComparePairSides = (environmentId: EnvironmentId, pairId: string) => {
+  const sides = pairRefs(environmentId, pairId).flatMap((ref) => {
+    const shell = readThreadShell(ref);
+    return shell === null ? [] : [{ ref, shell }];
+  });
+  const lead = sides[0]?.shell;
+  return lead === undefined ? null : { sides, lead, prompt: comparePromptOf(lead.title) };
+};
+
+/**
+ * Archive and delete for a pair's `refs`, each behind one confirmation that
+ * honours the archive and delete confirm settings. True when every side went.
+ */
+export function useComparePairRemoval() {
+  const { archiveThread, deleteThread } = useThreadActions();
+  const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
+  const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
+  const archivePair = useCallback(
+    async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
+      if (confirmThreadArchive && !(await confirmed(`Archive comparison "${prompt}"?`, false))) {
+        return false;
+      }
+      return onBothSides(refs, "Failed to archive comparison", (ref) => archiveThread(ref));
+    },
+    [archiveThread, confirmThreadArchive],
+  );
+  const deletePair = useCallback(
+    async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
+      if (
+        confirmThreadDelete &&
+        !(await confirmed(
+          [
+            `Delete comparison "${prompt}"?`,
+            "Both threads and their conversation history are removed for good.",
+          ].join("\n"),
+          true,
+        ))
+      ) {
+        return false;
+      }
+      return onBothSides(refs, "Failed to delete comparison", deleteThread);
+    },
+    [confirmThreadDelete, deleteThread],
+  );
+  return { archivePair, deletePair };
+}
 
 /** Renames a comparison: each side keeps its `Compare · <model> ·` prefix. */
 export function useRenameComparison(environmentId: EnvironmentId) {
@@ -158,47 +211,22 @@ export function useComparePairMenu(input: {
     pinThread,
     unpinThread,
     setThreadAutoSettle,
-    archiveThread,
     unarchiveThread,
-    deleteThread,
     markThreadUnread,
   } = useThreadActions();
-  const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
-  const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
+  const { archivePair, deletePair } = useComparePairRemoval();
+  const router = useRouter();
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
-
-  const deletePair = useCallback(
-    async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
-      if (
-        confirmThreadDelete &&
-        !(await confirmed(
-          [
-            `Delete comparison "${prompt}"?`,
-            "Both threads and their conversation history are removed for good.",
-          ].join("\n"),
-          true,
-        ))
-      ) {
-        return false;
-      }
-      return onBothSides(refs, "Failed to delete comparison", deleteThread);
-    },
-    [confirmThreadDelete, deleteThread],
-  );
 
   const openMenu = useCallback(
     (pairId: string, position: { x: number; y: number }) => {
       void (async () => {
         const api = readLocalApi();
         if (!api) return;
-        const sides = pairRefs(environmentId, pairId).flatMap((ref) => {
-          const shell = readThreadShell(ref);
-          return shell === null ? [] : [{ ref, shell }];
-        });
-        const lead = sides[0]?.shell;
-        if (lead === undefined) return;
+        const pair = readComparePairSides(environmentId, pairId);
+        if (pair === null) return;
+        const { sides, lead, prompt } = pair;
         const refs = sides.map((side) => side.ref);
-        const prompt = comparePromptOf(lead.title);
         const now = new Date();
         const supports = {
           settlement: readEnvironmentSupportsSettlement(environmentId),
@@ -227,7 +255,7 @@ export function useComparePairMenu(input: {
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (isForkThreadMenuId(clicked.value)) {
           const menuId = clicked.value;
-          for (const ref of refs) await runForkThreadMenuItem(ref, menuId);
+          for (const ref of refs) await runForkThreadMenuItem(ref, menuId, router);
           return;
         }
         const action: ThreadActionMenuId = clicked.value;
@@ -271,16 +299,7 @@ export function useComparePairMenu(input: {
             for (const ref of refs) markThreadUnread(ref);
             return;
           case "archive":
-            if (
-              confirmThreadArchive &&
-              !(await confirmed(`Archive comparison "${prompt}"?`, false))
-            ) {
-              return;
-            }
-            if (
-              await onBothSides(refs, "Failed to archive comparison", (ref) => archiveThread(ref))
-            )
-              onRemoved(pairId);
+            if (await archivePair(refs, prompt)) onRemoved(pairId);
             return;
           case "delete":
             if (await deletePair(refs, prompt)) onRemoved(pairId);
@@ -291,14 +310,14 @@ export function useComparePairMenu(input: {
       })();
     },
     [
-      archiveThread,
-      confirmThreadArchive,
+      archivePair,
       deletePair,
       environmentId,
       markThreadUnread,
       onRemoved,
       onStartRename,
       pinThread,
+      router,
       setThreadAutoSettle,
       settleThread,
       snoozeThread,
