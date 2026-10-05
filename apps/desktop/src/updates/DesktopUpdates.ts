@@ -54,7 +54,7 @@ const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 // Fork add-on: local source builds merge each new upstream nightly in the background.
 const SOURCE_SYNC_STARTUP_DELAY = "1 minute";
-const SOURCE_SYNC_INTERVAL = "15 minutes";
+const SOURCE_SYNC_INTERVAL = "30 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";

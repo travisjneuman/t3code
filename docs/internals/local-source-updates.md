@@ -46,7 +46,7 @@ fixes); on failure those edits are stashed so the checkout stays clean. Sync and
 update share one lock because both rewrite the checkout, and the exported `inspect`
 takes it too, so an update check never reads the checkout mid-merge.
 
-`DesktopUpdates` also runs `autoSyncSource` a minute after startup and every 15
+`DesktopUpdates` also runs `autoSyncSource` a minute after startup and every 30
 minutes, then rechecks for updates; it never builds. It merges only the newest
 nightly (the same target update uses), not `upstream/main`, because update builds
 are keyed to nightly versions: commits past the nightly would sit unbuilt until
