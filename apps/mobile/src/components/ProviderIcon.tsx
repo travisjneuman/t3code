@@ -181,13 +181,11 @@ export function ProviderInstanceIcon(props: {
         <View
           style={{
             position: "absolute",
-            right: -2,
-            bottom: -2,
-            height: 8,
-            width: 8,
+            right: -1,
+            bottom: -1,
+            height: 4,
+            width: 4,
             borderRadius: 999,
-            borderWidth: 1,
-            borderColor: props.surfaceColor,
             backgroundColor: props.accentColor,
           }}
         />
