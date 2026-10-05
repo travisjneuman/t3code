@@ -1,11 +1,13 @@
 /**
- * Client calls for Compare agents: start a comparison, and send each side the
- * other's answer (review swap). Failures surface as toasts here, so callers
- * only handle success. Fork add-on: compare agents.
+ * Client calls for Compare agents: start a comparison, send each side the
+ * other's answer (review swap), send one follow-up to both, and stop both.
+ * Failures surface as toasts here, so callers only handle success.
+ * Fork add-on: compare agents.
  *
  * @module compare-agents/compareAgents
  */
 import {
+  type AtomCommand,
   createEnvironmentRpcCommand,
   isAtomCommandInterrupted,
   runAtomCommand,
@@ -30,6 +32,16 @@ const startCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
 const reviewSwapCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:compare-agents:review-swap",
   tag: COMPARE_AGENTS_WS_METHODS.reviewSwap,
+});
+
+const followUpCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:compare-agents:follow-up",
+  tag: COMPARE_AGENTS_WS_METHODS.followUp,
+});
+
+const stopCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:compare-agents:stop",
+  tag: COMPARE_AGENTS_WS_METHODS.stop,
 });
 
 /** A pair id taken from a URL, or undefined when it is not one. */
@@ -63,24 +75,35 @@ export const startComparison = async (
   return null;
 };
 
-export const reviewSwap = async (environmentId: EnvironmentId, pairId: string): Promise<void> => {
+/** Runs a pair command; true on success, false after a failure toast. */
+const runPairCommand = async <Input, A, E>(
+  command: AtomCommand<{ readonly environmentId: EnvironmentId; readonly input: Input }, A, E>,
+  environmentId: EnvironmentId,
+  input: Input,
+  failureTitle: string,
+): Promise<boolean> => {
   const result = await runAtomCommand(
     appAtomRegistry,
-    reviewSwapCommand,
-    { environmentId, input: { pairId } },
+    command,
+    { environmentId, input },
     { reportFailure: false },
   );
-  if (result._tag === "Failure") {
-    if (!isAtomCommandInterrupted(result)) {
-      failureToast("Review swap failed", squashAtomCommandFailure(result));
-    }
-    return;
+  if (result._tag === "Success") return true;
+  if (!isAtomCommandInterrupted(result)) {
+    failureToast(failureTitle, squashAtomCommandFailure(result));
   }
-  toastManager.add(
-    stackedThreadToast({
-      type: "success",
-      title: "Review swap sent",
-      description: "Each agent is now reviewing the other's answer.",
-    }),
-  );
+  return false;
 };
+
+export const reviewSwap = (environmentId: EnvironmentId, pairId: string): Promise<boolean> =>
+  runPairCommand(reviewSwapCommand, environmentId, { pairId }, "Review swap failed");
+
+export const sendFollowUp = (
+  environmentId: EnvironmentId,
+  pairId: string,
+  text: string,
+): Promise<boolean> =>
+  runPairCommand(followUpCommand, environmentId, { pairId, text }, "Could not send the follow-up");
+
+export const stopComparison = (environmentId: EnvironmentId, pairId: string): Promise<boolean> =>
+  runPairCommand(stopCommand, environmentId, { pairId }, "Could not stop the agents");

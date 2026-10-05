@@ -1,29 +1,39 @@
 /**
- * Compare agents page. Without a pair it is the setup form: one prompt, two
- * models. With a pair it shows both threads' prompts and answers side by
- * side, and offers Review swap once both agents have finished.
+ * Compare agents page. Without a pair it is the setup form, one prompt and
+ * two models, above the list of earlier comparisons. With a pair it shows
+ * both threads' prompts and answers side by side, with Review swap, Stop,
+ * and one follow-up box that sends to both.
  * Fork add-on: compare agents; see docs/user/compare-agents.md.
  */
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  COMPARE_FOLLOW_UP_MESSAGE_PREFIX,
+  COMPARE_REVIEW_MESSAGE_PREFIX,
+  comparePairOf,
   compareThreadIds,
   type EnvironmentId,
   type ModelSelection,
   modelSelectionLabel,
+  type OrchestrationV2ThreadProjection,
   providerInstanceLabel,
+  type ThreadExchange,
   threadExchanges,
   type ThreadId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
+import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useMemo, useState } from "react";
+import * as DateTime from "effect/DateTime";
+import { CheckIcon, CopyIcon, PlusIcon } from "lucide-react";
+import { type KeyboardEvent, type ReactNode, useMemo, useState } from "react";
 
 import ChatMarkdown from "../components/ChatMarkdown";
 import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import { scheduledTaskDefaultModel } from "../components/settings/scheduledTasksSettings.logic";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../components/settings/settingsLayout";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import {
@@ -37,6 +47,7 @@ import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
 import { Textarea } from "../components/ui/textarea";
 import { isElectron } from "../env";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { cn } from "../lib/utils";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
@@ -46,11 +57,12 @@ import {
   type ProviderInstanceEntry,
   sortProviderInstanceEntries,
 } from "../providerInstances";
-import { useProjects, useThreadProjection } from "../state/entities";
+import { useProjects, useThreadProjection, useThreadShells } from "../state/entities";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
 import { buildThreadRouteParams } from "../threadRoutes";
+import { formatRelativeTimeLabel } from "../timestampFormat";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
-import { reviewSwap, startComparison } from "./compareAgents";
+import { reviewSwap, sendFollowUp, startComparison, stopComparison } from "./compareAgents";
 
 const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
   "preparing",
@@ -60,29 +72,68 @@ const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
   "waiting",
 ]);
 
+const isWorking = (projection: OrchestrationV2ThreadProjection | null) =>
+  projection?.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)) ?? false;
+
+const isSendShortcut = (event: KeyboardEvent) =>
+  event.key === "Enter" && (event.metaKey || event.ctrlKey);
+
 export function CompareAgentsView(props: {
   environmentId: EnvironmentId;
   pairId: string | undefined;
   projectId: string | undefined;
+  fromThreadId: string | undefined;
 }) {
+  const navigate = useNavigate();
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
       <header
         className={cn(
-          "relative flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center bg-background",
+          "relative flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-2 bg-background",
           isElectron
             ? "drag-region px-3 sm:px-5 wco:pr-(--workspace-native-controls-inset)"
             : "pl-(--workspace-gutter-start) pr-(--workspace-gutter-end)",
           COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
         )}
       >
-        <h2 className="min-w-0 truncate text-sm font-medium">Compare agents</h2>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">Compare agents</h2>
+        {props.pairId !== undefined ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              void navigate({
+                to: "/compare/$environmentId",
+                params: { environmentId: props.environmentId },
+                search: {},
+              })
+            }
+          >
+            <PlusIcon />
+            New or earlier comparison
+          </Button>
+        ) : null}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 sm:px-6">
-        {props.pairId === undefined ? (
-          <CompareSetup environmentId={props.environmentId} initialProjectId={props.projectId} />
-        ) : (
+        {props.pairId !== undefined ? (
           <CompareResults environmentId={props.environmentId} pairId={props.pairId} />
+        ) : (
+          <>
+            {props.fromThreadId !== undefined ? (
+              <CompareSetupFromThread
+                environmentId={props.environmentId}
+                threadId={props.fromThreadId}
+              />
+            ) : (
+              <CompareSetup
+                environmentId={props.environmentId}
+                initialProjectId={props.projectId}
+                initialPrompt=""
+                initialLeft={null}
+              />
+            )}
+            <EarlierComparisons environmentId={props.environmentId} />
+          </>
         )}
       </div>
     </SidebarInset>
@@ -123,9 +174,32 @@ function otherDefaultModel(
   return entry && model ? createModelSelection(entry.instanceId, model.slug) : avoid;
 }
 
+/** The setup form prefilled from a thread: its project, model, and latest prompt. */
+function CompareSetupFromThread(props: { environmentId: EnvironmentId; threadId: string }) {
+  const thread = useThreadProjection(
+    scopeThreadRef(props.environmentId, props.threadId as ThreadId),
+  );
+  const projection = thread?.projection ?? null;
+  if (projection === null) {
+    return <p className="pt-6 text-sm text-muted-foreground">Loading the thread…</p>;
+  }
+  const prompt = threadExchanges(projection).findLast((exchange) => exchange.prompt !== null)
+    ?.prompt?.text;
+  return (
+    <CompareSetup
+      environmentId={props.environmentId}
+      initialProjectId={projection.thread.projectId}
+      initialPrompt={prompt ?? ""}
+      initialLeft={projection.thread.modelSelection}
+    />
+  );
+}
+
 function CompareSetup(props: {
   environmentId: EnvironmentId;
   initialProjectId: string | undefined;
+  initialPrompt: string;
+  initialLeft: ModelSelection | null;
 }) {
   const { environmentId } = props;
   const navigate = useNavigate();
@@ -145,8 +219,8 @@ function CompareSetup(props: {
     [providers, settings],
   );
   const [projectId, setProjectId] = useState(props.initialProjectId ?? "");
-  const [prompt, setPrompt] = useState("");
-  const [leftChoice, setLeftChoice] = useState<ModelSelection | null>(null);
+  const [prompt, setPrompt] = useState(props.initialPrompt);
+  const [leftChoice, setLeftChoice] = useState<ModelSelection | null>(props.initialLeft);
   const [rightChoice, setRightChoice] = useState<ModelSelection | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -157,7 +231,7 @@ function CompareSetup(props: {
   const canStart = !starting && project !== null && prompt.trim() !== "" && !!left && !!right;
 
   const start = async () => {
-    if (starting || project === null || prompt.trim() === "" || !left || !right) return;
+    if (!canStart || project === null || !left || !right) return;
     setStarting(true);
     const pairId = await startComparison(environmentId, {
       projectId: project.id,
@@ -204,6 +278,11 @@ function CompareSetup(props: {
           placeholder="What should both agents answer?"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (!isSendShortcut(event)) return;
+            event.preventDefault();
+            void start();
+          }}
         />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -224,10 +303,94 @@ function CompareSetup(props: {
           />
         </Field>
       </div>
-      <Button disabled={!canStart} onClick={() => void start()}>
-        {starting ? <Spinner /> : null}
-        Start comparison
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!left || !right}
+          onClick={() => {
+            setLeftChoice(right);
+            setRightChoice(left);
+          }}
+        >
+          Swap sides
+        </Button>
+        <Button disabled={!canStart} onClick={() => void start()}>
+          {starting ? <Spinner /> : null}
+          Start comparison
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** "Compare · gpt-5.5 · the prompt" → "the prompt"; a renamed thread keeps its title. */
+const comparePromptOf = (title: string): string => {
+  const parts = title.split(" · ");
+  return parts[0] === "Compare" && parts.length >= 3 ? parts.slice(2).join(" · ") : title;
+};
+
+function EarlierComparisons(props: { environmentId: EnvironmentId }) {
+  const navigate = useNavigate();
+  const shells = useThreadShells();
+  const pairs = useMemo(() => {
+    const byPair = new Map<
+      string,
+      { pairId: string; prompt: string; models: string[]; at: string; working: boolean }
+    >();
+    for (const shell of shells) {
+      if (shell.environmentId !== props.environmentId || shell.archivedAt !== null) continue;
+      const pair = comparePairOf(shell.id);
+      if (pair === null) continue;
+      const entry = byPair.get(pair.pairId) ?? {
+        pairId: pair.pairId,
+        prompt: comparePromptOf(shell.title),
+        models: [],
+        at: shell.createdAt,
+        working: false,
+      };
+      entry.models[pair.side === "a" ? 0 : 1] = shell.modelSelection.model;
+      entry.working ||= ACTIVE_RUN_STATUSES.has(shell.latestRun?.status ?? "");
+      if (shell.updatedAt > entry.at) entry.at = shell.updatedAt;
+      byPair.set(pair.pairId, entry);
+    }
+    return [...byPair.values()].toSorted((left, right) => right.at.localeCompare(left.at));
+  }, [shells, props.environmentId]);
+  if (pairs.length === 0) return null;
+  return (
+    <div className="mx-auto max-w-2xl space-y-2 pt-8">
+      <h3 className="text-sm font-medium">Earlier comparisons</h3>
+      <ul className="divide-y rounded-lg border">
+        {pairs.map((pair) => (
+          <li key={pair.pairId}>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/50"
+              onClick={() =>
+                void navigate({
+                  to: "/compare/$environmentId",
+                  params: { environmentId: props.environmentId },
+                  search: { pair: pair.pairId },
+                })
+              }
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{pair.prompt}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {pair.models.filter(Boolean).join(" vs ")}
+                </span>
+              </span>
+              {pair.working ? <Spinner /> : null}
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {formatRelativeTimeLabel(pair.at)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        Each side is a normal thread, so archiving both threads removes a comparison from this list.
+      </p>
     </div>
   );
 }
@@ -289,26 +452,45 @@ function ModelField(props: {
   );
 }
 
+/** What sent an exchange's prompt: the user's first prompt, a follow-up, or a review swap. */
+type ExchangeKind = "prompt" | "follow-up" | "review";
+
+const exchangeKind = (exchange: ThreadExchange): ExchangeKind => {
+  const id = exchange.prompt?.id ?? "";
+  if (id.startsWith(COMPARE_REVIEW_MESSAGE_PREFIX)) return "review";
+  if (id.startsWith(COMPARE_FOLLOW_UP_MESSAGE_PREFIX)) return "follow-up";
+  return "prompt";
+};
+
 function CompareResults(props: { environmentId: EnvironmentId; pairId: string }) {
   const { environmentId, pairId } = props;
   const [leftId, rightId] = compareThreadIds(pairId);
   const left = useThreadProjection(scopeThreadRef(environmentId, leftId));
   const right = useThreadProjection(scopeThreadRef(environmentId, rightId));
-  const [swapping, setSwapping] = useState(false);
+  const [pending, setPending] = useState<"swap" | "stop" | "follow-up" | null>(null);
+  const [followUp, setFollowUp] = useState("");
   const sides = [left?.projection ?? null, right?.projection ?? null];
-  const working = sides.some(
-    (projection) => projection?.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)) ?? false,
-  );
+  const working = sides.some(isWorking);
   const finished = sides.every((projection) => {
     if (projection === null) return false;
     const last = threadExchanges(projection).findLast((exchange) => exchange.run !== null);
     return last !== undefined && last.answer !== null && !last.answer.streaming;
   });
+  const swapsSent =
+    sides[0] === null
+      ? 0
+      : threadExchanges(sides[0]).filter((exchange) => exchangeKind(exchange) === "review").length;
 
-  const swap = async () => {
-    setSwapping(true);
-    await reviewSwap(environmentId, pairId);
-    setSwapping(false);
+  const run = async (kind: NonNullable<typeof pending>, action: () => Promise<boolean>) => {
+    setPending(kind);
+    const ok = await action();
+    setPending(null);
+    return ok;
+  };
+  const sendToBoth = async () => {
+    const text = followUp.trim();
+    if (text === "" || working || pending !== null) return;
+    if (await run("follow-up", () => sendFollowUp(environmentId, pairId, text))) setFollowUp("");
   };
 
   return (
@@ -316,23 +498,59 @@ function CompareResults(props: { environmentId: EnvironmentId; pairId: string })
       <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="outline"
-          disabled={swapping || working || !finished}
-          onClick={() => void swap()}
+          disabled={pending !== null || working || !finished}
+          onClick={() => void run("swap", () => reviewSwap(environmentId, pairId))}
         >
-          {swapping ? <Spinner /> : null}
-          Review swap
+          {pending === "swap" ? <Spinner /> : null}
+          {swapsSent === 0 ? "Review swap" : `Review swap (round ${swapsSent + 1})`}
         </Button>
-        <p className="text-sm text-muted-foreground">
+        {working ? (
+          <Button
+            variant="ghost"
+            disabled={pending !== null}
+            onClick={() => void run("stop", () => stopComparison(environmentId, pairId))}
+          >
+            {pending === "stop" ? <Spinner /> : null}
+            Stop both
+          </Button>
+        ) : null}
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
           {working
             ? "Waiting for both agents to finish."
             : finished
-              ? "Sends each agent the other's latest answer and asks it to compare and improve."
-              : "Review swap needs an answer from both agents."}
+              ? "Review swap sends each agent the other's newest answer and asks it to compare and improve."
+              : "Review swap needs a finished answer from both agents."}
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <CompareColumn environmentId={environmentId} threadId={leftId} thread={left} />
         <CompareColumn environmentId={environmentId} threadId={rightId} thread={right} />
+      </div>
+      <div className="space-y-2 rounded-lg border p-3">
+        <Label htmlFor="compare-agents-follow-up">Follow-up for both agents</Label>
+        <Textarea
+          id="compare-agents-follow-up"
+          placeholder={
+            working ? "Both agents need to finish first." : "Ask both agents the same follow-up…"
+          }
+          value={followUp}
+          onChange={(event) => setFollowUp(event.target.value)}
+          onKeyDown={(event) => {
+            if (!isSendShortcut(event)) return;
+            event.preventDefault();
+            void sendToBoth();
+          }}
+        />
+        <div className="flex items-center justify-end gap-3">
+          <p className="text-xs text-muted-foreground">Each agent sees only its own thread.</p>
+          <Button
+            disabled={pending !== null || working || followUp.trim() === ""}
+            onClick={() => void sendToBoth()}
+          >
+            {pending === "follow-up" ? <Spinner /> : null}
+            Send to both
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -362,7 +580,8 @@ function CompareColumn(props: {
     (project) =>
       project.environmentId === props.environmentId && project.id === projection.thread.projectId,
   )?.workspaceRoot;
-  const working = projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status));
+  const working = isWorking(projection);
+  let swapRound = 0;
   return (
     <section className="min-w-0 rounded-lg border">
       <div className="flex items-center gap-2 border-b px-4 py-2.5">
@@ -386,28 +605,98 @@ function CompareColumn(props: {
           Open thread
         </Button>
       </div>
-      <div className="space-y-5 px-4 py-4">
-        {exchanges.map((exchange, index) => (
-          <div key={exchange.run?.id ?? exchange.prompt?.id ?? index} className="space-y-2">
-            {exchange.prompt !== null ? (
-              <p className="line-clamp-4 whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                {exchange.prompt.text}
-              </p>
-            ) : null}
-            {exchange.answer !== null ? (
-              <ChatMarkdown
-                text={exchange.answer.text}
-                cwd={cwd}
-                isStreaming={exchange.answer.streaming}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {working && index === exchanges.length - 1 ? "Working…" : "No answer."}
-              </p>
-            )}
-          </div>
-        ))}
+      <div className="space-y-6 px-4 py-4">
+        {exchanges.map((exchange, index) => {
+          const kind = exchangeKind(exchange);
+          if (kind === "review") swapRound += 1;
+          return (
+            <ExchangeView
+              key={exchange.run?.id ?? exchange.prompt?.id ?? index}
+              exchange={exchange}
+              label={
+                kind === "review"
+                  ? `Review swap ${swapRound} · sent by T3`
+                  : kind === "follow-up"
+                    ? "Your follow-up"
+                    : "Your prompt"
+              }
+              cwd={cwd}
+              pending={working && index === exchanges.length - 1}
+            />
+          );
+        })}
       </div>
     </section>
+  );
+}
+
+const STOPPED_LABELS: Partial<Record<string, string>> = {
+  interrupted: "Stopped",
+  cancelled: "Cancelled",
+  failed: "Failed",
+};
+
+const runDuration = (exchange: ThreadExchange): string | null => {
+  const run = exchange.run;
+  if (run === null || run.startedAt === null || run.completedAt === null) return null;
+  return formatDuration(
+    DateTime.toEpochMillis(run.completedAt) - DateTime.toEpochMillis(run.startedAt),
+  );
+};
+
+function ExchangeView(props: {
+  exchange: ThreadExchange;
+  label: string;
+  cwd: string | undefined;
+  pending: boolean;
+}) {
+  const { exchange } = props;
+  const [expanded, setExpanded] = useState(false);
+  const { copyToClipboard, isCopied } = useCopyToClipboard();
+  const prompt = exchange.prompt?.text ?? null;
+  const long = prompt !== null && (prompt.length > 400 || prompt.split("\n").length > 4);
+  const stopped = exchange.run === null ? undefined : STOPPED_LABELS[exchange.run.status];
+  const duration = runDuration(exchange);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{props.label}</span>
+        {stopped !== undefined ? <Badge variant="warning">{stopped}</Badge> : null}
+        {duration !== null ? <span>{duration}</span> : null}
+      </div>
+      {prompt !== null ? (
+        <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+          <p className={cn("whitespace-pre-wrap", !expanded && long && "line-clamp-4")}>{prompt}</p>
+          {long ? (
+            <div className="mt-1">
+              <Button size="xs" variant="link" onClick={() => setExpanded((value) => !value)}>
+                {expanded ? "Show less" : "Show full message"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {exchange.answer !== null ? (
+        <div className="space-y-1">
+          <ChatMarkdown
+            text={exchange.answer.text}
+            cwd={props.cwd}
+            isStreaming={exchange.answer.streaming}
+          />
+          {!exchange.answer.streaming ? (
+            <Button
+              size="xs"
+              variant="ghost-muted"
+              onClick={() => copyToClipboard(exchange.answer?.text ?? "", undefined)}
+            >
+              {isCopied ? <CheckIcon /> : <CopyIcon />}
+              {isCopied ? "Copied" : "Copy answer"}
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">{props.pending ? "Working…" : "No answer."}</p>
+      )}
+    </div>
   );
 }

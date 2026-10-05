@@ -1,7 +1,8 @@
 /**
  * Command palette actions for Compare agents: "Compare agents…" opens the
- * setup page, and "Open comparison" shows both sides of the comparison the
- * current thread belongs to. Fork add-on: compare agents.
+ * setup page, "Open comparison" shows both sides of the comparison the
+ * current thread belongs to, and "Compare this thread's prompt…" opens the
+ * setup prefilled from the current thread. Fork add-on: compare agents.
  */
 import { comparePairOf, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import type { useNavigate } from "@tanstack/react-router";
@@ -30,6 +31,22 @@ export function compareAgentsPaletteItems(input: {
           to: "/compare/$environmentId",
           params: { environmentId: activeThread.environmentId },
           search: { pair: pair.pairId },
+        });
+      },
+    });
+  }
+  if (activeThread !== null && pair === null) {
+    items.push({
+      kind: "action",
+      value: "action:compare-this-thread",
+      searchTerms: ["compare agents", "compare this thread", "try another agent", "second opinion"],
+      title: "Compare this thread's prompt…",
+      icon: <Columns2Icon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({
+          to: "/compare/$environmentId",
+          params: { environmentId: activeThread.environmentId },
+          search: { from: activeThread.id },
         });
       },
     });

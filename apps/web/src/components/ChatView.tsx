@@ -471,7 +471,7 @@ import {
 } from "./chat/QueuedRunsControl";
 import { useLinkedThreadPullRequest } from "./ThreadStatusIndicators";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
-import { useRunningElsewhereBanner } from "../external-sessions/RunningElsewhereBanner"; // Fork add-on: external sessions.
+import { useForkComposerBanners } from "../forkComposerBanners"; // Fork add-on: external sessions, compare agents.
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import {
@@ -7486,7 +7486,7 @@ export default function ChatView(props: ChatViewProps) {
     usageLimitsBanner,
     wokeThreadBannerItem,
   ]);
-  const bannerStack = useRunningElsewhereBanner(composerBannerItems, environmentId, threadId); // Fork add-on: external sessions.
+  const bannerStack = useForkComposerBanners(composerBannerItems, environmentId, threadId); // Fork add-on: external sessions, compare agents.
 
   useEffect(() => {
     setPendingServerThreadEnvMode(null);
