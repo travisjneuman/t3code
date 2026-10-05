@@ -163,7 +163,7 @@ export function useThreadActionMenu(input: {
         const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on: thread export.
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (isForkThreadMenuId(clicked.value))
-          return runForkThreadMenuItem(threadRef, clicked.value); // Fork add-on: thread export, save to notes, hand back.
+          return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on: thread export, save to notes, hand back, open comparison.
         const action: ThreadActionMenuId = clicked.value;
         if (action.startsWith("snooze:")) {
           const preset =

@@ -189,7 +189,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { useSessionSearchPaletteGroup } from "../session-search/commandPaletteGroup"; // Fork add-on: session search.
-import { compareAgentsPaletteItems } from "../compare-agents/compareAgentsPalette"; // Fork add-on: compare agents.
+import { useCompareAgentsPaletteItems } from "../compare-agents/compareAgentsPalette"; // Fork add-on: compare agents.
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { searchSettings, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
 import {
@@ -2296,7 +2296,7 @@ function OpenCommandPaletteDialog(props: {
   }
 
   actionItems.push(
-    ...compareAgentsPaletteItems({
+    ...useCompareAgentsPaletteItems({
       navigate,
       environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId,
       activeThread: activeThread ?? null,

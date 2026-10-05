@@ -42,16 +42,18 @@ other's, except through Review swap.
 ## Get back to a comparison
 
 The sidebar's **Compare agents** icon opens the start page, which lists earlier comparisons; choose
-one to open it. Inside one of the comparison's threads, the note above the message box has **Open
-comparison**, and the command palette has it too. Messages sent from inside a thread go to that
-agent only.
+one to open it. Inside one of the comparison's threads, the note above the message box, the
+thread's menu (its title or its sidebar row), and the command palette all have **Open
+comparison**. Messages sent from inside a thread go to that agent only.
 
 ## Manage comparisons
 
 A comparison has the same actions as a thread, applied to both of its threads at once: pin,
 settle, snooze, rename, mark unread, export, save to notes, archive, and delete. Open them from the
 comparison's name in the header, from **…** on a row in the start page's list, or by
-right-clicking either one. Renaming changes the prompt part of both titles and keeps each model.
+right-clicking either one. Double-click the name in the header to rename it. The command palette
+has **Rename**, **Archive**, and **Delete comparison** for the comparison on screen or the one the
+current thread belongs to. Renaming changes the prompt part of both titles and keeps each model.
 Delete removes both threads and their history for good; archive keeps them.
 
 Archived comparisons are listed under **Archived comparisons** on the start page, where each can be
