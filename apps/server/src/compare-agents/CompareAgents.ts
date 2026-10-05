@@ -3,18 +3,23 @@
  * project folder, one per model; their ids derive from the pair id
  * (`compareThreadIds`), so the pair needs no stored record. `reviewSwap`
  * sends each thread the other's latest final answer, naming the provider,
- * model and options that produced it for the same prompt. Fork add-on; see
+ * model and options that produced it for the same prompts. `followUp` sends
+ * one message to both, and `stop` interrupts both. Fork add-on; see
  * docs/user/compare-agents.md.
  *
  * @module compare-agents/CompareAgents
  */
 import {
+  COMPARE_FOLLOW_UP_MESSAGE_PREFIX,
+  COMPARE_REVIEW_MESSAGE_PREFIX,
   CommandId,
+  type CompareAgentsEmptyResult,
   CompareAgentsError,
+  type CompareAgentsFollowUpInput,
   type CompareAgentsReviewSwapInput,
-  type CompareAgentsReviewSwapResult,
   type CompareAgentsStartInput,
   type CompareAgentsStartResult,
+  type CompareAgentsStopInput,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   MessageId,
@@ -42,13 +47,27 @@ export class CompareAgents extends Context.Service<
     ) => Effect.Effect<CompareAgentsStartResult, CompareAgentsError>;
     readonly reviewSwap: (
       input: CompareAgentsReviewSwapInput,
-    ) => Effect.Effect<CompareAgentsReviewSwapResult, CompareAgentsError>;
+    ) => Effect.Effect<CompareAgentsEmptyResult, CompareAgentsError>;
+    readonly followUp: (
+      input: CompareAgentsFollowUpInput,
+    ) => Effect.Effect<CompareAgentsEmptyResult, CompareAgentsError>;
+    readonly stop: (
+      input: CompareAgentsStopInput,
+    ) => Effect.Effect<CompareAgentsEmptyResult, CompareAgentsError>;
   }
 >()("t3/compare-agents/CompareAgents") {}
 
 const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
   "preparing",
   "queued",
+  "starting",
+  "running",
+  "waiting",
+]);
+
+// Queued runs wait their turn; interrupting means the run a provider is on now.
+const INTERRUPTIBLE_RUN_STATUSES: ReadonlySet<string> = new Set([
+  "preparing",
   "starting",
   "running",
   "waiting",
@@ -88,7 +107,7 @@ const latestAnswer = (projection: OrchestrationV2ThreadProjection) => {
 
 const reviewText = (other: NonNullable<ReturnType<typeof latestAnswer>>): string =>
   [
-    "Review swap. Another agent was given the exact same prompt you were given at the start of this comparison.",
+    "Review swap. Another agent was given the exact same prompts you were given in this comparison.",
     `It ran on ${other.agent}, model ${other.model}.`,
     "",
     "Its latest answer:",
@@ -138,17 +157,56 @@ const make = Effect.gen(function* () {
       .getThreadProjection(threadId)
       .pipe(Effect.mapError(failed("A thread in this comparison could not be read.")));
 
+  const readPair = Effect.fn("CompareAgents.readPair")(function* (pairId: string) {
+    const [leftId, rightId] = compareThreadIds(pairId);
+    const left = yield* readThread(leftId);
+    const right = yield* readThread(rightId);
+    return [left, right] as const;
+  });
+
+  const requireIdle = Effect.fn("CompareAgents.requireIdle")(function* (
+    sides: ReadonlyArray<OrchestrationV2ThreadProjection>,
+  ) {
+    if (sides.some((side) => side.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)))) {
+      return yield* new CompareAgentsError({ message: "Wait for both agents to finish first." });
+    }
+  });
+
+  /** Sends each side its text as a user message under `prefix`. */
+  const sendToBoth = Effect.fn("CompareAgents.sendToBoth")(function* (
+    prefix: string,
+    sends: ReadonlyArray<{
+      readonly projection: OrchestrationV2ThreadProjection;
+      readonly text: string;
+      readonly side: "a" | "b";
+    }>,
+  ) {
+    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not send.")));
+    for (const { projection, text, side } of sends) {
+      yield* orchestrator
+        .dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "server",
+          commandId: CommandId.make(`${prefix}${id}:${side}`),
+          threadId: projection.thread.id,
+          messageId: MessageId.make(`${prefix}${id}:${side}`),
+          text,
+          attachments: [],
+          modelSelection: projection.thread.modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        })
+        .pipe(
+          Effect.mapError(failed(`Could not send to ${projection.thread.modelSelection.model}.`)),
+        );
+    }
+  });
+
   const reviewSwap = Effect.fn("CompareAgents.reviewSwap")(function* (
     input: CompareAgentsReviewSwapInput,
   ) {
-    const [leftId, rightId] = compareThreadIds(input.pairId);
-    const left = yield* readThread(leftId);
-    const right = yield* readThread(rightId);
-    if (
-      [left, right].some((side) => side.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)))
-    ) {
-      return yield* new CompareAgentsError({ message: "Wait for both agents to finish first." });
-    }
+    const [left, right] = yield* readPair(input.pairId);
+    yield* requireIdle([left, right]);
     const leftAnswer = latestAnswer(left);
     const rightAnswer = latestAnswer(right);
     if (leftAnswer === null || rightAnswer === null) {
@@ -156,33 +214,47 @@ const make = Effect.gen(function* () {
         message: "Both agents need a finished answer before a review swap.",
       });
     }
-    const id = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(failed("Could not send the review swap.")),
-    );
-    const sends = [
+    yield* sendToBoth(COMPARE_REVIEW_MESSAGE_PREFIX, [
       { projection: left, text: reviewText(rightAnswer), side: "a" },
       { projection: right, text: reviewText(leftAnswer), side: "b" },
-    ] as const;
-    for (const { projection, text, side } of sends) {
+    ]);
+    return {};
+  });
+
+  const followUp = Effect.fn("CompareAgents.followUp")(function* (
+    input: CompareAgentsFollowUpInput,
+  ) {
+    const [left, right] = yield* readPair(input.pairId);
+    yield* requireIdle([left, right]);
+    yield* sendToBoth(COMPARE_FOLLOW_UP_MESSAGE_PREFIX, [
+      { projection: left, text: input.text, side: "a" },
+      { projection: right, text: input.text, side: "b" },
+    ]);
+    return {};
+  });
+
+  const stop = Effect.fn("CompareAgents.stop")(function* (input: CompareAgentsStopInput) {
+    const sides = yield* readPair(input.pairId);
+    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not stop.")));
+    for (const projection of sides) {
+      const run = projection.runs.findLast((candidate) =>
+        INTERRUPTIBLE_RUN_STATUSES.has(candidate.status),
+      );
+      if (run === undefined) continue;
       yield* orchestrator
         .dispatch({
-          type: "message.dispatch",
-          createdBy: "user",
-          creationSource: "server",
-          commandId: CommandId.make(`compare-agents-review:${id}:${side}`),
+          type: "run.interrupt",
+          commandId: CommandId.make(`compare-agents-stop:${id}:${run.id}`),
           threadId: projection.thread.id,
-          messageId: MessageId.make(`compare-agents-review:${id}:${side}`),
-          text,
-          attachments: [],
-          modelSelection: projection.thread.modelSelection,
-          dispatchMode: { type: "start_immediately" },
+          runId: run.id,
+          holdQueue: true,
         })
-        .pipe(Effect.mapError(failed("Could not send the review swap.")));
+        .pipe(Effect.mapError(failed("Could not stop an agent.")));
     }
     return {};
   });
 
-  return CompareAgents.of({ start, reviewSwap });
+  return CompareAgents.of({ start, reviewSwap, followUp, stop });
 });
 
 export const layer = Layer.effect(CompareAgents, make);

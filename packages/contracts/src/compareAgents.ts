@@ -2,7 +2,8 @@
  * Compare agents: one prompt sent to two agents as two new threads in the
  * same project, shown side by side. "Review swap" then sends each agent the
  * other's latest final answer, saying which provider, model and options
- * produced it for the same prompt. The pair needs no stored record: both
+ * produced it for the same prompts. "Follow up" sends one message to both and
+ * "Stop" interrupts both. The pair needs no stored record: both
  * thread ids derive from the pair id. Fork add-on; see
  * docs/user/compare-agents.md.
  */
@@ -16,7 +17,13 @@ import { ModelSelection } from "./modelSelection.ts";
 export const COMPARE_AGENTS_WS_METHODS = {
   start: "compareAgents.start",
   reviewSwap: "compareAgents.reviewSwap",
+  followUp: "compareAgents.followUp",
+  stop: "compareAgents.stop",
 } as const;
+
+/** Message id prefixes of what Compare agents sends, so clients can label each prompt. */
+export const COMPARE_REVIEW_MESSAGE_PREFIX = "compare-agents-review:";
+export const COMPARE_FOLLOW_UP_MESSAGE_PREFIX = "compare-agents-follow-up:";
 
 const PAIR_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const COMPARE_THREAD_ID_PATTERN = /^compare:([0-9a-f-]{36}):([ab])$/;
@@ -59,8 +66,20 @@ export const CompareAgentsReviewSwapInput = Schema.Struct({
 });
 export type CompareAgentsReviewSwapInput = typeof CompareAgentsReviewSwapInput.Type;
 
-export const CompareAgentsReviewSwapResult = Schema.Struct({});
-export type CompareAgentsReviewSwapResult = typeof CompareAgentsReviewSwapResult.Type;
+/** Success of the calls that only send: review swap, follow-up, and stop. */
+export const CompareAgentsEmptyResult = Schema.Struct({});
+export type CompareAgentsEmptyResult = typeof CompareAgentsEmptyResult.Type;
+
+export const CompareAgentsFollowUpInput = Schema.Struct({
+  pairId: ComparePairId,
+  text: TrimmedNonEmptyString,
+});
+export type CompareAgentsFollowUpInput = typeof CompareAgentsFollowUpInput.Type;
+
+export const CompareAgentsStopInput = Schema.Struct({
+  pairId: ComparePairId,
+});
+export type CompareAgentsStopInput = typeof CompareAgentsStopInput.Type;
 
 export class CompareAgentsError extends Schema.TaggedError<CompareAgentsError>()(
   "CompareAgentsError",
@@ -80,14 +99,33 @@ export const CompareAgentsStartRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.start, {
 
 export const CompareAgentsReviewSwapRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.reviewSwap, {
   payload: CompareAgentsReviewSwapInput,
-  success: CompareAgentsReviewSwapResult,
+  success: CompareAgentsEmptyResult,
   error: CompareAgentsRpcError,
 });
 
-export const CompareAgentsRpcs = [CompareAgentsStartRpc, CompareAgentsReviewSwapRpc] as const;
+export const CompareAgentsFollowUpRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.followUp, {
+  payload: CompareAgentsFollowUpInput,
+  success: CompareAgentsEmptyResult,
+  error: CompareAgentsRpcError,
+});
+
+export const CompareAgentsStopRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.stop, {
+  payload: CompareAgentsStopInput,
+  success: CompareAgentsEmptyResult,
+  error: CompareAgentsRpcError,
+});
+
+export const CompareAgentsRpcs = [
+  CompareAgentsStartRpc,
+  CompareAgentsReviewSwapRpc,
+  CompareAgentsFollowUpRpc,
+  CompareAgentsStopRpc,
+] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
 export const COMPARE_AGENTS_RPC_SCOPES = {
   [COMPARE_AGENTS_WS_METHODS.start]: AuthOrchestrationOperateScope,
   [COMPARE_AGENTS_WS_METHODS.reviewSwap]: AuthOrchestrationOperateScope,
+  [COMPARE_AGENTS_WS_METHODS.followUp]: AuthOrchestrationOperateScope,
+  [COMPARE_AGENTS_WS_METHODS.stop]: AuthOrchestrationOperateScope,
 } as const;

@@ -6,8 +6,10 @@
  */
 import {
   COMPARE_AGENTS_WS_METHODS,
+  type CompareAgentsFollowUpInput,
   type CompareAgentsReviewSwapInput,
   type CompareAgentsStartInput,
+  type CompareAgentsStopInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
@@ -31,5 +33,13 @@ export const makeHandlers = Effect.gen(function* () {
         compareAgents.reviewSwap(input),
         traceAttributes,
       ),
+    [COMPARE_AGENTS_WS_METHODS.followUp]: (input: CompareAgentsFollowUpInput) =>
+      observeRpcEffect(
+        COMPARE_AGENTS_WS_METHODS.followUp,
+        compareAgents.followUp(input),
+        traceAttributes,
+      ),
+    [COMPARE_AGENTS_WS_METHODS.stop]: (input: CompareAgentsStopInput) =>
+      observeRpcEffect(COMPARE_AGENTS_WS_METHODS.stop, compareAgents.stop(input), traceAttributes),
   };
 }).pipe(Effect.provide(CompareAgents.layer));
