@@ -5,7 +5,7 @@
  * T3 thread. Fork add-on; see docs/internals/external-sessions.md.
  */
 import * as Schema from "effect/Schema";
-import * as Rpc from "effect/unstable/rpc/Rpc";
+import * as Rpc from "effect/rpc/Rpc";
 
 import {
   AuthOrchestrationOperateScope,

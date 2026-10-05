@@ -13,7 +13,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import { expandHomePath } from "../pathExpansion.ts";
 import { withCodexAppServerClient } from "../provider/Layers/CodexProvider.ts";

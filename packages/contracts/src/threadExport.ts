@@ -4,7 +4,7 @@
  * projection. Fork add-on; see docs/user/thread-sidebar.md.
  */
 import * as Schema from "effect/Schema";
-import * as Rpc from "effect/unstable/rpc/Rpc";
+import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
