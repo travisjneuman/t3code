@@ -29,7 +29,7 @@ A client drops a superseded query's atom at once (idle TTL 0), which interrupts 
 
 - Owned sessions are `ExternalSessions.ownedSessionIds`, the set that keeps them out of the
   sidebar list, so search and the list always agree on what T3 owns.
-- Results older than the list's three days still open: `subscribeSession` looks up a key it has
+- Results older than the list's 14 days still open: `subscribeSession` looks up a key it has
   not listed with the same walk and 90-day window
   ([`sessionHistory.ts`](../../apps/server/src/external-sessions/sessionHistory.ts)). Changing
   the window there changes both.

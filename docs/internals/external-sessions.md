@@ -95,7 +95,7 @@ in T3, which binds an ordinary thread to that same session.
     threads through `RunningElsewhereBanner.tsx`. Sending stays allowed. Only `import:` threads
     open the stream.
 - **Watch the list only while someone looks.** The registry is an `RcRef`. The first list or session
-  subscriber starts the file watchers and the initial discovery, which covers the last 3 days. The
+  subscriber starts the file watchers and the initial discovery, which covers the last 14 days. The
   watchers stop 30 seconds after the last subscriber leaves. Bursts of writes, such as a streamed
   reply, are batched into one re-read about every 600 ms.
 - **Older sessions open on demand.** A session subscribe for a key the registry lacks, such as an

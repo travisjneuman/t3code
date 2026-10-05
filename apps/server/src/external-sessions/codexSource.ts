@@ -25,6 +25,7 @@ import {
   listDirectory,
   parseJsonObject,
   readLines,
+  readPrefix,
   sessionDetails,
   statMtimeMs,
   toolLine,
@@ -36,7 +37,9 @@ const ROLLOUT_FILE =
 const HEAD_BYTES = 512 * 1024;
 const TAIL_BYTES = 256 * 1024;
 const INDEX_BYTES = 256 * 1024;
-const DISCOVERY_DAYS = 7;
+// session_meta names its source within its first KB, ahead of the instructions.
+const META_PREFIX_BYTES = 4 * 1024;
+const SUBAGENT_SOURCE = /"source":\{"subagent":/;
 
 // Context Codex injects as user messages.
 const INJECTED_USER_TEXT =
@@ -113,6 +116,9 @@ export const makeCodexSource = (): ExternalSessionSource => {
     Effect.gen(function* () {
       const cached = heads.get(path);
       if (cached !== undefined) return cached;
+      // Most rollouts are subagents; skip them before the large head read.
+      const prefix = yield* readPrefix(path, META_PREFIX_BYTES);
+      if (prefix !== null && SUBAGENT_SOURCE.test(prefix)) return "hidden" as const;
       const slice = yield* readLines(path, { maxBytes: HEAD_BYTES });
       const meta = asRecord(parseJsonObject(slice?.lines[0] ?? "")?.payload);
       if (slice === null || meta === null) return null;
@@ -158,23 +164,22 @@ export const makeCodexSource = (): ExternalSessionSource => {
     roots: [{ path: sessions, recursive: true }],
     sessionPathsFor: (changed) =>
       Effect.succeed(ROLLOUT_FILE.test(NodePath.basename(changed)) ? [changed] : []),
+    // A rollout stays in the folder of the day it started, so a thread started
+    // weeks ago and used today sits in an old folder: check every file's mtime.
     discover: (sinceMs) =>
       Effect.gen(function* () {
         const found: Array<string> = [];
-        const now = Date.now();
-        for (let day = 0; day < DISCOVERY_DAYS; day++) {
-          const date = new Date(now - day * 86_400_000);
-          const dir = NodePath.join(
-            sessions,
-            String(date.getFullYear()),
-            String(date.getMonth() + 1).padStart(2, "0"),
-            String(date.getDate()).padStart(2, "0"),
-          );
-          for (const name of yield* listDirectory(dir)) {
-            if (!ROLLOUT_FILE.test(name)) continue;
-            const path = NodePath.join(dir, name);
-            const mtime = yield* statMtimeMs(path);
-            if (mtime !== null && mtime >= sinceMs) found.push(path);
+        for (const year of yield* listDirectory(sessions)) {
+          for (const month of yield* listDirectory(NodePath.join(sessions, year))) {
+            for (const day of yield* listDirectory(NodePath.join(sessions, year, month))) {
+              const dir = NodePath.join(sessions, year, month, day);
+              for (const name of yield* listDirectory(dir)) {
+                if (!ROLLOUT_FILE.test(name)) continue;
+                const path = NodePath.join(dir, name);
+                const mtime = yield* statMtimeMs(path);
+                if (mtime !== null && mtime >= sinceMs) found.push(path);
+              }
+            }
           }
         }
         return found;

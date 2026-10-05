@@ -41,8 +41,8 @@ const dayDirs = (root: string, oldestMs: number) =>
   });
 
 /**
- * Codex's own discovery looks back a week of day folders; this walks every
- * day folder the slack allows and keeps what the source calls a session file.
+ * Codex's own discovery stats every rollout; this walks only the day folders
+ * the slack allows and keeps what the source calls a session file.
  * Its paths are not filtered by mtime; callers that need that stat them.
  */
 const codexSessionPaths = (source: ExternalSessionSource, sinceMs: number) =>

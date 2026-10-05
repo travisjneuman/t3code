@@ -71,7 +71,7 @@ import { makeGrokSource } from "./grokSource.ts";
 import { makePiSource } from "./piSource.ts";
 import { findSessionPaths } from "./sessionHistory.ts";
 
-const LIST_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const LIST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_LISTED = 60;
 const RUNNING_MS = 60 * 1000;
 const IDLE_MS = 60 * 60 * 1000;
@@ -461,7 +461,7 @@ const make = Effect.gen(function* () {
           const source = sources.find((candidate) => candidate.driver === driver);
           if (separator <= 0 || source === undefined) return undefined;
           // Summarizing registers the entry, and the store's watcher (already
-          // running) keeps it current; the list still shows only 3 days.
+          // running) keeps it current; the list still shows only its window.
           for (const path of yield* provide(findSessionPaths(source, key.slice(separator + 1)))) {
             yield* summarizePath(source, path);
             const found = entries.get(key);

@@ -224,6 +224,26 @@ export const readLines = (
     }),
   ).pipe(Effect.orElseSucceed(() => null));
 
+/** The first `maxBytes` of a file as text, whether or not a line ends there. */
+export const readPrefix = (
+  path: string,
+  maxBytes: number,
+): Effect.Effect<string | null, never, FileSystem.FileSystem> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const file = yield* fs.open(path, { flag: "r" });
+      const buffer = new Uint8Array(maxBytes);
+      let filled = 0;
+      while (filled < maxBytes) {
+        const read = yield* file.read(buffer.subarray(filled));
+        if (read === 0) break;
+        filled += read;
+      }
+      return decoder.decode(buffer.subarray(0, filled));
+    }),
+  ).pipe(Effect.orElseSucceed(() => null));
+
 export const readText = (
   path: string,
 ): Effect.Effect<string | null, never, FileSystem.FileSystem> =>
