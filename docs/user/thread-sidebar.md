@@ -178,12 +178,11 @@ sidebar's **Search** box, to search threads across connected environments.
 Message search starts after two characters and includes your messages and final
 agent responses.
 
-Sidebar search also lists matching sessions from other agents under **Other
-Agents**: Claude Code, Codex, Grok, and Pi sessions from the last 90 days whose
+Both also list matching sessions from other agents under **Other Agents**: Claude Code, Codex, Grok, and Pi sessions from the last 90 days whose
 messages contain the text, and Antigravity sessions by title. Sessions that
 continue in T3 show up as threads instead. With very large session histories,
 the newest sessions are searched first; **Partial** means older ones weren't
-reached.
+reached; the palette labels the group **Other Agents (partial)**.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request

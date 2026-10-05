@@ -1,7 +1,8 @@
 # Session search
 
 Fork add-on. `sessionSearch.search` finds sessions from other agents whose messages contain a
-query, for the sidebar's thread search. It reuses each store's parser from
+query, for the sidebar's thread search and the command palette (which appends the server's
+results after its own filtering, since the server already matched them). It reuses each store's parser from
 [external sessions](./external-sessions.md) read-only, and keeps no index: it streams the
 transcripts on every query. Code: [`apps/server/src/session-search/`](../../apps/server/src/session-search/).
 

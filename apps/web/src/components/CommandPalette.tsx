@@ -188,6 +188,7 @@ import { ProjectFavicon } from "./ProjectFavicon";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
+import { useSessionSearchPaletteGroup } from "../session-search/commandPaletteGroup"; // Fork add-on: session search.
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { searchSettings, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
 import {
@@ -844,6 +845,7 @@ function OpenCommandPaletteDialog(props: {
   );
   const threadSearchQuery = currentView === null && !isActionsOnly ? deferredQuery : "";
   const threadSearch = useThreadSearch(environmentIds, threadSearchQuery);
+  const otherAgentsGroup = useSessionSearchPaletteGroup(threadSearchQuery); // Fork add-on: session search.
   const threadContentMatchByKey = useMemo(
     () =>
       new Map(
@@ -2940,7 +2942,9 @@ function OpenCommandPaletteDialog(props: {
           },
         ];
 
-  let displayedGroups: CommandPaletteView["groups"] = filteredGroups;
+  // Fork add-on: session search.
+  let displayedGroups: CommandPaletteView["groups"] =
+    otherAgentsGroup === null ? filteredGroups : [...filteredGroups, otherAgentsGroup];
   if (newProjectFlow !== null) {
     displayedGroups = [
       ...(newProjectMachineGroup ? [newProjectMachineGroup] : []),
