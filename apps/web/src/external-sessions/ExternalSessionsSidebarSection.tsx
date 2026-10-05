@@ -37,6 +37,7 @@ import { waitForThreadShell } from "../state/entities";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { useAtomCommand } from "../state/use-atom-command";
+import { THREAD_CARD_LAYOUT } from "../sidebar-compact/threadCardLayout";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
@@ -441,9 +442,11 @@ function compactTimeLabel(iso: string): string {
 }
 
 /**
- * One external session, in the standard thread row's type scale and surfaces:
- * title and status on top, then provider, folder and model. Inactive sessions
- * recede the way settled threads do. `nowMinute` only exists to refresh the
+ * One external session, laid out like a standard thread card and marked with
+ * the same `data-fork-card-part`s so `sidebar-compact` sizes both alike:
+ * folder and status, then the title, then model, machine and the harness icon
+ * where a thread card shows its provider. Inactive sessions recede the way
+ * settled threads do. `nowMinute` only exists to refresh the
  * relative time once a minute; the other props keep their identity across
  * unrelated pushes.
  */
@@ -472,13 +475,17 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
     .join(", ");
 
   return (
-    <li className="list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_58px]">
+    <li
+      data-fork-thread-card={THREAD_CARD_LAYOUT}
+      className="list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]"
+    >
       <Tooltip>
         <TooltipTrigger
           render={
             <Link
               to="/external/$environmentId/$sessionKey"
               params={{ environmentId, sessionKey: session.key }}
+              data-fork-card-part="surface"
               aria-label={label}
               aria-current={props.isActive ? "page" : undefined}
               onClick={props.onNavigate}
@@ -499,20 +506,26 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
         >
           <span
             aria-hidden
-            className="relative z-10 block px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
+            data-fork-card-part="box"
+            className="relative z-10 block h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
           >
-            <span className="flex h-5 min-w-0 items-center gap-1.5">
+            <span data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
+              {folder !== null ? (
+                <FolderIcon className="size-4 shrink-0 stroke-muted-foreground" />
+              ) : null}
               <span
+                data-fork-card-part="project"
                 className={cn(
-                  "min-w-0 flex-1 truncate text-sm",
-                  recede && !props.isActive
-                    ? "font-normal text-secondary-label"
-                    : "font-medium text-foreground/90",
+                  "min-w-0 flex-1 truncate text-xs text-secondary-label",
+                  recede ? "font-normal" : "font-medium",
                 )}
               >
-                {title}
+                {folder ?? externalSessionOriginLabel(session)}
               </span>
-              <span className="ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end text-xs tabular-nums text-secondary-label">
+              <span
+                data-fork-card-part="status"
+                className="ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end text-xs tabular-nums text-secondary-label"
+              >
                 {running ? (
                   <span className="inline-flex items-center gap-1 font-medium text-info">
                     <CircleDashedIcon className="size-4 shrink-0" />
@@ -523,26 +536,36 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
                 )}
               </span>
             </span>
-            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-secondary-label">
-              <ProviderInstanceIcon
-                driverKind={session.driver}
-                displayName={providerLabel}
-                className="size-3.5 shrink-0"
-                iconClassName="size-3.5"
-              />
-              <span className="min-w-0 truncate">
-                {folder ?? externalSessionOriginLabel(session)}
+            <span data-fork-card-part="title" className="mt-1 flex min-w-0">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-sm",
+                  recede && !props.isActive
+                    ? "font-normal text-secondary-label"
+                    : "font-medium text-foreground/90",
+                )}
+              >
+                {title}
               </span>
+            </span>
+            <span
+              data-fork-card-part="meta"
+              className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-secondary-label"
+            >
               {model !== null ? (
-                <span className="min-w-0 shrink-[2] truncate text-muted-foreground/60">
-                  {model}
-                </span>
+                <span className="min-w-0 shrink truncate text-muted-foreground/60">{model}</span>
               ) : null}
               {environmentLabel !== null ? (
-                <span className="ml-auto min-w-0 shrink-[3] truncate text-muted-foreground/60">
+                <span className="min-w-0 shrink-[3] truncate text-muted-foreground/60">
                   {environmentLabel}
                 </span>
               ) : null}
+              <ProviderInstanceIcon
+                driverKind={session.driver}
+                displayName={providerLabel}
+                className="ml-auto size-3.5 shrink-0"
+                iconClassName="size-3.5"
+              />
             </span>
           </span>
         </TooltipTrigger>

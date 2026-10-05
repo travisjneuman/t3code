@@ -31,7 +31,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | [**Save to notes**](#save-to-notes)     | Files a thread into your notes folder or Obsidian vault                 |
 | [**Export a thread**](#export-a-thread) | Saves a thread's full record as Markdown or JSON                        |
 | [**Upstream sync**](#upstream-sync)     | Merges new official nightlies and rebuilds the app from source          |
-| [**Compact cards**](#compact-cards)     | Sidebar thread cards in smaller text, about 20% shorter                 |
+| [**Compact cards**](#compact-cards)     | Outlined sidebar cards in smaller text, about 23% shorter               |
 
 ### Web apps
 
@@ -95,7 +95,7 @@ For now this needs push access to this repo, so it only works on the maintainer'
 
 ### Compact cards
 
-Thread cards in the sidebar keep their three lines (project, title, branch) one text size smaller, so more threads fit on screen.
+Thread cards in the sidebar keep their three lines (project, title, branch) one text size smaller, with a thin outline and tighter spacing, so more threads fit on screen. Other Agents sessions use the same card: folder, title, then model, machine and harness icon.
 
 ## Build it yourself
 
