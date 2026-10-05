@@ -33,6 +33,7 @@ import { Route as SettingsAppearanceRouteImport } from './routes/settings.appear
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
+import { Route as ChatCompareEnvironmentIdRouteImport } from './routes/_chat.compare.$environmentId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as ChatExternalEnvironmentIdSessionKeyRouteImport } from './routes/_chat.external.$environmentId.$sessionKey'
 
@@ -156,6 +157,12 @@ const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   path: '/draft/$draftId',
   getParentRoute: () => ChatRoute,
 } as any)
+const ChatCompareEnvironmentIdRoute =
+  ChatCompareEnvironmentIdRouteImport.update({
+    id: '/compare/$environmentId',
+    path: '/compare/$environmentId',
+    getParentRoute: () => ChatRoute,
+  } as any)
 const ChatEnvironmentIdThreadIdRoute =
   ChatEnvironmentIdThreadIdRouteImport.update({
     id: '/$environmentId/$threadId',
@@ -193,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
+  '/compare/$environmentId': typeof ChatCompareEnvironmentIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
@@ -220,6 +228,7 @@ export interface FileRoutesByTo {
   '/settings/storage': typeof SettingsStorageRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
+  '/compare/$environmentId': typeof ChatCompareEnvironmentIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
@@ -249,6 +258,7 @@ export interface FileRoutesById {
   '/settings/storage': typeof SettingsStorageRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
+  '/_chat/compare/$environmentId': typeof ChatCompareEnvironmentIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/_chat/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
@@ -278,6 +288,7 @@ export interface FileRouteTypes {
     | '/settings/source-control'
     | '/settings/storage'
     | '/$environmentId/$threadId'
+    | '/compare/$environmentId'
     | '/draft/$draftId'
     | '/external/$environmentId/$sessionKey'
   fileRoutesByTo: FileRoutesByTo
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/settings/storage'
     | '/'
     | '/$environmentId/$threadId'
+    | '/compare/$environmentId'
     | '/draft/$draftId'
     | '/external/$environmentId/$sessionKey'
   id:
@@ -333,6 +345,7 @@ export interface FileRouteTypes {
     | '/settings/storage'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
+    | '/_chat/compare/$environmentId'
     | '/_chat/draft/$draftId'
     | '/_chat/external/$environmentId/$sessionKey'
   fileRoutesById: FileRoutesById
@@ -517,6 +530,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatDraftDraftIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/compare/$environmentId': {
+      id: '/_chat/compare/$environmentId'
+      path: '/compare/$environmentId'
+      fullPath: '/compare/$environmentId'
+      preLoaderRoute: typeof ChatCompareEnvironmentIdRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/$environmentId/$threadId': {
       id: '/_chat/$environmentId/$threadId'
       path: '/$environmentId/$threadId'
@@ -538,6 +558,7 @@ interface ChatRouteChildren {
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ChatEnvironmentIdThreadIdRoute: typeof ChatEnvironmentIdThreadIdRoute
+  ChatCompareEnvironmentIdRoute: typeof ChatCompareEnvironmentIdRoute
   ChatDraftDraftIdRoute: typeof ChatDraftDraftIdRoute
   ChatExternalEnvironmentIdSessionKeyRoute: typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
@@ -546,6 +567,7 @@ const ChatRouteChildren: ChatRouteChildren = {
   ChatPullRequestsRoute: ChatPullRequestsRoute,
   ChatIndexRoute: ChatIndexRoute,
   ChatEnvironmentIdThreadIdRoute: ChatEnvironmentIdThreadIdRoute,
+  ChatCompareEnvironmentIdRoute: ChatCompareEnvironmentIdRoute,
   ChatDraftDraftIdRoute: ChatDraftDraftIdRoute,
   ChatExternalEnvironmentIdSessionKeyRoute:
     ChatExternalEnvironmentIdSessionKeyRoute,

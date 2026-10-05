@@ -338,6 +338,8 @@ import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 import { ExternalSessionsRpcs } from "./externalSessions.ts"; // Fork add-on: external sessions.
 import { SessionSearchRpc } from "./sessionSearch.ts"; // Fork add-on: session search.
 import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on: thread export.
+import { SaveToNotesRpcs } from "./saveToNotes.ts"; // Fork add-on: save to notes.
+import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on: compare agents.
 
 export const WS_METHODS = {
   // Project registry methods
@@ -1880,4 +1882,6 @@ export const WsRpcGroup = RpcGroup.make(
   ...ExternalSessionsRpcs, // Fork add-on: external sessions.
   SessionSearchRpc, // Fork add-on: session search.
   ThreadExportRpc, // Fork add-on: thread export.
+  ...SaveToNotesRpcs, // Fork add-on: save to notes.
+  ...CompareAgentsRpcs, // Fork add-on: compare agents.
 ).middleware(RpcScopeAuthorization);

@@ -57,6 +57,9 @@ export * from "./remote-apps.ts";
 export * from "./externalSessions.ts"; // Fork add-on: external sessions.
 export * from "./sessionSearch.ts"; // Fork add-on: cross-agent session search.
 export * from "./threadExport.ts"; // Fork add-on: thread export.
+export * from "./saveToNotes.ts"; // Fork add-on: save to notes.
+export * from "./compareAgents.ts"; // Fork add-on: compare agents.
+export * from "./threadExchanges.ts"; // Fork add-on: save to notes, compare agents.
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";

@@ -280,14 +280,12 @@ import {
 // Fork add-on: read-only sessions from agents running outside T3.
 import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection";
 import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on: session search.
-import { exportThread, isExportMenuId, withExportMenuItem } from "../thread-export/threadExport"; // Fork add-on: thread export.
+import { ContinuedFromLine, ContinuedThreadMarker } from "../external-sessions/handBack"; // Fork add-on: external-session hand back.
 import {
-  ContinuedFromLine,
-  ContinuedThreadMarker,
-  handBackThread,
-  isHandBackMenuId,
-  withHandBackMenuItem,
-} from "../external-sessions/handBack"; // Fork add-on: external-session hand back.
+  isForkThreadMenuId,
+  runForkThreadMenuItem,
+  withForkThreadMenuItems,
+} from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back.
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -4482,42 +4480,40 @@ export default function Sidebar() {
           ) ?? null;
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
-            withHandBackMenuItem(
-              withExportMenuItem(
-                buildThreadActionMenuItems({
-                  // Fork add-on: thread export, external-session hand back.
-                  branch: thread.branch ?? null,
-                  projectFilter: threadProjectGroup
-                    ? {
-                        label: threadProjectGroup.displayName,
-                        isActive: projectScopeKey === threadProjectGroup.projectKey,
-                      }
-                    : null,
-                  isPinned,
-                  isSettled,
-                  autoSettleEnabled: thread.autoSettleDisabledAt == null,
-                  isSnoozed,
-                  canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
-                  isRegeneratingTitle,
-                  isRunning: !threadRuntimeCanArchive(thread.runtime),
-                  supports: {
-                    settlement: supportsSettlement,
-                    autoSettleOptOut: supportsAutoSettleOptOut,
-                    snooze: supportsSnooze,
-                    pinning: supportsPinning,
-                    titleRegeneration: supportsTitleRegeneration,
-                  },
-                  snoozePresets,
-                }),
-              ),
+            withForkThreadMenuItems(
+              buildThreadActionMenuItems({
+                // Fork add-on: thread export, save to notes, external-session hand back.
+                branch: thread.branch ?? null,
+                projectFilter: threadProjectGroup
+                  ? {
+                      label: threadProjectGroup.displayName,
+                      isActive: projectScopeKey === threadProjectGroup.projectKey,
+                    }
+                  : null,
+                isPinned,
+                isSettled,
+                autoSettleEnabled: thread.autoSettleDisabledAt == null,
+                isSnoozed,
+                canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+                isRegeneratingTitle,
+                isRunning: !threadRuntimeCanArchive(thread.runtime),
+                supports: {
+                  settlement: supportsSettlement,
+                  autoSettleOptOut: supportsAutoSettleOptOut,
+                  snooze: supportsSnooze,
+                  pinning: supportsPinning,
+                  titleRegeneration: supportsTitleRegeneration,
+                },
+                snoozePresets,
+              }),
               thread,
-            ), // Fork add-on: thread export, external-session hand back.
+            ), // Fork add-on: thread export, save to notes, external-session hand back.
             position,
           ),
         );
         if (clicked._tag === "Failure") return;
-        if (isExportMenuId(clicked.value)) return exportThread(threadRef, clicked.value); // Fork add-on: thread export.
-        if (isHandBackMenuId(clicked.value)) return handBackThread(threadRef, clicked.value); // Fork add-on: external-session hand back.
+        if (isForkThreadMenuId(clicked.value))
+          return runForkThreadMenuItem(threadRef, clicked.value); // Fork add-on: thread export, save to notes, hand back.
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"

@@ -36,8 +36,9 @@ handoff is also a good choice when the old conversation contains conflicting ins
 
 ## Keeping a recovery copy
 
-T3 Code does not currently have a whole-thread export command. Before a major server update, stop
-the server and copy its `userdata` directory to a safe location. The default is
+[Export…](./thread-sidebar.md#export-a-thread) saves a readable copy of one thread, but T3 Code
+can't import it back. Before a major server update, stop the server and copy its `userdata`
+directory to a safe location. The default is
 `~/.t3/userdata`; a server started with `--home-dir <path>` uses `<path>/userdata`.
 
 If a migrated transcript is missing from the app, keep that copy unchanged. You can inspect the

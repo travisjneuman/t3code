@@ -1332,6 +1332,8 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
+  savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1652,6 +1654,8 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
+  notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
+  savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),

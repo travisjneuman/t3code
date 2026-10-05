@@ -8,6 +8,8 @@ import {
   AuthReviewWriteScope,
   AuthTerminalOperateScope,
   EXTERNAL_SESSIONS_RPC_SCOPES, // Fork add-on: external sessions.
+  SAVE_TO_NOTES_RPC_SCOPES, // Fork add-on: save to notes.
+  COMPARE_AGENTS_RPC_SCOPES, // Fork add-on: compare agents.
   ORCHESTRATION_V2_WS_METHODS,
   type AuthEnvironmentScope,
   EnvironmentAuthorizationError,
@@ -208,6 +210,8 @@ export const RPC_REQUIRED_SCOPES = {
   ...EXTERNAL_SESSIONS_RPC_SCOPES, // Fork add-on: external sessions.
   "sessionSearch.search": AuthOrchestrationReadScope, // Fork add-on: session search.
   "threadExport.export": AuthOrchestrationReadScope, // Fork add-on: thread export.
+  ...SAVE_TO_NOTES_RPC_SCOPES, // Fork add-on: save to notes.
+  ...COMPARE_AGENTS_RPC_SCOPES, // Fork add-on: compare agents.
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {

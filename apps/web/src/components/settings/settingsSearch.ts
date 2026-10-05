@@ -5,6 +5,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { commandLabel } from "./KeybindingsSettings.logic";
+import { SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS } from "../../save-to-notes/saveToNotesSettingsSearch"; // Fork add-on
 import {
   validateSettingsScopeSearch,
   type ResolvedSettingsScope,
@@ -461,6 +462,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "environment-defaults",
     searchTerms: ["base directory folder browser path home"],
   },
+  ...SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS, // Fork add-on: save to notes.
   {
     id: "unpin-confirmation",
     title: "Unpin confirmation",
