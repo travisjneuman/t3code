@@ -33,6 +33,7 @@ import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUp
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 // Fork add-on: compare agents.
 import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem";
+import "../../sidebar-compact/footerButtons.css"; // Fork add-on: compact sidebar.
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,

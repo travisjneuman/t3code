@@ -1,0 +1,19 @@
+/*
+ * The sidebar footer's icon buttons (Settings, Pull Requests, Usage, Compare
+ * agents, Sync, Update) are 32px each and never shrank, so at the narrowest
+ * sidebar the six of them ran past the edge. Here they shrink together, staying
+ * square, down to 24px when the row is short of room; at normal widths nothing
+ * changes. The Back button on utility pages is a full-size row and is left
+ * alone. Unlayered, so it wins over Tailwind's `shrink-0` and `size-8`.
+ * Fork add-on: compact sidebar.
+ */
+[data-sidebar="footer"] [data-sidebar="menu-item"]:has(> :is([data-size="icon"], button.size-8)) {
+  flex: 0 1 2rem;
+  min-width: 1.5rem;
+}
+
+[data-sidebar="footer"] [data-sidebar="menu-item"] > :is([data-size="icon"], button.size-8) {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
