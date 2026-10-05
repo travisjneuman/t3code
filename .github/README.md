@@ -4,7 +4,7 @@
 
 # ndev.t3code
 
-**A personal fork of [T3 Code](https://github.com/pingdotgg/t3code) with extra add-ons for the desktop app.**
+**An unofficial, personal fork of [T3 Code](https://github.com/pingdotgg/t3code) with extra add-ons for the desktop app.**
 
 [![Fork of pingdotgg/t3code](https://img.shields.io/badge/fork_of-pingdotgg%2Ft3code-18181b?style=flat-square&logo=github)](https://github.com/pingdotgg/t3code)
 [![Tracks upstream nightly](https://img.shields.io/badge/tracks-upstream_nightly-6d5bd0?style=flat-square)](#upstream-sync)
@@ -82,11 +82,13 @@ Choose **Export…** in a thread's menu to save everything the server stores for
 
 ### Upstream sync
 
-The desktop app updates from your own checkout instead of a download feed.
+This is how the fork stays current. The maintainer's desktop app updates from its source checkout instead of a download feed.
 
 - Every 30 minutes the app merges any new official nightly into the fork and pushes it.
-- **Sync & Build** builds the merged source on your Mac. **Restart & Install** then swaps in the new app.
+- **Sync & Build** builds the merged source on the Mac. **Restart & Install** then swaps in the new app.
 - When needed, Claude Code fixes merge conflicts and build breaks. Nothing is pushed unless the build succeeds.
+
+For now this needs push access to this repo, so it only works on the maintainer's machine. A copy you build yourself updates by pulling and rebuilding.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/updating.md#updating-the-fork-from-upstream-nightly)
 
@@ -95,19 +97,19 @@ The desktop app updates from your own checkout instead of a download feed.
 You need macOS, [Vite+](https://viteplus.dev/guide/) (`vp`) and at least one [signed-in provider](https://github.com/pingdotgg/t3code#installation).
 
 ```bash
-git clone https://github.com/travisjneuman/t3code.git ~/web-dev/t3code
-cd ~/web-dev/t3code
+git clone https://github.com/travisjneuman/t3code.git
+cd t3code
 vp i
 vp run dist:desktop:dmg:arm64   # on an Intel Mac, use dist:desktop:dmg:x64
 ```
 
-The app is saved in `release/`. **Sync & Build** looks for the checkout at `~/web-dev/t3code`. To keep it somewhere else, set `T3CODE_SOURCE_REPOSITORY_PATH`.
+The app is saved in `release/`. To update it, run `git pull`, then build again.
 
 ---
 
 <div align="center">
 <sub>
-Add-ons by <a href="https://github.com/travisjneuman">Travis J. Neuman</a>. Not affiliated with T3 Tools.
+Add-ons by <a href="https://github.com/travisjneuman">Travis J. Neuman</a>. Not affiliated with T3 Tools or Ping.
 T3 Code is © T3 Tools Inc. and <a href="https://github.com/travisjneuman/t3code/blob/main/LICENSE">MIT licensed</a>.
 </sub>
 </div>
