@@ -31,6 +31,8 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarSourceSyncButton } from "./SidebarSourceSyncButton";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+// Fork add-on: compare agents.
+import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -240,6 +242,8 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
+          {/* Fork add-on: compare agents. */}
+          <CompareAgentsSidebarItem />
         </>
       )}
       <SidebarSourceSyncButton />
