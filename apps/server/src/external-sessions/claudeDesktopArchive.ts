@@ -74,6 +74,11 @@ export interface ClaudeDesktopArchive {
    */
   readonly archivedIds: Effect.Effect<ReadonlyMap<string, number>>;
   /**
+   * Whether Claude desktop has a record for a CLI session, archived or not;
+   * null where it has no records at all (absent, or nothing readable).
+   */
+  readonly hasRecord: Effect.Effect<((cliSessionId: string) => boolean) | null>;
+  /**
    * Claude desktop's `local_<id>` for an unarchived CLI session, or null. A
    * miss rescans at once, so a session just started there is found.
    */
@@ -141,6 +146,11 @@ export const make = Effect.gen(function* () {
 
   const desktopArchive: ClaudeDesktopArchive = {
     archivedIds: Effect.map(latest, (result) => result.archived),
+    hasRecord: Effect.map(latest, ({ archived, localIds }) =>
+      archived.size + localIds.size === 0
+        ? null
+        : (cliSessionId: string) => archived.has(cliSessionId) || localIds.has(cliSessionId),
+    ),
     localSessionId: (cliSessionId) =>
       Effect.flatMap(latest, (result) =>
         result.localIds.has(cliSessionId)
