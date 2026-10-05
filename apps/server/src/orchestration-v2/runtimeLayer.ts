@@ -327,6 +327,7 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
         ProjectServiceLayerLive,
         orchestratorProvided,
         eventSinkProvided,
+        eventStoreProvided, // Fork add-on: external-session hand back.
         idAllocatorLayer,
         providerSessionRuntimeLayer,
       ),

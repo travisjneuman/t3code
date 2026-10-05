@@ -1,11 +1,11 @@
 /**
  * External sessions: agent sessions running outside T3 (Claude Code, Codex,
  * Grok, Pi, Antigravity CLIs and desktop apps), streamed live from each
- * environment, plus the command that continues an idle one as a T3 thread
- * (or hands its history to another agent), and which continued threads are
- * running in their own agent right now, and archive. Fork add-on; the sidebar
- * section, the session route, the thread composer's banner, and Settings ›
- * Archived read these atoms.
+ * environment, plus the command that continues an idle one as a T3 thread,
+ * which continued threads are running in their own agent right now, archive,
+ * and handing a continued thread back to its agent. Fork add-on; the sidebar
+ * section, the session route, the thread composer's banner, the thread menus,
+ * and Settings › Archived read these atoms.
  */
 import {
   EXTERNAL_SESSIONS_WS_METHODS,
@@ -116,6 +116,12 @@ export const externalSessionArchive = createEnvironmentRpcCommand(connectionAtom
 export const externalSessionUnarchive = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:unarchive",
   tag: EXTERNAL_SESSIONS_WS_METHODS.unarchive,
+});
+
+/** One message on a continued thread's original agent and model (handBack.tsx). */
+export const externalSessionHandBack = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:hand-back",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.handBack,
 });
 
 /** Archived sessions of one environment, newest first, for Settings › Archived. */

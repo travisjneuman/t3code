@@ -37,8 +37,8 @@ const FORMAT_BY_MENU_ID: Readonly<Record<ThreadExportMenuId, ThreadExportFormat 
   "export:json": "json",
 };
 
-export const isThreadExportMenuId = (value: string): value is ThreadExportMenuId =>
-  Object.hasOwn(FORMAT_BY_MENU_ID, value);
+export const isExportMenuId = (value: string | null): value is ThreadExportMenuId =>
+  value !== null && Object.hasOwn(FORMAT_BY_MENU_ID, value);
 
 const exportMenuItem: ContextMenuItem<ThreadExportMenuId> = {
   id: "export",
@@ -51,7 +51,7 @@ const exportMenuItem: ContextMenuItem<ThreadExportMenuId> = {
 };
 
 /** Adds "Export…" right after the "Copy" submenu, or last when a menu has none. */
-export const withThreadExportMenuItem = <T extends string>(
+export const withExportMenuItem = <T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
 ): ReadonlyArray<ContextMenuItem<T | ThreadExportMenuId>> => {
   const copyIndex = items.findIndex((item) => item.id === "copy");

@@ -232,6 +232,34 @@ local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
 
+## Export a thread
+
+On web and desktop, choose **Export…** from a thread's menu, either by right-clicking it in the
+sidebar or from the menu in the thread header. Then pick **Markdown** or **JSON**. Desktop asks
+where to save the file. A browser saves it like any other download.
+
+The export is built by the environment from everything it stores for the thread, not just what
+your app has loaded.
+
+- **Markdown** is a readable transcript. It starts with the thread's details: project folder,
+  model, and where it was forked or imported from. Then it shows every run with its model,
+  status, and token usage. It also includes every message, reasoning summary, tool call, command,
+  file change, plan, approval, and error, in order. Outputs are kept in full.
+- **JSON** is the complete record, for scripts and other tools. It starts with
+  `"format": "t3-thread-export"` and a `version`.
+
+Both formats include:
+
+- history the timeline hides, such as turns you rolled back, marked as such
+- a fork's inherited history
+
+Attachments are listed by name, without their contents. Both formats leave out:
+
+- long binary data inside tool results
+- answers you gave to sign-in prompts
+
+The mobile app can't export threads yet.
+
 ## Sessions from other agents
 
 **Other Agents**, below your threads in the sidebar, lists recent sessions you started outside
@@ -246,11 +274,14 @@ afterwards shows up in the T3 thread too. Send from one app at a time: while the
 working in the session, the thread warns you above the composer. Antigravity sessions can be
 followed but not continued, because T3 runs Antigravity with its own session store.
 
-After continuing in T3, you can switch the thread to another agent with the model picker. The new
-agent gets the session's whole history, including what happened before T3. Its own turns stay in
-T3, though: the original session only records turns its own agent ran. Before going back to the
-other app, switch the thread back to the original agent and send one more message. That agent is
-told what the other agents did, and that turn is saved in the original session.
+A continued thread shows a small import icon in the sidebar, and its hover card says which agent
+it came from. You can switch it to another agent with the model picker; the new agent gets the
+session's whole history, including what happened before T3. Its own turns stay in T3, though: the
+original session only records turns its own agent ran. Before going back to the other app,
+right-click the thread and choose **Hand back to** the original agent. T3 sends a short "Handing
+back" message on the model and reasoning level the session was continued with, the agent is told
+what the other agents did, and that turn is saved in the original session. The item shows only
+while the thread is set to a different agent, and it is not on mobile yet.
 
 Right-click a session to continue it, copy its session ID or folder path, open its folder, or
 archive it. Archiving takes the session off the list; a Codex session is
