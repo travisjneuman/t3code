@@ -138,7 +138,8 @@ const readState = Effect.fnUntraced(function* (input: {
   if (raw === null) return DEFAULT_REMOTE_APP_STATE;
 
   return yield* decodeState(raw).pipe(
-    Effect.map(normalizeRemoteAppState),
+    // Unread badges describe live views, which do not survive a restart.
+    Effect.map((state) => ({ ...normalizeRemoteAppState(state), unreadSites: [] })),
     Effect.catchTag("SchemaError", (cause) =>
       input.fileSystem.rename(input.statePath, `${input.statePath}.corrupt-${process.pid}`).pipe(
         Effect.catch(() => Effect.void),

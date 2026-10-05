@@ -1,13 +1,16 @@
 /**
  * External sessions: agent sessions running outside T3 (Claude Code, Codex,
  * Grok, Pi, Antigravity CLIs and desktop apps), streamed live from each
- * environment, plus the command that continues an idle one as a T3 thread.
- * Fork add-on; the sidebar section and the session route read these atoms.
+ * environment, plus the command that continues an idle one as a T3 thread
+ * (or hands its history to another agent), and which continued threads are
+ * running in their own agent right now. Fork add-on; the sidebar section, the
+ * session route, and the thread composer's banner read these atoms.
  */
 import {
   EXTERNAL_SESSIONS_WS_METHODS,
   PROVIDER_DISPLAY_NAMES,
   type EnvironmentId,
+  type ExternalSessionDetails,
   type ExternalSessionEvent,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
@@ -81,7 +84,23 @@ export const externalSessionTranscript = createEnvironmentRpcSubscriptionAtomFam
   },
 );
 
-/** Imports an idle session as a T3 thread, or returns the thread it already became. */
+/**
+ * Continued threads whose session is running in its own agent right now. One
+ * stream per environment, shared by every thread view; the server pushes the
+ * whole set only when it changes.
+ */
+export const externalSessionsRunningElsewhere = createEnvironmentRpcSubscriptionAtomFamily(
+  connectionAtomRuntime,
+  {
+    label: "environment-data:external-sessions:running-elsewhere",
+    tag: EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere,
+  },
+);
+
+/**
+ * Imports an idle session as a T3 thread, or returns the thread it already
+ * became. With `handoffTo`, starts a new thread on that agent from its history.
+ */
 export const externalSessionContinue = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:continue",
   tag: EXTERNAL_SESSIONS_WS_METHODS.continue,
@@ -173,8 +192,27 @@ function summariesEqual(left: ExternalSessionSummary, right: ExternalSessionSumm
     left.cwd === right.cwd &&
     left.model === right.model &&
     left.updatedAt === right.updatedAt &&
-    left.liveness === right.liveness
+    left.liveness === right.liveness &&
+    detailsEqual(left.details, right.details)
   );
+}
+
+function detailsEqual(
+  left: ExternalSessionDetails | undefined,
+  right: ExternalSessionDetails | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined) return false;
+  const keys = Object.keys(left) as Array<keyof ExternalSessionDetails>;
+  if (keys.length !== Object.keys(right).length) return false;
+  return keys.every((key) => {
+    const a = left[key];
+    const b = right[key];
+    if (Array.isArray(a) && Array.isArray(b)) {
+      return a.length === b.length && a.every((value, index) => value === b[index]);
+    }
+    return a === b;
+  });
 }
 
 const EMPTY_ENTRIES: ReadonlyArray<ExternalSessionEntry> = [];
@@ -287,4 +325,32 @@ export function shortModelLabel(model: string | null): string | null {
   if (model === null || model.trim().length === 0) return null;
   const label = formatModelSlugName(model.trim());
   return label.startsWith("Claude ") ? label.slice("Claude ".length) : label;
+}
+
+// Mode and effort values arrive in each agent's own terms; known ones read
+// better spelled out, the rest are split into words.
+const SETTING_LABELS: Record<string, string> = {
+  xhigh: "Extra High",
+  acceptEdits: "Accept edits",
+  bypassPermissions: "Bypass permissions",
+  dontAsk: "Don't ask",
+  never: "Never ask",
+  "on-request": "On request",
+  "on-failure": "On failure",
+  yolo: "Yolo (auto-approve)",
+  "danger-full-access": "Full access",
+  "workspace-write": "Workspace write",
+  "read-only": "Read-only",
+};
+
+/** "bypassPermissions" reads "Bypass permissions", "high" reads "High". */
+export function externalSessionSettingLabel(value: string): string {
+  const known = SETTING_LABELS[value];
+  if (known !== undefined) return known;
+  const words = value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .toLowerCase();
+  return words.length === 0 ? value : `${words[0]!.toUpperCase()}${words.slice(1)}`;
 }

@@ -279,6 +279,7 @@ import {
 } from "../composerDraftStore";
 // Fork add-on: read-only sessions from agents running outside T3.
 import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection";
+import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on: session search.
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -5060,6 +5061,8 @@ export default function Sidebar() {
               </p>
             )
           ) : null}
+          <SessionSearchResults query={threadSearchQuery} />
+          {/* Fork add-on: session search. */}
           {!isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"

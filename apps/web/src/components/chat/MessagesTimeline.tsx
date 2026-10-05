@@ -182,6 +182,7 @@ import { MessageCopyButton } from "./MessageCopyButton";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { inferEntryKindFromPath } from "../../pierre-icons";
 import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
+import { RemoteAppSendMessageAction } from "~/remote-apps/RemoteAppSendMessageAction"; // Fork add-on: send replies to desktop web apps.
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import {
   AssistantCitationSource,
@@ -2646,6 +2647,8 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
+      <RemoteAppSendMessageAction message={message} visible={showCopyButton && !copyStreaming} />
+      {/* Fork add-on: send replies to desktop web apps. */}
       {!message.streaming && (
         <Tooltip>
           <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>

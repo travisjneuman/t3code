@@ -4,6 +4,8 @@ import type {
   DesktopPreviewRecordingInputEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
+  RemoteAppFillPromptRequest,
+  RemoteAppSendToThread,
   RemoteAppSurfaceMenuAnchor,
   RemoteAppTheme,
   RemoteAppState,
@@ -13,9 +15,17 @@ import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
+import * as RemoteAppChannels from "./remote-apps/RemoteAppChannels.ts";
 
 // Mirrors RemoteAppSiteSchema; the preload imports contract types only.
-const REMOTE_APP_SURFACES = new Set(["t3code", "chatgpt", "claude", "grok", "gemini"]);
+const REMOTE_APP_SURFACES = new Set([
+  "t3code",
+  "chatgpt",
+  "claude",
+  "grok",
+  "gemini",
+  "perplexity",
+]);
 
 function isRemoteAppState(value: unknown): value is RemoteAppState {
   if (typeof value !== "object" || value === null) return false;
@@ -27,6 +37,18 @@ function isRemoteAppState(value: unknown): value is RemoteAppState {
     typeof state.currentTitle === "string" &&
     typeof state.zoomFactor === "number" &&
     Array.isArray(state.recents)
+  );
+}
+
+function isRemoteAppSendToThread(value: unknown): value is RemoteAppSendToThread {
+  if (typeof value !== "object" || value === null) return false;
+  const send = value as Partial<RemoteAppSendToThread>;
+  return (
+    typeof send.site === "string" &&
+    send.site !== "t3code" &&
+    REMOTE_APP_SURFACES.has(send.site) &&
+    typeof send.text === "string" &&
+    send.text.length > 0
   );
 }
 
@@ -324,6 +346,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     resetZoom: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RESET_ZOOM_CHANNEL),
     retry: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RETRY_CHANNEL),
     clearData: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_CLEAR_DATA_CHANNEL),
+    fillSitePrompt: (request: RemoteAppFillPromptRequest) =>
+      ipcRenderer.invoke(RemoteAppChannels.REMOTE_APP_FILL_SITE_PROMPT_CHANNEL, request),
     onStateChange: (listener) => {
       const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
         if (isRemoteAppState(state)) listener(state);
@@ -331,6 +355,18 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.on(IpcChannels.REMOTE_APP_STATE_CHANGE_CHANNEL, wrappedListener);
       return () => {
         ipcRenderer.removeListener(IpcChannels.REMOTE_APP_STATE_CHANGE_CHANNEL, wrappedListener);
+      };
+    },
+    onSendToThread: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, send: unknown) => {
+        if (isRemoteAppSendToThread(send)) listener(send);
+      };
+      ipcRenderer.on(RemoteAppChannels.REMOTE_APP_SEND_TO_THREAD_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(
+          RemoteAppChannels.REMOTE_APP_SEND_TO_THREAD_CHANNEL,
+          wrappedListener,
+        );
       };
     },
   },

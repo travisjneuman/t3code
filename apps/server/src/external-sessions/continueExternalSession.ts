@@ -7,10 +7,18 @@
  * same way from this add-on's own transcript parsers. Unlike the importer,
  * the thread starts active rather than settled, and its history is "native"
  * so the first turn resumes instead of also replaying it as a context
- * handoff. Fork add-on; see docs/internals/external-sessions.md.
+ * handoff.
+ *
+ * Handing a session to a different agent is the other way in: a new thread
+ * per handoff, on the chosen instance, with no provider thread and history
+ * marked "v1_import", so the first turn carries the history as imported
+ * context (Orchestrator prepareLegacyImport). Nothing binds the original
+ * session, and the sync never follows these threads. Fork add-on; see
+ * docs/internals/external-sessions.md.
  *
  * @module external-sessions/continueExternalSession
  */
+import { Buffer } from "node:buffer";
 import * as NodeOS from "node:os";
 
 import {
@@ -59,12 +67,16 @@ import {
 } from "../project/AgentSessionScanner.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
+import { deriveProviderInstanceConfigMap } from "../provider/Layers/ProviderInstanceRegistryHydration.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { asString, parseJsonObject, type TranscriptParser } from "./ExternalSessionSource.ts";
 
 // Same prefix and id shapes as AgentSessionImporter, so a session continued
 // here and one imported during onboarding are the same thread.
 const IMPORT_EVENT_PREFIX = "agent-session-import:v2";
+const HANDOFF_EVENT_PREFIX = "external-session-handoff:v1";
+// Never `import:`, so a handoff cannot collide with the thread continued in place.
+const HANDOFF_THREAD_PREFIX = "external-handoff";
 const CLAUDE_SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // The parser holds the whole transcript in memory; past this it is not worth it.
@@ -99,6 +111,30 @@ interface ContinueHistory {
   readonly messages: ReadonlyArray<AgentSessionThreadMessage>;
 }
 
+/**
+ * Where the sync (externalSessionSync.ts) takes over: the transcript bytes
+ * continue already imported end at `offset`, on a line boundary.
+ */
+export interface ContinueSyncStart {
+  readonly threadId: ThreadId;
+  readonly driver: ContinueDriver;
+  /** The native session id, as in the thread id. */
+  readonly sessionId: string;
+  readonly transcriptPath: string;
+  readonly offset: number;
+}
+
+/** `syncStart` is null when the thread already existed. */
+export type ContinueOutcome = ExternalSessionContinueResult & {
+  readonly syncStart: ContinueSyncStart | null;
+};
+
+/** The agent a handoff goes to: an enabled instance of a different driver. */
+export interface HandoffTo {
+  readonly instanceId: ProviderInstanceId;
+  readonly model: string;
+}
+
 export const isContinueDriver = (driver: string): driver is ContinueDriver =>
   driver === "claudeAgent" || driver === "codex" || driver === "grok" || driver === "pi";
 
@@ -106,16 +142,41 @@ const failed = (cause: unknown) =>
   new ExternalSessionError({ message: "Could not continue this session in T3.", cause });
 
 function messageEvents(input: {
+  readonly prefix: string;
   readonly threadId: ThreadId;
   readonly index: number;
   readonly message: AgentSessionThreadMessage;
 }): ReadonlyArray<OrchestrationV2DomainEvent> {
   const suffix = String(input.index).padStart(6, "0");
-  const messageId = MessageId.make(`${input.threadId}:${suffix}`);
-  const turnItemId = TurnItemId.make(
-    `${IMPORT_EVENT_PREFIX}:turn-item:${input.threadId}:${suffix}`,
-  );
+  return importedMessageEvents({
+    threadId: input.threadId,
+    messageId: MessageId.make(`${input.threadId}:${suffix}`),
+    turnItemId: TurnItemId.make(`${input.prefix}:turn-item:${input.threadId}:${suffix}`),
+    eventId: (kind) => EventId.make(`${input.prefix}:${kind}:${input.threadId}:${suffix}`),
+    ordinal: input.index + 1,
+    message: input.message,
+  });
+}
+
+/**
+ * A runless, completed user or assistant message: the shape continue gives
+ * the imported history and the sync (externalSessionSync.ts) gives messages
+ * the other app adds later. Upserted by message and turn-item id.
+ */
+export function importedMessageEvents(input: {
+  readonly threadId: ThreadId;
+  readonly messageId: MessageId;
+  readonly turnItemId: TurnItemId;
+  readonly eventId: (kind: "message" | "turn-item") => EventId;
+  readonly ordinal: number;
+  readonly message: AgentSessionThreadMessage;
+  /** When the event is recorded; the message's own time when omitted. */
+  readonly occurredAt?: DateTime.Utc;
+}): ReadonlyArray<OrchestrationV2DomainEvent> {
+  const messageId = input.messageId;
+  const turnItemId = input.turnItemId;
   const at = DateTime.makeUnsafe(input.message.createdAt);
+  const occurredAt = input.occurredAt ?? at;
   const message: OrchestrationV2ConversationMessage = {
     createdBy: input.message.role === "user" ? "user" : "agent",
     creationSource: "server",
@@ -139,7 +200,7 @@ function messageEvents(input: {
     providerTurnId: null,
     nativeItemRef: null,
     parentItemId: null,
-    ordinal: input.index + 1,
+    ordinal: input.ordinal,
     status: "completed" as const,
     title: null,
     startedAt: at,
@@ -167,28 +228,29 @@ function messageEvents(input: {
         };
   return [
     {
-      id: EventId.make(`${IMPORT_EVENT_PREFIX}:message:${input.threadId}:${suffix}`),
+      id: input.eventId("message"),
       type: "message.updated",
       threadId: input.threadId,
-      occurredAt: at,
+      occurredAt,
       payload: message,
     },
     {
-      id: EventId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${input.threadId}:${suffix}`),
+      id: input.eventId("turn-item"),
       type: "turn-item.updated",
       threadId: input.threadId,
-      occurredAt: at,
+      occurredAt,
       payload: turnItem,
     },
   ];
 }
 
 const threadCreated = (
+  prefix: string,
   threadId: ThreadId,
   providerInstanceId: ProviderInstanceId,
   appThread: OrchestrationV2AppThread,
 ): OrchestrationV2DomainEvent => ({
-  id: EventId.make(`${IMPORT_EVENT_PREFIX}:thread:${threadId}:created`),
+  id: EventId.make(`${prefix}:thread:${threadId}:created`),
   type: "thread.created",
   threadId,
   providerInstanceId,
@@ -409,13 +471,13 @@ export const make = Effect.gen(function* () {
       return bootstrapped;
     });
 
-  const continueSession = Effect.fn("ExternalSessions.continueSession")(function* (
+  /** Reads the transcript; only ever reads it. */
+  const readHistory = Effect.fn("ExternalSessions.readHistory")(function* (
     target: ContinueTarget,
+    providerInstanceId: ProviderInstanceId,
   ) {
     const unsupported = (reason: ExternalSessionUnsupportedError["reason"]) =>
       new ExternalSessionUnsupportedError({ key: target.key, reason });
-    const providerInstanceId = yield* resolveInstance(target);
-
     const stats = yield* fileSystem
       .stat(target.transcriptPath)
       .pipe(Effect.mapError(() => unsupported("empty")));
@@ -434,6 +496,16 @@ export const make = Effect.gen(function* () {
           })
         : parsedHistory(target, contents);
     if (history === null) return yield* unsupported("empty");
+    return { stats, contents, history };
+  });
+
+  const continueSession = Effect.fn("ExternalSessions.continueSession")(function* (
+    target: ContinueTarget,
+  ) {
+    const unsupported = (reason: ExternalSessionUnsupportedError["reason"]) =>
+      new ExternalSessionUnsupportedError({ key: target.key, reason });
+    const providerInstanceId = yield* resolveInstance(target);
+    const { stats, contents, history } = yield* readHistory(target, providerInstanceId);
     // Claude resumes only by a UUID session id.
     if (
       target.driver === "claudeAgent" &&
@@ -453,7 +525,8 @@ export const make = Effect.gen(function* () {
       return {
         threadId,
         projectId: existing.value.thread.projectId,
-      } satisfies ExternalSessionContinueResult;
+        syncStart: null,
+      } satisfies ContinueOutcome;
     }
 
     const projectId = yield* resolveProject(target);
@@ -571,16 +644,26 @@ export const make = Effect.gen(function* () {
     yield* eventSink
       .write({
         events: [
-          threadCreated(threadId, providerInstanceId, appThread),
+          threadCreated(IMPORT_EVENT_PREFIX, threadId, providerInstanceId, appThread),
           ...history.messages.flatMap((message, index) =>
-            messageEvents({ threadId, index, message }),
+            messageEvents({ prefix: IMPORT_EVENT_PREFIX, threadId, index, message }),
           ),
           providerThreadUpdated(threadId, driver, providerInstanceId, providerThread),
         ],
       })
       .pipe(Effect.mapError(failed));
+    // Everything up to the last complete line is in the history above; the
+    // sync picks up whatever is appended after it.
+    const lastNewline = contents.lastIndexOf("\n");
+    const syncStart: ContinueSyncStart = {
+      threadId,
+      driver: target.driver,
+      sessionId: history.providerSessionId,
+      transcriptPath: target.transcriptPath,
+      offset: lastNewline === -1 ? 0 : Buffer.byteLength(contents.slice(0, lastNewline + 1)),
+    };
     if (importerSource === null) {
-      return { threadId, projectId } satisfies ExternalSessionContinueResult;
+      return { threadId, projectId, syncStart } satisfies ContinueOutcome;
     }
     // Best-effort, as in the importer: it only lets onboarding skip this file later.
     yield* runtimes
@@ -602,8 +685,82 @@ export const make = Effect.gen(function* () {
         },
       })
       .pipe(Effect.ignore);
+    return { threadId, projectId, syncStart } satisfies ContinueOutcome;
+  });
+
+  /**
+   * A new thread on another agent that starts from this session's history.
+   * Runs whether or not the session is still running, since it only reads.
+   */
+  const handoffSession = Effect.fn("ExternalSessions.handoffSession")(function* (
+    target: ContinueTarget,
+    to: HandoffTo,
+  ) {
+    const settings = yield* serverSettings.getSettings.pipe(Effect.mapError(failed));
+    const instances = deriveProviderInstanceConfigMap(settings);
+    const instance: ProviderInstanceConfig | undefined = Object.hasOwn(instances, to.instanceId)
+      ? instances[to.instanceId]
+      : undefined;
+    if (instance === undefined || !resolveProviderInstanceEnabled(instance)) {
+      return yield* new ExternalSessionUnsupportedError({ key: target.key, reason: "no-instance" });
+    }
+    if (instance.driver === target.driver) {
+      return yield* new ExternalSessionError({
+        message: "Pick a different agent, or continue this session in place.",
+      });
+    }
+    const { history } = yield* readHistory(target, to.instanceId);
+    const projectId = yield* resolveProject(target);
+    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed));
+    const threadId = ThreadId.make(`${HANDOFF_THREAD_PREFIX}:${id}`);
+    const now = yield* DateTime.now;
+    const title = target.title.trim() || history.title.trim() || "Untitled thread";
+    const appThread: OrchestrationV2AppThread = {
+      createdBy: "system",
+      creationSource: "server",
+      id: threadId,
+      projectId,
+      title,
+      providerInstanceId: to.instanceId,
+      modelSelection: { instanceId: to.instanceId, model: to.model },
+      runtimeMode: DEFAULT_RUNTIME_MODE,
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      branch: null,
+      worktreePath: null,
+      linkedPullRequest: null,
+      branchPullRequest: null,
+      // The first turn creates a fresh provider thread with no native
+      // session, which is what makes it carry the history as context.
+      activeProviderThreadId: null,
+      historyOrigin: "v1_import",
+      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+      forkedFrom: null,
+      createdAt: DateTime.makeUnsafe(history.createdAt),
+      updatedAt: now,
+      archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
+      unsettledAt: null,
+      snoozedUntil: null,
+      snoozedAt: null,
+      pinnedAt: null,
+      pinOrderKey: null,
+      activeOrderKey: null,
+      lastVisitedAt: null,
+      deletedAt: null,
+    };
+    yield* eventSink
+      .write({
+        events: [
+          threadCreated(HANDOFF_EVENT_PREFIX, threadId, to.instanceId, appThread),
+          ...history.messages.flatMap((message, index) =>
+            messageEvents({ prefix: HANDOFF_EVENT_PREFIX, threadId, index, message }),
+          ),
+        ],
+      })
+      .pipe(Effect.mapError(failed));
     return { threadId, projectId } satisfies ExternalSessionContinueResult;
   });
 
-  return continueSession;
+  return { continueSession, handoffSession };
 });

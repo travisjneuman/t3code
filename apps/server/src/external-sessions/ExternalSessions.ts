@@ -4,8 +4,9 @@
  * provider's own session store is watched while anyone subscribes and is
  * never written to. Continuing an idle Claude, Codex, Grok, or Pi session
  * binds a T3 thread to that same session (continueExternalSession.ts), after
- * which it is listed as that thread instead. Fork add-on; see
- * docs/internals/external-sessions.md.
+ * which it is listed as that thread instead. Handing one to a different agent
+ * makes a separate thread from its history and leaves the session listed.
+ * Fork add-on; see docs/internals/external-sessions.md.
  *
  * @module external-sessions/ExternalSessions
  */
@@ -14,15 +15,18 @@ import * as NodePath from "node:path";
 
 import {
   ExternalSessionBusyError,
+  type ExternalSessionContinueInput,
   type ExternalSessionContinueResult,
   ExternalSessionError,
   ExternalSessionNotFoundError,
   ExternalSessionUnsupportedError,
+  externalSessionHandoffUnsupportedReason,
   externalSessionUnsupportedReason,
   type ExternalSessionEvent,
   type ExternalSessionListResult,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -37,11 +41,13 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as ServerConfig from "../config.ts";
+import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
 import { makeAntigravitySource } from "./antigravitySource.ts";
 import { makeClaudeSource } from "./claudeSource.ts";
 import { makeCodexSource } from "./codexSource.ts";
 import * as ContinueExternalSession from "./continueExternalSession.ts";
+import * as ExternalSessionSync from "./externalSessionSync.ts";
 import {
   type ExternalSessionInfo,
   type ExternalSessionSource,
@@ -49,6 +55,7 @@ import {
 } from "./ExternalSessionSource.ts";
 import { makeGrokSource } from "./grokSource.ts";
 import { makePiSource } from "./piSource.ts";
+import { findSessionPaths } from "./sessionHistory.ts";
 
 const LIST_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const MAX_LISTED = 60;
@@ -71,9 +78,13 @@ export class ExternalSessions extends Context.Service<
     readonly subscribeSession: (
       key: string,
     ) => Stream.Stream<ExternalSessionEvent, ExternalSessionError>;
-    /** Import an idle session as a T3 thread; returns the existing thread when already done. */
+    /**
+     * Import an idle session as a T3 thread; returns the existing thread when
+     * already done. With `handoffTo`, makes a new thread on that other agent
+     * from the session's history instead.
+     */
     readonly continueSession: (
-      key: string,
+      input: ExternalSessionContinueInput,
     ) => Effect.Effect<
       ExternalSessionContinueResult,
       | ExternalSessionNotFoundError
@@ -81,6 +92,16 @@ export class ExternalSessions extends Context.Service<
       | ExternalSessionUnsupportedError
       | ExternalSessionError
     >;
+    /**
+     * Continued threads whose session the other app is working in right now:
+     * the whole set on subscribe, then again only when it changes.
+     */
+    readonly subscribeRunningElsewhere: Stream.Stream<ReadonlyArray<ThreadId>>;
+    /**
+     * Native session ids and session paths that T3 threads own, re-read at
+     * most every 30 seconds. Session search leaves these to T3's own search.
+     */
+    readonly ownedSessionIds: Effect.Effect<ReadonlySet<string>>;
   }
 >()("t3/external-sessions/ExternalSessions") {}
 
@@ -98,6 +119,11 @@ interface Registry {
   readonly summaryFor: (key: string) => ExternalSessionSummary | null;
   /** Re-reads which sessions T3 owns and republishes the list. */
   readonly refreshOwned: Effect.Effect<void>;
+  /**
+   * The listed entry for `key`, or else one looked up on demand in the
+   * history window (an older search result), which then stays registered.
+   */
+  readonly resolve: (key: string) => Effect.Effect<Entry | undefined>;
 }
 
 const sessionKey = (source: ExternalSessionSource, id: string) => `${source.driver}:${id}`;
@@ -129,6 +155,11 @@ const make = Effect.gen(function* () {
     makePiSource(),
     makeAntigravitySource(),
   ];
+  // Runs for the server's lifetime, apart from the listing's watchers.
+  const sync = yield* ExternalSessionSync.make((driver) => {
+    const source = sources.find((candidate) => candidate.driver === driver);
+    return source === undefined ? { push: () => [] } : source.createParser();
+  });
   // Sessions T3 started itself (scratch threads, worktrees) already show as T3 threads.
   const excludedRoots = [
     config.baseDir,
@@ -137,53 +168,58 @@ const make = Effect.gen(function* () {
   ];
   const provide = Effect.provideService(FileSystem.FileSystem, fileSystem);
 
+  // Sessions T3 threads own. Runtime rows cover imported Claude and Codex
+  // sessions, including ones whose thread later fell back to a fresh native
+  // session. Threads T3 started itself, and continued Grok and Pi sessions,
+  // have none; their provider threads name the native session (an id, or Pi's
+  // file path). Kept for the server's lifetime, so search shares it.
+  let owned: ReadonlySet<string> = new Set();
+  let ownedAt = 0;
+  const readRuntimeOwned = providerSessions.list().pipe(
+    Effect.map((rows) => {
+      const ids = new Set<string>();
+      for (const row of rows) collectStrings(row.resumeCursor, ids);
+      return ids;
+    }),
+    Effect.orElseSucceed(() => new Set<string>()),
+  );
+  const readProviderThreadOwned = sql<{ readonly native_id: string | null }>`
+    SELECT json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id
+    FROM orchestration_v2_projection_provider_threads p
+    LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
+    WHERE json_valid(p.payload_json) AND t.deleted_at IS NULL
+  `.pipe(
+    Effect.map((rows) => {
+      const ids = new Set<string>();
+      for (const row of rows) {
+        if (typeof row.native_id !== "string") continue;
+        ids.add(row.native_id);
+        const piId = PI_SESSION_FILE.exec(row.native_id)?.[1];
+        if (piId !== undefined) ids.add(piId);
+      }
+      return ids;
+    }),
+    Effect.orElseSucceed(() => new Set<string>()),
+  );
+  const refreshOwnedIds = Effect.all([readRuntimeOwned, readProviderThreadOwned], {
+    concurrency: 2,
+  }).pipe(
+    Effect.map(([fromRuntime, fromProviderThreads]): ReadonlySet<string> => {
+      owned = new Set([...fromRuntime, ...fromProviderThreads]);
+      ownedAt = Date.now();
+      return owned;
+    }),
+  );
+  const ownedSessionIds: ExternalSessions["Service"]["ownedSessionIds"] = Effect.suspend(() =>
+    Date.now() - ownedAt <= OWNED_REFRESH_MS ? Effect.succeed(owned) : refreshOwnedIds,
+  );
+
   const acquireRegistry = Effect.gen(function* () {
     const entries = new Map<string, Entry>();
     const keysByPath = new Map<string, ReadonlyArray<string>>();
     const hiddenPaths = new Set<string>();
     const list = yield* SubscriptionRef.make<ExternalSessionListResult>({ sessions: [] });
     const changed = yield* PubSub.unbounded<ReadonlySet<string>>();
-    let owned = new Set<string>();
-    let ownedAt = 0;
-
-    // Runtime rows cover imported Claude and Codex sessions, including ones
-    // whose thread later fell back to a fresh native session. Threads T3
-    // started itself, and continued Grok and Pi sessions, have none; their
-    // provider threads name the native session (an id, or Pi's file path).
-    const readRuntimeOwned = providerSessions.list().pipe(
-      Effect.map((rows) => {
-        const ids = new Set<string>();
-        for (const row of rows) collectStrings(row.resumeCursor, ids);
-        return ids;
-      }),
-      Effect.orElseSucceed(() => new Set<string>()),
-    );
-    const readProviderThreadOwned = sql<{ readonly native_id: string | null }>`
-      SELECT json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id
-      FROM orchestration_v2_projection_provider_threads p
-      LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
-      WHERE json_valid(p.payload_json) AND t.deleted_at IS NULL
-    `.pipe(
-      Effect.map((rows) => {
-        const ids = new Set<string>();
-        for (const row of rows) {
-          if (typeof row.native_id !== "string") continue;
-          ids.add(row.native_id);
-          const piId = PI_SESSION_FILE.exec(row.native_id)?.[1];
-          if (piId !== undefined) ids.add(piId);
-        }
-        return ids;
-      }),
-      Effect.orElseSucceed(() => new Set<string>()),
-    );
-    const refreshOwned = Effect.all([readRuntimeOwned, readProviderThreadOwned], {
-      concurrency: 2,
-    }).pipe(
-      Effect.map(([fromRuntime, fromProviderThreads]) => {
-        owned = new Set([...fromRuntime, ...fromProviderThreads]);
-        ownedAt = Date.now();
-      }),
-    );
 
     const toSummary = (key: string, entry: Entry, now: number): ExternalSessionSummary => ({
       key,
@@ -208,7 +244,7 @@ const make = Effect.gen(function* () {
       !(entry.info.cwd !== null && excludedRoots.some((root) => isUnder(entry.info.cwd!, root)));
 
     const publish = Effect.gen(function* () {
-      if (Date.now() - ownedAt > OWNED_REFRESH_MS) yield* refreshOwned;
+      yield* ownedSessionIds;
       const now = Date.now();
       const sessions = [...entries]
         .filter(([, entry]) => isListed(entry, now))
@@ -240,7 +276,7 @@ const make = Effect.gen(function* () {
       });
 
     // Initial discovery, before the first subscriber sees the list.
-    yield* refreshOwned;
+    yield* refreshOwnedIds;
     const since = Date.now() - LIST_WINDOW_MS;
     yield* Effect.forEach(
       sources,
@@ -302,9 +338,29 @@ const make = Effect.gen(function* () {
       changed,
       summaryFor: (key) => {
         const entry = entries.get(key);
-        return entry === undefined ? null : toSummary(key, entry, Date.now());
+        // Details ride only on the session stream; the list stays lean.
+        return entry === undefined
+          ? null
+          : { ...toSummary(key, entry, Date.now()), details: entry.info.details };
       },
-      refreshOwned: Effect.andThen(refreshOwned, publish),
+      refreshOwned: Effect.andThen(refreshOwnedIds, publish),
+      resolve: (key) =>
+        Effect.gen(function* () {
+          const listed = entries.get(key);
+          if (listed !== undefined) return listed;
+          const separator = key.indexOf(":");
+          const driver = key.slice(0, separator);
+          const source = sources.find((candidate) => candidate.driver === driver);
+          if (separator <= 0 || source === undefined) return undefined;
+          // Summarizing registers the entry, and the store's watcher (already
+          // running) keeps it current; the list still shows only 3 days.
+          for (const path of yield* provide(findSessionPaths(source, key.slice(separator + 1)))) {
+            yield* summarizePath(source, path);
+            const found = entries.get(key);
+            if (found !== undefined) return found;
+          }
+          return undefined;
+        }),
     };
     return registry;
   });
@@ -323,7 +379,7 @@ const make = Effect.gen(function* () {
     Stream.unwrap(
       Effect.gen(function* () {
         const registry = yield* RcRef.get(registryRef);
-        const entry = registry.entries.get(key);
+        const entry = yield* registry.resolve(key);
         const summary = registry.summaryFor(key);
         if (entry === undefined || summary === null) {
           return yield* Effect.fail(
@@ -410,7 +466,7 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const continueSession: ExternalSessions["Service"]["continueSession"] = (key) =>
+  const continueSession: ExternalSessions["Service"]["continueSession"] = ({ key, handoffTo }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* RcRef.get(registryRef);
@@ -419,8 +475,14 @@ const make = Effect.gen(function* () {
         if (entry === undefined || summary === null) {
           return yield* new ExternalSessionNotFoundError({ key });
         }
-        if (summary.liveness === "running") return yield* new ExternalSessionBusyError({ key });
-        const reason = externalSessionUnsupportedReason(summary);
+        // A handoff only reads the transcript, so the session may keep running.
+        if (handoffTo === undefined && summary.liveness === "running") {
+          return yield* new ExternalSessionBusyError({ key });
+        }
+        const reason =
+          handoffTo === undefined
+            ? externalSessionUnsupportedReason(summary)
+            : externalSessionHandoffUnsupportedReason(summary);
         const transcriptPath = entry.source.transcriptPath(entry.path);
         const driver = summary.driver;
         if (
@@ -431,7 +493,7 @@ const make = Effect.gen(function* () {
         ) {
           return yield* new ExternalSessionUnsupportedError({ key, reason: reason ?? "provider" });
         }
-        const result = yield* continueExternalSession({
+        const target: ContinueExternalSession.ContinueTarget = {
           key,
           driver,
           sessionId: entry.info.id,
@@ -441,14 +503,29 @@ const make = Effect.gen(function* () {
           transcriptPath,
           updatedAtMs: entry.info.updatedAtMs,
           createParser: entry.source.createParser,
-        });
+        };
+        // Its own thread on another agent: the session stays listed and unsynced.
+        if (handoffTo !== undefined) {
+          return yield* continueExternalSession.handoffSession(target, handoffTo);
+        }
+        const { syncStart, ...result } = yield* continueExternalSession.continueSession(target);
         // The session now belongs to a T3 thread; drop it from the list right away.
         yield* registry.refreshOwned;
+        // From here on, what the other app appends shows up in the thread.
+        if (syncStart !== null) yield* sync.register(syncStart);
         return result;
       }),
     );
 
-  return ExternalSessions.of({ subscribeList, subscribeSession, continueSession });
+  return ExternalSessions.of({
+    subscribeList,
+    subscribeSession,
+    continueSession,
+    subscribeRunningElsewhere: sync.runningElsewhere,
+    ownedSessionIds,
+  });
 });
 
-export const layer = Layer.effect(ExternalSessions, make);
+export const layer = Layer.effect(ExternalSessions, make).pipe(
+  Layer.provide(TurnItemPositionStore.layer),
+);

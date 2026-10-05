@@ -8,6 +8,26 @@ export interface RemoteAppSiteDefinition {
   readonly hosts: ReadonlyArray<string>;
   /** Sign-in hosts this site uses beyond the shared identity providers. */
   readonly authHosts: ReadonlyArray<string>;
+  /**
+   * Hooks into the site's own markup. A site without them never shows the
+   * finished-reply badge, and "Send to <site>" copies to the clipboard instead.
+   */
+  readonly page?: RemoteAppPageHooks;
+}
+
+/**
+ * BEST-EFFORT, UNVERIFIED SELECTORS. They describe each site's markup as last
+ * known, change without notice when a site ships a redesign, and need checking
+ * against the live page (CDP) whenever badges or prompt fills stop working. A
+ * stale selector fails quietly: `generating` falls back to the generic
+ * activity heuristic in RemoteAppPageScripts.ts, and `promptInput` falls back
+ * to copying the text.
+ */
+export interface RemoteAppPageHooks {
+  /** Matches only while a reply is streaming, usually the Stop button. */
+  readonly generating: ReadonlyArray<string>;
+  /** The prompt box, most specific first; the first visible match wins. */
+  readonly promptInput: ReadonlyArray<string>;
 }
 
 export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDefinition> = {
@@ -17,12 +37,25 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     partition: "persist:tjn-remote-chatgpt-v1",
     hosts: ["chatgpt.com", "openai.com"],
     authHosts: [],
+    page: {
+      generating: ['button[data-testid="stop-button"]'],
+      // Checked 2026-10-04: a ProseMirror div labelled "Ask ChatGPT"; #prompt-textarea is gone.
+      promptInput: [
+        'div.ProseMirror[contenteditable="true"]',
+        "#prompt-textarea",
+        'div[contenteditable="true"]',
+      ],
+    },
   },
   claude: {
     entryUrl: "https://claude.ai/",
     partition: "persist:tjn-remote-claude-v1",
     hosts: ["claude.ai", "claude.com", "anthropic.com"],
     authHosts: [],
+    page: {
+      generating: ['button[aria-label="Stop response"]', 'button[aria-label="Stop"]'],
+      promptInput: ['div.ProseMirror[contenteditable="true"]', 'div[contenteditable="true"]'],
+    },
   },
   grok: {
     entryUrl: "https://grok.com/",
@@ -37,6 +70,11 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
       "auth.grokusercontent.com",
       "auth.cursor.com",
     ],
+    page: {
+      generating: ['button[aria-label="Stop model response"]', 'button[aria-label="Stop"]'],
+      // Checked 2026-10-04: a tiptap ProseMirror div; a hidden sizing textarea sits beside it.
+      promptInput: ['div.ProseMirror[contenteditable="true"]', 'div[contenteditable="true"]'],
+    },
   },
   gemini: {
     entryUrl: "https://gemini.google.com/app",
@@ -44,6 +82,24 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     hosts: ["gemini.google.com"],
     // Google's sign-in hops through accounts.youtube.com to set its cookies.
     authHosts: ["accounts.youtube.com"],
+    page: {
+      generating: ['button[aria-label="Stop response"]', "button.stop"],
+      promptInput: ["rich-textarea .ql-editor", 'div[contenteditable="true"]'],
+    },
+  },
+  // Standalone: no T3 provider. Google and Apple sign-in use the shared hosts.
+  perplexity: {
+    entryUrl: "https://www.perplexity.ai/",
+    partition: "persist:tjn-remote-perplexity-v1",
+    hosts: ["perplexity.ai"],
+    authHosts: [],
+    page: {
+      generating: [
+        'button[data-testid="stop-generating-response-button"]',
+        'button[aria-label="Stop"]',
+      ],
+      promptInput: ["#ask-input", "textarea", 'div[contenteditable="true"]'],
+    },
   },
 };
 

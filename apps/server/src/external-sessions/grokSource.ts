@@ -12,6 +12,7 @@ import type { ExternalSessionMessage } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import {
+  asCount,
   asRecord,
   asString,
   clipMessage,
@@ -22,6 +23,7 @@ import {
   parseJsonObject,
   readLines,
   readText,
+  sessionDetails,
   statMtimeMs,
   timestampMs,
   toolLine,
@@ -79,16 +81,21 @@ export const makeGrokSource = (): ExternalSessionSource => {
         });
         let model = asString(summary?.current_model_id);
         let busy = false;
+        let yolo: boolean | null = null;
         for (const line of events?.lines ?? []) {
           const record = parseJsonObject(line);
           if (record?.type === "turn_started") {
             busy = true;
             model = asString(record.model_id) ?? model;
+            if (typeof record.yolo_mode === "boolean") yolo = record.yolo_mode;
           }
           if (record?.type === "turn_ended") busy = false;
         }
         const updatedMtime = yield* statMtimeMs(NodePath.join(path, "updates.jsonl"));
         if (summary === null && updatedMtime === null) return [];
+        const usage = asRecord(
+          parseJsonObject((yield* readText(NodePath.join(path, "usage.json"))) ?? "")?.session,
+        );
         return [
           {
             id,
@@ -106,6 +113,15 @@ export const makeGrokSource = (): ExternalSessionSource => {
               events?.mtimeMs ?? 0,
             ),
             busy,
+            details: sessionDetails(id, {
+              effort: asString(summary?.reasoning_effort),
+              // Yolo mode approves every tool call without asking.
+              approval: yolo === true ? "yolo" : null,
+              sandbox: asString(summary?.sandbox_profile),
+              createdAt: asString(summary?.created_at),
+              messageCount: asCount(summary?.num_chat_messages),
+              totalTokens: asCount(usage?.totalTokens),
+            }),
           },
         ];
       }),

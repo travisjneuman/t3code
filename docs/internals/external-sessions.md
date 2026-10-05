@@ -1,9 +1,10 @@
 # External sessions (fork add-on)
 
-The sidebar's "Other agents" section lists sessions from agents running outside T3, such as Claude
+The sidebar's "Other Agents" section lists sessions from agents running outside T3, such as Claude
 Code, Codex, Grok, Pi and Antigravity, in a CLI, desktop app or IDE extension. Opening one shows the
 session live, laid out like a T3 thread. An idle Claude, Codex, Grok or Pi session can be continued
-in T3, which binds an ordinary thread to that same session.
+in T3, which binds an ordinary thread to that same session. Any of their sessions, running or not,
+can also be handed to a different agent, which starts a separate thread from its history.
 
 ## Decisions
 
@@ -11,7 +12,8 @@ in T3, which binds an ordinary thread to that same session.
   sessions on disk (`~/.claude/projects`, `~/.codex/sessions`, `~/.grok/sessions`,
   `~/.pi/agent/sessions`, `~/.gemini/antigravity-cli`). One adapter per store lives in
   [`apps/server/src/external-sessions/`](../../apps/server/src/external-sessions). Watching a
-  session writes nothing to T3's database; only an explicit continue does.
+  session writes nothing to T3's database; only an explicit continue or handoff, and the sync of a
+  continued thread, do.
 - **Render with the thread timeline, not a second transcript.** The view feeds the messages to
   the standard `MessagesTimeline` as runless timeline entries: user and assistant text become
   message entries, and each tool line becomes a work entry. The header and the docked
@@ -51,23 +53,73 @@ in T3, which binds an ordinary thread to that same session.
   while the session is running. Logic lives in
   [`continueExternalSession.ts`](../../apps/server/src/external-sessions/continueExternalSession.ts),
   which imports only exported pieces of upstream code.
+- **Handing a session to another agent copies its history; it never binds the session.** The
+  Continue button's menu lists the ready instances of every other driver, each on its own default
+  model, and sends that choice as `handoffTo`. Each handoff writes a new thread
+  `external-handoff:<uuid>`, which can never collide with the `import:` thread of an in-place
+  continue. The thread has the same runless messages, `historyOrigin: "v1_import"`, and no
+  provider thread. Its first turn therefore creates a provider thread with no native ref, and the
+  orchestrator's legacy-import path hands the runless items over as context
+  (`ContextHandoffService.prepareLegacyImport`, up to its 32k-character summary budget). This
+  needs no upstream change. The source session is only read, so a handoff is allowed while the
+  session runs. The session stays listed, and the sync never follows these threads.
 - **Antigravity stays watch-only.** T3 runs Antigravity with a private per-instance `GEMINI_HOME`,
   which cannot see a CLI conversation in `~/.gemini`, and the CLI keeps no transcript for a context
   handoff. The view shows the `separate-store` reason. Continuing it needs an Antigravity option
   upstream to use the user's own store.
-- **No two-way sync after continue.** Turns made in the other app after a continue show up in T3
-  only when the provider resumes them on the next T3 turn; T3 does not copy them into the
-  timeline. Copying them would need a per-line key that tells T3's own writes from the other
-  app's, and no store offers one for every driver. A live T3 process also keeps its view of the
-  session until it is released, so the user should send from one app at a time.
-- **Watch only while someone looks.** The registry is an `RcRef`. The first list or session
+- **Continued threads sync both ways.** T3's turns land in the native transcript because the
+  provider resumes the session in place, so the other app sees them when it reloads or resumes.
+  For the other direction,
+  [`externalSessionSync.ts`](../../apps/server/src/external-sessions/externalSessionSync.ts) follows
+  each continued thread's transcript for the server's lifetime and copies what the other app
+  appends into the thread:
+  - **Attribution is by time, not markers.** No store marks every line with its writer, so an entry
+    is T3's when it falls inside a T3 run or provider turn window (a few seconds of slack each
+    side), or, for Codex, when its turn id is one of T3's provider turns. Everything else came from
+    the other app. Users alternate between apps, so the windows rarely overlap the other app's
+    work; when they do, that work is taken as T3's and not copied.
+  - **Passes wait for T3.** While the thread has an active run, a pass only retries later. It never
+    reads T3's own output mid-turn, and a cursor never moves past lines it could not attribute.
+  - **Copied messages sort after the run they followed.** Runless items normally sit in the band
+    before every run. The sync allocates each item's position in the band of the latest run that
+    started before it, before writing the event. The sink's own allocation keeps an existing
+    position, so no upstream change is needed. Ids derive from the line's byte offset, so a crash
+    between write and cursor save re-upserts the same items.
+  - **A stale T3 process is let go.** After copying, the thread's idle provider sessions are
+    detached through `provider-session.detach`, so the next T3 turn resumes the session from disk.
+    Claude also gets its conversation head moved to the newest main-chain entry. Detach is skipped
+    while the provider thread has pending background work.
+  - **T3 does not release its session after every turn.** An idle T3 process writes nothing, the
+    detach above covers the staleness, and releasing after each turn would cost a respawn on every
+    turn.
+  - **The cursor lives outside the database.** `<state dir>/external-sessions-sync.json` holds the
+    byte offset per thread, always at a line start (for Grok, at the start of a reply that may
+    still grow), plus Codex's open turn id. Threads continued before the sync existed catch up from
+    the size continue recorded (Claude, Codex) or start at the current end (Grok, Pi).
+  - **Watching costs nothing while idle.** One non-recursive watch per transcript directory, a
+    600 ms debounce, a size check before any read, and reads of appended bytes only (at most 8 MB a
+    pass). A 30 second size check covers a missed watch event.
+  - **"Running elsewhere" is a warning, not a lock.** `externalSessions.subscribeRunningElsewhere`
+    sends the set of continued threads whose transcript gained an entry from the other app in the
+    last minute, or that hold an open Codex turn the other app started. The whole set goes out on
+    subscribe and again only when it changes. The web composer shows a warning banner on those
+    threads through `RunningElsewhereBanner.tsx`. Sending stays allowed. Only `import:` threads
+    open the stream.
+- **Watch the list only while someone looks.** The registry is an `RcRef`. The first list or session
   subscriber starts the file watchers and the initial discovery, which covers the last 3 days. The
   watchers stop 30 seconds after the last subscriber leaves. Bursts of writes, such as a streamed
   reply, are batched into one re-read about every 600 ms.
+- **Older sessions open on demand.** A session subscribe for a key the registry lacks, such as an
+  older [session search](./session-search.md) result, walks that one store once over search's
+  90-day window
+  ([`sessionHistory.ts`](../../apps/server/src/external-sessions/sessionHistory.ts)) and keeps
+  only files named after the session id. The match is registered like a discovered session, so
+  the existing watchers keep it current and it can be continued. The list still shows 3 days.
 - **The transcript stream follows bytes, not files.** A session stream opens with the newest
   messages from at most 8 MB of the transcript's tail, then reads only the bytes appended after
   that. Messages are upserted by id, so a streamed reply grows in place.
-- **T3's own sessions are excluded.** That covers:
+- **T3's own sessions are excluded.** The first two items below are `ownedSessionIds`, which
+  session search reads too. That covers:
   - the native id of every provider thread on a live T3 thread, which covers threads T3 started
     and continued sessions; the exclusion is refreshed right after a continue, so the session
     leaves the list at once
@@ -77,13 +129,16 @@ in T3, which binds an ordinary thread to that same session.
   - Codex subagent rollouts, which belong to their parent
 - **Stay mergeable with upstream.** All logic lives in the add-on folders: server
   `external-sessions/`, web `apps/web/src/external-sessions/` plus one route, and contracts
-  `externalSessions.ts`. Upstream files only gain one-line hooks marked "Fork add-on":
-  - the contracts index and RPC group
-  - RPC authorization
+  `externalSessions.ts`. The contract exports the RPC tuple (`ExternalSessionsRpcs`), the scope
+  map, and the subscription method type, so a new RPC never touches an upstream file. Upstream
+  files only gain one-line hooks marked "Fork add-on":
+  - the contracts index and RPC group (one spread)
+  - RPC authorization (one spread)
   - the client subscription tag union
   - the server runtime layer
   - `ws.ts`
   - the sidebar mount
+  - the composer banner stack in `ChatView`
 
 ## Constraints
 
@@ -102,5 +157,14 @@ in T3, which binds an ordinary thread to that same session.
   composer block asks the user to stop it there first.
 - Continue reads the whole transcript, up to 64 MB. A larger one is refused instead of being
   truncated.
-- Mobile does not render this section yet. The RPCs are environment-scoped, so it can be added
-  later from the same contracts.
+- Synced messages are runless. Reverting or rolling back a T3 run does not hide them, and a fork
+  copies only run items. A rewind in the other app shows up as more messages after the old ones.
+  Message text is clipped at 20,000 characters, as in the live view.
+- If the other app and T3 write the same session at the same time, the other app's entries inside
+  T3's window are not copied, and a detach can race a turn the user sends right then.
+- A continued thread is "native", so switching it to another provider in the model picker hands
+  over only items from T3 runs. The orchestrator reads runless items only for `v1_import`
+  threads, so the session's imported and synced history does not go with it. To move a session
+  to another agent with its history, hand it off from the session view instead.
+- Mobile does not render this section, the handoff menu or the running warning yet. The RPCs are
+  environment-scoped, so they can be added later from the same contracts.

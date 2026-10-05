@@ -1,5 +1,5 @@
 import {
-  REMOTE_APP_SITE_LABELS,
+  REMOTE_APP_SITE_INFO,
   REMOTE_APP_THEME_STAGE_COLOR_MAX_LENGTH,
   type DesktopSurface,
   type RemoteAppMenuTheme,
@@ -713,23 +713,30 @@ export const resolveRemoteAppSurfaceMenuBackground = (input: RemoteAppTheme): st
 };
 
 const surfaceLabel = (surface: DesktopSurface): string =>
-  surface === "t3code" ? PRODUCT_NAME : REMOTE_APP_SITE_LABELS[surface];
+  surface === "t3code" ? PRODUCT_NAME : REMOTE_APP_SITE_INFO[surface].label;
 
 export const buildRemoteAppSurfaceMenuHtml = (
   input: RemoteAppTheme,
   surfaces: ReadonlyArray<DesktopSurface>,
   material: RemoteAppSurfaceMenuMaterial,
+  // Sites that finished a reply while hidden; their rows carry a static dot.
+  unreadSurfaces: ReadonlyArray<DesktopSurface> = [],
 ): string => {
   const { appearance, menu } = resolveSurfaceMenuTheme(input);
+  const unreadColor = normalizeRemoteAppTheme(input).colors.focus;
   const separated = hasSurfaceMenuSeparator(surfaces);
   const items = surfaces
     .map((surface, index) => {
       const separator =
         separated && index === 1 ? '\n      <div class="separator" role="separator"></div>' : "";
+      const unread = unreadSurfaces.includes(surface);
+      const label = surfaceLabel(surface);
       return `${separator}
-      <a role="menuitem" href="${surfaceMenuUrl(surface)}">
+      <a role="menuitem" href="${surfaceMenuUrl(surface)}"${
+        unread ? ` aria-label="${label}, finished reply"` : ""
+      }>
         <span class="icon">${REMOTE_APP_SURFACE_ICONS[surface]}</span>
-        <span class="label">${surfaceLabel(surface)}</span>
+        <span class="label">${label}</span>${unread ? '\n        <span class="unread"></span>' : ""}
       </a>`;
     })
     .join("");
@@ -789,6 +796,14 @@ export const buildRemoteAppSurfaceMenuHtml = (
       .icon svg { width: 16px; height: 16px; }
       .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .separator { height: 1px; margin: 4px 8px; background: ${menu.separator}; }
+      .unread {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        margin-inline-start: auto;
+        border-radius: 9999px;
+        background: ${unreadColor};
+      }
     </style>
   </head>
   <body>

@@ -471,6 +471,7 @@ import {
 } from "./chat/QueuedRunsControl";
 import { useLinkedThreadPullRequest } from "./ThreadStatusIndicators";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
+import { useRunningElsewhereBanner } from "../external-sessions/RunningElsewhereBanner"; // Fork add-on: external sessions.
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import {
@@ -7485,6 +7486,7 @@ export default function ChatView(props: ChatViewProps) {
     usageLimitsBanner,
     wokeThreadBannerItem,
   ]);
+  const bannerStack = useRunningElsewhereBanner(composerBannerItems, environmentId, threadId); // Fork add-on: external sessions.
 
   useEffect(() => {
     setPendingServerThreadEnvMode(null);
@@ -11204,7 +11206,7 @@ export default function ChatView(props: ChatViewProps) {
                                   />
                                 ) : null
                               }
-                              bannerItems={composerBannerItems}
+                              bannerItems={bannerStack} // Fork add-on: external sessions.
                               // With attachments or contexts aboard the pick just inserts the
                               // text, so it sends as a prompt like the typed path would.
                               onUsageLimitsCommand={

@@ -3,9 +3,9 @@ import type { DesktopSurface } from "@t3tools/contracts";
 /**
  * Inline SVG marks for the surface menu, which renders in its own small
  * document with no access to the web app's icon components. Paths mirror
- * apps/web/src/components/Icons.tsx and T3Wordmark.tsx; Gemini has no icon
- * there, so it uses the four-point sparkle. "currentColor" marks follow the
- * menu's text color.
+ * apps/web/src/components/Icons.tsx and T3Wordmark.tsx; Gemini and Perplexity
+ * have no icon there, so they mirror RemoteAppSiteIcon.tsx instead.
+ * "currentColor" marks follow the menu's text color.
  */
 export const REMOTE_APP_SURFACE_ICONS: Record<DesktopSurface, string> = {
   t3code:
@@ -17,4 +17,6 @@ export const REMOTE_APP_SURFACE_ICONS: Record<DesktopSurface, string> = {
   grok: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.26905 15.284L17.2479 9.36086C17.6391 9.07047 18.1981 9.18374 18.3845 9.63478C19.3655 12.0135 18.9272 14.8721 16.9755 16.8349C15.0238 18.7976 12.3082 19.228 9.8261 18.2477L7.1146 19.5102C11.0037 22.1834 15.7263 21.5223 18.6774 18.5525C21.0182 16.1985 21.7432 12.9897 21.0653 10.0961L21.0714 10.1023C20.0884 5.85143 21.3131 4.15233 23.8218 0.677913C23.8812 0.595532 23.9406 0.513151 24 0.428711L20.6987 3.74866V3.73836L9.267 15.2861"/><path d="M7.62249 16.7237C4.83113 14.0422 5.3124 9.89222 7.69417 7.49905C9.45541 5.72786 12.341 5.00497 14.86 6.06768L17.5653 4.81138C17.0779 4.45714 16.4533 4.07613 15.7365 3.80839C12.4966 2.46764 8.6178 3.13492 5.98413 5.78141C3.45081 8.32904 2.65415 12.2463 4.02219 15.5889C5.04412 18.0871 3.36889 19.8541 1.68137 21.6377C1.08337 22.2699 0.483318 22.9022 0 23.5716L7.62045 16.7257"/></svg>',
   gemini:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="gemini-mark" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4f8df5"/><stop offset="0.55" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#gemini-mark)" d="M12 0C12 6.627 17.373 12 24 12C17.373 12 12 17.373 12 24C12 17.373 6.627 12 0 12C6.627 12 12 6.627 12 0Z"/></svg>',
+  perplexity:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 8V1.5L12 8l7.5-6.5V8M2 8h20v8H2zM12 1.5v21M12 16l-7 6.5V16M12 16l7 6.5V16"/></svg>',
 };
