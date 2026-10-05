@@ -24,6 +24,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   unarchive: "externalSessions.unarchive",
   subscribeArchived: "externalSessions.subscribeArchived",
   handBack: "externalSessions.handBack",
+  release: "externalSessions.release",
   openInOrigin: "externalSessions.openInOrigin",
 } as const;
 
@@ -393,6 +394,24 @@ export const ExternalSessionsHandBackRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS
 });
 
 /**
+ * Give a continued thread's session back to Other Agents: the thread is
+ * archived, and continuing the session again unarchives it.
+ */
+export const ExternalSessionReleaseInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type ExternalSessionReleaseInput = typeof ExternalSessionReleaseInput.Type;
+
+export const ExternalSessionReleaseResult = Schema.Struct({});
+export type ExternalSessionReleaseResult = typeof ExternalSessionReleaseResult.Type;
+
+export const ExternalSessionsReleaseRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.release, {
+  payload: ExternalSessionReleaseInput,
+  success: ExternalSessionReleaseResult,
+  error: ExternalSessionRpcError,
+});
+
+/**
  * Whether the app a session runs in can be opened on it: Claude desktop and
  * the Codex app take a link to one session. Fork add-on.
  */
@@ -437,6 +456,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsUnarchiveRpc,
   ExternalSessionsSubscribeArchivedRpc,
   ExternalSessionsHandBackRpc,
+  ExternalSessionsReleaseRpc,
   ExternalSessionsOpenInOriginRpc,
 ] as const;
 
@@ -450,5 +470,6 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: AuthOrchestrationReadScope,
   [EXTERNAL_SESSIONS_WS_METHODS.handBack]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.release]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: AuthOrchestrationOperateScope,
 } as const;

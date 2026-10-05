@@ -544,6 +544,17 @@ export const make = Effect.gen(function* () {
           message: "This session was continued in T3 before, and that thread was deleted.",
         });
       }
+      // Moved back to Other Agents (an archive); continuing takes it up again.
+      if (existing.value.thread.archivedAt !== null) {
+        const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed));
+        yield* orchestrator
+          .dispatch({
+            type: "thread.unarchive",
+            commandId: CommandId.make(`external-session-unarchive:${id}`),
+            threadId,
+          })
+          .pipe(Effect.mapError(failed));
+      }
       return {
         threadId,
         projectId: existing.value.thread.projectId,

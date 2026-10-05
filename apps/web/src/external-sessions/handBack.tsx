@@ -1,9 +1,11 @@
 /**
  * Threads continued from another app: the sidebar row's marker, the hover
- * card's "Continued from" line, and "Hand back to <agent>" in the thread
- * menus, shown while the thread is set to a different agent. Handing back
- * sends one short message on the original agent and model, so the other
- * app's session gets what the other agents did. Fork add-on; see
+ * card's "Continued from" line, and two ways back in the thread menus. "Hand
+ * back to <agent>", shown while the thread is set to a different agent, sends
+ * one short message on the original agent and model, so the other app's
+ * session gets what the other agents did. "Move back to Other Agents" archives
+ * the thread, so the session is listed there again; continuing it unarchives
+ * the thread. Fork add-on; see
  * docs/internals/external-sessions.md.
  *
  * @module external-sessions/handBack
@@ -27,7 +29,7 @@ import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { getProviderInstanceEntry } from "../providerInstances";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentServerConfigsAtom } from "../state/server";
-import { externalSessionHandBack } from "./atoms";
+import { externalSessionHandBack, externalSessionRelease } from "./atoms";
 
 interface ContinuedThread {
   readonly id: ThreadId;
@@ -35,10 +37,10 @@ interface ContinuedThread {
   readonly modelSelection: ModelSelection;
 }
 
-export type HandBackMenuId = "hand-back";
+export type HandBackMenuId = "hand-back" | "move-back";
 
 export const isHandBackMenuId = (value: string | null): value is HandBackMenuId =>
-  value === "hand-back";
+  value === "hand-back" || value === "move-back";
 
 /** The origin agent's name as this environment shows it, e.g. "Claude Code". */
 const originName = (environmentId: EnvironmentId, threadId: ThreadId): string | null => {
@@ -49,38 +51,48 @@ const originName = (environmentId: EnvironmentId, threadId: ThreadId): string | 
   return getProviderInstanceEntry(providers, origin)?.displayName ?? origin;
 };
 
-/** Adds "Hand back to <agent>" first while the thread is set to another agent. */
+/**
+ * Puts a continued thread's ways back first: "Hand back to <agent>" while the
+ * thread is set to another agent, and always "Move back to Other Agents".
+ */
 export const withHandBackMenuItem = <T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
   thread: ContinuedThread,
 ): ReadonlyArray<ContextMenuItem<T | HandBackMenuId>> => {
   const origin = continuedThreadOriginInstanceId(thread.id);
-  if (origin === null || thread.modelSelection.instanceId === origin) return items;
-  const name = originName(thread.environmentId, thread.id) ?? origin;
-  const handBack: ContextMenuItem<HandBackMenuId> = {
-    id: "hand-back",
-    label: `Hand back to ${name}`,
-    icon: "undo-2",
-  };
+  if (origin === null) return items;
+  const added: Array<ContextMenuItem<HandBackMenuId>> = [];
+  if (thread.modelSelection.instanceId !== origin) {
+    const name = originName(thread.environmentId, thread.id) ?? origin;
+    added.push({ id: "hand-back", label: `Hand back to ${name}`, icon: "undo-2" });
+  }
+  added.push({ id: "move-back", label: "Move back to Other Agents", icon: "archive" });
   const [first, ...rest] = items;
-  return first === undefined
-    ? [handBack]
-    : [handBack, { ...first, separatorBefore: true }, ...rest];
+  return first === undefined ? added : [...added, { ...first, separatorBefore: true }, ...rest];
 };
 
-export const handBackThread = async (threadRef: ScopedThreadRef): Promise<void> => {
-  const result = await runAtomCommand(
-    appAtomRegistry,
-    externalSessionHandBack,
-    { environmentId: threadRef.environmentId, input: { threadId: threadRef.threadId } },
-    { reportFailure: false },
-  );
+export const handBackThread = async (
+  threadRef: ScopedThreadRef,
+  action: HandBackMenuId,
+): Promise<void> => {
+  const request = {
+    environmentId: threadRef.environmentId,
+    input: { threadId: threadRef.threadId },
+  };
+  const result =
+    action === "hand-back"
+      ? await runAtomCommand(appAtomRegistry, externalSessionHandBack, request, {
+          reportFailure: false,
+        })
+      : await runAtomCommand(appAtomRegistry, externalSessionRelease, request, {
+          reportFailure: false,
+        });
   if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
   const error = squashAtomCommandFailure(result);
   toastManager.add(
     stackedThreadToast({
       type: "error",
-      title: "Failed to hand back",
+      title: action === "hand-back" ? "Failed to hand back" : "Failed to move back",
       description: error instanceof Error ? error.message : "An error occurred.",
     }),
   );

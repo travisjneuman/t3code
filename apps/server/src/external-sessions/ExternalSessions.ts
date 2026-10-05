@@ -23,6 +23,7 @@ import {
   type ExternalSessionArchivedSession,
   type ExternalSessionHandBackResult,
   type ExternalSessionOpenInOriginResult,
+  type ExternalSessionReleaseResult,
   ExternalSessionBusyError,
   type ExternalSessionContinueInput,
   type ExternalSessionContinueResult,
@@ -140,6 +141,13 @@ export class ExternalSessions extends Context.Service<
     readonly handBack: (
       threadId: ThreadId,
     ) => Effect.Effect<ExternalSessionHandBackResult, ExternalSessionError>;
+    /**
+     * Archive a continued thread so its session is listed again; continuing
+     * the session unarchives it (handBack.ts).
+     */
+    readonly release: (
+      threadId: ThreadId,
+    ) => Effect.Effect<ExternalSessionReleaseResult, ExternalSessionError>;
     /** Opens the app a session runs in on that session (openInOrigin.ts). */
     readonly openInOrigin: (
       key: string,
@@ -199,7 +207,7 @@ const make = Effect.gen(function* () {
   const archive = yield* ExternalSessionArchive.make;
   const codexNativeArchive = yield* CodexNativeArchive.make;
   const claudeDesktopArchive = yield* ClaudeDesktopArchive.make;
-  const { handBack } = yield* HandBack.make;
+  const { handBack, release: releaseThread } = yield* HandBack.make;
   const origins = yield* OpenInOrigin.make(claudeDesktopArchive);
   const sources: ReadonlyArray<ExternalSessionSource> = [
     makeClaudeSource(),
@@ -225,22 +233,35 @@ const make = Effect.gen(function* () {
   // sessions, including ones whose thread later fell back to a fresh native
   // session. Threads T3 started itself, and continued Grok and Pi sessions,
   // have none; their provider threads name the native session (an id, or Pi's
-  // file path). Kept for the server's lifetime, so search shares it.
+  // file path). Kept for the server's lifetime, so search shares it. An
+  // archived continued thread owns nothing, so its session is listed again
+  // ("Move back to Other Agents", handBack.ts); continuing it unarchives it.
   let owned: ReadonlySet<string> = new Set();
   let ownedAt = 0;
-  const readRuntimeOwned = providerSessions.list().pipe(
-    Effect.map((rows) => {
-      const ids = new Set<string>();
-      for (const row of rows) collectStrings(row.resumeCursor, ids);
-      return ids;
-    }),
-    Effect.orElseSucceed(() => new Set<string>()),
+  const readReleasedThreadIds = sql<{ readonly thread_id: string }>`
+    SELECT thread_id FROM orchestration_v2_projection_threads
+    WHERE thread_id LIKE 'import:%' AND archived_at IS NOT NULL
+  `.pipe(
+    Effect.map((rows): ReadonlySet<string> => new Set(rows.map((row) => row.thread_id))),
+    Effect.orElseSucceed((): ReadonlySet<string> => new Set()),
   );
+  const readRuntimeOwned = (released: ReadonlySet<string>) =>
+    providerSessions.list().pipe(
+      Effect.map((rows) => {
+        const ids = new Set<string>();
+        for (const row of rows) {
+          if (!released.has(row.threadId)) collectStrings(row.resumeCursor, ids);
+        }
+        return ids;
+      }),
+      Effect.orElseSucceed(() => new Set<string>()),
+    );
   const readProviderThreadOwned = sql<{ readonly native_id: string | null }>`
     SELECT json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id
     FROM orchestration_v2_projection_provider_threads p
     LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
     WHERE json_valid(p.payload_json) AND t.deleted_at IS NULL
+      AND NOT (p.thread_id LIKE 'import:%' AND t.archived_at IS NOT NULL)
   `.pipe(
     Effect.map((rows) => {
       const ids = new Set<string>();
@@ -254,9 +275,10 @@ const make = Effect.gen(function* () {
     }),
     Effect.orElseSucceed(() => new Set<string>()),
   );
-  const refreshOwnedIds = Effect.all([readRuntimeOwned, readProviderThreadOwned], {
-    concurrency: 2,
-  }).pipe(
+  const refreshOwnedIds = readReleasedThreadIds.pipe(
+    Effect.flatMap((released) =>
+      Effect.all([readRuntimeOwned(released), readProviderThreadOwned], { concurrency: 2 }),
+    ),
     Effect.map(([fromRuntime, fromProviderThreads]): ReadonlySet<string> => {
       owned = new Set([...fromRuntime, ...fromProviderThreads]);
       ownedAt = Date.now();
@@ -657,6 +679,17 @@ const make = Effect.gen(function* () {
     ),
   );
 
+  // The session is listed again right away, not on the next ownership re-read.
+  const release: ExternalSessions["Service"]["release"] = (threadId) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const result = yield* releaseThread(threadId);
+        const registry = yield* RcRef.get(registryRef);
+        yield* registry.refreshOwned;
+        return result;
+      }),
+    );
+
   const openInOrigin: ExternalSessions["Service"]["openInOrigin"] = (key) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -684,6 +717,7 @@ const make = Effect.gen(function* () {
     unarchiveSession,
     subscribeArchived,
     handBack,
+    release,
     openInOrigin,
   });
 });

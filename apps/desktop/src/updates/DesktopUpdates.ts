@@ -52,6 +52,9 @@ import {
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
+// Fork add-on: local source builds keep the fork merged with upstream main.
+const SOURCE_SYNC_STARTUP_DELAY = "1 minute";
+const SOURCE_SYNC_INTERVAL = "15 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
@@ -842,6 +845,35 @@ export const make = Effect.gen(function* () {
     );
   }).pipe(Effect.withSpan("desktop.updates.startPollers"));
 
+  /**
+   * Fork add-on: merges upstream main into the fork and pushes it, then
+   * refreshes the update state so a newer nightly shows as available. Building
+   * and installing stay on Check for updates. A dirty checkout or a conflict
+   * the rename pass cannot settle skips that round (LocalSourceUpdates).
+   */
+  const startSourceSyncPoller: Effect.Effect<void, never, Scope.Scope> = Effect.gen(function* () {
+    const syncOnce = localSourceUpdates.autoSyncSource.pipe(
+      Effect.flatMap((result) =>
+        logUpdaterInfo("background source sync finished", { merged: result.merged }).pipe(
+          Effect.andThen(checkForUpdates("source-sync")),
+        ),
+      ),
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : logUpdaterWarning("background source sync skipped", {
+              cause: Cause.pretty(cause),
+            }),
+      ),
+    );
+    yield* Effect.sleep(SOURCE_SYNC_STARTUP_DELAY).pipe(
+      Effect.andThen(
+        syncOnce.pipe(Effect.andThen(Effect.sleep(SOURCE_SYNC_INTERVAL)), Effect.forever),
+      ),
+      Effect.forkScoped,
+    );
+  }).pipe(Effect.withSpan("desktop.updates.startSourceSyncPoller"));
+
   const handleUpdateAvailable = Effect.fn("desktop.updates.handleUpdateAvailable")(function* (
     raw: unknown,
   ) {
@@ -1039,6 +1071,7 @@ export const make = Effect.gen(function* () {
         yield* logUpdaterInfo("using local source update mode", {
           repositoryPath: environment.sourceRepositoryPath ?? null,
         });
+        yield* startSourceSyncPoller; // Fork add-on: background upstream sync.
         return;
       }
 

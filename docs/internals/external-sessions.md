@@ -191,5 +191,10 @@ in T3, which binds an ordinary thread to that same session.
   selection from the thread's `thread.created` event, not the current one, and the origin
   instance from the `import:<instance>:<session>` thread id, so upstream onboarding imports get it
   too.
+- "Move back to Other Agents" (`release` in `handBack.ts`) is the reverse of Continue: it archives
+  the thread, and ownership skips archived `import:` threads in both the runtime rows and the
+  provider-thread query, so the session is listed again. Thread ids are deterministic, so
+  Continue on that session finds the archived thread and unarchives it instead of creating one.
+  Deleting is not the way out: a deleted `import:` thread blocks Continue for that session.
 - Mobile does not render this section or the running warning yet. The RPCs are
   environment-scoped, so they can be added later from the same contracts.
