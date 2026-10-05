@@ -286,6 +286,8 @@ import {
   runForkThreadMenuItem,
   withForkThreadMenuItems,
 } from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back.
+import { THREAD_CARD_LAYOUT } from "../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
+import "../sidebar-compact/threadCardLayout.css"; // Fork add-on: compact sidebar cards.
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -878,7 +880,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     [draftId, onDiscard],
   );
   return (
-    <li className="list-none py-0.5">
+    <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5">
       <div
         role="button"
         tabIndex={0}
@@ -894,16 +896,25 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         onKeyDown={handleKeyDown}
       >
         <span className="sr-only">{preview}</span>
-        <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
-          <div className="flex h-5 min-w-0 items-center gap-1.5">
+        <div
+          data-fork-card-part="box"
+          className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
+        >
+          <div data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
             <SquarePenIcon aria-hidden className={draftPenClassName} />
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
+            <span
+              data-fork-card-part="project"
+              className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label"
+            >
               {props.projectDisplayName}
             </span>
-            <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
+            <span
+              data-fork-card-part="status"
+              className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end"
+            >
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -921,7 +932,11 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               </Tooltip>
             </span>
           </div>
-          <div aria-hidden className="mt-0.5 truncate text-sm font-medium text-foreground/90">
+          <div
+            aria-hidden
+            data-fork-card-part="title"
+            className="mt-0.5 truncate text-sm font-medium text-foreground/90"
+          >
             {preview}
           </div>
         </div>
@@ -1919,6 +1934,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   return (
     <li
       data-thread-item={threadKey}
+      data-fork-thread-card={THREAD_CARD_LAYOUT}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
@@ -1947,14 +1963,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         >
           {accessibleTitle}
-          <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
-            <div className="flex h-5 min-w-0 items-center gap-1.5">
+          <div
+            data-fork-card-part="box"
+            className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
+          >
+            <div data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
               {props.projectDisplayName ? (
                 <span
+                  data-fork-card-part="project"
                   className={cn(
                     "min-w-0 flex-1 truncate text-secondary-label text-xs",
                     shouldRecede ? "font-normal" : "font-medium",
@@ -1974,6 +1994,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 dragDestination
               ) : (
                 <span
+                  data-fork-card-part="status"
                   className={cn(
                     "group/sidebar-status-slot relative ml-auto flex h-5 min-w-8 shrink-0 items-stretch justify-end text-xs",
                     props.sweepAction !== null && "hidden",
@@ -2110,7 +2131,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   release click still fires and is consumed. */}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
-            <div className="mt-1 flex min-w-0">
+            <div data-fork-card-part="title" className="mt-1 flex min-w-0">
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
@@ -2118,7 +2139,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 </span>
               ) : null}
             </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
+            <div
+              data-fork-card-part="meta"
+              className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs"
+            >
               {/* Always the branch. The plan step used to take this slot while
                   working, but it truncated to a half-sentence and dropped the
                   branch, so the row lost its most stable identifier. */}
