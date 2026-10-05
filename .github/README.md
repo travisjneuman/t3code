@@ -48,7 +48,7 @@ Open ChatGPT, Claude, Grok, Gemini and Perplexity from the titlebar switcher, ri
 
 Claude Code, Codex, Grok, Pi and Antigravity sessions that you started outside T3 are listed under **Other Agents** in the sidebar. That covers sessions from a terminal, a desktop app or an IDE.
 
-- Sessions are grouped into the past 3 days, the past 7 days and older, and the header counts the ones running now.
+- Sessions are grouped into the past 3 days, the past 7 days and older, and the header counts the ones active now.
 - Follow any session live, or find one through the command palette search.
 - **Continue in T3** turns a session into a normal thread with its whole history. The original session stays usable in its own app.
 - **Hand back to** gives the session back to the agent it came from. **Move back to Other Agents** undoes the continue.

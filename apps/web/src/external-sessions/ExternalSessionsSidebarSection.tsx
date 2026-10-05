@@ -401,11 +401,28 @@ export function ExternalSessionsSidebarSection() {
 
   return (
     <section aria-label="Other Agents" className="mt-2">
-      <div className="mx-0.5 h-8" onContextMenu={(event) => void handleHeaderContextMenu(event)}>
-        <CollapsibleSectionHeader expanded={expanded} onClick={toggleExpanded}>
-          {runningCount > 0
-            ? `Other Agents (${visible.length} · ${runningCount} running)`
-            : `Other Agents (${visible.length})`}
+      <div
+        className="@container/other-agents mx-0.5 h-8"
+        onContextMenu={(event) => void handleHeaderContextMenu(event)}
+      >
+        <CollapsibleSectionHeader
+          expanded={expanded}
+          onClick={toggleExpanded}
+          accessory={
+            // At the narrowest sidebar the word drops out, so the chevron stays in view.
+            runningCount > 0 ? (
+              <span
+                title={`${runningCount} active`}
+                className="inline-flex shrink-0 items-center gap-1 text-info tabular-nums"
+              >
+                <CircleDashedIcon aria-hidden className="size-3 shrink-0" />
+                {runningCount}
+                <span className="sr-only @min-[14.5rem]/other-agents:not-sr-only">{" active"}</span>
+              </span>
+            ) : null
+          }
+        >
+          {`Other Agents (${visible.length})`}
         </CollapsibleSectionHeader>
       </div>
       {expanded ? (

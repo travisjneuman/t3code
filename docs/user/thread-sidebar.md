@@ -280,7 +280,7 @@ used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop 
 Open one to follow it live. Older sessions are still found by search. Sessions are grouped by
 when they were last active: **Past 3 days**, **Past 7 days**, and **Older**, which starts
 collapsed. Click a group's header to show or hide it. The header shows how many sessions are
-running right now. Runs that the sidebar's sync button starts to finish an upstream merge are
+active right now. Runs that the sidebar's sync button starts to finish an upstream merge are
 titled **Upstream sync** with their date.
 
 To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then
