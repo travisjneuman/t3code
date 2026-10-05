@@ -14,6 +14,7 @@ import { Switch } from "~/components/ui/switch";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { primaryServerProvidersAtom } from "~/state/server";
 
+import { RemoteAppChatImportRow } from "./RemoteAppChatImportRow";
 import { RemoteAppSiteIcon } from "./RemoteAppSiteIcon";
 import { resolveAvailableRemoteAppSites, resolveEnabledRemoteAppSites } from "./remoteAppState";
 import {
@@ -66,9 +67,8 @@ export function RemoteAppSitesSettings({
   const { backgroundDisabledSites, setSiteBackgroundDisabled } =
     useBackgroundDisabledRemoteAppSites();
   const { idleUnloadMinutes, setIdleUnloadMinutes } = useRemoteAppIdleUnloadMinutes();
-  if (window.desktopBridge?.remoteApps === undefined || environmentId !== primaryEnvironmentId) {
-    return null;
-  }
+  const bridge = window.desktopBridge?.remoteApps;
+  if (bridge === undefined || environmentId !== primaryEnvironmentId) return null;
   const enabledSites = resolveEnabledRemoteAppSites(providers);
   const shownSites = resolveAvailableRemoteAppSites(providers, hiddenSites, enabledStandaloneSites);
 
@@ -152,6 +152,7 @@ export function RemoteAppSitesSettings({
           </Select>
         }
       />
+      <RemoteAppChatImportRow bridge={bridge} />
     </SettingsSection>
   );
 }

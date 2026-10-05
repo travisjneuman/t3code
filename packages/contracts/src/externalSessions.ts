@@ -13,20 +13,24 @@ import {
   EnvironmentAuthorizationError,
 } from "./auth.ts";
 import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { ProviderDriverKind } from "./providerInstance.ts";
 
 export const EXTERNAL_SESSIONS_WS_METHODS = {
   subscribeList: "externalSessions.subscribeList",
   subscribeSession: "externalSessions.subscribeSession",
   continue: "externalSessions.continue",
   subscribeRunningElsewhere: "externalSessions.subscribeRunningElsewhere",
+  archive: "externalSessions.archive",
+  unarchive: "externalSessions.unarchive",
+  subscribeArchived: "externalSessions.subscribeArchived",
 } as const;
 
 /** The streaming methods, for the client's subscription tag union. */
 export type ExternalSessionsSubscriptionMethod =
   | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeList
   | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeSession
-  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere;
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived;
 
 /**
  * running: written to in the last minute (or the provider reports it busy).
@@ -144,21 +148,10 @@ const ExternalSessionRpcError = Schema.Union([ExternalSessionError, EnvironmentA
 
 export const ExternalSessionContinueInput = Schema.Struct({
   key: TrimmedNonEmptyString,
-  /**
-   * Hand the history to this provider instance and model instead, for an agent
-   * other than the session's. That makes a new T3 thread every time, carrying
-   * the conversation as imported context; the original session stays unbound.
-   */
-  handoffTo: Schema.optional(
-    Schema.Struct({ instanceId: ProviderInstanceId, model: TrimmedNonEmptyString }),
-  ),
 });
 export type ExternalSessionContinueInput = typeof ExternalSessionContinueInput.Type;
 
-/**
- * Continuing in place returns the T3 thread that owns the session, the same
- * one each time. A handoff returns the new thread it made.
- */
+/** The T3 thread that owns the session, the same one each time. */
 export const ExternalSessionContinueResult = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
@@ -211,19 +204,6 @@ export function externalSessionUnsupportedReason(
   summary: Pick<ExternalSessionSummary, "driver" | "cwd">,
 ): ExternalSessionUnsupportedReason | null {
   if (SEPARATE_STORE_DRIVERS.has(summary.driver)) return "separate-store";
-  if (!CONTINUABLE_DRIVERS.has(summary.driver)) return "provider";
-  if (summary.cwd === null) return "no-folder";
-  return null;
-}
-
-/**
- * Whether a summary's history can be handed to a different agent. Unlike
- * continuing in place, this only reads the transcript, so the agent's own
- * runtime and store layout do not matter. The server checks again.
- */
-export function externalSessionHandoffUnsupportedReason(
-  summary: Pick<ExternalSessionSummary, "driver" | "cwd">,
-): ExternalSessionUnsupportedReason | null {
   if (!CONTINUABLE_DRIVERS.has(summary.driver)) return "provider";
   if (summary.cwd === null) return "no-folder";
   return null;
@@ -311,12 +291,98 @@ export const ExternalSessionsSubscribeRunningElsewhereRpc = Rpc.make(
   },
 );
 
+/**
+ * A session archived in T3, or in Claude desktop (see `archivedIn`). Archive
+ * is T3's own state, so every client of the environment agrees; an archived
+ * session leaves the list until unarchived.
+ * The title and folder are kept from archive time, since an agent's own
+ * archive (Codex) moves the session out of the store the list reads.
+ */
+export const ExternalSessionArchivedSession = Schema.Struct({
+  key: TrimmedNonEmptyString,
+  driver: ProviderDriverKind,
+  title: Schema.String,
+  cwd: Schema.NullOr(Schema.String),
+  archivedAt: Schema.String,
+  /** The agent archived it in its own store too, so unarchive restores it there. */
+  nativeArchived: Schema.Boolean,
+  /**
+   * Set when the agent's own app archived the session and T3 only mirrors
+   * that: "claudeDesktop" is the Claude app. T3 cannot unarchive these; they
+   * come back when unarchived there. Absent for T3's own archive.
+   */
+  archivedIn: Schema.optional(Schema.Literals(["claudeDesktop"])),
+});
+export type ExternalSessionArchivedSession = typeof ExternalSessionArchivedSession.Type;
+
+export const ExternalSessionArchiveInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+  /**
+   * Archive in the agent's own store as well, where it has one (Codex).
+   * Defaults to true; false archives in T3 only.
+   */
+  native: Schema.optional(Schema.Boolean),
+});
+export type ExternalSessionArchiveInput = typeof ExternalSessionArchiveInput.Type;
+
+export const ExternalSessionUnarchiveInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+});
+export type ExternalSessionUnarchiveInput = typeof ExternalSessionUnarchiveInput.Type;
+
+/**
+ * `warning` says why the agent could not archive or unarchive the session in
+ * its own store. The change in T3 happened regardless.
+ */
+export const ExternalSessionArchiveResult = Schema.Struct({
+  warning: Schema.NullOr(Schema.String),
+});
+export type ExternalSessionArchiveResult = typeof ExternalSessionArchiveResult.Type;
+
+export const ExternalSessionArchivedInput = Schema.Struct({});
+export type ExternalSessionArchivedInput = typeof ExternalSessionArchivedInput.Type;
+
+/** Newest first; the whole set on subscribe and after every change. */
+export const ExternalSessionArchivedResult = Schema.Struct({
+  sessions: Schema.Array(ExternalSessionArchivedSession),
+});
+export type ExternalSessionArchivedResult = typeof ExternalSessionArchivedResult.Type;
+
+export const ExternalSessionsArchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.archive, {
+  payload: ExternalSessionArchiveInput,
+  success: ExternalSessionArchiveResult,
+  error: Schema.Union([
+    ExternalSessionNotFoundError,
+    ExternalSessionError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const ExternalSessionsUnarchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.unarchive, {
+  payload: ExternalSessionUnarchiveInput,
+  success: ExternalSessionArchiveResult,
+  error: ExternalSessionRpcError,
+});
+
+export const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
+  EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
+  {
+    payload: ExternalSessionArchivedInput,
+    success: ExternalSessionArchivedResult,
+    error: ExternalSessionRpcError,
+    stream: true,
+  },
+);
+
 /** Every external-session RPC, spread into the WebSocket RPC group. */
 export const ExternalSessionsRpcs = [
   ExternalSessionsSubscribeListRpc,
   ExternalSessionsSubscribeSessionRpc,
   ExternalSessionsContinueRpc,
   ExternalSessionsSubscribeRunningElsewhereRpc,
+  ExternalSessionsArchiveRpc,
+  ExternalSessionsUnarchiveRpc,
+  ExternalSessionsSubscribeArchivedRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -325,4 +391,7 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeSession]: AuthOrchestrationReadScope,
   [EXTERNAL_SESSIONS_WS_METHODS.continue]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.archive]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: AuthOrchestrationReadScope,
 } as const;

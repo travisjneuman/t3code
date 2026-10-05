@@ -7,14 +7,7 @@
  * same way from this add-on's own transcript parsers. Unlike the importer,
  * the thread starts active rather than settled, and its history is "native"
  * so the first turn resumes instead of also replaying it as a context
- * handoff.
- *
- * Handing a session to a different agent is the other way in: a new thread
- * per handoff, on the chosen instance, with no provider thread and history
- * marked "v1_import", so the first turn carries the history as imported
- * context (Orchestrator prepareLegacyImport). Nothing binds the original
- * session, and the sync never follows these threads. Fork add-on; see
- * docs/internals/external-sessions.md.
+ * handoff. Fork add-on; see docs/internals/external-sessions.md.
  *
  * @module external-sessions/continueExternalSession
  */
@@ -39,6 +32,7 @@ import {
   ProviderInstanceId,
   type ProviderInstanceConfig,
   resolveProviderInstanceEnabled,
+  type ServerSettings as ServerSettingsValues,
   ThreadId,
   TurnItemId,
   type OrchestrationV2AppThread,
@@ -67,16 +61,12 @@ import {
 } from "../project/AgentSessionScanner.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
-import { deriveProviderInstanceConfigMap } from "../provider/Layers/ProviderInstanceRegistryHydration.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { asString, parseJsonObject, type TranscriptParser } from "./ExternalSessionSource.ts";
 
 // Same prefix and id shapes as AgentSessionImporter, so a session continued
 // here and one imported during onboarding are the same thread.
 const IMPORT_EVENT_PREFIX = "agent-session-import:v2";
-const HANDOFF_EVENT_PREFIX = "external-session-handoff:v1";
-// Never `import:`, so a handoff cannot collide with the thread continued in place.
-const HANDOFF_THREAD_PREFIX = "external-handoff";
 const CLAUDE_SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // The parser holds the whole transcript in memory; past this it is not worth it.
@@ -96,6 +86,8 @@ export interface ContinueTarget {
   readonly title: string;
   readonly cwd: string;
   readonly model: string | null;
+  /** The session's latest reasoning effort, as its own store records it. */
+  readonly effort: string | null;
   readonly transcriptPath: string;
   readonly updatedAtMs: number;
   /** The listing's own parser; history for drivers the importer does not read. */
@@ -129,11 +121,17 @@ export type ContinueOutcome = ExternalSessionContinueResult & {
   readonly syncStart: ContinueSyncStart | null;
 };
 
-/** The agent a handoff goes to: an enabled instance of a different driver. */
-export interface HandoffTo {
-  readonly instanceId: ProviderInstanceId;
-  readonly model: string;
-}
+// The option each adapter reads the effort from. Grok and Pi keep the session's own.
+const EFFORT_OPTION_ID: Partial<Record<ContinueDriver, string>> = {
+  claudeAgent: "effort",
+  codex: "reasoningEffort",
+};
+
+/** The session's reasoning effort as a model option, so the thread starts where it left off. */
+const effortOptions = (target: ContinueTarget) => {
+  const id = EFFORT_OPTION_ID[target.driver];
+  return id === undefined || target.effort === null ? undefined : [{ id, value: target.effort }];
+};
 
 export const isContinueDriver = (driver: string): driver is ContinueDriver =>
   driver === "claudeAgent" || driver === "codex" || driver === "grok" || driver === "pi";
@@ -142,7 +140,6 @@ const failed = (cause: unknown) =>
   new ExternalSessionError({ message: "Could not continue this session in T3.", cause });
 
 function messageEvents(input: {
-  readonly prefix: string;
   readonly threadId: ThreadId;
   readonly index: number;
   readonly message: AgentSessionThreadMessage;
@@ -151,8 +148,8 @@ function messageEvents(input: {
   return importedMessageEvents({
     threadId: input.threadId,
     messageId: MessageId.make(`${input.threadId}:${suffix}`),
-    turnItemId: TurnItemId.make(`${input.prefix}:turn-item:${input.threadId}:${suffix}`),
-    eventId: (kind) => EventId.make(`${input.prefix}:${kind}:${input.threadId}:${suffix}`),
+    turnItemId: TurnItemId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${input.threadId}:${suffix}`),
+    eventId: (kind) => EventId.make(`${IMPORT_EVENT_PREFIX}:${kind}:${input.threadId}:${suffix}`),
     ordinal: input.index + 1,
     message: input.message,
   });
@@ -245,12 +242,11 @@ export function importedMessageEvents(input: {
 }
 
 const threadCreated = (
-  prefix: string,
   threadId: ThreadId,
   providerInstanceId: ProviderInstanceId,
   appThread: OrchestrationV2AppThread,
 ): OrchestrationV2DomainEvent => ({
-  id: EventId.make(`${prefix}:thread:${threadId}:created`),
+  id: EventId.make(`${IMPORT_EVENT_PREFIX}:thread:${threadId}:created`),
   type: "thread.created",
   threadId,
   providerInstanceId,
@@ -330,6 +326,56 @@ function claudeLeafUuid(contents: string): string | null {
   return null;
 }
 
+/**
+ * Enabled instances of a driver, the built-in one first: the order
+ * AgentSessionScanner uses to choose the owner of a shared home.
+ */
+export function enabledInstancesOf(
+  settings: ServerSettingsValues,
+  driver: ContinueDriver,
+): Array<{ readonly instanceId: ProviderInstanceId; readonly config: ProviderInstanceConfig }> {
+  const instances = Object.entries(settings.providerInstances)
+    .filter(
+      ([, instance]) => instance.driver === driver && resolveProviderInstanceEnabled(instance),
+    )
+    .map(([instanceId, config]) => ({ instanceId: ProviderInstanceId.make(instanceId), config }));
+  if (!Object.hasOwn(settings.providerInstances, driver)) {
+    const legacy = {
+      instanceId: ProviderInstanceId.make(driver),
+      config: { driver: ProviderDriverKind.make(driver), config: settings.providers[driver] },
+    };
+    if (resolveProviderInstanceEnabled(legacy.config)) instances.push(legacy);
+  }
+  return instances.sort(
+    (left, right) => (left.instanceId === driver ? 0 : 1) - (right.instanceId === driver ? 0 : 1),
+  );
+}
+
+/**
+ * A Codex instance's settings and home layout. With no home configured, a
+ * CODEX_HOME in the instance's environment (else the host's) is its home,
+ * since the spawned CLI sees that. Null when the settings do not decode.
+ */
+export const codexInstanceHome = Effect.fn("ExternalSessions.codexInstanceHome")(function* (
+  instance: ProviderInstanceConfig,
+  hostEnvironment: NodeJS.ProcessEnv,
+) {
+  const config = decodeCodexSettings(instance.config ?? {});
+  if (Option.isNone(config)) return null;
+  const environmentHome = (
+    instance.environment?.findLast((variable) => variable.name === "CODEX_HOME")?.value ??
+    hostEnvironment.CODEX_HOME ??
+    ""
+  ).trim();
+  const settings =
+    config.value.homePath.trim().length === 0 &&
+    config.value.shadowHomePath.trim().length === 0 &&
+    environmentHome.length > 0
+      ? { ...config.value, homePath: environmentHome }
+      : config.value;
+  return { settings, layout: yield* resolveCodexHomeLayout(settings) };
+});
+
 const isUnder = (path: Path.Path, child: string, root: string) => {
   const relative = path.relative(root, child);
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
@@ -362,24 +408,7 @@ export const make = Effect.gen(function* () {
   ) {
     const source = target.driver;
     const settings = yield* serverSettings.getSettings.pipe(Effect.mapError(failed));
-    const instances: Array<{
-      readonly instanceId: ProviderInstanceId;
-      readonly config: ProviderInstanceConfig;
-    }> = Object.entries(settings.providerInstances)
-      .filter(
-        ([, instance]) => instance.driver === source && resolveProviderInstanceEnabled(instance),
-      )
-      .map(([instanceId, config]) => ({ instanceId: ProviderInstanceId.make(instanceId), config }));
-    if (!Object.hasOwn(settings.providerInstances, source)) {
-      const legacy = {
-        instanceId: ProviderInstanceId.make(source),
-        config: { driver: ProviderDriverKind.make(source), config: settings.providers[source] },
-      };
-      if (resolveProviderInstanceEnabled(legacy.config)) instances.push(legacy);
-    }
-    instances.sort(
-      (left, right) => (left.instanceId === source ? 0 : 1) - (right.instanceId === source ? 0 : 1),
-    );
+    const instances = enabledInstancesOf(settings, source);
     if (source === "pi") {
       const first = instances[0];
       if (first !== undefined) return first.instanceId;
@@ -411,18 +440,11 @@ export const make = Effect.gen(function* () {
               ? path.resolve(expandHomePath(fromEnvironment))
               : path.join(NodeOS.homedir(), ".claude");
       } else if (source === "codex") {
-        const config = decodeCodexSettings(instance.config ?? {});
-        if (Option.isNone(config)) continue;
-        const codexSettings =
-          config.value.homePath.trim().length === 0 &&
-          config.value.shadowHomePath.trim().length === 0 &&
-          fromEnvironment.length > 0
-            ? { ...config.value, homePath: environmentHome ?? "" }
-            : config.value;
-        const layout = yield* resolveCodexHomeLayout(codexSettings).pipe(
+        const codex = yield* codexInstanceHome(instance, hostEnvironment).pipe(
           Effect.provideService(Path.Path, path),
         );
-        homePath = layout.sharedHomePath;
+        if (codex === null) continue;
+        homePath = codex.layout.sharedHomePath;
       } else {
         // Grok has no home setting; GROK_HOME or `~/.grok`, as UsageService reads it.
         homePath =
@@ -559,7 +581,11 @@ export const make = Effect.gen(function* () {
       projectId,
       title,
       providerInstanceId,
-      modelSelection: { instanceId: providerInstanceId, model },
+      modelSelection: {
+        instanceId: providerInstanceId,
+        model,
+        ...(effortOptions(target) === undefined ? {} : { options: effortOptions(target) }),
+      },
       runtimeMode: DEFAULT_RUNTIME_MODE,
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       branch: null,
@@ -571,7 +597,8 @@ export const make = Effect.gen(function* () {
       // history. "v1_import" would also hand it over as context on the first
       // turn (Orchestrator prepareLegacyImport), duplicating it. If the
       // resume fails, the fresh-session fallback still carries these runless
-      // items in its summary handoff.
+      // items in its summary handoff, and so does a switch to another
+      // provider (importedHistory.ts).
       historyOrigin: "native",
       lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
       forkedFrom: null,
@@ -644,9 +671,9 @@ export const make = Effect.gen(function* () {
     yield* eventSink
       .write({
         events: [
-          threadCreated(IMPORT_EVENT_PREFIX, threadId, providerInstanceId, appThread),
+          threadCreated(threadId, providerInstanceId, appThread),
           ...history.messages.flatMap((message, index) =>
-            messageEvents({ prefix: IMPORT_EVENT_PREFIX, threadId, index, message }),
+            messageEvents({ threadId, index, message }),
           ),
           providerThreadUpdated(threadId, driver, providerInstanceId, providerThread),
         ],
@@ -688,79 +715,5 @@ export const make = Effect.gen(function* () {
     return { threadId, projectId, syncStart } satisfies ContinueOutcome;
   });
 
-  /**
-   * A new thread on another agent that starts from this session's history.
-   * Runs whether or not the session is still running, since it only reads.
-   */
-  const handoffSession = Effect.fn("ExternalSessions.handoffSession")(function* (
-    target: ContinueTarget,
-    to: HandoffTo,
-  ) {
-    const settings = yield* serverSettings.getSettings.pipe(Effect.mapError(failed));
-    const instances = deriveProviderInstanceConfigMap(settings);
-    const instance: ProviderInstanceConfig | undefined = Object.hasOwn(instances, to.instanceId)
-      ? instances[to.instanceId]
-      : undefined;
-    if (instance === undefined || !resolveProviderInstanceEnabled(instance)) {
-      return yield* new ExternalSessionUnsupportedError({ key: target.key, reason: "no-instance" });
-    }
-    if (instance.driver === target.driver) {
-      return yield* new ExternalSessionError({
-        message: "Pick a different agent, or continue this session in place.",
-      });
-    }
-    const { history } = yield* readHistory(target, to.instanceId);
-    const projectId = yield* resolveProject(target);
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed));
-    const threadId = ThreadId.make(`${HANDOFF_THREAD_PREFIX}:${id}`);
-    const now = yield* DateTime.now;
-    const title = target.title.trim() || history.title.trim() || "Untitled thread";
-    const appThread: OrchestrationV2AppThread = {
-      createdBy: "system",
-      creationSource: "server",
-      id: threadId,
-      projectId,
-      title,
-      providerInstanceId: to.instanceId,
-      modelSelection: { instanceId: to.instanceId, model: to.model },
-      runtimeMode: DEFAULT_RUNTIME_MODE,
-      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-      branch: null,
-      worktreePath: null,
-      linkedPullRequest: null,
-      branchPullRequest: null,
-      // The first turn creates a fresh provider thread with no native
-      // session, which is what makes it carry the history as context.
-      activeProviderThreadId: null,
-      historyOrigin: "v1_import",
-      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
-      forkedFrom: null,
-      createdAt: DateTime.makeUnsafe(history.createdAt),
-      updatedAt: now,
-      archivedAt: null,
-      settledOverride: null,
-      settledAt: null,
-      unsettledAt: null,
-      snoozedUntil: null,
-      snoozedAt: null,
-      pinnedAt: null,
-      pinOrderKey: null,
-      activeOrderKey: null,
-      lastVisitedAt: null,
-      deletedAt: null,
-    };
-    yield* eventSink
-      .write({
-        events: [
-          threadCreated(HANDOFF_EVENT_PREFIX, threadId, to.instanceId, appThread),
-          ...history.messages.flatMap((message, index) =>
-            messageEvents({ prefix: HANDOFF_EVENT_PREFIX, threadId, index, message }),
-          ),
-        ],
-      })
-      .pipe(Effect.mapError(failed));
-    return { threadId, projectId } satisfies ExternalSessionContinueResult;
-  });
-
-  return { continueSession, handoffSession };
+  return { continueSession };
 });

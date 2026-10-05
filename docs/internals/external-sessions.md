@@ -3,8 +3,7 @@
 The sidebar's "Other Agents" section lists sessions from agents running outside T3, such as Claude
 Code, Codex, Grok, Pi and Antigravity, in a CLI, desktop app or IDE extension. Opening one shows the
 session live, laid out like a T3 thread. An idle Claude, Codex, Grok or Pi session can be continued
-in T3, which binds an ordinary thread to that same session. Any of their sessions, running or not,
-can also be handed to a different agent, which starts a separate thread from its history.
+in T3, which binds an ordinary thread to that same session.
 
 ## Decisions
 
@@ -12,8 +11,8 @@ can also be handed to a different agent, which starts a separate thread from its
   sessions on disk (`~/.claude/projects`, `~/.codex/sessions`, `~/.grok/sessions`,
   `~/.pi/agent/sessions`, `~/.gemini/antigravity-cli`). One adapter per store lives in
   [`apps/server/src/external-sessions/`](../../apps/server/src/external-sessions). Watching a
-  session writes nothing to T3's database; only an explicit continue or handoff, and the sync of a
-  continued thread, do.
+  session writes nothing to T3's database; only an explicit continue, and the sync of a continued
+  thread, do.
 - **Render with the thread timeline, not a second transcript.** The view feeds the messages to
   the standard `MessagesTimeline` as runless timeline entries: user and assistant text become
   message entries, and each tool line becomes a work entry. The header and the docked
@@ -53,16 +52,6 @@ can also be handed to a different agent, which starts a separate thread from its
   while the session is running. Logic lives in
   [`continueExternalSession.ts`](../../apps/server/src/external-sessions/continueExternalSession.ts),
   which imports only exported pieces of upstream code.
-- **Handing a session to another agent copies its history; it never binds the session.** The
-  Continue button's menu lists the ready instances of every other driver, each on its own default
-  model, and sends that choice as `handoffTo`. Each handoff writes a new thread
-  `external-handoff:<uuid>`, which can never collide with the `import:` thread of an in-place
-  continue. The thread has the same runless messages, `historyOrigin: "v1_import"`, and no
-  provider thread. Its first turn therefore creates a provider thread with no native ref, and the
-  orchestrator's legacy-import path hands the runless items over as context
-  (`ContextHandoffService.prepareLegacyImport`, up to its 32k-character summary budget). This
-  needs no upstream change. The source session is only read, so a handoff is allowed while the
-  session runs. The session stays listed, and the sync never follows these threads.
 - **Antigravity stays watch-only.** T3 runs Antigravity with a private per-instance `GEMINI_HOME`,
   which cannot see a CLI conversation in `~/.gemini`, and the CLI keeps no transcript for a context
   handoff. The view shows the `separate-store` reason. Continuing it needs an Antigravity option
@@ -127,6 +116,22 @@ can also be handed to a different agent, which starts a separate thread from its
   - cwds under the T3 home or worktrees (scratch threads)
   - Codex rollouts whose originator is T3
   - Codex subagent rollouts, which belong to their parent
+- **Archive is T3 state, plus Codex's own archive.** Archived keys live in
+  `<state dir>/external-sessions-archive.json` (not SQLite, so upstream keeps its migration
+  numbering), and the list leaves them out. For Codex, archive and unarchive also call the
+  app-server's `thread/archive` / `thread/unarchive` through the enabled, unmanaged Codex
+  instance whose shared home is `~/.codex`, the store the list reads. A Codex failure leaves the
+  T3 archive in place and comes back as a warning. Other agents have no archive of their own, so
+  theirs is T3-only. Each entry keeps its title, cwd and driver because Codex moves the rollout out
+  of `sessions/`, where the list no longer finds it.
+- **Claude desktop's archive is mirrored read-only.**
+  [`claudeDesktopArchive.ts`](../../apps/server/src/external-sessions/claudeDesktopArchive.ts)
+  keeps only `cliSessionId` and `isArchived` from the Claude app's
+  `claude-code-sessions/*/*/local_*.json` records; the rest holds account and bridge ids. Those
+  sessions leave the list and reach Settings › Archived with `archivedIn: "claudeDesktop"` and no
+  Unarchive, because T3 never writes Claude's files. The scan rides the list's republish (at most
+  every 10 seconds, only while the list is watched, re-reading only files whose mtime changed) and
+  covers only sessions the registry knows, since their titles come from the transcripts.
 - **Stay mergeable with upstream.** All logic lives in the add-on folders: server
   `external-sessions/`, web `apps/web/src/external-sessions/` plus one route, and contracts
   `externalSessions.ts`. The contract exports the RPC tuple (`ExternalSessionsRpcs`), the scope
@@ -138,6 +143,7 @@ can also be handed to a different agent, which starts a separate thread from its
   - the server runtime layer
   - `ws.ts`
   - the sidebar mount
+  - the Settings › Archived route's panel import
   - the composer banner stack in `ChatView`
 
 ## Constraints
@@ -162,9 +168,12 @@ can also be handed to a different agent, which starts a separate thread from its
   Message text is clipped at 20,000 characters, as in the live view.
 - If the other app and T3 write the same session at the same time, the other app's entries inside
   T3's window are not copied, and a detach can race a turn the user sends right then.
-- A continued thread is "native", so switching it to another provider in the model picker hands
-  over only items from T3 runs. The orchestrator reads runless items only for `v1_import`
-  threads, so the session's imported and synced history does not go with it. To move a session
-  to another agent with its history, hand it off from the session view instead.
-- Mobile does not render this section, the handoff menu or the running warning yet. The RPCs are
+- A continued thread is "native" so its own provider resumes without replaying history, but
+  upstream reads runless items as handoff context only for `v1_import` threads. The
+  `carriesImportedHistory` hook in `Orchestrator.ts` also counts `import:` threads, so a switch to
+  another provider carries the imported and synced history; the first same-provider turn still
+  skips it, because `shouldPrepareLegacyImportHandoff` keeps requiring `v1_import`.
+- Turns run by another provider never reach the original session. When the thread switches back,
+  the usual handoff delta goes into the resumed session, so the other app sees it from then on.
+- Mobile does not render this section or the running warning yet. The RPCs are
   environment-scoped, so they can be added later from the same contracts.

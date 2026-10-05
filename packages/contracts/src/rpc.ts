@@ -337,6 +337,7 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 import { ExternalSessionsRpcs } from "./externalSessions.ts"; // Fork add-on: external sessions.
 import { SessionSearchRpc } from "./sessionSearch.ts"; // Fork add-on: session search.
+import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on: thread export.
 
 export const WS_METHODS = {
   // Project registry methods
@@ -1878,4 +1879,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   ...ExternalSessionsRpcs, // Fork add-on: external sessions.
   SessionSearchRpc, // Fork add-on: session search.
+  ThreadExportRpc, // Fork add-on: thread export.
 ).middleware(RpcScopeAuthorization);

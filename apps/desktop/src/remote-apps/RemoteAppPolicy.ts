@@ -158,6 +158,21 @@ export const isTrustedRemoteUrl = (site: RemoteAppSite, rawUrl: string): boolean
   return url !== null && isTrustedRemoteHost(site, url.hostname);
 };
 
+/**
+ * A download the site's own page started. Sites often build files in the page,
+ * so a blob: URL counts when its origin is the site, and a data: URL when the
+ * page that started it is on the site.
+ */
+export const isTrustedRemoteDownload = (
+  site: RemoteAppSite,
+  rawUrl: string,
+  initiatorUrl: string,
+): boolean => {
+  if (isTrustedRemoteUrl(site, rawUrl)) return true;
+  if (rawUrl.startsWith("blob:")) return isTrustedRemoteUrl(site, rawUrl.slice("blob:".length));
+  return rawUrl.startsWith("data:") && isTrustedRemoteUrl(site, initiatorUrl);
+};
+
 /** The site whose embedded hosts include this URL, if any. */
 export const resolveRemoteAppSiteForUrl = (rawUrl: string): RemoteAppSite | undefined => {
   const url = parseHttpsUrl(rawUrl);

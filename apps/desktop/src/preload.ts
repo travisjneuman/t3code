@@ -4,6 +4,7 @@ import type {
   DesktopPreviewRecordingInputEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
+  RemoteAppDownloadCapture,
   RemoteAppFillPromptRequest,
   RemoteAppSendToThread,
   RemoteAppSurfaceMenuAnchor,
@@ -49,6 +50,24 @@ function isRemoteAppSendToThread(value: unknown): value is RemoteAppSendToThread
     REMOTE_APP_SURFACES.has(send.site) &&
     typeof send.text === "string" &&
     send.text.length > 0
+  );
+}
+
+function isRemoteAppDownloadCapture(value: unknown): value is RemoteAppDownloadCapture {
+  if (typeof value !== "object" || value === null) return false;
+  const capture = value as Partial<RemoteAppDownloadCapture>;
+  return (
+    typeof capture.id === "string" &&
+    typeof capture.site === "string" &&
+    capture.site !== "t3code" &&
+    REMOTE_APP_SURFACES.has(capture.site) &&
+    typeof capture.filename === "string" &&
+    typeof capture.path === "string" &&
+    (capture.kind === "text" || capture.kind === "archive") &&
+    typeof capture.bytes === "number" &&
+    typeof capture.language === "string" &&
+    (capture.text === null || typeof capture.text === "string") &&
+    typeof capture.addNow === "boolean"
   );
 }
 
@@ -369,6 +388,22 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         );
       };
     },
+    onDownloadCaptured: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, capture: unknown) => {
+        if (isRemoteAppDownloadCapture(capture)) listener(capture);
+      };
+      ipcRenderer.on(RemoteAppChannels.REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(
+          RemoteAppChannels.REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL,
+          wrappedListener,
+        );
+      };
+    },
+    showDownloadInFolder: (id: string) =>
+      ipcRenderer.invoke(RemoteAppChannels.REMOTE_APP_SHOW_DOWNLOAD_CHANNEL, id),
+    importChatExport: () =>
+      ipcRenderer.invoke(RemoteAppChannels.REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL),
   },
   preview: {
     createTab: (tabId, defaults) =>
