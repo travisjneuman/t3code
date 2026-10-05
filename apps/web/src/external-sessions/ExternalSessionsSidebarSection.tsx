@@ -55,6 +55,34 @@ import {
 } from "./atoms";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Sessions grouped by when they last moved, newest group first. A session
+ * goes in the first group whose age it is within; live ones always go first.
+ */
+const AGE_GROUPS = [
+  {
+    label: "Past 3 days",
+    maxAgeMs: 3 * DAY_MS,
+    storageKey: "t3code:sidebar:external-sessions-group-3d-expanded",
+    defaultExpanded: true,
+  },
+  {
+    label: "Past 7 days",
+    maxAgeMs: 7 * DAY_MS,
+    storageKey: "t3code:sidebar:external-sessions-group-7d-expanded",
+    defaultExpanded: true,
+  },
+  {
+    label: "Older",
+    maxAgeMs: Number.POSITIVE_INFINITY,
+    storageKey: "t3code:sidebar:external-sessions-group-older-expanded",
+    defaultExpanded: false,
+  },
+] as const;
+type AgeGroup = (typeof AGE_GROUPS)[number];
+
 /** Per-browser "Hide from list" keys from before archive; archived once, then removed. */
 const LEGACY_HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
 const LegacyHiddenKeysSchema = Schema.Array(Schema.String);
@@ -97,8 +125,8 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
 
 /**
  * "Other Agents" shelf: sessions running outside T3 on the connected
- * environments, live ones first. Expanding shows every session. Right-click a
- * row for its actions, or the header to find archived sessions. Renders
+ * environments, in collapsible groups by age with live ones first. Right-click
+ * a row for its actions, or the header to find archived sessions. Renders
  * nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
@@ -137,6 +165,24 @@ export function ExternalSessionsSidebarSection() {
     }
     return [...live, ...recent];
   }, [entries]);
+  const runningCount = useMemo(
+    () => entries.filter((entry) => entry.session.liveness === "running").length,
+    [entries],
+  );
+  // `nowMinute` is the UTC minute ("YYYY-MM-DDTHH:mm"); its ticks move sessions
+  // into older groups as they age.
+  const groups = useMemo(() => {
+    const now = Date.parse(`${nowMinute}Z`);
+    const groupOf = (entry: ExternalSessionEntry): AgeGroup => {
+      if (entry.session.liveness !== "recent") return AGE_GROUPS[0];
+      const ageMs = now - Date.parse(entry.session.updatedAt);
+      return AGE_GROUPS.find((group) => ageMs <= group.maxAgeMs) ?? AGE_GROUPS[0];
+    };
+    return AGE_GROUPS.map((group) => ({
+      group,
+      entries: visible.filter((entry) => groupOf(entry) === group),
+    })).filter(({ entries: grouped }) => grouped.length > 0);
+  }, [visible, nowMinute]);
 
   // Sessions hidden in this browser before archive existed are archived in T3
   // only, once, on the first non-empty list. Keys of sessions not listed then
@@ -357,30 +403,80 @@ export function ExternalSessionsSidebarSection() {
     <section aria-label="Other Agents" className="mt-2">
       <div className="mx-0.5 h-8" onContextMenu={(event) => void handleHeaderContextMenu(event)}>
         <CollapsibleSectionHeader expanded={expanded} onClick={toggleExpanded}>
-          {`Other Agents (${visible.length})`}
+          {runningCount > 0
+            ? `Other Agents (${visible.length} · ${runningCount} running)`
+            : `Other Agents (${visible.length})`}
         </CollapsibleSectionHeader>
       </div>
       {expanded ? (
         // Same hover timing as the thread list's cards.
         <TooltipProvider delay={150} closeDelay={0} timeout={400}>
-          <ul className="flex flex-col">
-            {visible.map((entry) => {
-              const key = rowKey(entry.environmentId, entry.session.key);
-              return (
-                <ExternalSessionRow
-                  key={key}
-                  entry={entry}
-                  isActive={activeKey === key}
-                  nowMinute={nowMinute}
-                  onNavigate={closeMobileSidebar}
-                  onContextMenu={handleRowContextMenu}
-                />
-              );
-            })}
-          </ul>
+          {groups.map(({ group, entries: grouped }) => (
+            <ExternalSessionAgeGroup
+              key={group.storageKey}
+              group={group}
+              entries={grouped}
+              activeKey={activeKey}
+              nowMinute={nowMinute}
+              onNavigate={closeMobileSidebar}
+              onContextMenu={handleRowContextMenu}
+            />
+          ))}
         </TooltipProvider>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * One age group of the shelf, collapsible on its own. Collapsed, it still
+ * shows the session that is open, as the Settled shelf does for its thread.
+ */
+function ExternalSessionAgeGroup(props: {
+  group: AgeGroup;
+  entries: ReadonlyArray<ExternalSessionEntry>;
+  activeKey: string | null;
+  nowMinute: string;
+  onNavigate: () => void;
+  onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
+}) {
+  const { group } = props;
+  const [expanded, setExpanded] = useLocalStorage(
+    group.storageKey,
+    group.defaultExpanded,
+    Schema.Boolean,
+  );
+  const toggleExpanded = useCallback(() => setExpanded((value) => !value), [setExpanded]);
+  const rows = expanded
+    ? props.entries
+    : props.entries.filter(
+        (entry) => rowKey(entry.environmentId, entry.session.key) === props.activeKey,
+      );
+  return (
+    <div role="group" aria-label={group.label}>
+      <div className="mr-0.5 ml-2.5 h-8">
+        <CollapsibleSectionHeader expanded={expanded} onClick={toggleExpanded}>
+          {`${group.label} (${props.entries.length})`}
+        </CollapsibleSectionHeader>
+      </div>
+      {rows.length > 0 ? (
+        <ul className="flex flex-col">
+          {rows.map((entry) => {
+            const key = rowKey(entry.environmentId, entry.session.key);
+            return (
+              <ExternalSessionRow
+                key={key}
+                entry={entry}
+                isActive={props.activeKey === key}
+                nowMinute={props.nowMinute}
+                onNavigate={props.onNavigate}
+                onContextMenu={props.onContextMenu}
+              />
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
