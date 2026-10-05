@@ -275,9 +275,9 @@ machine that runs the environment, and the folders must already exist.
 
 ## Sessions from other agents
 
-**Other Agents**, below your threads in the sidebar, lists recent sessions you started outside
-T3, such as Claude Code or Codex in a terminal, a desktop app, or an IDE. Open one to follow it
-live.
+**Other Agents**, below your threads in the sidebar, lists sessions you started outside T3 and
+used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop app, or an IDE.
+Open one to follow it live. Older sessions are still found by search.
 
 To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then
 choose **Continue in T3**. The session becomes a regular thread in its folder's project, with its
