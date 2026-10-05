@@ -1,6 +1,6 @@
 import type { RemoteAppSite, RemoteAppTheme, RemoteAppThemeColors } from "@t3tools/contracts";
 
-import { buildRemoteAppThemeCss, normalizeRemoteAppTheme } from "./RemoteAppTheme.ts";
+import { normalizeRemoteAppTheme } from "./RemoteAppTheme.ts";
 
 type Rgba = { readonly r: number; readonly g: number; readonly b: number; readonly a: number };
 
@@ -97,6 +97,85 @@ body {
   background-color: ${toHex(palette.canvas)} !important;
   scrollbar-color: ${toHex(palette.active)} transparent !important;
 }`;
+
+/* In a narrow ChatGPT sidebar its section title ("ChatGPT", "Space",
+   "Scheduled") stays on the first line and the header buttons wrap below it,
+   rather than clipping the title beside the icon rail. */
+const CHATGPT_HEADER_WRAP_CSS = `#app-shell-sidebar [class*="@container/navigation-header"] {
+  flex-wrap: wrap !important;
+  row-gap: 4px !important;
+  height: auto !important;
+  min-height: var(--sidebar-navigation-header-height, 2rem) !important;
+}
+#app-shell-sidebar [class*="@container/navigation-header"] > a {
+  min-width: max-content !important;
+}`;
+
+const buildChatGptCss = (palette: Palette, colorScheme: string): string => {
+  const canvas = toHex(palette.canvas);
+  const raised = toHex(palette.surfaceRaised);
+  const hover = toHex(palette.hover);
+  const text = toHex(palette.text);
+  const textSecondary = toHex(palette.textSecondary);
+  const textMuted = toHex(palette.textMuted);
+  // ChatGPT declares its tokens on :where(:root) and :where([data-theme]).
+  // Hover and border tokens are translucent whites over these surfaces, so
+  // they stay the site's own.
+  return `/* ndev.t3code theme for the isolated ChatGPT surface. */
+:root,
+body,
+[data-theme] {
+${declarations({
+  "--color-surface": canvas,
+  "--color-surface-secondary": canvas,
+  "--color-surface-canvas": canvas,
+  "--color-surface-recovery": canvas,
+  "--color-token-main-surface-primary": canvas,
+  "--app-color-background-surface": canvas,
+  "--app-color-background-surface-under": canvas,
+  "--main-surface-primary": canvas,
+  "--color-surface-tertiary": raised,
+  "--color-surface-elevated": raised,
+  "--color-surface-elevated-secondary": raised,
+  "--color-surface-card": raised,
+  "--app-color-background-elevated-primary": raised,
+  "--color-background-composer-surface": raised,
+  "--composer-background-color": raised,
+  "--composer-surface": raised,
+  "--composer-surface-primary": raised,
+  "--composer-surface-secondary": raised,
+  "--main-surface-secondary": raised,
+  "--main-surface-tertiary": raised,
+  "--color-background-composer-action-bar": toHex(palette.surface),
+  "--color-background-home-suggestion-hover": toHex(palette.surface),
+  "--app-color-background-elevated-secondary": hover,
+  "--color-background-callout-surface": hover,
+  "--color-background-primary-soft": hover,
+  "--color-background-secondary-soft": hover,
+  "--color-background-secondary-solid": hover,
+  "--app-shell-sidebar-popover-background": toHex(palette.surfaceOverlay),
+  "--sidebar-surface-primary": toHex(palette.sidebar),
+  "--sidebar-surface-secondary": toHex(palette.sidebar),
+  "--color-background-user-message": toHex(palette.message),
+  "--color-text": text,
+  "--color-text-emphasis": text,
+  "--color-text-prose": text,
+  "--color-text-primary": text,
+  "--color-token-text-primary": text,
+  "--color-token-foreground": text,
+  "--text-primary": text,
+  "--color-text-secondary": textSecondary,
+  "--color-token-text-secondary": textSecondary,
+  "--text-secondary": textSecondary,
+  "--color-text-tertiary": textMuted,
+  "--color-token-text-tertiary": textMuted,
+  "--color-token-description-foreground": textMuted,
+  "--text-tertiary": textMuted,
+})}
+}
+${CHATGPT_HEADER_WRAP_CSS}
+${pageBase(palette, colorScheme)}`;
+};
 
 const buildClaudeCss = (palette: Palette, colorScheme: string): string => {
   const h = toHslTriplet;
@@ -303,35 +382,22 @@ export const buildRemoteAppSidebarWidthScript = (width: number | null): string =
 })();`;
 };
 
-/* In a narrow ChatGPT sidebar its section title ("ChatGPT", "Space",
-   "Scheduled") stays on the first line and the header buttons wrap below it,
-   rather than clipping the title beside the icon rail. */
-const CHATGPT_HEADER_WRAP_CSS = `#app-shell-sidebar [class*="@container/navigation-header"] {
-  flex-wrap: wrap !important;
-  row-gap: 4px !important;
-  height: auto !important;
-  min-height: var(--sidebar-navigation-header-height, 2rem) !important;
-}
-#app-shell-sidebar [class*="@container/navigation-header"] > a {
-  min-width: max-content !important;
-}`;
-
 interface RemoteSiteTheme {
   /** Repaints the site's own design tokens with the active T3 palette. */
-  readonly css: (input: RemoteAppTheme, palette: Palette, colorScheme: string) => string;
+  readonly css: (palette: Palette, colorScheme: string) => string;
   /** Pins the site's sidebar to T3's width; see PINNED. */
   readonly sidebarWidthCss: string;
 }
 
 /**
- * The theme treatment of each themeable site. ChatGPT keeps its fuller
- * treatment; the others only remap their tokens, so apart from the pinned
- * sidebar width their layouts stay as the sites ship them. A site without an
+ * The theme treatment of each themeable site. Each only remaps the site's own
+ * design tokens, so apart from the pinned sidebar width (and ChatGPT's header
+ * wrap) their layouts stay as the sites ship them. A site without an
  * entry keeps its own look and sidebar width.
  */
 const SITE_THEMES: Partial<Record<RemoteAppSite, RemoteSiteTheme>> = {
   chatgpt: {
-    css: (input) => `${buildRemoteAppThemeCss(input)}\n${CHATGPT_HEADER_WRAP_CSS}`,
+    css: buildChatGptCss,
     // Only while ChatGPT's own panel is open, so its collapse still works. The
     // inner panel carries an inline width from --codex-sidebar-preferred-width.
     sidebarWidthCss: `${PINNED} {
@@ -346,7 +412,7 @@ ${PINNED} [data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div 
 }`,
   },
   claude: {
-    css: (_input, palette, colorScheme) => buildClaudeCss(palette, colorScheme),
+    css: buildClaudeCss,
     sidebarWidthCss: `${PINNED} aside.dframe-sidebar {
   width: var(--t3code-sidebar-width) !important;
   min-width: var(--t3code-sidebar-width) !important;
@@ -354,7 +420,7 @@ ${PINNED} [data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div 
 }`,
   },
   grok: {
-    css: (_input, palette, colorScheme) => buildGrokCss(palette, colorScheme),
+    css: buildGrokCss,
     // Grok's sidebar is content-box with a 1px edge border.
     sidebarWidthCss: `${PINNED},
 ${PINNED} [style*="--sidebar-width"] {
@@ -362,7 +428,7 @@ ${PINNED} [style*="--sidebar-width"] {
 }`,
   },
   gemini: {
-    css: (_input, palette, colorScheme) => buildGeminiCss(palette, colorScheme),
+    css: buildGeminiCss,
     sidebarWidthCss: `${PINNED},
 ${PINNED} bard-sidenav {
   --bard-sidenav-open-width: var(--t3code-sidebar-width) !important;
@@ -383,6 +449,6 @@ export const buildRemoteSiteThemeCss = (site: RemoteAppSite, input: RemoteAppThe
   if (siteTheme === undefined) return `${SITE_NO_DRAG_CSS}\n`;
   const theme = normalizeRemoteAppTheme(input);
   const colorScheme = theme.appearance === "dark" ? "dark" : "light";
-  const css = siteTheme.css(input, resolvePalette(theme.colors), colorScheme);
+  const css = siteTheme.css(resolvePalette(theme.colors), colorScheme);
   return `${SITE_NO_DRAG_CSS}\n${css}\n\n${siteTheme.sidebarWidthCss}\n`;
 };

@@ -246,13 +246,17 @@ afterwards shows up in the T3 thread too. Send from one app at a time: while the
 working in the session, the thread warns you above the composer. Antigravity sessions can be
 followed but not continued, because T3 runs Antigravity with its own session store.
 
-To work on a session with a different agent, open the menu next to **Continue in T3** and choose
-**Continue with** that agent. T3 starts a new thread that gives the agent the session's
-conversation as context. The original session is left untouched and stays in the list, so you
-can do this while it's still running, and as often as you like. That new thread doesn't follow
-later changes in the other app. To switch agents in a thread you already have, pick another
-provider in the composer's model picker; for a continued session, only what happened in T3 goes
-along.
+After continuing in T3, you can switch the thread to another agent with the model picker. The new
+agent gets the session's whole history, including what happened before T3. Its own turns stay in
+T3, though: the original session only records turns its own agent ran. Before going back to the
+other app, switch the thread back to the original agent and send one more message. That agent is
+told what the other agents did, and that turn is saved in the original session.
 
-Right-click a session to continue it, hand it to another agent, copy its session ID or folder
-path, open its folder, or hide it. Right-click the **Other Agents** header to show hidden sessions again.
+Right-click a session to continue it, copy its session ID or folder path, open its folder, or
+archive it. Archiving takes the session off the list; a Codex session is
+archived in Codex too, as if you had archived it there. A running session can't be archived until
+it stops. Archived sessions are listed in **Settings › Archived**, where **Unarchive** brings them
+back. Right-click the **Other Agents** header and choose **Show archived sessions** to go there.
+Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
+Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here
+within a few seconds.

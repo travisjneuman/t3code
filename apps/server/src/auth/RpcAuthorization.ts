@@ -207,6 +207,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscribeBackgroundPolicy]: AuthOrchestrationReadScope,
   ...EXTERNAL_SESSIONS_RPC_SCOPES, // Fork add-on: external sessions.
   "sessionSearch.search": AuthOrchestrationReadScope, // Fork add-on: session search.
+  "threadExport.export": AuthOrchestrationReadScope, // Fork add-on: thread export.
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {

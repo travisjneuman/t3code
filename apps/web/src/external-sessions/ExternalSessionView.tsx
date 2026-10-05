@@ -53,16 +53,6 @@ import {
   showAnchoredCopySuccessToast,
 } from "../components/ui/anchoredCopyToast";
 import { Button } from "../components/ui/button";
-import { Group, GroupSeparator } from "../components/ui/group";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuItemLabel,
-  MenuPopup,
-  MenuTrigger,
-} from "../components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "../components/ui/popover";
 import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
@@ -74,7 +64,7 @@ import { useTheme } from "../hooks/useTheme";
 import { formatContextWindowTokens } from "../lib/contextWindow";
 import { cn } from "../lib/utils";
 import type { TimelineEntry } from "../session-logic";
-import { useServerConfigs, waitForThreadShell } from "../state/entities";
+import { waitForThreadShell } from "../state/entities";
 import { useConnectedEnvironmentIds } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -92,7 +82,6 @@ import {
   LIVENESS_LABEL,
   shortModelLabel,
 } from "./atoms";
-import { resolveHandoffTargets, type HandoffTo } from "./handoffTargets";
 
 const EMPTY_MESSAGES: ReadonlyArray<ExternalSessionMessage> = [];
 const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
@@ -552,9 +541,8 @@ function resolveComposerBlockState(input: {
  * Stands in for the composer and keeps its shape. The prompt area explains the
  * session's state in the placeholder's style, the toolbar row shows the model
  * and status where the composer's pickers sit, and "Continue in T3" sits where
- * the send button does, split with a menu that hands the history to another
- * agent instead. The classes mirror ChatComposer's expanded layout; each part
- * names its source.
+ * the send button does. The classes mirror ChatComposer's expanded layout;
+ * each part names its source.
  */
 function ExternalSessionComposerBlock(props: {
   environmentId: EnvironmentId;
@@ -577,58 +565,35 @@ function ExternalSessionComposerBlock(props: {
   const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
   const [continuing, setContinuing] = useState(false);
   const [continueError, setContinueError] = useState<string | null>(null);
-  const providers = useServerConfigs().get(environmentId)?.providers ?? EMPTY_PROVIDERS;
-  const sessionDriver = summary?.driver ?? null;
-  const sessionCwd = summary?.cwd ?? null;
-  const handoffTargets = useMemo(
-    () =>
-      resolveHandoffTargets(
-        providers,
-        sessionDriver === null ? null : { driver: sessionDriver, cwd: sessionCwd },
-      ),
-    [providers, sessionCwd, sessionDriver],
-  );
 
-  // Without `handoffTo` the session continues in place; with it, a new thread
-  // on that agent starts from the session's history.
-  const handleContinue = useCallback(
-    async (handoffTo?: HandoffTo) => {
-      setContinuing(true);
-      setContinueError(null);
-      const result = await runContinue({
-        environmentId,
-        input: handoffTo === undefined ? { key: sessionKey } : { key: sessionKey, handoffTo },
-      });
-      if (result._tag === "Failure") {
-        setContinuing(false);
-        if (!isAtomCommandInterrupted(result)) {
-          const failure = squashAtomCommandFailure(result);
-          setContinueError(
-            failure instanceof Error
-              ? failure.message
-              : handoffTo === undefined
-                ? "Could not continue this session in T3."
-                : "Could not hand this session to that agent.",
-          );
-        }
-        return;
-      }
-      const threadRef = scopeThreadRef(environmentId, result.value.threadId);
-      // The thread route treats a thread missing from the shell as gone.
-      if (!(await waitForThreadShell(threadRef))) {
-        setContinuing(false);
+  const handleContinue = useCallback(async () => {
+    setContinuing(true);
+    setContinueError(null);
+    const result = await runContinue({ environmentId, input: { key: sessionKey } });
+    if (result._tag === "Failure") {
+      setContinuing(false);
+      if (!isAtomCommandInterrupted(result)) {
+        const failure = squashAtomCommandFailure(result);
         setContinueError(
-          "The thread was created, but it has not reached this client yet. Open it from the sidebar.",
+          failure instanceof Error ? failure.message : "Could not continue this session in T3.",
         );
-        return;
       }
-      await navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(threadRef),
-      });
-    },
-    [environmentId, navigate, runContinue, sessionKey],
-  );
+      return;
+    }
+    const threadRef = scopeThreadRef(environmentId, result.value.threadId);
+    // The thread route treats a thread missing from the shell as gone.
+    if (!(await waitForThreadShell(threadRef))) {
+      setContinuing(false);
+      setContinueError(
+        "The thread was created, but it has not reached this client yet. Open it from the sidebar.",
+      );
+      return;
+    }
+    await navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(threadRef),
+    });
+  }, [environmentId, navigate, runContinue, sessionKey]);
 
   const { message, tone, blockedReason } = resolveComposerBlockState({
     summary,
@@ -642,8 +607,6 @@ function ExternalSessionComposerBlock(props: {
     ? "Opening this session as a T3 thread…"
     : (blockedReason ?? "Open this session as a T3 thread and reply here");
   const continueBlocked = blockedReason !== null || continuing;
-  // A handoff only reads the transcript, so a running session can still go.
-  const handoffBlocked = continuing || !props.connected || summary === null || !props.hasMessages;
 
   return (
     // ChatComposer's <form> and the wrapper around its main surface.
@@ -735,77 +698,31 @@ function ExternalSessionComposerBlock(props: {
                     Retry
                   </Button>
                 ) : (
-                  <Group>
-                    <Tooltip>
-                      {/* aria-disabled, not disabled: the button keeps pointer
-                          events, so the reason stays reachable, and stays a
-                          direct child of the group for its joined corners. */}
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            variant="default"
-                            size="default"
-                            aria-disabled={continueBlocked || undefined}
-                            aria-busy={continuing || undefined}
-                            onClick={() => {
-                              if (!continueBlocked) void handleContinue();
-                            }}
-                          />
-                        }
-                      >
-                        {continuing ? (
-                          <Spinner aria-hidden />
-                        ) : (
-                          <PlayIcon aria-hidden className="fill-current" />
-                        )}
-                        Continue in T3
-                      </TooltipTrigger>
-                      <TooltipPopup>{continueTooltip}</TooltipPopup>
-                    </Tooltip>
-                    {handoffTargets.length > 0 ? (
-                      <>
-                        <GroupSeparator />
-                        <Menu>
-                          <MenuTrigger
-                            render={
-                              <Button
-                                variant="default"
-                                size="icon"
-                                aria-label="Continue with another agent"
-                                disabled={handoffBlocked}
-                              />
-                            }
-                          >
-                            <ChevronDownIcon aria-hidden />
-                          </MenuTrigger>
-                          <MenuPopup align="end" side="top">
-                            <MenuGroup>
-                              <MenuGroupLabel>New thread from this history</MenuGroupLabel>
-                              {handoffTargets.map(({ entry, model }) => (
-                                <MenuItem
-                                  key={entry.instanceId}
-                                  onClick={() =>
-                                    void handleContinue({ instanceId: entry.instanceId, model })
-                                  }
-                                >
-                                  <ProviderInstanceIcon
-                                    driverKind={entry.driverKind}
-                                    displayName={entry.displayName}
-                                    accentColor={entry.accentColor}
-                                    acpRegistryAgentId={entry.acpRegistryAgentId}
-                                    acpRegistryIconUrl={entry.acpRegistryIconUrl}
-                                    className="size-4"
-                                    iconClassName="size-4"
-                                  />
-                                  <MenuItemLabel>Continue with {entry.displayName}</MenuItemLabel>
-                                </MenuItem>
-                              ))}
-                            </MenuGroup>
-                          </MenuPopup>
-                        </Menu>
-                      </>
-                    ) : null}
-                  </Group>
+                  <Tooltip>
+                    {/* aria-disabled, not disabled: the button keeps pointer
+                        events, so the reason stays reachable. */}
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="default"
+                          size="default"
+                          aria-disabled={continueBlocked || undefined}
+                          aria-busy={continuing || undefined}
+                          onClick={() => {
+                            if (!continueBlocked) void handleContinue();
+                          }}
+                        />
+                      }
+                    >
+                      {continuing ? (
+                        <Spinner aria-hidden />
+                      ) : (
+                        <PlayIcon aria-hidden className="fill-current" />
+                      )}
+                      Continue in T3
+                    </TooltipTrigger>
+                    <TooltipPopup>{continueTooltip}</TooltipPopup>
+                  </Tooltip>
                 )}
               </div>
             </div>

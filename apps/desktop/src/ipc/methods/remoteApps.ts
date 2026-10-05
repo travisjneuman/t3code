@@ -1,6 +1,8 @@
 import {
   DesktopSurfaceSchema,
   RemoteAppAvailabilitySchema,
+  RemoteAppChatImportResultSchema,
+  RemoteAppDownloadIdSchema,
   RemoteAppFillPromptRequestSchema,
   RemoteAppFillPromptResultSchema,
   RemoteAppSurfaceMenuAnchorSchema,
@@ -10,7 +12,11 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { REMOTE_APP_FILL_SITE_PROMPT_CHANNEL } from "../../remote-apps/RemoteAppChannels.ts";
+import {
+  REMOTE_APP_FILL_SITE_PROMPT_CHANNEL,
+  REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL,
+  REMOTE_APP_SHOW_DOWNLOAD_CHANNEL,
+} from "../../remote-apps/RemoteAppChannels.ts";
 import * as RemoteAppManager from "../../remote-apps/RemoteAppManager.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 import * as IpcChannels from "../channels.ts";
@@ -86,6 +92,28 @@ export const fillSitePrompt = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.remoteApp.fillSitePrompt")(function* (request) {
     const manager = yield* RemoteAppManager.RemoteAppManager;
     return yield* manager.fillSitePrompt(request);
+  }),
+});
+
+export const showDownloadInFolder = DesktopIpc.makeIpcMethod({
+  channel: REMOTE_APP_SHOW_DOWNLOAD_CHANNEL,
+  payload: RemoteAppDownloadIdSchema,
+  result: Schema.Void,
+  authorize,
+  handler: Effect.fn("desktop.ipc.remoteApp.showDownloadInFolder")(function* (id) {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    yield* manager.showDownloadInFolder(id);
+  }),
+});
+
+export const importChatExport = DesktopIpc.makeIpcMethod({
+  channel: REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL,
+  payload: voidInput,
+  result: RemoteAppChatImportResultSchema,
+  authorize,
+  handler: Effect.fn("desktop.ipc.remoteApp.importChatExport")(function* () {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    return yield* manager.importChatExport;
   }),
 });
 
@@ -166,4 +194,6 @@ export const methods = [
   retry,
   clearData,
   fillSitePrompt,
+  showDownloadInFolder,
+  importChatExport,
 ] as const;

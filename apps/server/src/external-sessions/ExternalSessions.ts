@@ -6,7 +6,10 @@
  * binds a T3 thread to that same session (continueExternalSession.ts), after
  * which it is listed as that thread instead. Handing one to a different agent
  * makes a separate thread from its history and leaves the session listed.
- * Fork add-on; see docs/internals/external-sessions.md.
+ * Archiving one hides it from the list (externalSessionArchive.ts) and, for
+ * Codex, archives it in Codex too (codexNativeArchive.ts). Claude sessions
+ * archived in Claude desktop are hidden and listed as archived too, read-only
+ * (claudeDesktopArchive.ts). Fork add-on; see docs/internals/external-sessions.md.
  *
  * @module external-sessions/ExternalSessions
  */
@@ -14,13 +17,16 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import {
+  type ExternalSessionArchiveInput,
+  type ExternalSessionArchiveResult,
+  type ExternalSessionArchivedResult,
+  type ExternalSessionArchivedSession,
   ExternalSessionBusyError,
   type ExternalSessionContinueInput,
   type ExternalSessionContinueResult,
   ExternalSessionError,
   ExternalSessionNotFoundError,
   ExternalSessionUnsupportedError,
-  externalSessionHandoffUnsupportedReason,
   externalSessionUnsupportedReason,
   type ExternalSessionEvent,
   type ExternalSessionListResult,
@@ -44,9 +50,12 @@ import * as ServerConfig from "../config.ts";
 import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
 import { makeAntigravitySource } from "./antigravitySource.ts";
+import * as ClaudeDesktopArchive from "./claudeDesktopArchive.ts";
 import { makeClaudeSource } from "./claudeSource.ts";
+import * as CodexNativeArchive from "./codexNativeArchive.ts";
 import { makeCodexSource } from "./codexSource.ts";
 import * as ContinueExternalSession from "./continueExternalSession.ts";
+import * as ExternalSessionArchive from "./externalSessionArchive.ts";
 import * as ExternalSessionSync from "./externalSessionSync.ts";
 import {
   type ExternalSessionInfo,
@@ -80,8 +89,7 @@ export class ExternalSessions extends Context.Service<
     ) => Stream.Stream<ExternalSessionEvent, ExternalSessionError>;
     /**
      * Import an idle session as a T3 thread; returns the existing thread when
-     * already done. With `handoffTo`, makes a new thread on that other agent
-     * from the session's history instead.
+     * already done.
      */
     readonly continueSession: (
       input: ExternalSessionContinueInput,
@@ -102,6 +110,25 @@ export class ExternalSessions extends Context.Service<
      * most every 30 seconds. Session search leaves these to T3's own search.
      */
     readonly ownedSessionIds: Effect.Effect<ReadonlySet<string>>;
+    /**
+     * Hide a session from the list until unarchived; Codex sessions are
+     * archived in Codex too unless `native` is false. Refused while running.
+     */
+    readonly archiveSession: (
+      input: ExternalSessionArchiveInput,
+    ) => Effect.Effect<
+      ExternalSessionArchiveResult,
+      ExternalSessionNotFoundError | ExternalSessionError
+    >;
+    /** List the session again, restoring it in Codex when Codex archived it. */
+    readonly unarchiveSession: (
+      key: string,
+    ) => Effect.Effect<ExternalSessionArchiveResult, ExternalSessionError>;
+    /**
+     * Archived sessions, newest first, including listable Claude sessions
+     * archived in Claude desktop; the whole set on subscribe and after every change.
+     */
+    readonly subscribeArchived: Stream.Stream<ExternalSessionArchivedResult>;
   }
 >()("t3/external-sessions/ExternalSessions") {}
 
@@ -114,9 +141,15 @@ interface Entry {
 interface Registry {
   readonly entries: Map<string, Entry>;
   readonly list: SubscriptionRef.SubscriptionRef<ExternalSessionListResult>;
+  /** Sessions the list hides because Claude desktop archived them, newest first. */
+  readonly archivedInClaude: SubscriptionRef.SubscriptionRef<
+    ReadonlyArray<ExternalSessionArchivedSession>
+  >;
   /** Session paths whose files changed, after each flush. */
   readonly changed: PubSub.PubSub<ReadonlySet<string>>;
   readonly summaryFor: (key: string) => ExternalSessionSummary | null;
+  /** Republishes the list, e.g. after an archive change. */
+  readonly publish: Effect.Effect<void>;
   /** Re-reads which sessions T3 owns and republishes the list. */
   readonly refreshOwned: Effect.Effect<void>;
   /**
@@ -148,6 +181,9 @@ const make = Effect.gen(function* () {
   const providerSessions = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
   const sql = yield* SqlClient.SqlClient;
   const continueExternalSession = yield* ContinueExternalSession.make;
+  const archive = yield* ExternalSessionArchive.make;
+  const codexNativeArchive = yield* CodexNativeArchive.make;
+  const claudeDesktopArchive = yield* ClaudeDesktopArchive.make;
   const sources: ReadonlyArray<ExternalSessionSource> = [
     makeClaudeSource(),
     makeCodexSource(),
@@ -219,6 +255,9 @@ const make = Effect.gen(function* () {
     const keysByPath = new Map<string, ReadonlyArray<string>>();
     const hiddenPaths = new Set<string>();
     const list = yield* SubscriptionRef.make<ExternalSessionListResult>({ sessions: [] });
+    const archivedInClaude = yield* SubscriptionRef.make<
+      ReadonlyArray<ExternalSessionArchivedSession>
+    >([]);
     const changed = yield* PubSub.unbounded<ReadonlySet<string>>();
 
     const toSummary = (key: string, entry: Entry, now: number): ExternalSessionSummary => ({
@@ -245,15 +284,43 @@ const make = Effect.gen(function* () {
 
     const publish = Effect.gen(function* () {
       yield* ownedSessionIds;
+      const inClaude = yield* claudeDesktopArchive.archivedIds;
       const now = Date.now();
-      const sessions = [...entries]
-        .filter(([, entry]) => isListed(entry, now))
+      const listable = [...entries].filter(([, entry]) => isListed(entry, now));
+      // Claude desktop's archive hides a Claude session just as T3's does.
+      const claudeArchivedAt = (entry: Entry) =>
+        entry.source.driver === "claudeAgent" ? inClaude.get(entry.info.id) : undefined;
+      const sessions = listable
+        .filter(
+          ([key, entry]) => archive.get(key) === undefined && claudeArchivedAt(entry) === undefined,
+        )
         .sort(([, a], [, b]) => b.info.updatedAtMs - a.info.updatedAtMs)
         .slice(0, MAX_LISTED)
         .map(([key, entry]) => toSummary(key, entry, now));
       const current = yield* SubscriptionRef.get(list);
       if (JSON.stringify(current.sessions) !== JSON.stringify(sessions)) {
         yield* SubscriptionRef.set(list, { sessions });
+      }
+      const mirrored = listable
+        .flatMap(([key, entry]): Array<ExternalSessionArchivedSession> => {
+          const archivedAtMs = claudeArchivedAt(entry);
+          if (archivedAtMs === undefined) return [];
+          return [
+            {
+              key,
+              driver: entry.source.driver,
+              title: entry.info.title,
+              cwd: entry.info.cwd,
+              archivedAt: new Date(archivedAtMs).toISOString(),
+              nativeArchived: false,
+              archivedIn: "claudeDesktop",
+            },
+          ];
+        })
+        .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt));
+      const currentMirrored = yield* SubscriptionRef.get(archivedInClaude);
+      if (JSON.stringify(currentMirrored) !== JSON.stringify(mirrored)) {
+        yield* SubscriptionRef.set(archivedInClaude, mirrored);
       }
     });
 
@@ -335,7 +402,9 @@ const make = Effect.gen(function* () {
     const registry: Registry = {
       entries,
       list,
+      archivedInClaude,
       changed,
+      publish,
       summaryFor: (key) => {
         const entry = entries.get(key);
         // Details ride only on the session stream; the list stays lean.
@@ -466,7 +535,7 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const continueSession: ExternalSessions["Service"]["continueSession"] = ({ key, handoffTo }) =>
+  const continueSession: ExternalSessions["Service"]["continueSession"] = ({ key }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* RcRef.get(registryRef);
@@ -475,14 +544,10 @@ const make = Effect.gen(function* () {
         if (entry === undefined || summary === null) {
           return yield* new ExternalSessionNotFoundError({ key });
         }
-        // A handoff only reads the transcript, so the session may keep running.
-        if (handoffTo === undefined && summary.liveness === "running") {
+        if (summary.liveness === "running") {
           return yield* new ExternalSessionBusyError({ key });
         }
-        const reason =
-          handoffTo === undefined
-            ? externalSessionUnsupportedReason(summary)
-            : externalSessionHandoffUnsupportedReason(summary);
+        const reason = externalSessionUnsupportedReason(summary);
         const transcriptPath = entry.source.transcriptPath(entry.path);
         const driver = summary.driver;
         if (
@@ -500,14 +565,11 @@ const make = Effect.gen(function* () {
           title: entry.info.title,
           cwd: summary.cwd,
           model: entry.info.model,
+          effort: entry.info.details.effort ?? null,
           transcriptPath,
           updatedAtMs: entry.info.updatedAtMs,
           createParser: entry.source.createParser,
         };
-        // Its own thread on another agent: the session stays listed and unsynced.
-        if (handoffTo !== undefined) {
-          return yield* continueExternalSession.handoffSession(target, handoffTo);
-        }
         const { syncStart, ...result } = yield* continueExternalSession.continueSession(target);
         // The session now belongs to a T3 thread; drop it from the list right away.
         yield* registry.refreshOwned;
@@ -517,14 +579,93 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const archiveSession: ExternalSessions["Service"]["archiveSession"] = ({ key, native }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        if (archive.get(key) !== undefined) return { warning: null };
+        const registry = yield* RcRef.get(registryRef);
+        const entry = yield* registry.resolve(key);
+        const summary = registry.summaryFor(key);
+        if (entry === undefined || summary === null) {
+          return yield* new ExternalSessionNotFoundError({ key });
+        }
+        // It may be in use in the other app; Codex would archive it mid-turn.
+        if (summary.liveness === "running") {
+          return yield* new ExternalSessionError({
+            message: "This session is still running. Stop it in the other app, then archive it.",
+          });
+        }
+        const archived = {
+          key,
+          driver: summary.driver,
+          title: summary.title,
+          cwd: summary.cwd,
+          archivedAt: new Date().toISOString(),
+          nativeArchived: false,
+        };
+        // T3 first, so the row leaves the list without waiting on Codex.
+        yield* archive.put(archived);
+        yield* registry.publish;
+        if (native === false || summary.driver !== "codex") return { warning: null };
+        const warning = yield* codexNativeArchive.run("thread/archive", entry.info.id);
+        if (warning === null) yield* archive.put({ ...archived, nativeArchived: true });
+        return { warning };
+      }),
+    );
+
+  const unarchiveSession: ExternalSessions["Service"]["unarchiveSession"] = (key) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const archived = archive.get(key);
+        if (archived === undefined) return { warning: null };
+        // Codex first, so the rollout is back where the list reads it.
+        const warning = archived.nativeArchived
+          ? yield* codexNativeArchive.run("thread/unarchive", key.slice(key.indexOf(":") + 1))
+          : null;
+        yield* archive.remove(key);
+        const registry = yield* RcRef.get(registryRef);
+        yield* registry.publish;
+        return { warning };
+      }),
+    );
+
+  // Holds the registry, which knows the titles of sessions Claude desktop archived.
+  const subscribeArchived: ExternalSessions["Service"]["subscribeArchived"] = Stream.unwrap(
+    Effect.map(RcRef.get(registryRef), (registry) =>
+      Stream.zipLatestWith(
+        SubscriptionRef.changes(archive.sessions),
+        SubscriptionRef.changes(registry.archivedInClaude),
+        (inT3, inClaude) => ({ sessions: mergeArchived(inT3, inClaude) }),
+      ),
+    ),
+  );
+
   return ExternalSessions.of({
     subscribeList,
     subscribeSession,
     continueSession,
     subscribeRunningElsewhere: sync.runningElsewhere,
     ownedSessionIds,
+    archiveSession,
+    unarchiveSession,
+    subscribeArchived,
   });
 });
+
+/**
+ * T3's archive plus Claude desktop's, newest first. A session in both shows
+ * T3's entry, whose Unarchive still applies; it stays hidden after that.
+ */
+const mergeArchived = (
+  inT3: ReadonlyArray<ExternalSessionArchivedSession>,
+  inClaude: ReadonlyArray<ExternalSessionArchivedSession>,
+): ReadonlyArray<ExternalSessionArchivedSession> => {
+  if (inClaude.length === 0) return inT3;
+  const keys = new Set(inT3.map((session) => session.key));
+  return [...inT3, ...inClaude.filter((session) => !keys.has(session.key))].sort((left, right) =>
+    right.archivedAt.localeCompare(left.archivedAt),
+  );
+};
 
 export const layer = Layer.effect(ExternalSessions, make).pipe(
   Layer.provide(TurnItemPositionStore.layer),

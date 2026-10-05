@@ -6,7 +6,9 @@
  */
 import {
   EXTERNAL_SESSIONS_WS_METHODS,
+  type ExternalSessionArchiveInput,
   type ExternalSessionContinueInput,
+  type ExternalSessionUnarchiveInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
@@ -41,6 +43,24 @@ export const makeHandlers = Effect.gen(function* () {
       observeRpcStream(
         EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere,
         externalSessions.subscribeRunningElsewhere.pipe(Stream.map((threadIds) => ({ threadIds }))),
+        traceAttributes,
+      ),
+    [EXTERNAL_SESSIONS_WS_METHODS.archive]: (input: ExternalSessionArchiveInput) =>
+      observeRpcEffect(
+        EXTERNAL_SESSIONS_WS_METHODS.archive,
+        externalSessions.archiveSession(input),
+        traceAttributes,
+      ),
+    [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: (input: ExternalSessionUnarchiveInput) =>
+      observeRpcEffect(
+        EXTERNAL_SESSIONS_WS_METHODS.unarchive,
+        externalSessions.unarchiveSession(input.key),
+        traceAttributes,
+      ),
+    [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: (_input: unknown) =>
+      observeRpcStream(
+        EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
+        externalSessions.subscribeArchived,
         traceAttributes,
       ),
   };

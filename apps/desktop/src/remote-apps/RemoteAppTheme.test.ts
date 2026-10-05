@@ -4,11 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildRemoteAppInteractionScript,
-  buildRemoteAppThemeCss,
   DEFAULT_REMOTE_APP_THEME,
   isChatGptRemoteAppUrl,
   normalizeRemoteAppTheme,
-  resolveRemoteToolbarControlKind,
 } from "./RemoteAppTheme.ts";
 
 const decodeRemoteAppTheme = Schema.decodeUnknownSync(RemoteAppThemeSchema);
@@ -20,50 +18,6 @@ describe("RemoteAppTheme", () => {
     expect(isChatGptRemoteAppUrl("https://auth.openai.com/login")).toBe(false);
     expect(isChatGptRemoteAppUrl("https://chatgpt.com.evil.example/")).toBe(false);
     expect(isChatGptRemoteAppUrl("javascript:alert(1)")).toBe(false);
-  });
-
-  it("maps the T3 palette to ChatGPT surface tokens and semantic fallbacks", () => {
-    const css = buildRemoteAppThemeCss(DEFAULT_REMOTE_APP_THEME);
-
-    expect(css).toContain("color-scheme: dark !important");
-    expect(css).toContain("--main-surface-primary: var(--t3code-remote-canvas) !important");
-    expect(css).toContain("--sidebar-surface-primary: var(--t3code-remote-sidebar) !important");
-    expect(css).toContain("--composer-surface: var(--t3code-remote-input) !important");
-    expect(css).toContain('[data-t3code-remote-composer-shell="true"]');
-    expect(css).toContain("background: var(--t3code-remote-input) !important");
-    expect(css).toContain("[data-t3code-remote-toolbar-control]");
-    expect(css).not.toContain("form:has(textarea)");
-    expect(css).not.toContain("width: nullpx");
-
-    const alignedCss = buildRemoteAppThemeCss({
-      ...DEFAULT_REMOTE_APP_THEME,
-      sidebarWidth: 235,
-    });
-    expect(alignedCss).toContain("width: 235px !important");
-    expect(alignedCss).toContain("--sidebar-width: 235px !important");
-    expect(alignedCss).toContain('[data-testid*="sidebar"]');
-    expect(alignedCss).toContain("main :where(a)");
-    expect(alignedCss).toContain("html body :is(");
-    expect(alignedCss).toContain("background-image: none !important");
-    expect(alignedCss).toContain('[data-t3code-remote-sidebar="true"]');
-    expect(alignedCss).toContain('[data-t3code-remote-sidebar-root="true"]');
-    expect(alignedCss).not.toContain("flex-basis: 235px !important");
-    expect(alignedCss).toContain("overflow-x: hidden !important");
-    expect(alignedCss).toContain("padding-top: 9px !important");
-    expect(alignedCss).not.toContain("data:image/svg+xml");
-    expect(alignedCss).not.toContain("\n:where(a) {");
-
-    const nightlyCss = buildRemoteAppThemeCss({
-      ...DEFAULT_REMOTE_APP_THEME,
-      stageArt: "nightly",
-    });
-    expect(nightlyCss).toContain('background-image: url("data:image/svg+xml,');
-    expect(nightlyCss).toContain("background-position: left -40px !important");
-    expect(nightlyCss).toContain('data-t3code-remote-sidebar-root="true"] :where(');
-    expect(nightlyCss).toContain(':where(*):not(a):not(button):not([role="button"])');
-    expect(nightlyCss).toContain("background-color: transparent !important");
-    expect(nightlyCss).toContain("data-stage-art%3D%22nightly%22");
-    expect(nightlyCss).not.toContain("var(--stage-night-bottom)");
   });
 
   it("validates stage-art variants and defaults unknown presentation input", () => {
@@ -108,85 +62,24 @@ describe("RemoteAppTheme", () => {
     expect(normalizeRemoteAppTheme(theme).colors.canvas).toBe(
       DEFAULT_REMOTE_APP_THEME.colors.canvas,
     );
-    expect(buildRemoteAppThemeCss(theme)).not.toContain("example.invalid");
   });
 
   it("installs a focused-only editor recovery handler for the add-files popover", () => {
-    const script = buildRemoteAppInteractionScript({
-      ...DEFAULT_REMOTE_APP_THEME,
-      stageArt: "nightly",
-    });
+    const script = buildRemoteAppInteractionScript();
 
     expect(script).toContain("__t3codeRemoteAppInteraction");
-    expect(script).toContain("applyInlineTheme");
-    expect(script).toContain('root.style.setProperty(property, value, "important")');
-    expect(script).toContain('"--main-surface-primary":"#192531"');
-    expect(script).toContain("targetSidebarWidth");
-    expect(script).toContain("dataset.t3codeRemoteSidebar");
-    expect(script).toContain("dataset.t3codeRemoteSidebarRoot");
-    expect(script).toContain("style.removeProperty(property)");
-    expect(script).toContain("getBoundingClientRect().height >=");
-    expect(script).toContain("existing.setSidebarWidth(");
-    expect(script).toContain('existing.setPresentation(nextSidebarWidth, "none", "")');
-    expect(script).toContain("setSidebarWidth(value)");
-    expect(script).toContain('setProperty("overflow-x", "hidden", "important")');
-    expect(script).not.toContain('rootSidebar.querySelectorAll("*")');
-    expect(script).toContain("requestAnimationFrame");
-    expect(script).toContain("10_000");
+    expect(script).not.toContain("style.setProperty");
     expect(script).not.toContain("MutationObserver");
     expect(script).toContain("textarea, [contenteditable='true']");
     expect(script).toContain("dataset.t3codeRemoteComposerShell");
     expect(script).toContain("dataset.t3codeRemoteComposerEditable");
-    expect(script).toContain("dataset.t3codeRemoteToolbarControl");
-    expect(script).toContain("document.querySelectorAll(\"button, a[role='button']\")");
-    expect(script).toContain("insideSidebar");
-    expect(script).toContain("inUpperRightContent");
-    expect(script).toContain("dataset.t3codeRemoteAuth");
-    expect(script).toContain("continue with ");
     expect(script).toContain("handleTryItFirst");
     expect(script).toContain('new URL("/", window.location.origin).href');
-    expect(script).toContain("window.location.assign(targetUrl)");
-    expect(script).not.toContain("data-t3code-remote-stage-art");
-    expect(script).not.toContain("rootSidebar.prepend(");
     expect(script).toContain("button[aria-label*='Add files']");
-    expect(script).toContain("[data-state='open']");
-    expect(script).toContain("triggerIsOpen");
-    expect(script).toContain("document.activeElement === editable");
-    expect(script).toContain("button, a, input, select, [role='button']");
     expect(script).toContain("dispatchEscape");
-    expect(script).toContain('key: "Escape"');
-    expect(script).toContain("window.setTimeout(focus, 160)");
     expect(script).toContain("queueMicrotask(focus)");
-    expect(script).toContain('["pointerdown", "mousedown"');
-    expect(script).not.toContain('"focusin"');
     expect(script).not.toContain("fetch(");
     expect(script).not.toContain("localStorage");
     expect(() => Function(script)).not.toThrow();
-  });
-
-  it("identifies only main-content upper-right ChatGPT toolbar controls", () => {
-    const base = {
-      insideMainContent: true,
-      left: 900,
-      top: 24,
-      viewportWidth: 1200,
-      sidebarWidth: 240,
-    };
-
-    expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade" })).toBe("upgrade");
-    expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Temporary Chat" })).toBe(
-      "temporary-chat",
-    );
-    expect(
-      resolveRemoteToolbarControlKind({
-        ...base,
-        accessibleName: "Upgrade",
-        insideMainContent: false,
-      }),
-    ).toBeNull();
-    expect(
-      resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade", left: 120 }),
-    ).toBeNull();
-    expect(resolveRemoteToolbarControlKind({ ...base, accessibleName: "Upgrade plan" })).toBeNull();
   });
 });

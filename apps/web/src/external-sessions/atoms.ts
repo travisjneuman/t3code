@@ -3,8 +3,9 @@
  * Grok, Pi, Antigravity CLIs and desktop apps), streamed live from each
  * environment, plus the command that continues an idle one as a T3 thread
  * (or hands its history to another agent), and which continued threads are
- * running in their own agent right now. Fork add-on; the sidebar section, the
- * session route, and the thread composer's banner read these atoms.
+ * running in their own agent right now, and archive. Fork add-on; the sidebar
+ * section, the session route, the thread composer's banner, and Settings ›
+ * Archived read these atoms.
  */
 import {
   EXTERNAL_SESSIONS_WS_METHODS,
@@ -99,12 +100,32 @@ export const externalSessionsRunningElsewhere = createEnvironmentRpcSubscription
 
 /**
  * Imports an idle session as a T3 thread, or returns the thread it already
- * became. With `handoffTo`, starts a new thread on that agent from its history.
+ * became.
  */
 export const externalSessionContinue = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:continue",
   tag: EXTERNAL_SESSIONS_WS_METHODS.continue,
 });
+
+/** Hides a session from the list until unarchived; Codex archives it too. */
+export const externalSessionArchive = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:archive",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.archive,
+});
+
+export const externalSessionUnarchive = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:unarchive",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.unarchive,
+});
+
+/** Archived sessions of one environment, newest first, for Settings › Archived. */
+export const externalSessionsArchived = createEnvironmentRpcSubscriptionAtomFamily(
+  connectionAtomRuntime,
+  {
+    label: "environment-data:external-sessions:archived",
+    tag: EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
+  },
+);
 
 /**
  * Applies one stream event. Returns the same object when nothing changed, and

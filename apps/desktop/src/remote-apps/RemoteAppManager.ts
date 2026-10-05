@@ -5,6 +5,8 @@ import {
   REMOTE_APP_TRANSFER_TEXT_MAX_LENGTH,
   type DesktopSurface,
   type RemoteAppAvailability,
+  type RemoteAppChatImportResult,
+  type RemoteAppDownloadCapture,
   type RemoteAppFillPromptRequest,
   type RemoteAppFillPromptResult,
   type RemoteAppSendToThread,
@@ -16,13 +18,16 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
 import * as Electron from "electron";
+import * as NodeCrypto from "node:crypto";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopIpc from "../ipc/DesktopIpc.ts";
@@ -33,6 +38,7 @@ import {
   canUseRemoteAppControl,
   classifyRemoteAppNavigation,
   isAllowedPermission,
+  isTrustedRemoteDownload,
   isTrustedRemoteHost,
   isTrustedRemoteUrl,
   resolveRemoteAppSiteForUrl,
@@ -57,11 +63,21 @@ import {
   type RemoteAppSurfaceMenuMaterial,
 } from "./RemoteAppTheme.ts";
 import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
-import { REMOTE_APP_SEND_TO_THREAD_CHANNEL } from "./RemoteAppChannels.ts";
 import {
+  REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL,
+  REMOTE_APP_SEND_TO_THREAD_CHANNEL,
+} from "./RemoteAppChannels.ts";
+import { importRemoteAppChatExport } from "./RemoteAppChatImport.ts";
+import { readRemoteAppDownloadCapture } from "./RemoteAppDownloads.ts";
+import { safeFilename } from "./RemoteAppFiles.ts";
+import { decodeRemoteAppSelection, remoteAppSelectionToMarkdown } from "./RemoteAppMarkdown.ts";
+import {
+  buildRemoteAppActionNoticeScript,
   buildRemoteAppActivityScript,
   buildRemoteAppNoticeScript,
   buildRemoteAppPromptFillScript,
+  buildRemoteAppSelectionScript,
+  REMOTE_APP_ACTION_NOTICE_TIMEOUT_MS,
   REMOTE_APP_PAGE_WORLD_ID,
 } from "./RemoteAppPageScripts.ts";
 import { REMOTE_APP_VIEW_TOP_INSET, TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
@@ -80,6 +96,8 @@ const REMOTE_APP_PRELOAD_SETTLE_DELAY = "2 seconds";
 const REMOTE_APP_IDLE_SWEEP_INTERVAL = "5 minutes";
 // How long a prompt fill waits for a site that is still loading.
 const REMOTE_APP_FILL_LOAD_TIMEOUT = "15 seconds";
+// Downloads offered to T3 that the renderer may still ask to reveal.
+const REMOTE_APP_MAX_CAPTURED_DOWNLOADS = 50;
 // SidebarChromeFooter is a 32px utility row with 8px padding on each side.
 // Keep the live remote document above the host footer's exact 48px strip so
 // the native Settings, Pull Requests, Usage, and update controls remain both
@@ -210,20 +228,11 @@ export class RemoteAppManager extends Context.Service<
       request: RemoteAppFillPromptRequest,
     ) => Effect.Effect<RemoteAppFillPromptResult, RemoteAppManagerError>;
     readonly authorizeSender: (event: DesktopIpc.DesktopIpcInvokeEvent) => Effect.Effect<boolean>;
+    // Reveals a download captured this session; an unknown id does nothing.
+    readonly showDownloadInFolder: (id: string) => Effect.Effect<void>;
+    readonly importChatExport: Effect.Effect<RemoteAppChatImportResult>;
   }
 >()("@t3tools/desktop/remote-apps/RemoteAppManager") {}
-
-const safeFilename = (filename: string): string => {
-  const normalized = [...filename]
-    .map((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
-      return codePoint < 32 || codePoint === 127 ? "-" : character;
-    })
-    .join("")
-    .replace(/[\\/:*?"<>|]/g, "-")
-    .trim();
-  return normalized.length > 0 ? normalized.slice(0, 180) : "download";
-};
 
 const activeSiteOf = (state: RemoteAppState): RemoteAppSite | undefined =>
   canUseRemoteAppControl(state.activeSurface) ? state.activeSurface : undefined;
@@ -239,6 +248,8 @@ export const make = Effect.gen(function* () {
   const shell = yield* ElectronShell.ElectronShell;
   const sessionService = yield* RemoteAppSession.RemoteAppSession;
   const stateStore = yield* RemoteAppStateStore.RemoteAppStateStore;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
   const attachedRef = yield* Ref.make(false);
   const stateChangeLock = yield* Semaphore.make(1);
@@ -268,6 +279,9 @@ export const make = Effect.gen(function* () {
   const brokenSites = new Set<RemoteAppSite>();
   const insertedThemeKeys = new Map<RemoteAppSite, string>();
   const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
+  // Saved downloads offered to T3 this session, by capture id, so the renderer
+  // can reveal one without naming a path itself. Oldest entries drop first.
+  const capturedDownloads = new Map<string, string>();
   const popupWindows = new Set<Electron.BrowserWindow>();
   let surfaceMenuWindow: Electron.BrowserWindow | null = null;
   // When each kept view last left the screen (or was created hidden).
@@ -517,7 +531,7 @@ export const make = Effect.gen(function* () {
         yield* applySidebarWidth(view);
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
-          try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript(theme)),
+          try: () => view.webContents.executeJavaScript(buildRemoteAppInteractionScript()),
           catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
         }).pipe(Effect.catch(() => Effect.void));
       }),
@@ -670,7 +684,11 @@ export const make = Effect.gen(function* () {
         template.push(
           {
             label: "Send to T3 Thread",
-            click: () => sendSelectionToThread(site, selection),
+            click: () => sendSelectionToThread(site, contents, selection),
+          },
+          {
+            label: "Save Selection as Markdown…",
+            click: () => saveSelectionAsMarkdown(site, contents, window, selection),
           },
           { type: "separator" },
         );
@@ -764,8 +782,9 @@ export const make = Effect.gen(function* () {
     // Listeners accumulate, so each session gets exactly one download handler.
     if (sessionsWithDownloadHandler.has(session)) return;
     sessionsWithDownloadHandler.add(session);
-    session.on("will-download", (_event, item) => {
-      if (!isTrustedRemoteUrl(site, item.getURL())) {
+    session.on("will-download", (_event, item, initiator) => {
+      const initiatorUrl = initiator && !initiator.isDestroyed() ? initiator.getURL() : "";
+      if (!isTrustedRemoteDownload(site, item.getURL(), initiatorUrl)) {
         item.cancel();
         return;
       }
@@ -776,7 +795,11 @@ export const make = Effect.gen(function* () {
           if (result.canceled || result.filePath === undefined) {
             item.cancel();
           } else {
-            item.setSavePath(result.filePath);
+            const savePath = result.filePath;
+            item.setSavePath(savePath);
+            item.once("done", (_doneEvent, state) => {
+              if (state === "completed") offerDownload(site, savePath);
+            });
             item.resume();
           }
         })
@@ -1369,14 +1392,49 @@ export const make = Effect.gen(function* () {
     return reset;
   });
 
+  const withFileServices = <A, E>(
+    effect: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  ): Effect.Effect<A, E> =>
+    effect.pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, pathService),
+    );
+
   /**
-   * Hands a web app selection to the renderer, which appends it to the most
-   * recent T3 thread's draft. T3 comes on screen first so the renderer can
-   * navigate to that thread.
+   * The page's current selection as Markdown, or the plain selected text when
+   * the page can't give its structure or is not one of the site's own pages.
+   * Read only on the user's menu action (see buildRemoteAppSelectionScript for
+   * the terms-of-service basis).
    */
-  const sendSelectionToThread = (site: RemoteAppSite, text: string) =>
+  const selectionMarkdown = (
+    site: RemoteAppSite,
+    contents: Electron.WebContents,
+    fallbackText: string,
+  ) =>
+    (contents.isDestroyed() || !isTrustedRemoteUrl(site, contents.getURL())
+      ? Effect.succeed<unknown>(null)
+      : runPageScript(contents, buildRemoteAppSelectionScript())
+    ).pipe(
+      Effect.map((result) => {
+        const nodes = decodeRemoteAppSelection(result);
+        const markdown = nodes === null ? "" : remoteAppSelectionToMarkdown(nodes);
+        return markdown.length > 0 ? markdown : fallbackText;
+      }),
+    );
+
+  /**
+   * Hands a web app selection, as Markdown, to the renderer, which appends it
+   * to the most recent T3 thread's draft. T3 comes on screen first so the
+   * renderer can navigate to that thread.
+   */
+  const sendSelectionToThread = (
+    site: RemoteAppSite,
+    contents: Electron.WebContents,
+    fallbackText: string,
+  ) =>
     runSafely(
       Effect.gen(function* () {
+        const text = yield* selectionMarkdown(site, contents, fallbackText);
         yield* setActiveSurface("t3code");
         const window = yield* getLiveWindow;
         if (Option.isNone(window) || window.value.webContents.isDestroyed()) return;
@@ -1387,6 +1445,122 @@ export const make = Effect.gen(function* () {
         window.value.webContents.send(REMOTE_APP_SEND_TO_THREAD_CHANNEL, send);
       }),
     );
+
+  /** Writes the selection as Markdown to a file the user picks, named after the page. */
+  const saveSelectionAsMarkdown = (
+    site: RemoteAppSite,
+    contents: Electron.WebContents,
+    owner: Electron.BrowserWindow,
+    fallbackText: string,
+  ) =>
+    runSafely(
+      Effect.gen(function* () {
+        const markdown = yield* selectionMarkdown(site, contents, fallbackText);
+        const title = contents.isDestroyed() ? "" : sanitizeRemoteTitle(contents.getTitle());
+        const result = yield* Effect.tryPromise(() =>
+          Electron.dialog.showSaveDialog(owner, {
+            title: "Save Selection as Markdown",
+            defaultPath: `${safeFilename(title, "Selection")}.md`,
+            filters: [{ name: "Markdown", extensions: ["md"] }],
+          }),
+        );
+        if (result.canceled || result.filePath === undefined) return;
+        const filename = pathService.basename(result.filePath);
+        const saved = yield* fileSystem.writeFileString(result.filePath, `${markdown}\n`).pipe(
+          Effect.as(true),
+          Effect.catch(() => Effect.succeed(false)),
+        );
+        if (contents.isDestroyed() || !isTrustedRemoteUrl(site, contents.getURL())) return;
+        yield* runPageScript(
+          contents,
+          buildRemoteAppNoticeScript(saved ? `Saved ${filename}.` : `Couldn't save ${filename}.`),
+        );
+      }),
+    );
+
+  const rememberDownload = (id: string, filePath: string): void => {
+    capturedDownloads.set(id, filePath);
+    for (const oldest of capturedDownloads.keys()) {
+      if (capturedDownloads.size <= REMOTE_APP_MAX_CAPTURED_DOWNLOADS) break;
+      capturedDownloads.delete(oldest);
+    }
+  };
+
+  const showDownloadInFolder = (id: string) =>
+    Effect.sync(() => {
+      const filePath = capturedDownloads.get(id);
+      if (filePath !== undefined) Electron.shell.showItemInFolder(filePath);
+    });
+
+  const downloadNotice = (
+    capture: RemoteAppDownloadCapture,
+  ): { readonly message: string; readonly action: string } => {
+    if (capture.text !== null) {
+      return { message: `Saved ${capture.filename}.`, action: "Add to T3 Thread" };
+    }
+    const tooLarge = capture.kind === "text" ? " It's too large to add to a thread." : "";
+    return { message: `Saved ${capture.filename}.${tooLarge}`, action: "Show in Folder" };
+  };
+
+  /**
+   * Asks on the site's own page, since T3 toasts sit beneath its view. Only
+   * while the site that saved the file is on screen on one of its own pages;
+   * "ignored" otherwise, or when the user lets the notice go.
+   */
+  const askAboutDownloadOnPage = (capture: RemoteAppDownloadCapture) =>
+    Effect.gen(function* () {
+      if (activeSiteOf(yield* stateStore.get) !== capture.site) return "ignored" as const;
+      const view = yield* getLiveView(capture.site);
+      const contents = Option.isSome(view) ? view.value.webContents : undefined;
+      if (contents === undefined || !isTrustedRemoteUrl(capture.site, contents.getURL())) {
+        return "ignored" as const;
+      }
+      const { message, action } = downloadNotice(capture);
+      const outcome = yield* runPageScript(
+        contents,
+        buildRemoteAppActionNoticeScript(message, action),
+      ).pipe(Effect.timeoutOption(REMOTE_APP_ACTION_NOTICE_TIMEOUT_MS));
+      return Option.isSome(outcome) && outcome.value === "action"
+        ? ("action" as const)
+        : ("ignored" as const);
+    });
+
+  /**
+   * Offers a saved text file or archive to T3 (see RemoteAppDownloads.ts for
+   * the terms-of-service basis). A choice made on the site's page is carried
+   * out here; otherwise the renderer offers the file in a toast.
+   */
+  const offerDownload = (site: RemoteAppSite, filePath: string) =>
+    runSafely(
+      Effect.gen(function* () {
+        const id = NodeCrypto.randomUUID();
+        const capture = yield* withFileServices(
+          readRemoteAppDownloadCapture({ id, site, filePath }),
+        );
+        if (capture === null) return;
+        rememberDownload(id, filePath);
+        const choice = yield* askAboutDownloadOnPage(capture);
+        if (choice === "action" && capture.text === null) {
+          Electron.shell.showItemInFolder(filePath);
+          return;
+        }
+        if (choice === "action") {
+          yield* setActiveSurface("t3code").pipe(Effect.catch(() => Effect.void));
+        }
+        const window = yield* getLiveWindow;
+        if (Option.isNone(window) || window.value.webContents.isDestroyed()) return;
+        const send: RemoteAppDownloadCapture = { ...capture, addNow: choice === "action" };
+        window.value.webContents.send(REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL, send);
+      }),
+    );
+
+  const importChatExport = getLiveWindow.pipe(
+    Effect.flatMap((window) =>
+      withFileServices(
+        importRemoteAppChatExport(Option.getOrUndefined(window), environment.platform),
+      ),
+    ),
+  );
 
   const awaitPageLoaded = (contents: Electron.WebContents) =>
     contents.isLoading()
@@ -1476,6 +1650,8 @@ export const make = Effect.gen(function* () {
     retry,
     clearData,
     fillSitePrompt,
+    showDownloadInFolder,
+    importChatExport,
     authorizeSender: (event) => {
       const senderId = event.sender?.id;
       const senderUrl = (() => {

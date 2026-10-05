@@ -248,6 +248,7 @@ import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 // Fork add-on: read-only sessions from agents running outside T3.
 import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts";
 import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts"; // Fork add-on: session search.
+import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts"; // Fork add-on: thread export.
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -1797,6 +1798,7 @@ const makeWsRpcLayer = (
       const handlers = ServerWsRpcGroup.of({
         ...externalSessionsHandlers,
         ...(yield* SessionSearchRpc.makeHandlers), // Fork add-on: session search.
+        ...(yield* ThreadExportRpc.makeHandlers), // Fork add-on: thread export.
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.dispatchCommand,

@@ -119,6 +119,7 @@ import {
   ThreadForkServiceV2,
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
+import { carriesImportedHistory } from "../external-sessions/importedHistory.ts"; // Fork add-on
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
   "OrchestratorDispatchError",
@@ -1386,10 +1387,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 run.ordinal <= latestHandoffRun.ordinal,
             );
       const needsFullContext = deliveryProviderThread.nativeThreadRef === null;
-      const legacyImportItems =
-        projection.thread.historyOrigin === "v1_import"
-          ? yield* readHandoffItems(threadId, [null])
-          : [];
+      const legacyImportItems = carriesImportedHistory(projection.thread) // Fork add-on: continued external sessions.
+        ? yield* readHandoffItems(threadId, [null])
+        : [];
       const handoffStrategy = needsFullContext
         ? ("full_thread_summary" as const)
         : ("delta_since_target_last_seen" as const);
@@ -5014,10 +5014,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const runId = idAllocator.derive.run({ threadId: command.threadId, ordinal });
       const latestCompletedRun = projection.runs.findLast((run) => run.status === "completed");
       const latestHandoffRun = projection.runs.findLast(isHandoffSourceRun);
-      const legacyImportItems =
-        projection.thread.historyOrigin === "v1_import"
-          ? yield* readHandoffItems(command.threadId, [null])
-          : [];
+      const legacyImportItems = carriesImportedHistory(projection.thread) // Fork add-on: continued external sessions.
+        ? yield* readHandoffItems(command.threadId, [null])
+        : [];
       const isProviderSwitch =
         activeProviderThread !== undefined &&
         activeProviderThread.providerInstanceId !== modelSelection.instanceId;
@@ -5554,7 +5553,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               ...sourceProjection.runs
                 .filter((run) => run.ordinal <= sourceRun.ordinal)
                 .map((run) => run.id),
-              ...(sourceProjection.thread.historyOrigin === "v1_import" ? [null] : []),
+              // Fork add-on: continued external sessions.
+              ...(carriesImportedHistory(sourceProjection.thread) ? [null] : []),
             ]);
       const portableForkHandoff =
         !requiresPortableFork ||

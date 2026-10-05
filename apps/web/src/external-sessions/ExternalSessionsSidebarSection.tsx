@@ -13,14 +13,18 @@ import {
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { CircleDashedIcon } from "lucide-react";
-import { memo, useCallback, useMemo, useRef, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
 import { useSidebar } from "../components/ui/sidebar";
 import { toastManager } from "../components/ui/toast";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
-import { useLocalStorage } from "../hooks/useLocalStorage";
+import {
+  getLocalStorageItem,
+  removeLocalStorageItem,
+  useLocalStorage,
+} from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
@@ -33,6 +37,7 @@ import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
   cwdBasename,
+  externalSessionArchive,
   externalSessionContinue,
   externalSessionEntriesAtom,
   externalSessionOriginLabel,
@@ -42,27 +47,23 @@ import {
   shortModelLabel,
   type ExternalSessionEntry,
 } from "./atoms";
-import { resolveHandoffTargets, type HandoffTo } from "./handoffTargets";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
-const HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
-/** Sessions leave the list after a few idle days, so old hidden keys only need a cap. */
-const MAX_HIDDEN_KEYS = 500;
-const HiddenKeysSchema = Schema.Array(Schema.String);
+/** Per-browser "Hide from list" keys from before archive; archived once, then removed. */
+const LEGACY_HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
+const LegacyHiddenKeysSchema = Schema.Array(Schema.String);
 
 const EDITOR_LABEL_BY_ID = new Map(EDITORS.map((editor) => [editor.id, editor.label]));
 
 type RowMenuAction =
   | "continue"
-  | "continue-with"
-  | `handoff:${string}`
   | "copy-session-id"
   | "copy-path"
   | "open-folder"
   | "open-with"
   | `editor:${EditorId}`
-  | "hide"
-  | "unhide-all";
+  | "archive"
+  | "show-archived";
 
 type MenuPosition = { readonly x: number; readonly y: number };
 
@@ -75,32 +76,32 @@ function nativeSessionId(sessionKey: string): string {
   return sessionKey.slice(sessionKey.indexOf(":") + 1);
 }
 
-function unhideAllItem(hiddenCount: number): ContextMenuItem<RowMenuAction> {
-  return {
-    id: "unhide-all",
-    label: `Show ${hiddenCount} hidden session${hiddenCount === 1 ? "" : "s"}`,
-    icon: "refresh-cw",
-  };
+/** The legacy hidden keys, read once; null when there are none or they cannot be read. */
+function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
+  try {
+    const keys = getLocalStorageItem(LEGACY_HIDDEN_STORAGE_KEY, LegacyHiddenKeysSchema);
+    if (keys === null) return null;
+    removeLocalStorageItem(LEGACY_HIDDEN_STORAGE_KEY);
+    return keys.length > 0 ? new Set(keys) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * "Other Agents" shelf: sessions running outside T3 on the connected
  * environments, live ones first. Expanding shows every session. Right-click a
- * row for its actions, or the header to bring hidden sessions back. Renders
+ * row for its actions, or the header to find archived sessions. Renders
  * nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
   const entries = useAtomValue(externalSessionEntriesAtom);
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
-  const [hiddenKeys, setHiddenKeys] = useLocalStorage<ReadonlyArray<string>, readonly string[]>(
-    HIDDEN_STORAGE_KEY,
-    [],
-    HiddenKeysSchema,
-  );
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
   const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
+  const runArchive = useAtomCommand(externalSessionArchive, { reportFailure: false });
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const activeKey = useParams({
     strict: false,
@@ -120,40 +121,44 @@ export function ExternalSessionsSidebarSection() {
       }),
   });
 
-  const hiddenSet = useMemo(() => new Set(hiddenKeys), [hiddenKeys]);
-  const { visible, hiddenCount } = useMemo(() => {
+  const visible = useMemo(() => {
     const live: Array<ExternalSessionEntry> = [];
     const recent: Array<ExternalSessionEntry> = [];
-    let hidden = 0;
     for (const entry of entries) {
-      if (hiddenSet.has(rowKey(entry.environmentId, entry.session.key))) {
-        hidden += 1;
-        continue;
-      }
       (entry.session.liveness === "recent" ? recent : live).push(entry);
     }
-    return { visible: [...live, ...recent], hiddenCount: hidden };
-  }, [entries, hiddenSet]);
+    return [...live, ...recent];
+  }, [entries]);
+
+  // Sessions hidden in this browser before archive existed are archived in T3
+  // only, once, on the first non-empty list. Keys of sessions not listed then
+  // (aged out, or on an environment not yet connected) are dropped.
+  const legacyMigrated = useRef(false);
+  useEffect(() => {
+    if (legacyMigrated.current || entries.length === 0) return;
+    legacyMigrated.current = true;
+    const hidden = takeLegacyHiddenKeys();
+    if (hidden === null) return;
+    for (const { environmentId, session } of entries) {
+      if (!hidden.has(rowKey(environmentId, session.key))) continue;
+      void runArchive({ environmentId, input: { key: session.key, native: false } });
+    }
+  }, [entries, runArchive]);
 
   const toggleExpanded = useCallback(() => setExpanded((value) => !value), [setExpanded]);
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
 
-  // Without `handoffTo` the session continues in place; with it, a new thread
-  // on that agent starts from the session's history.
-  const continueInT3 = async (entry: ExternalSessionEntry, handoffTo?: HandoffTo) => {
+  const continueInT3 = async (entry: ExternalSessionEntry) => {
     const { environmentId, session } = entry;
-    const result = await runContinue({
-      environmentId,
-      input: handoffTo === undefined ? { key: session.key } : { key: session.key, handoffTo },
-    });
+    const result = await runContinue({ environmentId, input: { key: session.key } });
     if (result._tag === "Failure") {
       if (isAtomCommandInterrupted(result)) return;
       const failure = squashAtomCommandFailure(result);
       toastManager.add({
         type: "error",
-        title: handoffTo === undefined ? "Could not continue in T3" : "Could not hand off",
+        title: "Could not continue in T3",
         description:
           failure instanceof Error ? failure.message : "Could not continue this session in T3.",
       });
@@ -190,10 +195,35 @@ export function ExternalSessionsSidebarSection() {
     });
   };
 
-  const setHidden = (key: string | null) =>
-    setHiddenKeys((keys) =>
-      key === null ? [] : [key, ...keys.filter((k) => k !== key)].slice(0, MAX_HIDDEN_KEYS),
-    );
+  // The row leaves the list on the server's next push; an open session's view stays put.
+  const archiveSession = async (entry: ExternalSessionEntry) => {
+    const result = await runArchive({
+      environmentId: entry.environmentId,
+      input: { key: entry.session.key },
+    });
+    if (result._tag === "Failure") {
+      if (isAtomCommandInterrupted(result)) return;
+      const failure = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: "Could not archive session",
+        description: failure instanceof Error ? failure.message : "An error occurred.",
+      });
+      return;
+    }
+    if (result.value.warning !== null) {
+      toastManager.add({
+        type: "warning",
+        title: "Archived in T3",
+        description: `${externalSessionProductName(entry.session)} could not archive it: ${result.value.warning}`,
+      });
+    }
+  };
+
+  const showArchived = async () => {
+    closeMobileSidebar();
+    await navigate({ to: "/settings/archived" });
+  };
 
   const showRowMenu = async (entry: ExternalSessionEntry, position: MenuPosition) => {
     const api = readLocalApi();
@@ -202,7 +232,6 @@ export function ExternalSessionsSidebarSection() {
     // Read at click time, so rows do not each subscribe to the server config.
     const config = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId));
     const editors = config?.availableEditors ?? [];
-    const handoffTargets = resolveHandoffTargets(config?.providers ?? [], session);
     const otherEditors = editors.filter((id) => id !== "file-manager");
     const items: Array<ContextMenuItem<RowMenuAction>> = [];
     if (externalSessionUnsupportedReason(session) === null) {
@@ -212,17 +241,6 @@ export function ExternalSessionsSidebarSection() {
         icon: "message-square-plus",
         // Two writers on one native session would interleave its transcript.
         disabled: session.liveness === "running",
-      });
-    }
-    if (handoffTargets.length > 0) {
-      // A handoff only reads the transcript, so a running session can still go.
-      items.push({
-        id: "continue-with",
-        label: "Continue with",
-        children: handoffTargets.map(({ entry: target }) => ({
-          id: `handoff:${target.instanceId}` as const,
-          label: target.displayName,
-        })),
       });
     }
     items.push({
@@ -247,14 +265,19 @@ export function ExternalSessionsSidebarSection() {
         });
       }
     }
-    items.push({ id: "hide", label: "Hide from list", icon: "archive", separatorBefore: true });
-    if (hiddenCount > 0) items.push(unhideAllItem(hiddenCount));
+    items.push({
+      id: "archive",
+      label: "Archive",
+      icon: "archive",
+      separatorBefore: true,
+      // It may be in use in the other app right now.
+      disabled: session.liveness === "running",
+    });
 
     const clicked = await api.contextMenu.show(items, position);
     switch (clicked) {
       case null:
       case "open-with":
-      case "continue-with":
         return;
       case "continue":
         await continueInT3(entry);
@@ -268,21 +291,13 @@ export function ExternalSessionsSidebarSection() {
       case "open-folder":
         await openFolder(entry, "file-manager");
         return;
-      case "hide":
-        setHidden(rowKey(environmentId, session.key));
+      case "archive":
+        await archiveSession(entry);
         return;
-      case "unhide-all":
-        setHidden(null);
+      case "show-archived":
+        await showArchived();
         return;
       default:
-        if (clicked.startsWith("handoff:")) {
-          const instanceId = clicked.slice("handoff:".length);
-          const target = handoffTargets.find(({ entry: t }) => t.instanceId === instanceId);
-          if (target !== undefined) {
-            await continueInT3(entry, { instanceId: target.entry.instanceId, model: target.model });
-          }
-          return;
-        }
         await openFolder(entry, clicked.slice("editor:".length) as EditorId);
     }
   };
@@ -299,13 +314,13 @@ export function ExternalSessionsSidebarSection() {
 
   const handleHeaderContextMenu = async (event: MouseEvent) => {
     const api = readLocalApi();
-    if (hiddenCount === 0 || api === undefined) return;
+    if (api === undefined) return;
     event.preventDefault();
-    const clicked = await api.contextMenu.show([unhideAllItem(hiddenCount)], {
-      x: event.clientX,
-      y: event.clientY,
-    });
-    if (clicked === "unhide-all") setHidden(null);
+    const clicked = await api.contextMenu.show<RowMenuAction>(
+      [{ id: "show-archived", label: "Show archived sessions", icon: "archive" }],
+      { x: event.clientX, y: event.clientY },
+    );
+    if (clicked === "show-archived") await showArchived();
   };
 
   if (entries.length === 0) return null;
