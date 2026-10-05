@@ -1,6 +1,7 @@
 /**
  * Compare agents: one prompt sent to two agents as two new threads in the
- * same project, shown side by side. "Review swap" then sends each agent the
+ * same project (or "No project", where each side gets a folder of its own),
+ * shown side by side. "Review swap" then sends each agent the
  * other's latest final answer, saying which provider, model and options
  * produced it for the same prompts. "Follow up" sends one message to both and
  * "Stop" interrupts both. The pair needs no stored record: both
@@ -12,7 +13,9 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 
 import { AuthOrchestrationOperateScope, EnvironmentAuthorizationError } from "./auth.ts";
 import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ChatAttachment } from "./chatAttachment.ts";
 import { ModelSelection } from "./modelSelection.ts";
+import { ProviderInteractionMode, RuntimeMode } from "./providerPolicy.ts";
 
 export const COMPARE_AGENTS_WS_METHODS = {
   start: "compareAgents.start",
@@ -49,7 +52,8 @@ export const comparePairOf = (
 };
 
 export const CompareAgentsStartInput = Schema.Struct({
-  projectId: ProjectId,
+  /** Absent for "No project": the environment's Scratch project. */
+  projectId: Schema.optional(ProjectId),
   prompt: TrimmedNonEmptyString,
   left: ModelSelection,
   right: ModelSelection,
@@ -70,9 +74,21 @@ export type CompareAgentsReviewSwapInput = typeof CompareAgentsReviewSwapInput.T
 export const CompareAgentsEmptyResult = Schema.Struct({});
 export type CompareAgentsEmptyResult = typeof CompareAgentsEmptyResult.Type;
 
+/** One side of a follow-up: its model for this turn and its own attachment uploads. */
+export const CompareAgentsFollowUpSide = Schema.Struct({
+  modelSelection: ModelSelection,
+  attachments: Schema.Array(ChatAttachment),
+});
+export type CompareAgentsFollowUpSide = typeof CompareAgentsFollowUpSide.Type;
+
+/** The same text and modes to both sides; attachments upload once per side. */
 export const CompareAgentsFollowUpInput = Schema.Struct({
   pairId: ComparePairId,
   text: TrimmedNonEmptyString,
+  interactionMode: ProviderInteractionMode,
+  runtimeMode: RuntimeMode,
+  left: CompareAgentsFollowUpSide,
+  right: CompareAgentsFollowUpSide,
 });
 export type CompareAgentsFollowUpInput = typeof CompareAgentsFollowUpInput.Type;
 

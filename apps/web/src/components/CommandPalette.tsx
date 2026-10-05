@@ -2299,7 +2299,6 @@ function OpenCommandPaletteDialog(props: {
     ...compareAgentsPaletteItems({
       navigate,
       environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId,
-      projectId: currentProjectId,
       activeThread: activeThread ?? null,
     }),
   ); // Fork add-on: compare agents.

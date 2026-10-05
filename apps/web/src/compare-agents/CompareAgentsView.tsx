@@ -1,12 +1,14 @@
 /**
  * Compare agents page. Without a pair it is the setup form, one prompt and
- * two models, above the list of earlier comparisons. With a pair it shows
- * both threads' prompts and answers side by side, with Review swap and a
- * docked follow-up box that sends to both, or stops both while they work.
+ * two models, in No project by default, above the list of earlier
+ * comparisons. With a pair it shows both threads' prompts and answers side by
+ * side over CompareComposer, the message box that drives both.
  * Fork add-on: compare agents; see docs/user/compare-agents.md.
  */
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
+import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import {
   COMPARE_FOLLOW_UP_MESSAGE_PREFIX,
   COMPARE_REVIEW_MESSAGE_PREFIX,
@@ -29,7 +31,6 @@ import { CheckIcon, CopyIcon, PlusIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useMemo, useState } from "react";
 
 import ChatMarkdown from "../components/ChatMarkdown";
-import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import { scheduledTaskDefaultModel } from "../components/settings/scheduledTasksSettings.logic";
@@ -47,24 +48,20 @@ import {
 import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
 import { Textarea } from "../components/ui/textarea";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { isElectron } from "../env";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { cn } from "../lib/utils";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
-import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  type ProviderInstanceEntry,
-  sortProviderInstanceEntries,
-} from "../providerInstances";
+import type { ProviderInstanceEntry } from "../providerInstances";
 import { useProjects, useThreadProjection, useThreadShells } from "../state/entities";
+import { useEnvironments } from "../state/environments";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
-import { reviewSwap, sendFollowUp, startComparison, stopComparison } from "./compareAgents";
+import { startComparison } from "./compareAgents";
+import { CompareComposer, useCompareProviders } from "./CompareComposer";
 
 const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
   "preparing",
@@ -80,10 +77,12 @@ const isWorking = (projection: OrchestrationV2ThreadProjection | null) =>
 const isSendShortcut = (event: KeyboardEvent) =>
   event.key === "Enter" && (event.metaKey || event.ctrlKey);
 
+/** The setup form's project choice for the environment's Scratch project. */
+const NO_PROJECT = "no-project";
+
 export function CompareAgentsView(props: {
   environmentId: EnvironmentId;
   pairId: string | undefined;
-  projectId: string | undefined;
   fromThreadId: string | undefined;
 }) {
   const navigate = useNavigate();
@@ -128,7 +127,7 @@ export function CompareAgentsView(props: {
           ) : (
             <CompareSetup
               environmentId={props.environmentId}
-              initialProjectId={props.projectId}
+              initialProjectId={undefined}
               initialPrompt=""
               initialLeft={null}
             />
@@ -174,7 +173,7 @@ function otherDefaultModel(
   return entry && model ? createModelSelection(entry.instanceId, model.slug) : avoid;
 }
 
-/** The setup form prefilled from a thread: its project, model, and latest prompt. */
+/** The setup form prefilled from a thread: its project (or No project), model, and latest prompt. */
 function CompareSetupFromThread(props: { environmentId: EnvironmentId; threadId: string }) {
   const thread = useThreadProjection(
     scopeThreadRef(props.environmentId, props.threadId as ThreadId),
@@ -204,37 +203,43 @@ function CompareSetup(props: {
   const { environmentId } = props;
   const navigate = useNavigate();
   const allProjects = useProjects();
+  const { environments } = useEnvironments();
+  const environment = environments.find((entry) => entry.environmentId === environmentId);
+  // Null when this environment offers no Scratch folder ("No project").
+  const scratchRoot = availableScratchWorkspaceRoot(
+    environment?.connection.phase,
+    environment?.serverConfig,
+  );
   const projects = useMemo(
-    () => allProjects.filter((project) => project.environmentId === environmentId),
-    [allProjects, environmentId],
-  );
-  const settings = useEnvironmentSettings(environmentId);
-  const providers =
-    useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
-  const entries = useMemo(
     () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+      allProjects.filter(
+        (project) =>
+          project.environmentId === environmentId && !isScratchProject(project, scratchRoot),
       ),
-    [providers, settings],
+    [allProjects, environmentId, scratchRoot],
   );
-  const [projectId, setProjectId] = useState(props.initialProjectId ?? "");
+  const { settings, entries } = useCompareProviders(environmentId);
+  const [projectId, setProjectId] = useState(props.initialProjectId ?? NO_PROJECT);
   const [prompt, setPrompt] = useState(props.initialPrompt);
   const [leftChoice, setLeftChoice] = useState<ModelSelection | null>(props.initialLeft);
   const [rightChoice, setRightChoice] = useState<ModelSelection | null>(null);
   const [starting, setStarting] = useState(false);
 
-  const project = projects.find((candidate) => candidate.id === projectId) ?? projects[0] ?? null;
+  // Anything but a listed project (No project, the Scratch project itself) means No project.
+  const project =
+    projects.find((candidate) => candidate.id === projectId) ??
+    (scratchRoot === null ? (projects[0] ?? null) : null);
   const leftDefault = scheduledTaskDefaultModel(settings, project, entries);
   const left = leftChoice ?? leftDefault;
   const right = rightChoice ?? otherDefaultModel(entries, left);
-  const canStart = !starting && project !== null && prompt.trim() !== "" && !!left && !!right;
+  const hasPlace = project !== null || scratchRoot !== null;
+  const canStart = !starting && hasPlace && prompt.trim() !== "" && !!left && !!right;
 
   const start = async () => {
-    if (!canStart || project === null || !left || !right) return;
+    if (!canStart || !left || !right) return;
     setStarting(true);
     const pairId = await startComparison(environmentId, {
-      projectId: project.id,
+      ...(project === null ? {} : { projectId: project.id }),
       prompt: prompt.trim(),
       left,
       right,
@@ -249,21 +254,29 @@ function CompareSetup(props: {
     }
   };
 
-  if (projects.length === 0) {
+  if (!hasPlace) {
     return <p className="pt-6 text-sm text-muted-foreground">Add a project first.</p>;
   }
   return (
     <div className="mx-auto max-w-2xl space-y-5 pt-4">
       <p className="text-sm text-muted-foreground">
         Send one prompt to two agents and see their answers side by side. Each side becomes its own
-        thread. Both work in the project folder itself, so prefer questions and reviews over edits.
+        thread.{" "}
+        {project === null
+          ? "With No project, each agent gets an empty folder of its own, so both can build freely."
+          : "Both work in the project folder itself, so prefer questions and reviews over edits."}
       </p>
       <Field label="Project">
-        <Select value={project?.id ?? ""} onValueChange={(id) => setProjectId(String(id))}>
+        <Select value={project?.id ?? NO_PROJECT} onValueChange={(id) => setProjectId(String(id))}>
           <SelectTrigger size="sm">
-            <SelectValue>{project?.title ?? "Pick a project"}</SelectValue>
+            <SelectValue>{project?.title ?? "No project"}</SelectValue>
           </SelectTrigger>
           <SelectPopup>
+            {scratchRoot !== null ? (
+              <SelectItem value={NO_PROJECT}>
+                No project · a separate folder for each side
+              </SelectItem>
+            ) : null}
             {projects.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
                 {candidate.title}
@@ -467,10 +480,7 @@ function CompareResults(props: { environmentId: EnvironmentId; pairId: string })
   const [leftId, rightId] = compareThreadIds(pairId);
   const left = useThreadProjection(scopeThreadRef(environmentId, leftId));
   const right = useThreadProjection(scopeThreadRef(environmentId, rightId));
-  const [pending, setPending] = useState<"swap" | "stop" | "follow-up" | null>(null);
-  const [followUp, setFollowUp] = useState("");
-  const sides = [left?.projection ?? null, right?.projection ?? null];
-  const working = sides.some(isWorking);
+  const sides = [left?.projection ?? null, right?.projection ?? null] as const;
   const finished = sides.every((projection) => {
     if (projection === null) return false;
     const last = threadExchanges(projection).findLast((exchange) => exchange.run !== null);
@@ -481,184 +491,21 @@ function CompareResults(props: { environmentId: EnvironmentId; pairId: string })
       ? 0
       : threadExchanges(sides[0]).filter((exchange) => exchangeKind(exchange) === "review").length;
 
-  const run = async (kind: NonNullable<typeof pending>, action: () => Promise<boolean>) => {
-    setPending(kind);
-    const ok = await action();
-    setPending(null);
-    return ok;
-  };
-  const sendToBoth = async () => {
-    const text = followUp.trim();
-    if (text === "" || working || pending !== null) return;
-    if (await run("follow-up", () => sendFollowUp(environmentId, pairId, text))) setFollowUp("");
-  };
-
   return (
     <>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-6 sm:px-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            disabled={pending !== null || working || !finished}
-            onClick={() => void run("swap", () => reviewSwap(environmentId, pairId))}
-          >
-            {pending === "swap" ? <Spinner /> : null}
-            {swapsSent === 0 ? "Review swap" : `Review swap (round ${swapsSent + 1})`}
-          </Button>
-          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-            {working
-              ? "Waiting for both agents to finish."
-              : finished
-                ? "Review swap sends each agent the other's newest answer and asks it to compare and improve."
-                : "Review swap needs a finished answer from both agents."}
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <CompareColumn environmentId={environmentId} threadId={leftId} thread={left} />
-          <CompareColumn environmentId={environmentId} threadId={rightId} thread={right} />
-        </div>
+      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pt-4 pb-6 sm:px-6 lg:grid-cols-2 lg:items-start">
+        <CompareColumn environmentId={environmentId} threadId={leftId} thread={left} />
+        <CompareColumn environmentId={environmentId} threadId={rightId} thread={right} />
       </div>
-      <FollowUpComposer
-        value={followUp}
-        onChange={setFollowUp}
-        working={working}
-        pending={pending}
-        onSend={() => void sendToBoth()}
-        onStop={() => void run("stop", () => stopComparison(environmentId, pairId))}
+      <CompareComposer
+        environmentId={environmentId}
+        pairId={pairId}
+        left={sides[0]}
+        right={sides[1]}
+        swapsSent={swapsSent}
+        finished={finished}
       />
     </>
-  );
-}
-
-// ComposerPrimaryActions' round send and stop buttons, without the stage backdrop art.
-const ROUND_ACTION_CLASS =
-  "relative isolate flex size-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:opacity-64 disabled:shadow-none disabled:hover:scale-100 sm:size-8 [&_svg]:pointer-events-none";
-
-/**
- * The follow-up box, docked under the results in ChatComposer's lane, surface
- * and toolbar. While either agent works, its round button stops both instead.
- */
-function FollowUpComposer(props: {
-  value: string;
-  onChange: (value: string) => void;
-  working: boolean;
-  pending: "swap" | "stop" | "follow-up" | null;
-  onSend: () => void;
-  onStop: () => void;
-}) {
-  const { value, working, pending } = props;
-  const canSend = !working && pending === null && value.trim() !== "";
-  return (
-    <div className="chat-composer-lane w-full shrink-0 pt-1.5 sm:pt-2">
-      <ComposerSurface.Shell>
-        <ComposerSurface.Host>
-          <div className="relative z-10">
-            <ComposerSurface.Main>
-              <div className="rounded-3xl">
-                <div className="relative px-3 pt-3.5 pb-2 sm:px-4 sm:pt-4">
-                  <textarea
-                    aria-label="Follow-up for both agents"
-                    className="block field-sizing-content max-h-50 min-h-12 w-full resize-none bg-transparent font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) leading-relaxed text-foreground outline-none placeholder:text-placeholder max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)"
-                    placeholder={
-                      working
-                        ? "Both agents are working. You can send once they finish."
-                        : "Ask both agents the same follow-up…"
-                    }
-                    value={value}
-                    onChange={(event) => props.onChange(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (!isSendShortcut(event)) return;
-                      event.preventDefault();
-                      if (canSend) props.onSend();
-                    }}
-                  />
-                </div>
-                <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2 px-3 pb-3 sm:px-4 sm:pb-4">
-                  <p className="min-w-0 truncate text-xs text-muted-foreground">
-                    Sends to both agents. Each sees only its own thread.
-                  </p>
-                  {working ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            className={cn(
-                              ROUND_ACTION_CLASS,
-                              "bg-destructive/90 text-white shadow-destructive/24 hover:bg-destructive",
-                            )}
-                            disabled={pending !== null}
-                            onClick={props.onStop}
-                            aria-label="Stop both agents"
-                          />
-                        }
-                      >
-                        {pending === "stop" ? (
-                          <Spinner size="sm" aria-hidden="true" />
-                        ) : (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 12 12"
-                            fill="currentColor"
-                            aria-hidden="true"
-                          >
-                            <rect x="2" y="2" width="8" height="8" rx="1.5" />
-                          </svg>
-                        )}
-                      </TooltipTrigger>
-                      <TooltipPopup>Stop both</TooltipPopup>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            className={cn(
-                              ROUND_ACTION_CLASS,
-                              "bg-message-action text-message-action-foreground enabled:shadow-message-action/24 hover:bg-message-action-hover",
-                            )}
-                            disabled={!canSend}
-                            onClick={props.onSend}
-                            aria-label="Send to both"
-                          />
-                        }
-                      >
-                        {pending === "follow-up" ? (
-                          <Spinner size="sm" aria-hidden="true" />
-                        ) : (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </TooltipTrigger>
-                      <TooltipPopup>Send to both (Ctrl/⌘ Enter)</TooltipPopup>
-                    </Tooltip>
-                  )}
-                </div>
-              </div>
-            </ComposerSurface.Main>
-          </div>
-        </ComposerSurface.Host>
-      </ComposerSurface.Shell>
-      <div
-        aria-hidden
-        className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-      />
-    </div>
   );
 }
 

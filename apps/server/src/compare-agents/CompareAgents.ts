@@ -1,10 +1,12 @@
 /**
- * Compare agents. `start` launches the same prompt as two new threads in one
- * project folder, one per model; their ids derive from the pair id
+ * Compare agents. `start` launches the same prompt as two new threads, one
+ * per model, in a project or in "No project" (Scratch, where thread launch
+ * gives each side a folder of its own); their ids derive from the pair id
  * (`compareThreadIds`), so the pair needs no stored record. `reviewSwap`
  * sends each thread the other's latest final answer, naming the provider,
  * model and options that produced it for the same prompts. `followUp` sends
- * one message to both, and `stop` interrupts both. Fork add-on; see
+ * one message to both, with each side's model and attachments and the
+ * shared modes, and `stop` interrupts both. Fork add-on; see
  * docs/user/compare-agents.md.
  *
  * @module compare-agents/CompareAgents
@@ -16,6 +18,7 @@ import {
   type CompareAgentsEmptyResult,
   CompareAgentsError,
   type CompareAgentsFollowUpInput,
+  type CompareAgentsFollowUpSide,
   type CompareAgentsReviewSwapInput,
   type CompareAgentsStartInput,
   type CompareAgentsStartResult,
@@ -25,6 +28,8 @@ import {
   MessageId,
   type ModelSelection,
   type OrchestrationV2ThreadProjection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
   type ThreadId,
   compareThreadIds,
   modelSelectionLabel,
@@ -38,6 +43,7 @@ import * as Layer from "effect/Layer";
 
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 
 export class CompareAgents extends Context.Service<
   CompareAgents,
@@ -121,11 +127,17 @@ const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
   const crypto = yield* Crypto.Crypto;
+  const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
 
   const start = Effect.fn("CompareAgents.start")(function* (input: CompareAgentsStartInput) {
     const pairId = yield* crypto.randomUUIDv4.pipe(
       Effect.mapError(failed("Could not start the comparison.")),
     );
+    const projectId =
+      input.projectId ??
+      (yield* managedFolders.ensureScratchProject.pipe(
+        Effect.mapError(failed("Could not start without a project.")),
+      )).projectId;
     const [leftId, rightId] = compareThreadIds(pairId);
     const sides = [
       { threadId: leftId, selection: input.left, side: "a" },
@@ -136,7 +148,7 @@ const make = Effect.gen(function* () {
         .launch({
           commandId: CommandId.make(`compare-agents:${pairId}:${side}`),
           threadId,
-          projectId: input.projectId,
+          projectId,
           title: threadTitle(input.prompt, selection),
           generateTitle: false,
           modelSelection: selection,
@@ -172,17 +184,22 @@ const make = Effect.gen(function* () {
     }
   });
 
-  /** Sends each side its text as a user message under `prefix`. */
+  /**
+   * Sends each side its text as a user message under `prefix`, on the side's
+   * own model unless the send names one.
+   */
   const sendToBoth = Effect.fn("CompareAgents.sendToBoth")(function* (
     prefix: string,
     sends: ReadonlyArray<{
       readonly projection: OrchestrationV2ThreadProjection;
       readonly text: string;
       readonly side: "a" | "b";
+      readonly with?: CompareAgentsFollowUpSide;
     }>,
   ) {
     const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not send.")));
-    for (const { projection, text, side } of sends) {
+    for (const { projection, text, side, with: sideInput } of sends) {
+      const modelSelection = sideInput?.modelSelection ?? projection.thread.modelSelection;
       yield* orchestrator
         .dispatch({
           type: "message.dispatch",
@@ -192,13 +209,40 @@ const make = Effect.gen(function* () {
           threadId: projection.thread.id,
           messageId: MessageId.make(`${prefix}${id}:${side}`),
           text,
-          attachments: [],
-          modelSelection: projection.thread.modelSelection,
+          attachments: sideInput?.attachments ?? [],
+          modelSelection,
           dispatchMode: { type: "start_immediately" },
         })
-        .pipe(
-          Effect.mapError(failed(`Could not send to ${projection.thread.modelSelection.model}.`)),
-        );
+        .pipe(Effect.mapError(failed(`Could not send to ${modelSelection.model}.`)));
+    }
+  });
+
+  /** Brings a side's Build/Plan and access modes to the follow-up's, as the composer does on send. */
+  const applyModes = Effect.fn("CompareAgents.applyModes")(function* (
+    projection: OrchestrationV2ThreadProjection,
+    modes: { readonly interactionMode: ProviderInteractionMode; readonly runtimeMode: RuntimeMode },
+  ) {
+    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not send.")));
+    const threadId = projection.thread.id;
+    if (projection.thread.runtimeMode !== modes.runtimeMode) {
+      yield* orchestrator
+        .dispatch({
+          type: "thread.runtime-mode.set",
+          commandId: CommandId.make(`compare-agents-mode:${id}:runtime`),
+          threadId,
+          runtimeMode: modes.runtimeMode,
+        })
+        .pipe(Effect.mapError(failed("Could not change the access mode.")));
+    }
+    if (projection.thread.interactionMode !== modes.interactionMode) {
+      yield* orchestrator
+        .dispatch({
+          type: "thread.interaction-mode.set",
+          commandId: CommandId.make(`compare-agents-mode:${id}:interaction`),
+          threadId,
+          interactionMode: modes.interactionMode,
+        })
+        .pipe(Effect.mapError(failed("Could not change Build or Plan mode.")));
     }
   });
 
@@ -226,9 +270,11 @@ const make = Effect.gen(function* () {
   ) {
     const [left, right] = yield* readPair(input.pairId);
     yield* requireIdle([left, right]);
+    yield* applyModes(left, input);
+    yield* applyModes(right, input);
     yield* sendToBoth(COMPARE_FOLLOW_UP_MESSAGE_PREFIX, [
-      { projection: left, text: input.text, side: "a" },
-      { projection: right, text: input.text, side: "b" },
+      { projection: left, text: input.text, side: "a", with: input.left },
+      { projection: right, text: input.text, side: "b", with: input.right },
     ]);
     return {};
   });
