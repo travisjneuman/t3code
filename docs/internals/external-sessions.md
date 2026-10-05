@@ -132,6 +132,10 @@ in T3, which binds an ordinary thread to that same session.
   Unarchive, because T3 never writes Claude's files. The scan rides the list's republish (at most
   every 10 seconds, only while the list is watched, re-reading only files whose mtime changed) and
   covers only sessions the registry knows, since their titles come from the transcripts.
+  A session whose transcript says `entrypoint: "claude-desktop"` but has no record there is left
+  out: it was deleted in Claude, or it is a background `claude` run (a `/doctor` check, a probe)
+  that inherited the desktop app's environment. Search still finds it. Without any records,
+  nothing is filtered.
 - **"Open in <app>" uses each app's own link, on the server's machine.**
   [`openInOrigin.ts`](../../apps/server/src/external-sessions/openInOrigin.ts) opens
   `claude://code/continue?session=local_<id>` for Claude desktop and `codex://threads/<id>` for the

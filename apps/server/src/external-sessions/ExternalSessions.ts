@@ -324,8 +324,18 @@ const make = Effect.gen(function* () {
     const publish = Effect.gen(function* () {
       yield* ownedSessionIds;
       const inClaude = yield* claudeDesktopArchive.archivedIds;
+      const claudeDesktopHas = yield* claudeDesktopArchive.hasRecord;
       const now = Date.now();
-      const listable = [...entries].filter(([, entry]) => isListed(entry, now));
+      // Tagged as Claude desktop's but unknown to it: deleted there, or a
+      // background run that inherited its tag. Claude desktop doesn't list it.
+      const unknownToClaudeDesktop = (entry: Entry) =>
+        entry.source.driver === "claudeAgent" &&
+        entry.info.origin === "Desktop" &&
+        claudeDesktopHas !== null &&
+        !claudeDesktopHas(entry.info.id);
+      const listable = [...entries].filter(
+        ([, entry]) => isListed(entry, now) && !unknownToClaudeDesktop(entry),
+      );
       // Claude desktop's archive hides a Claude session just as T3's does.
       const claudeArchivedAt = (entry: Entry) =>
         entry.source.driver === "claudeAgent" ? inClaude.get(entry.info.id) : undefined;

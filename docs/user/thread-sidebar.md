@@ -308,7 +308,7 @@ it stops. Archived sessions are listed in **Settings › Archived**, where **Una
 back. Right-click the **Other Agents** header and choose **Show archived sessions** to go there.
 Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
 Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here
-within a few seconds.
+within a few seconds. Sessions you delete in the Claude desktop app leave the list as well.
 
 Sessions from the Claude desktop app or the Codex app open in that app on the same session: click
 **Claude Desktop** or **Codex Desktop** under the session, or right-click the row and choose
