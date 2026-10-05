@@ -175,5 +175,9 @@ in T3, which binds an ordinary thread to that same session.
   skips it, because `shouldPrepareLegacyImportHandoff` keeps requiring `v1_import`.
 - Turns run by another provider never reach the original session. When the thread switches back,
   the usual handoff delta goes into the resumed session, so the other app sees it from then on.
+  "Hand back" (`handBack.ts`) is that switch as one message. It reads the original model
+  selection from the thread's `thread.created` event, not the current one, and the origin
+  instance from the `import:<instance>:<session>` thread id, so upstream onboarding imports get it
+  too.
 - Mobile does not render this section or the running warning yet. The RPCs are
   environment-scoped, so they can be added later from the same contracts.

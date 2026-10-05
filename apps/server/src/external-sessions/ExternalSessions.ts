@@ -21,6 +21,7 @@ import {
   type ExternalSessionArchiveResult,
   type ExternalSessionArchivedResult,
   type ExternalSessionArchivedSession,
+  type ExternalSessionHandBackResult,
   ExternalSessionBusyError,
   type ExternalSessionContinueInput,
   type ExternalSessionContinueResult,
@@ -51,6 +52,7 @@ import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStor
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
 import { makeAntigravitySource } from "./antigravitySource.ts";
 import * as ClaudeDesktopArchive from "./claudeDesktopArchive.ts";
+import * as HandBack from "./handBack.ts";
 import { makeClaudeSource } from "./claudeSource.ts";
 import * as CodexNativeArchive from "./codexNativeArchive.ts";
 import { makeCodexSource } from "./codexSource.ts";
@@ -129,6 +131,13 @@ export class ExternalSessions extends Context.Service<
      * archived in Claude desktop; the whole set on subscribe and after every change.
      */
     readonly subscribeArchived: Stream.Stream<ExternalSessionArchivedResult>;
+    /**
+     * Send one short message on the agent a continued thread came from, so
+     * what other agents did lands in its own session (handBack.ts).
+     */
+    readonly handBack: (
+      threadId: ThreadId,
+    ) => Effect.Effect<ExternalSessionHandBackResult, ExternalSessionError>;
   }
 >()("t3/external-sessions/ExternalSessions") {}
 
@@ -184,6 +193,7 @@ const make = Effect.gen(function* () {
   const archive = yield* ExternalSessionArchive.make;
   const codexNativeArchive = yield* CodexNativeArchive.make;
   const claudeDesktopArchive = yield* ClaudeDesktopArchive.make;
+  const { handBack } = yield* HandBack.make;
   const sources: ReadonlyArray<ExternalSessionSource> = [
     makeClaudeSource(),
     makeCodexSource(),
@@ -649,6 +659,7 @@ const make = Effect.gen(function* () {
     archiveSession,
     unarchiveSession,
     subscribeArchived,
+    handBack,
   });
 });
 

@@ -13,7 +13,7 @@ import {
   EnvironmentAuthorizationError,
 } from "./auth.ts";
 import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 export const EXTERNAL_SESSIONS_WS_METHODS = {
   subscribeList: "externalSessions.subscribeList",
@@ -23,6 +23,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   archive: "externalSessions.archive",
   unarchive: "externalSessions.unarchive",
   subscribeArchived: "externalSessions.subscribeArchived",
+  handBack: "externalSessions.handBack",
 } as const;
 
 /** The streaming methods, for the client's subscription tag union. */
@@ -364,6 +365,32 @@ export const ExternalSessionsUnarchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHOD
   error: ExternalSessionRpcError,
 });
 
+/**
+ * The provider instance a thread was continued from, read from its id
+ * (`import:<instance>:<session id>`, as continue and the onboarding importer
+ * make it), or null for any other thread.
+ */
+export const continuedThreadOriginInstanceId = (threadId: string): ProviderInstanceId | null => {
+  if (!threadId.startsWith("import:")) return null;
+  const end = threadId.indexOf(":", "import:".length);
+  return end === -1 ? null : ProviderInstanceId.make(threadId.slice("import:".length, end));
+};
+
+/** Hand a continued thread back to the agent it came from (see `handBack`). */
+export const ExternalSessionHandBackInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type ExternalSessionHandBackInput = typeof ExternalSessionHandBackInput.Type;
+
+export const ExternalSessionHandBackResult = Schema.Struct({});
+export type ExternalSessionHandBackResult = typeof ExternalSessionHandBackResult.Type;
+
+export const ExternalSessionsHandBackRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.handBack, {
+  payload: ExternalSessionHandBackInput,
+  success: ExternalSessionHandBackResult,
+  error: ExternalSessionRpcError,
+});
+
 export const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
   {
@@ -383,6 +410,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsArchiveRpc,
   ExternalSessionsUnarchiveRpc,
   ExternalSessionsSubscribeArchivedRpc,
+  ExternalSessionsHandBackRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -394,4 +422,5 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.archive]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.handBack]: AuthOrchestrationOperateScope,
 } as const;

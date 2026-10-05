@@ -37,6 +37,17 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     { tag: "rect", attrs: { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2" } },
     { tag: "path", attrs: { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" } },
   ],
+  "undo-2": [
+    // Fork add-on: external-session hand back.
+    { tag: "path", attrs: { d: "M9 14 4 9l5-5" } }, // Fork add-on: external-session hand back.
+    { tag: "path", attrs: { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" } }, // Fork add-on: external-session hand back.
+  ], // Fork add-on: external-session hand back.
+  download: [
+    // Fork add-on: thread export.
+    { tag: "path", attrs: { d: "M12 15V3" } }, // Fork add-on: thread export.
+    { tag: "path", attrs: { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" } }, // Fork add-on: thread export.
+    { tag: "path", attrs: { d: "m7 10 5 5 5-5" } }, // Fork add-on: thread export.
+  ], // Fork add-on: thread export.
   folder: [
     {
       tag: "path",
