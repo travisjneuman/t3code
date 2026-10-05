@@ -76,7 +76,9 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
   const accentStyle = props.accentColor
     ? ({ "--provider-accent": props.accentColor } as CSSProperties)
     : undefined;
-  const badgeContent = props.badgeContent ?? "initials";
+  // Fork add-on: an accent color already tells instances apart, so a colored
+  // badge is a small dot; initials stay for uncolored instances.
+  const badgeContent = props.badgeContent ?? (props.accentColor ? "none" : "initials");
   const isAcpRegistry = props.driverKind === "acpRegistry";
   const acpRegistryIconUrl = resolveProviderInstanceAcpRegistryIconUrl({
     driverKind: props.driverKind,
@@ -126,6 +128,7 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
               ? "bg-(--provider-accent) text-white"
               : "bg-card text-muted-foreground",
             props.badgeClassName,
+            badgeContent === "none" && "h-2 min-w-2 px-0",
           )}
           style={{ borderColor: indicatorBackground }}
           aria-hidden

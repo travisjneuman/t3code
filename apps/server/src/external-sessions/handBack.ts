@@ -1,10 +1,13 @@
 /**
- * "Hand back" for a continued thread: one message on the agent the session
- * came from, with the model and options it was continued with. The
+ * The ways back for a continued thread. "Hand back": one message on the agent
+ * the session came from, with the model and options it was continued with. The
  * orchestrator puts what other agents did since that agent's last turn into
  * the message as a context handoff, and the provider resumes its own session,
  * so the other app sees that work from then on. Turns another agent ran never
- * reach the original session otherwise. Fork add-on; see
+ * reach the original session otherwise. "Move back to Other Agents"
+ * (`release`): archives the thread, which then no longer owns its session
+ * (ExternalSessions' ownership), so the session is listed again; continuing
+ * it unarchives the thread. Fork add-on; see
  * docs/internals/external-sessions.md.
  *
  * @module external-sessions/handBack
@@ -105,5 +108,31 @@ export const make = Effect.gen(function* () {
     return {};
   });
 
-  return { handBack };
+  const release = Effect.fn("ExternalSessions.release")(function* (threadId: ThreadId) {
+    if (continuedThreadOriginInstanceId(threadId) === null) {
+      return yield* new ExternalSessionError({
+        message: "This thread was not continued from another app.",
+      });
+    }
+    const projection = yield* orchestrator
+      .getThreadProjection(threadId)
+      .pipe(Effect.mapError(failed("This thread could not be read.")));
+    if (projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) {
+      return yield* new ExternalSessionError({
+        message: "This thread is still working. Stop it, then move it back.",
+      });
+    }
+    if (projection.thread.archivedAt !== null) return {};
+    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not move it back.")));
+    yield* orchestrator
+      .dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make(`external-session-release:${id}`),
+        threadId,
+      })
+      .pipe(Effect.mapError(failed("Could not move it back.")));
+    return {};
+  });
+
+  return { handBack, release };
 });

@@ -4517,7 +4517,7 @@ export default function Sidebar() {
         );
         if (clicked._tag === "Failure") return;
         if (isExportMenuId(clicked.value)) return exportThread(threadRef, clicked.value); // Fork add-on: thread export.
-        if (isHandBackMenuId(clicked.value)) return handBackThread(threadRef); // Fork add-on: external-session hand back.
+        if (isHandBackMenuId(clicked.value)) return handBackThread(threadRef, clicked.value); // Fork add-on: external-session hand back.
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"

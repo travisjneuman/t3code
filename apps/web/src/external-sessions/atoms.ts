@@ -124,6 +124,12 @@ export const externalSessionHandBack = createEnvironmentRpcCommand(connectionAto
   tag: EXTERNAL_SESSIONS_WS_METHODS.handBack,
 });
 
+/** Archives a continued thread so its session is listed in Other Agents again. */
+export const externalSessionRelease = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:release",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.release,
+});
+
 /** Opens the app a session runs in on that session, on the server's machine. */
 export const externalSessionOpenInOrigin = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:open-in-origin",

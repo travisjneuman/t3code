@@ -13,13 +13,16 @@ import {
 } from "@t3tools/contracts";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon } from "lucide-react";
+import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
+import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
 import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
+import { MiddleTruncate } from "../components/ui/middle-truncate";
 import { useSidebar } from "../components/ui/sidebar";
 import { toastManager } from "../components/ui/toast";
+import { Tooltip, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import {
   getLocalStorageItem,
@@ -357,23 +360,76 @@ export function ExternalSessionsSidebarSection() {
         </CollapsibleSectionHeader>
       </div>
       {expanded ? (
-        <ul className="flex flex-col">
-          {visible.map((entry) => {
-            const key = rowKey(entry.environmentId, entry.session.key);
-            return (
-              <ExternalSessionRow
-                key={key}
-                entry={entry}
-                isActive={activeKey === key}
-                nowMinute={nowMinute}
-                onNavigate={closeMobileSidebar}
-                onContextMenu={handleRowContextMenu}
-              />
-            );
-          })}
-        </ul>
+        // Same hover timing as the thread list's cards.
+        <TooltipProvider delay={150} closeDelay={0} timeout={400}>
+          <ul className="flex flex-col">
+            {visible.map((entry) => {
+              const key = rowKey(entry.environmentId, entry.session.key);
+              return (
+                <ExternalSessionRow
+                  key={key}
+                  entry={entry}
+                  isActive={activeKey === key}
+                  nowMinute={nowMinute}
+                  onNavigate={closeMobileSidebar}
+                  onContextMenu={handleRowContextMenu}
+                />
+              );
+            })}
+          </ul>
+        </TooltipProvider>
       ) : null}
     </section>
+  );
+}
+
+/** The thread rows' hover card, for a session: where it runs, its folder and how recently it moved. */
+function ExternalSessionHoverCard(props: { entry: ExternalSessionEntry }) {
+  const { environmentLabel, session } = props.entry;
+  const model = shortModelLabel(session.model);
+  const origin = externalSessionOriginLabel(session);
+  const lastActive = `Last active ${formatRelativeTimeLabel(session.updatedAt)}`;
+  const activity =
+    session.liveness === "running"
+      ? LIVENESS_LABEL.running
+      : session.liveness === "idle"
+        ? `${LIVENESS_LABEL.idle} · ${lastActive.toLowerCase()}`
+        : lastActive;
+  return (
+    <ThreadHoverCardPopup side="right" align="start" sideOffset={4}>
+      <ThreadHoverCard title={externalSessionTitle(session)}>
+        <div className="flex min-w-0 items-center gap-2">
+          <ProviderInstanceIcon
+            driverKind={session.driver}
+            displayName={externalSessionProductName(session)}
+            iconClassName="size-3 shrink-0 grayscale opacity-60"
+          />
+          <div className="min-w-0 truncate text-foreground/75">
+            {model === null ? origin : `${origin} · ${model}`}
+          </div>
+        </div>
+        {session.cwd !== null ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <FolderIcon className="size-3 shrink-0 stroke-muted-foreground" />
+            <MiddleTruncate value={session.cwd} className="flex text-foreground/75" />
+          </div>
+        ) : null}
+        {environmentLabel !== null ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <MonitorIcon className="size-3 shrink-0 stroke-muted-foreground" />
+            <div className="min-w-0 truncate text-foreground/75">{environmentLabel}</div>
+          </div>
+        ) : null}
+        <div className="flex min-w-0 items-center gap-2">
+          {session.liveness === "running" ? (
+            <CircleDashedIcon className="size-3 shrink-0 text-info" />
+          ) : (
+            <ClockIcon className="size-3 shrink-0 stroke-muted-foreground" />
+          )}
+          <div className="min-w-0 truncate text-foreground/75">{activity}</div>
+        </div>
+      </ThreadHoverCard>
+    </ThreadHoverCardPopup>
   );
 }
 
@@ -417,73 +473,81 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
 
   return (
     <li className="list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_58px]">
-      <Link
-        to="/external/$environmentId/$sessionKey"
-        params={{ environmentId, sessionKey: session.key }}
-        aria-label={label}
-        aria-current={props.isActive ? "page" : undefined}
-        onClick={props.onNavigate}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
-        }}
-        title={session.cwd === null ? title : `${title}\n${session.cwd}`}
-        className={cn(
-          "group/sidebar-row relative block w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-          props.isActive
-            ? "bg-sidebar-row-active text-sidebar-foreground"
-            : recede
-              ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-              : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
-        )}
-      >
-        <span
-          aria-hidden
-          className="relative z-10 block px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
-        >
-          <span className="flex h-5 min-w-0 items-center gap-1.5">
-            <span
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              to="/external/$environmentId/$sessionKey"
+              params={{ environmentId, sessionKey: session.key }}
+              aria-label={label}
+              aria-current={props.isActive ? "page" : undefined}
+              onClick={props.onNavigate}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
+              }}
               className={cn(
-                "min-w-0 flex-1 truncate text-sm",
-                recede && !props.isActive
-                  ? "font-normal text-secondary-label"
-                  : "font-medium text-foreground/90",
+                "group/sidebar-row relative block w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                props.isActive
+                  ? "bg-sidebar-row-active text-sidebar-foreground"
+                  : recede
+                    ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                    : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
               )}
-            >
-              {title}
-            </span>
-            <span className="ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end text-xs tabular-nums text-secondary-label">
-              {running ? (
-                <span className="inline-flex items-center gap-1 font-medium text-info">
-                  <CircleDashedIcon className="size-4 shrink-0" />
-                  Running
-                </span>
-              ) : (
-                compactTimeLabel(session.updatedAt)
-              )}
-            </span>
-          </span>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-secondary-label">
-            <ProviderInstanceIcon
-              driverKind={session.driver}
-              displayName={providerLabel}
-              className="size-3.5 shrink-0"
-              iconClassName="size-3.5"
             />
-            <span className="min-w-0 truncate">
-              {folder ?? externalSessionOriginLabel(session)}
-            </span>
-            {model !== null ? (
-              <span className="min-w-0 shrink-[2] truncate text-muted-foreground/60">{model}</span>
-            ) : null}
-            {environmentLabel !== null ? (
-              <span className="ml-auto min-w-0 shrink-[3] truncate text-muted-foreground/60">
-                {environmentLabel}
+          }
+        >
+          <span
+            aria-hidden
+            className="relative z-10 block px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
+          >
+            <span className="flex h-5 min-w-0 items-center gap-1.5">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-sm",
+                  recede && !props.isActive
+                    ? "font-normal text-secondary-label"
+                    : "font-medium text-foreground/90",
+                )}
+              >
+                {title}
               </span>
-            ) : null}
+              <span className="ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end text-xs tabular-nums text-secondary-label">
+                {running ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-info">
+                    <CircleDashedIcon className="size-4 shrink-0" />
+                    Running
+                  </span>
+                ) : (
+                  compactTimeLabel(session.updatedAt)
+                )}
+              </span>
+            </span>
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-secondary-label">
+              <ProviderInstanceIcon
+                driverKind={session.driver}
+                displayName={providerLabel}
+                className="size-3.5 shrink-0"
+                iconClassName="size-3.5"
+              />
+              <span className="min-w-0 truncate">
+                {folder ?? externalSessionOriginLabel(session)}
+              </span>
+              {model !== null ? (
+                <span className="min-w-0 shrink-[2] truncate text-muted-foreground/60">
+                  {model}
+                </span>
+              ) : null}
+              {environmentLabel !== null ? (
+                <span className="ml-auto min-w-0 shrink-[3] truncate text-muted-foreground/60">
+                  {environmentLabel}
+                </span>
+              ) : null}
+            </span>
           </span>
-        </span>
-      </Link>
+        </TooltipTrigger>
+        <ExternalSessionHoverCard entry={props.entry} />
+      </Tooltip>
     </li>
   );
 });

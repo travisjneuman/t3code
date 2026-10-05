@@ -89,9 +89,13 @@ copy and the build files.
 
 The merge button beside the update button (**Sync fork with official T3 Code**)
 merges everything on the official `main` branch into your fork and pushes it,
-without building. Use it to keep the fork's GitHub page current between
-nightlies. Once a synced fork contains a nightly newer than the app you are
-running, the update button offers **Sync & Build** for it.
+without building. The app also does this on its own a minute after it starts
+and every 15 minutes after that, so the fork follows the official repository
+without you clicking anything. The background sync never uses Claude Code: if
+the official changes conflict with the fork's in a way it can't settle by
+itself, it skips them until you press the merge button, which can. Once a
+synced fork contains a nightly newer than the app you are running, the update
+button offers **Sync & Build** for it.
 
 Sync and update refuse to start while the checkout has uncommitted changes, is
 not on `main`, or is in the middle of another merge. If it still cannot merge

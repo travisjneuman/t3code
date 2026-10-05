@@ -283,6 +283,11 @@ back" message on the model and reasoning level the session was continued with, t
 what the other agents did, and that turn is saved in the original session. The item shows only
 while the thread is set to a different agent, and it is not on mobile yet.
 
+Continued a session by mistake, or done with it in T3? Right-click the thread and choose **Move
+back to Other Agents**. Nothing is sent: the thread is archived and the session is listed under
+Other Agents again. Choosing **Continue in T3** on it later brings the same thread back. Archiving
+a continued thread any other way does the same.
+
 Right-click a session to continue it, copy its session ID or folder path, open its folder, or
 archive it. Archiving takes the session off the list; a Codex session is
 archived in Codex too, as if you had archived it there. A running session can't be archived until

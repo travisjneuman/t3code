@@ -164,7 +164,7 @@ export function useThreadActionMenu(input: {
         const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on: thread export.
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (isExportMenuId(clicked.value)) return exportThread(threadRef, clicked.value); // Fork add-on: thread export.
-        if (isHandBackMenuId(clicked.value)) return handBackThread(threadRef); // Fork add-on: external-session hand back.
+        if (isHandBackMenuId(clicked.value)) return handBackThread(threadRef, clicked.value); // Fork add-on: external-session hand back.
         const action: ThreadActionMenuId = clicked.value;
         if (action.startsWith("snooze:")) {
           const preset =

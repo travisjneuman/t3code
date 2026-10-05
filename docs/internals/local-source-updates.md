@@ -43,7 +43,16 @@ triggers: the fork is behind the newest nightly, or the fork already contains it
 (merged by a sync) while the running app's version is older. The second case
 builds without merging and commits only what the build changed (lockfile, agent
 fixes); on failure those edits are stashed so the checkout stays clean. Sync and
-update share one lock because both rewrite the checkout.
+update share one lock because both rewrite the checkout, and the exported `inspect`
+takes it too, so an update check never reads the checkout mid-merge.
+
+`DesktopUpdates` also runs `autoSyncSource` a minute after startup and every 15
+minutes, then rechecks for updates; it never builds. It is `syncSource` without the
+agent: conflicts the rename pass leaves abort the merge, and that `upstream/main`
+commit is remembered (in memory) and skipped until upstream moves or the button,
+which has the agent, merges it. A dirty checkout fails `inspect`, so a round during
+local edits is a logged skip. Every round that merges pushes the fork; GitHub
+Actions are disabled on the fork, so a push costs no CI.
 
 ## Rename-only conflict resolution
 

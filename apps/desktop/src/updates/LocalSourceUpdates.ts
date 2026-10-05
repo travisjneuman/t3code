@@ -100,6 +100,13 @@ export class LocalSourceUpdates extends Context.Service<
     readonly syncAndBuild: Effect.Effect<LocalSourceUpdateBuild, LocalSourceUpdateError>;
     readonly install: Effect.Effect<void, LocalSourceUpdateError>;
     readonly syncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
+    /**
+     * Fork add-on: `syncSource` for the background poller, without the merge
+     * agent. Conflicts the rename pass cannot settle abort the merge, and that
+     * upstream commit is skipped until upstream moves or the sync button
+     * (which has the agent) merges it.
+     */
+    readonly autoSyncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
   }
 >()("@t3tools/desktop/updates/LocalSourceUpdates") {}
 
@@ -682,13 +689,15 @@ export const make = Effect.gen(function* () {
 
   /**
    * Merges `target` without committing and settles conflicts (rename pass, then
-   * the agent). Fails with the merge still open; callers abort it.
+   * the agent unless `agent` is false). Fails with the merge still open;
+   * callers abort it.
    */
   const mergeUpstream = Effect.fn("desktop.localSourceUpdates.mergeUpstream")(function* (
     repo: string,
     target: string,
     label: string,
     message: string,
+    agent = true,
   ): Effect.fn.Return<void, LocalSourceUpdateError> {
     // --no-commit leaves the merge open so a failed resolution or build can
     // still be undone with `git merge --abort`.
@@ -716,13 +725,13 @@ export const make = Effect.gen(function* () {
     }
     const unresolved = yield* resolveForkConflicts(repo).pipe(
       Effect.flatMap((paths) =>
-        paths.length > 0 ? resolveWithAgent(repo, paths) : Effect.succeed(paths),
+        paths.length > 0 && agent ? resolveWithAgent(repo, paths) : Effect.succeed(paths),
       ),
     );
     if (unresolved.length > 0) {
       return yield* makeError(
         "merge",
-        `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. Merge ${label} into main by hand, push it, then try again. Conflicted: ${describeUnresolvedPaths(unresolved)}`,
+        `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. ${agent ? `Merge ${label} into main by hand, push it, then try again.` : "Sync fork with official T3 Code resolves them with the merge agent."} Conflicted: ${describeUnresolvedPaths(unresolved)}`,
         new Error(output),
         repo,
       );
@@ -915,35 +924,54 @@ export const make = Effect.gen(function* () {
     Effect.withSpan("desktop.localSourceUpdates.syncAndBuild"),
   );
 
+  // The upstream main commit the background sync could not merge cleanly.
+  const autoSyncBlockedRef = yield* Ref.make<string | null>(null);
+
   // Brings every upstream/main commit into the fork without building; the
   // update button builds the result once a newer nightly is contained.
-  const syncSource = Effect.gen(function* () {
-    const inspection = yield* inspect;
-    const repo = inspection.repositoryPath;
-    const git = (args: ReadonlyArray<string>) =>
-      runChecked({ operation: "merge", command: "git", args, cwd: repo });
-    // inspect just fetched upstream/main.
-    const upstreamMain = (yield* git([
-      "rev-parse",
-      "--verify",
-      "upstream/main^{commit}",
-    ])).stdout.trim();
-    const count = yield* git(["rev-list", "--count", `HEAD..${upstreamMain}`]);
-    const behind = Number(count.stdout.trim());
-    if (behind === 0) {
-      return { merged: 0, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
-    }
-    const label = `upstream main ${upstreamMain.slice(0, 10)}`;
-    const message = `chore(sync): merge ${label}`;
-    yield* Effect.gen(function* () {
-      yield* mergeUpstream(repo, upstreamMain, label, message);
-      yield* git(["commit", "--no-verify", "--no-edit", "-m", message]);
+  const syncUpstreamMain = (agent: boolean) =>
+    Effect.gen(function* () {
+      const inspection = yield* inspect;
+      const repo = inspection.repositoryPath;
+      const git = (args: ReadonlyArray<string>) =>
+        runChecked({ operation: "merge", command: "git", args, cwd: repo });
+      // inspect just fetched upstream/main.
+      const upstreamMain = (yield* git([
+        "rev-parse",
+        "--verify",
+        "upstream/main^{commit}",
+      ])).stdout.trim();
+      const count = yield* git(["rev-list", "--count", `HEAD..${upstreamMain}`]);
+      const behind = Number(count.stdout.trim());
+      if (behind === 0 || (!agent && (yield* Ref.get(autoSyncBlockedRef)) === upstreamMain)) {
+        return { merged: 0, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
+      }
+      const label = `upstream main ${upstreamMain.slice(0, 10)}`;
+      const message = `chore(sync): merge ${label}`;
+      yield* Effect.gen(function* () {
+        yield* mergeUpstream(repo, upstreamMain, label, message, agent);
+        yield* git(["commit", "--no-verify", "--no-edit", "-m", message]);
+      }).pipe(
+        Effect.catchCause((cause) =>
+          abortMerge(repo).pipe(
+            Effect.andThen(agent ? Effect.void : Ref.set(autoSyncBlockedRef, upstreamMain)),
+            Effect.andThen(Effect.failCause(cause)),
+          ),
+        ),
+      );
+      yield* pushFork(repo);
+      return {
+        merged: behind,
+        upstreamTag: inspection.upstreamTag,
+      } satisfies LocalSourceSyncResult;
     }).pipe(
-      Effect.catchCause((cause) => abortMerge(repo).pipe(Effect.andThen(Effect.failCause(cause)))),
+      repositoryLock.withPermits(1),
+      Effect.withSpan(
+        agent
+          ? "desktop.localSourceUpdates.syncSource"
+          : "desktop.localSourceUpdates.autoSyncSource",
+      ),
     );
-    yield* pushFork(repo);
-    return { merged: behind, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
-  }).pipe(repositoryLock.withPermits(1), Effect.withSpan("desktop.localSourceUpdates.syncSource"));
 
   const install = Effect.gen(function* () {
     const builtUpdate = yield* Ref.get(builtUpdateRef);
@@ -1007,10 +1035,12 @@ export const make = Effect.gen(function* () {
     enabled: Effect.succeed(
       environment.platform === "darwin" && environment.isPackaged && repositoryPath !== undefined,
     ),
-    inspect,
+    // Locked so a poll never inspects mid-merge.
+    inspect: inspect.pipe(repositoryLock.withPermits(1)),
     syncAndBuild,
     install,
-    syncSource,
+    syncSource: syncUpstreamMain(true),
+    autoSyncSource: syncUpstreamMain(false),
   });
 });
 
