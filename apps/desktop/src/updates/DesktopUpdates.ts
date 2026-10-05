@@ -52,7 +52,7 @@ import {
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
-// Fork add-on: local source builds keep the fork merged with upstream main.
+// Fork add-on: local source builds merge each new upstream nightly in the background.
 const SOURCE_SYNC_STARTUP_DELAY = "1 minute";
 const SOURCE_SYNC_INTERVAL = "15 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
@@ -846,8 +846,8 @@ export const make = Effect.gen(function* () {
   }).pipe(Effect.withSpan("desktop.updates.startPollers"));
 
   /**
-   * Fork add-on: merges upstream main into the fork and pushes it, then
-   * refreshes the update state so a newer nightly shows as available. Building
+   * Fork add-on: merges a newly released upstream nightly into the fork and
+   * pushes it, then refreshes the update state so it shows as available. Building
    * and installing stay on Check for updates. A dirty checkout or a conflict
    * the rename pass cannot settle skips that round (LocalSourceUpdates).
    */
