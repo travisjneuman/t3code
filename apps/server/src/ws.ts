@@ -250,6 +250,8 @@ import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts";
 import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts"; // Fork add-on: session search.
 import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts"; // Fork add-on: thread export.
+import * as SaveToNotesRpc from "./save-to-notes/SaveToNotesRpc.ts"; // Fork add-on: save to notes.
+import * as CompareAgentsRpc from "./compare-agents/CompareAgentsRpc.ts"; // Fork add-on: compare agents.
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -1802,6 +1804,8 @@ const makeWsRpcLayer = (
         ...externalSessionsHandlers,
         ...(yield* SessionSearchRpc.makeHandlers), // Fork add-on: session search.
         ...(yield* ThreadExportRpc.makeHandlers), // Fork add-on: thread export.
+        ...(yield* SaveToNotesRpc.makeHandlers), // Fork add-on: save to notes.
+        ...(yield* CompareAgentsRpc.makeHandlers), // Fork add-on: compare agents.
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.dispatchCommand,

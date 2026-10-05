@@ -17,12 +17,11 @@ import {
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
-import { exportThread, isExportMenuId, withExportMenuItem } from "../thread-export/threadExport"; // Fork add-on: thread export.
 import {
-  handBackThread,
-  isHandBackMenuId,
-  withHandBackMenuItem,
-} from "../external-sessions/handBack"; // Fork add-on: external-session hand back.
+  isForkThreadMenuId,
+  runForkThreadMenuItem,
+  withForkThreadMenuItems,
+} from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back.
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
@@ -160,11 +159,11 @@ export function useThreadActionMenu(input: {
           supports,
           snoozePresets,
         });
-        const menuItems = withHandBackMenuItem(withExportMenuItem(items), thread); // Fork add-on: thread export, external-session hand back.
+        const menuItems = withForkThreadMenuItems(items, thread); // Fork add-on: thread export, save to notes, hand back.
         const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on: thread export.
         if (clicked._tag === "Failure" || clicked.value === null) return;
-        if (isExportMenuId(clicked.value)) return exportThread(threadRef, clicked.value); // Fork add-on: thread export.
-        if (isHandBackMenuId(clicked.value)) return handBackThread(threadRef, clicked.value); // Fork add-on: external-session hand back.
+        if (isForkThreadMenuId(clicked.value))
+          return runForkThreadMenuItem(threadRef, clicked.value); // Fork add-on: thread export, save to notes, hand back.
         const action: ThreadActionMenuId = clicked.value;
         if (action.startsWith("snooze:")) {
           const preset =

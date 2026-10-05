@@ -7,6 +7,7 @@ ndev.t3code is Travis J. Neuman's fork of [T3 Code](https://github.com/pingdotgg
 - [Install T3 Code](./user/install.md)
 - [Messages and context](./user/composer.md)
 - [Working with threads](./user/thread-sidebar.md)
+- [Compare agents](./user/compare-agents.md)
 - [Permission modes](./user/permission-modes.md)
 - [Terminal history](./user/terminal.md)
 - [Source control](./user/source-control.md)

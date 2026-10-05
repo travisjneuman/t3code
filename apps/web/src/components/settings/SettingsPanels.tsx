@@ -166,6 +166,7 @@ import {
   useSettingsSearchTargetId,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 
@@ -3098,6 +3099,8 @@ export function GeneralSettingsPanel() {
             />
           }
         />
+        {/* Fork add-on: save to notes. */}
+        <SaveToNotesSettingsRows />
       </SettingsSection>
 
       <SettingsSection id="confirmations" title="Confirmations">
