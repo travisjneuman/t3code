@@ -88,7 +88,7 @@ Install** replaces the installed app with the new build and removes the old
 copy and the build files.
 
 The app checks for a new official nightly a minute after it starts and every
-15 minutes after that. When one is out, it merges that nightly into your fork
+30 minutes after that. When one is out, it merges that nightly into your fork
 and pushes it, without building, and the update button then offers **Sync &
 Build** for it. The background check never uses Claude Code: if the official
 changes conflict with the fork's in a way it can't settle by itself, it skips
