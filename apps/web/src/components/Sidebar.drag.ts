@@ -8,6 +8,7 @@ import {
   type SidebarListMarker,
   type SidebarSection,
 } from "./Sidebar.logic";
+import { THREAD_CARD_ROW_HEIGHT } from "../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
 
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const hidden = { ...stationary, scaleY: 0 };
@@ -149,10 +150,12 @@ export function createSidebarSortingStrategy(input: {
       else slimHeight ??= rects[index]?.height;
       if (item.key !== active.key) groups[item.section].push(item);
     }
-    // Cards are 4.875rem + 0.25rem padding; slim rows/placeholders are h-9.
+    // Cards are THREAD_CARD_ROW_HEIGHT with padding; slim rows/placeholders are h-9.
     const scale =
-      slimHeight !== undefined ? slimHeight / 36 : (headerScale ?? (cardHeight ?? 82) / 82);
-    cardHeight ??= 82 * scale;
+      slimHeight !== undefined
+        ? slimHeight / 36
+        : (headerScale ?? (cardHeight ?? THREAD_CARD_ROW_HEIGHT) / THREAD_CARD_ROW_HEIGHT);
+    cardHeight ??= THREAD_CARD_ROW_HEIGHT * scale; // Fork add-on: compact sidebar cards.
     slimHeight ??= 36 * scale;
     const labelHeight = (input.boundaryLabelHeight ?? 0) * scale;
     const group = groups[target.section];

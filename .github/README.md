@@ -31,6 +31,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | [**Save to notes**](#save-to-notes)     | Files a thread into your notes folder or Obsidian vault                 |
 | [**Export a thread**](#export-a-thread) | Saves a thread's full record as Markdown or JSON                        |
 | [**Upstream sync**](#upstream-sync)     | Merges new official nightlies and rebuilds the app from source          |
+| [**Compact cards**](#compact-cards)     | Sidebar thread cards in smaller text, about 20% shorter                 |
 
 ### Web apps
 
@@ -91,6 +92,10 @@ This is how the fork stays current. The maintainer's desktop app updates from it
 For now this needs push access to this repo, so it only works on the maintainer's machine. A copy you build yourself updates by pulling and rebuilding.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/updating.md#updating-the-fork-from-upstream-nightly)
+
+### Compact cards
+
+Thread cards in the sidebar keep their three lines (project, title, branch) one text size smaller, so more threads fit on screen.
 
 ## Build it yourself
 
