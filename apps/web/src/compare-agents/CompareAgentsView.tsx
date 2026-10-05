@@ -1,41 +1,33 @@
 /**
  * Compare agents page. Without a pair it is the setup form, one prompt and
- * two models, in No project by default, above the list of earlier
- * comparisons. With a pair it shows both threads' prompts and answers side by
- * side over CompareComposer, the message box that drives both.
+ * two models, in No project by default, above the earlier and archived
+ * comparisons. With a pair it shows both threads side by side, each as a
+ * standard thread timeline, over CompareComposer, the message box that
+ * drives both. The header and list rows open the comparison's menu.
  * Fork add-on: compare agents; see docs/user/compare-agents.md.
  */
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
+import { presentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
-  COMPARE_FOLLOW_UP_MESSAGE_PREFIX,
   COMPARE_REVIEW_MESSAGE_PREFIX,
-  comparePairOf,
   compareThreadIds,
   type EnvironmentId,
   type ModelSelection,
-  modelSelectionLabel,
-  type OrchestrationV2ThreadProjection,
-  providerInstanceLabel,
-  type ThreadExchange,
   threadExchanges,
   type ThreadId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { useNavigate } from "@tanstack/react-router";
-import * as DateTime from "effect/DateTime";
-import { CheckIcon, CopyIcon, PlusIcon } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useMemo, useState } from "react";
+import { ChevronDownIcon, ChevronRightIcon, EllipsisIcon, PlusIcon } from "lucide-react";
+import { type KeyboardEvent, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
-import ChatMarkdown from "../components/ChatMarkdown";
 import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import { scheduledTaskDefaultModel } from "../components/settings/scheduledTasksSettings.logic";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../components/settings/settingsLayout";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import {
@@ -48,31 +40,34 @@ import {
 import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
 import { Textarea } from "../components/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
+import {
+  WorkspaceBreadcrumb,
+  WorkspaceBreadcrumbItem,
+  WorkspaceBreadcrumbSeparator,
+  WorkspaceBreadcrumbText,
+} from "../components/WorkspaceBreadcrumb";
 import { isElectron } from "../env";
-import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
+import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { cn } from "../lib/utils";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
 import type { ProviderInstanceEntry } from "../providerInstances";
-import { useProjects, useThreadProjection, useThreadShells } from "../state/entities";
+import {
+  useProjects,
+  useThreadProjection,
+  useThreadShell,
+  useThreadShells,
+} from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
-import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 import { startComparison } from "./compareAgents";
 import { CompareComposer, useCompareProviders } from "./CompareComposer";
-
-const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
-  "preparing",
-  "queued",
-  "starting",
-  "running",
-  "waiting",
-]);
-
-const isWorking = (projection: OrchestrationV2ThreadProjection | null) =>
-  projection?.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)) ?? false;
+import { type ComparePair, comparePromptOf, groupComparePairs } from "./comparePairs";
+import { CompareThreadColumn } from "./CompareThreadColumn";
+import { useComparePairMenu, useRenameComparison } from "./useComparePairMenu";
 
 const isSendShortcut = (event: KeyboardEvent) =>
   event.key === "Enter" && (event.metaKey || event.ctrlKey);
@@ -85,7 +80,43 @@ export function CompareAgentsView(props: {
   pairId: string | undefined;
   fromThreadId: string | undefined;
 }) {
+  const { environmentId, pairId } = props;
   const navigate = useNavigate();
+  const goToStart = useCallback(
+    () => void navigate({ to: "/compare/$environmentId", params: { environmentId }, search: {} }),
+    [environmentId, navigate],
+  );
+  // The comparison being renamed, in the header or its list row. Leaving the
+  // page it started on drops it, like ChatHeader's rename.
+  const [renaming, setRenaming] = useState<{
+    readonly pairId: string;
+    readonly onPage: string | undefined;
+  } | null>(null);
+  if (renaming !== null && renaming.onPage !== pairId) setRenaming(null);
+  const renamingPairId = renaming?.pairId ?? null;
+  const startRename = useCallback(
+    (renamedPairId: string) => setRenaming({ pairId: renamedPairId, onPage: pairId }),
+    [pairId],
+  );
+  const renameComparison = useRenameComparison(environmentId);
+  const finishRename = useCallback(
+    (renamedPairId: string, name: string | null) => {
+      setRenaming(null);
+      if (name !== null) renameComparison(renamedPairId, name);
+    },
+    [renameComparison],
+  );
+  const leaveIfOpen = useCallback(
+    (removedPairId: string) => {
+      if (removedPairId === pairId) goToStart();
+    },
+    [goToStart, pairId],
+  );
+  const { openMenu, openArchivedMenu } = useComparePairMenu({
+    environmentId,
+    onStartRename: startRename,
+    onRemoved: leaveIfOpen,
+  });
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
       <header
@@ -96,46 +127,153 @@ export function CompareAgentsView(props: {
             : "pl-(--workspace-gutter-start) pr-(--workspace-gutter-end)",
           COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
         )}
+        onContextMenu={(event) => {
+          if (pairId === undefined || renamingPairId === pairId) return;
+          event.preventDefault();
+          openMenu(pairId, { x: event.clientX, y: event.clientY });
+        }}
       >
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">Compare agents</h2>
-        {props.pairId !== undefined ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() =>
-              void navigate({
-                to: "/compare/$environmentId",
-                params: { environmentId: props.environmentId },
-                search: {},
-              })
-            }
-          >
-            <PlusIcon />
-            New comparison
-          </Button>
-        ) : null}
+        {pairId !== undefined ? (
+          <>
+            <ComparePairTitle
+              environmentId={environmentId}
+              pairId={pairId}
+              renaming={renamingPairId === pairId}
+              onOpenMenu={openMenu}
+              onFinishRename={finishRename}
+            />
+            <Button size="sm" variant="ghost" onClick={goToStart}>
+              <PlusIcon />
+              New comparison
+            </Button>
+          </>
+        ) : (
+          <h2 className="min-w-0 flex-1 truncate text-sm font-medium">Compare agents</h2>
+        )}
       </header>
-      {props.pairId !== undefined ? (
-        <CompareResults environmentId={props.environmentId} pairId={props.pairId} />
+      {pairId !== undefined ? (
+        <CompareResults environmentId={environmentId} pairId={pairId} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 sm:px-6">
           {props.fromThreadId !== undefined ? (
-            <CompareSetupFromThread
-              environmentId={props.environmentId}
-              threadId={props.fromThreadId}
-            />
+            <CompareSetupFromThread environmentId={environmentId} threadId={props.fromThreadId} />
           ) : (
             <CompareSetup
-              environmentId={props.environmentId}
+              environmentId={environmentId}
               initialProjectId={undefined}
               initialPrompt=""
               initialLeft={null}
             />
           )}
-          <EarlierComparisons environmentId={props.environmentId} />
+          <EarlierComparisons
+            environmentId={environmentId}
+            renamingPairId={renamingPairId}
+            onOpenMenu={openMenu}
+            onFinishRename={finishRename}
+          />
+          <ArchivedComparisons environmentId={environmentId} onOpenMenu={openArchivedMenu} />
         </div>
       )}
     </SidebarInset>
+  );
+}
+
+type OpenPairMenu = (pairId: string, position: { x: number; y: number }) => void;
+type FinishRename = (pairId: string, name: string | null) => void;
+
+const belowElement = (element: Element) => {
+  const rect = element.getBoundingClientRect();
+  return { x: rect.left, y: rect.bottom + 4 };
+};
+
+/**
+ * The thread header's breadcrumb for a comparison: Compare agents / its name.
+ * The name opens the comparison's menu, like a thread title does.
+ */
+function ComparePairTitle(props: {
+  environmentId: EnvironmentId;
+  pairId: string;
+  renaming: boolean;
+  onOpenMenu: OpenPairMenu;
+  onFinishRename: FinishRename;
+}) {
+  const { environmentId, pairId } = props;
+  const [leftId, rightId] = compareThreadIds(pairId);
+  const left = useThreadShell(scopeThreadRef(environmentId, leftId));
+  const right = useThreadShell(scopeThreadRef(environmentId, rightId));
+  const title = comparePromptOf((left ?? right)?.title ?? "Comparison");
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+      <WorkspaceBreadcrumb
+        ariaLabel="Comparison breadcrumb"
+        className="flex-1 overflow-clip [overflow-clip-margin:2px]"
+      >
+        <WorkspaceBreadcrumbItem className="shrink">
+          <WorkspaceBreadcrumbText className="text-muted-foreground">
+            Compare agents
+          </WorkspaceBreadcrumbText>
+        </WorkspaceBreadcrumbItem>
+        <WorkspaceBreadcrumbSeparator>
+          <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
+        </WorkspaceBreadcrumbSeparator>
+        <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
+          {props.renaming ? (
+            <CompareRenameInput
+              initial={title}
+              onFinish={(name) => props.onFinishRename(pairId, name)}
+            />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`Comparison actions for ${title}`}
+                    aria-haspopup="menu"
+                    onClick={(event) => props.onOpenMenu(pairId, belowElement(event.currentTarget))}
+                    className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                }
+              >
+                <h2 className="min-w-0">
+                  <WorkspaceBreadcrumbText>{title}</WorkspaceBreadcrumbText>
+                </h2>
+                <ChevronDownIcon
+                  aria-hidden
+                  className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
+                />
+              </TooltipTrigger>
+              <TooltipPopup side="top">{title}</TooltipPopup>
+            </Tooltip>
+          )}
+        </WorkspaceBreadcrumbItem>
+      </WorkspaceBreadcrumb>
+    </div>
+  );
+}
+
+/** ChatHeader's inline rename: Enter or leaving the field saves, Escape cancels. */
+function CompareRenameInput(props: { initial: string; onFinish: (name: string | null) => void }) {
+  const finishedRef = useRef(false);
+  const finish = (name: string | null) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    props.onFinish(name);
+  };
+  return (
+    <input
+      autoFocus
+      aria-label="Comparison name"
+      className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring"
+      defaultValue={props.initial}
+      onFocus={(event) => event.currentTarget.select()}
+      onBlur={(event) => finish(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+        if (event.key === "Enter") finish(event.currentTarget.value);
+        else if (event.key === "Escape") finish(null);
+      }}
+    />
   );
 }
 
@@ -337,74 +475,175 @@ function CompareSetup(props: {
   );
 }
 
-/** "Compare · gpt-5.5 · the prompt" → "the prompt"; a renamed thread keeps its title. */
-const comparePromptOf = (title: string): string => {
-  const parts = title.split(" · ");
-  return parts[0] === "Compare" && parts.length >= 3 ? parts.slice(2).join(" · ") : title;
-};
-
-function EarlierComparisons(props: { environmentId: EnvironmentId }) {
-  const navigate = useNavigate();
+function EarlierComparisons(props: {
+  environmentId: EnvironmentId;
+  renamingPairId: string | null;
+  onOpenMenu: OpenPairMenu;
+  onFinishRename: FinishRename;
+}) {
   const shells = useThreadShells();
-  const pairs = useMemo(() => {
-    const byPair = new Map<
-      string,
-      { pairId: string; prompt: string; models: string[]; at: string; working: boolean }
-    >();
-    for (const shell of shells) {
-      if (shell.environmentId !== props.environmentId || shell.archivedAt !== null) continue;
-      const pair = comparePairOf(shell.id);
-      if (pair === null) continue;
-      const entry = byPair.get(pair.pairId) ?? {
-        pairId: pair.pairId,
-        prompt: comparePromptOf(shell.title),
-        models: [],
-        at: shell.createdAt,
-        working: false,
-      };
-      entry.models[pair.side === "a" ? 0 : 1] = shell.modelSelection.model;
-      entry.working ||= ACTIVE_RUN_STATUSES.has(shell.latestRun?.status ?? "");
-      if (shell.updatedAt > entry.at) entry.at = shell.updatedAt;
-      byPair.set(pair.pairId, entry);
-    }
-    return [...byPair.values()].toSorted((left, right) => right.at.localeCompare(left.at));
-  }, [shells, props.environmentId]);
+  const pairs = useMemo(
+    () =>
+      groupComparePairs(
+        shells.filter((shell) => shell.archivedAt === null),
+        props.environmentId,
+      ),
+    [shells, props.environmentId],
+  );
   if (pairs.length === 0) return null;
   return (
     <div className="mx-auto max-w-2xl space-y-2 pt-8">
       <h3 className="text-sm font-medium">Earlier comparisons</h3>
       <ul className="divide-y rounded-lg border">
         {pairs.map((pair) => (
-          <li key={pair.pairId}>
-            <button
-              type="button"
-              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/50"
-              onClick={() =>
-                void navigate({
+          <ComparePairRow
+            key={pair.pairId}
+            environmentId={props.environmentId}
+            pair={pair}
+            renaming={props.renamingPairId === pair.pairId}
+            onOpenMenu={(position) => props.onOpenMenu(pair.pairId, position)}
+            onFinishRename={(name) => props.onFinishRename(pair.pairId, name)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Archived comparisons, loaded only while the section is open. */
+function ArchivedComparisons(props: {
+  environmentId: EnvironmentId;
+  onOpenMenu: (pair: ComparePair, position: { x: number; y: number }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mx-auto max-w-2xl space-y-2 pt-6">
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
+        Archived comparisons
+      </Button>
+      {open ? (
+        <ArchivedComparisonList environmentId={props.environmentId} onOpenMenu={props.onOpenMenu} />
+      ) : null}
+    </div>
+  );
+}
+
+function ArchivedComparisonList(props: {
+  environmentId: EnvironmentId;
+  onOpenMenu: (pair: ComparePair, position: { x: number; y: number }) => void;
+}) {
+  const environmentIds = useMemo(() => [props.environmentId], [props.environmentId]);
+  const { snapshots, error, isLoading } = useArchivedThreadSnapshots(environmentIds);
+  const pairs = useMemo(
+    () =>
+      groupComparePairs(
+        snapshots.flatMap(({ environmentId, snapshot }) =>
+          snapshot.threads.map((thread) => presentThreadShell(environmentId, thread)),
+        ),
+        props.environmentId,
+      ),
+    [snapshots, props.environmentId],
+  );
+  if (error !== null) {
+    return <p className="px-3 text-sm text-destructive-foreground">{error}</p>;
+  }
+  if (pairs.length === 0) {
+    return (
+      <p className="px-3 text-sm text-muted-foreground">
+        {isLoading ? "Loading…" : "No archived comparisons."}
+      </p>
+    );
+  }
+  return (
+    <ul className="divide-y rounded-lg border">
+      {pairs.map((pair) => (
+        <ComparePairRow
+          key={pair.pairId}
+          environmentId={props.environmentId}
+          pair={pair}
+          archived
+          renaming={false}
+          onOpenMenu={(position) => props.onOpenMenu(pair, position)}
+          onFinishRename={() => {}}
+        />
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * A comparison in a list. Opens on click (an archived one only offers its
+ * menu); the menu opens from "…" or a right-click.
+ */
+function ComparePairRow(props: {
+  environmentId: EnvironmentId;
+  pair: ComparePair;
+  archived?: boolean;
+  renaming: boolean;
+  onOpenMenu: (position: { x: number; y: number }) => void;
+  onFinishRename: (name: string | null) => void;
+}) {
+  const { pair } = props;
+  const navigate = useNavigate();
+  const details = (
+    <span className="block truncate text-xs text-muted-foreground">
+      {pair.models.filter(Boolean).join(" vs ")}
+    </span>
+  );
+  return (
+    <li
+      className="flex items-center gap-1 pe-2 hover:bg-accent/50"
+      onContextMenu={(event) => {
+        if (props.renaming) return;
+        event.preventDefault();
+        props.onOpenMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      {props.renaming ? (
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-2">
+          <CompareRenameInput initial={pair.prompt} onFinish={props.onFinishRename} />
+          {details}
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
+          onClick={(event) =>
+            props.archived
+              ? props.onOpenMenu(belowElement(event.currentTarget))
+              : void navigate({
                   to: "/compare/$environmentId",
                   params: { environmentId: props.environmentId },
                   search: { pair: pair.pairId },
                 })
-              }
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{pair.prompt}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {pair.models.filter(Boolean).join(" vs ")}
-                </span>
-              </span>
-              {pair.working ? <Spinner /> : null}
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {formatRelativeTimeLabel(pair.at)}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-muted-foreground">
-        Each side is a normal thread, so archiving both threads removes a comparison from this list.
-      </p>
-    </div>
+          }
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm">{pair.prompt}</span>
+            {details}
+          </span>
+          {pair.working ? <Spinner /> : null}
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatRelativeTimeLabel(pair.at)}
+          </span>
+        </button>
+      )}
+      <Button
+        size="icon-xs"
+        variant="ghost-muted"
+        aria-label={`Comparison actions for ${pair.prompt}`}
+        aria-haspopup="menu"
+        onClick={(event) => props.onOpenMenu(belowElement(event.currentTarget))}
+      >
+        <EllipsisIcon />
+      </Button>
+    </li>
   );
 }
 
@@ -465,16 +704,6 @@ function ModelField(props: {
   );
 }
 
-/** What sent an exchange's prompt: the user's first prompt, a follow-up, or a review swap. */
-type ExchangeKind = "prompt" | "follow-up" | "review";
-
-const exchangeKind = (exchange: ThreadExchange): ExchangeKind => {
-  const id = exchange.prompt?.id ?? "";
-  if (id.startsWith(COMPARE_REVIEW_MESSAGE_PREFIX)) return "review";
-  if (id.startsWith(COMPARE_FOLLOW_UP_MESSAGE_PREFIX)) return "follow-up";
-  return "prompt";
-};
-
 function CompareResults(props: { environmentId: EnvironmentId; pairId: string }) {
   const { environmentId, pairId } = props;
   const [leftId, rightId] = compareThreadIds(pairId);
@@ -486,16 +715,19 @@ function CompareResults(props: { environmentId: EnvironmentId; pairId: string })
     const last = threadExchanges(projection).findLast((exchange) => exchange.run !== null);
     return last !== undefined && last.answer !== null && !last.answer.streaming;
   });
+  // Review swaps already sent, to label the next round.
   const swapsSent =
     sides[0] === null
       ? 0
-      : threadExchanges(sides[0]).filter((exchange) => exchangeKind(exchange) === "review").length;
+      : threadExchanges(sides[0]).filter((exchange) =>
+          (exchange.prompt?.id ?? "").startsWith(COMPARE_REVIEW_MESSAGE_PREFIX),
+        ).length;
 
   return (
     <>
-      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pt-4 pb-6 sm:px-6 lg:grid-cols-2 lg:items-start">
-        <CompareColumn environmentId={environmentId} threadId={leftId} thread={left} />
-        <CompareColumn environmentId={environmentId} threadId={rightId} thread={right} />
+      <div className="grid min-h-0 flex-1 grid-rows-2 divide-y lg:grid-cols-2 lg:grid-rows-1 lg:divide-x lg:divide-y-0">
+        <CompareThreadColumn environmentId={environmentId} threadId={leftId} />
+        <CompareThreadColumn environmentId={environmentId} threadId={rightId} />
       </div>
       <CompareComposer
         environmentId={environmentId}
@@ -506,150 +738,5 @@ function CompareResults(props: { environmentId: EnvironmentId; pairId: string })
         finished={finished}
       />
     </>
-  );
-}
-
-function CompareColumn(props: {
-  environmentId: EnvironmentId;
-  threadId: ThreadId;
-  thread: ReturnType<typeof useThreadProjection>;
-}) {
-  const navigate = useNavigate();
-  const projects = useProjects();
-  const projection = props.thread?.projection ?? null;
-  const exchanges = useMemo(
-    () => (projection === null ? [] : threadExchanges(projection)),
-    [projection],
-  );
-  if (projection === null) {
-    return (
-      <section className="rounded-lg border p-4 text-sm text-muted-foreground">
-        Loading this side…
-      </section>
-    );
-  }
-  const selection = projection.thread.modelSelection;
-  const cwd = projects.find(
-    (project) =>
-      project.environmentId === props.environmentId && project.id === projection.thread.projectId,
-  )?.workspaceRoot;
-  const working = isWorking(projection);
-  let swapRound = 0;
-  return (
-    <section className="min-w-0 rounded-lg border">
-      <div className="flex items-center gap-2 border-b px-4 py-2.5">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
-            {providerInstanceLabel(projection, selection.instanceId)}
-          </p>
-          <p className="truncate text-xs text-muted-foreground">{modelSelectionLabel(selection)}</p>
-        </div>
-        {working ? <Spinner /> : null}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() =>
-            void navigate({
-              to: "/$environmentId/$threadId",
-              params: buildThreadRouteParams(scopeThreadRef(props.environmentId, props.threadId)),
-            })
-          }
-        >
-          Open thread
-        </Button>
-      </div>
-      <div className="space-y-6 px-4 py-4">
-        {exchanges.map((exchange, index) => {
-          const kind = exchangeKind(exchange);
-          if (kind === "review") swapRound += 1;
-          return (
-            <ExchangeView
-              key={exchange.run?.id ?? exchange.prompt?.id ?? index}
-              exchange={exchange}
-              label={
-                kind === "review"
-                  ? `Review swap ${swapRound} · sent by T3`
-                  : kind === "follow-up"
-                    ? "Your follow-up"
-                    : "Your prompt"
-              }
-              cwd={cwd}
-              pending={working && index === exchanges.length - 1}
-            />
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-const STOPPED_LABELS: Partial<Record<string, string>> = {
-  interrupted: "Stopped",
-  cancelled: "Cancelled",
-  failed: "Failed",
-};
-
-const runDuration = (exchange: ThreadExchange): string | null => {
-  const run = exchange.run;
-  if (run === null || run.startedAt === null || run.completedAt === null) return null;
-  return formatDuration(
-    DateTime.toEpochMillis(run.completedAt) - DateTime.toEpochMillis(run.startedAt),
-  );
-};
-
-function ExchangeView(props: {
-  exchange: ThreadExchange;
-  label: string;
-  cwd: string | undefined;
-  pending: boolean;
-}) {
-  const { exchange } = props;
-  const [expanded, setExpanded] = useState(false);
-  const { copyToClipboard, isCopied } = useCopyToClipboard();
-  const prompt = exchange.prompt?.text ?? null;
-  const long = prompt !== null && (prompt.length > 400 || prompt.split("\n").length > 4);
-  const stopped = exchange.run === null ? undefined : STOPPED_LABELS[exchange.run.status];
-  const duration = runDuration(exchange);
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{props.label}</span>
-        {stopped !== undefined ? <Badge variant="warning">{stopped}</Badge> : null}
-        {duration !== null ? <span>{duration}</span> : null}
-      </div>
-      {prompt !== null ? (
-        <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-          <p className={cn("whitespace-pre-wrap", !expanded && long && "line-clamp-4")}>{prompt}</p>
-          {long ? (
-            <div className="mt-1">
-              <Button size="xs" variant="link" onClick={() => setExpanded((value) => !value)}>
-                {expanded ? "Show less" : "Show full message"}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {exchange.answer !== null ? (
-        <div className="space-y-1">
-          <ChatMarkdown
-            text={exchange.answer.text}
-            cwd={props.cwd}
-            isStreaming={exchange.answer.streaming}
-          />
-          {!exchange.answer.streaming ? (
-            <Button
-              size="xs"
-              variant="ghost-muted"
-              onClick={() => copyToClipboard(exchange.answer?.text ?? "", undefined)}
-            >
-              {isCopied ? <CheckIcon /> : <CopyIcon />}
-              {isCopied ? "Copied" : "Copy answer"}
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">{props.pending ? "Working…" : "No answer."}</p>
-      )}
-    </div>
   );
 }
