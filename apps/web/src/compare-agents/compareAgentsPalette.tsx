@@ -4,7 +4,7 @@
  * current thread belongs to, and "Compare this thread's prompt…" opens the
  * setup prefilled from the current thread. Fork add-on: compare agents.
  */
-import { comparePairOf, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
+import { comparePairOf, type EnvironmentId } from "@t3tools/contracts";
 import type { useNavigate } from "@tanstack/react-router";
 import { Columns2Icon } from "lucide-react";
 
@@ -13,10 +13,9 @@ import { type CommandPaletteActionItem, ITEM_ICON_CLASS } from "../components/Co
 export function compareAgentsPaletteItems(input: {
   readonly navigate: ReturnType<typeof useNavigate>;
   readonly environmentId: EnvironmentId | null;
-  readonly projectId: ProjectId | null;
   readonly activeThread: { readonly environmentId: EnvironmentId; readonly id: string } | null;
 }): CommandPaletteActionItem[] {
-  const { navigate, environmentId, projectId, activeThread } = input;
+  const { navigate, environmentId, activeThread } = input;
   const items: CommandPaletteActionItem[] = [];
   const pair = activeThread === null ? null : comparePairOf(activeThread.id);
   if (activeThread !== null && pair !== null) {
@@ -62,7 +61,7 @@ export function compareAgentsPaletteItems(input: {
         await navigate({
           to: "/compare/$environmentId",
           params: { environmentId },
-          search: projectId === null ? {} : { project: projectId },
+          search: {},
         });
       },
     });

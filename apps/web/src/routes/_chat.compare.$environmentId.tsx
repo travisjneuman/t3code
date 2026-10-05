@@ -6,7 +6,6 @@ import { CompareAgentsView } from "../compare-agents/CompareAgentsView";
 
 interface CompareSearch {
   readonly pair?: string;
-  readonly project?: string;
   /** Prefill the setup form from this thread. */
   readonly from?: string;
 }
@@ -17,9 +16,6 @@ export const Route = createFileRoute("/_chat/compare/$environmentId")({
     const pair = parsePairId(raw.pair);
     return {
       ...(pair !== undefined ? { pair } : {}),
-      ...(typeof raw.project === "string" && raw.project
-        ? { project: raw.project.slice(0, 200) }
-        : {}),
       ...(typeof raw.from === "string" && raw.from ? { from: raw.from.slice(0, 300) } : {}),
     };
   },
@@ -28,13 +24,12 @@ export const Route = createFileRoute("/_chat/compare/$environmentId")({
 
 function CompareRouteView() {
   const { environmentId } = Route.useParams();
-  const { pair, project, from } = Route.useSearch();
+  const { pair, from } = Route.useSearch();
   return (
     <CompareAgentsView
       key={`${environmentId}\u0000${pair ?? ""}\u0000${from ?? ""}`}
       environmentId={environmentId as EnvironmentId}
       pairId={pair}
-      projectId={project}
       fromThreadId={from}
     />
   );

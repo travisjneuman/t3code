@@ -9,21 +9,28 @@ how different providers, models, or reasoning levels handle the same question.
    choose **Compare agents…** in the command palette. From a normal thread, **Compare this thread's
    prompt…** in the palette opens the same form filled in with that thread's project, model, and
    latest prompt.
-2. Pick the project, write the prompt, and choose a model for each side. The picker next to each
+2. Keep **No project** or pick a project, write the prompt, and choose a model for each side. The picker next to each
    model sets its options, such as reasoning effort.
 3. Choose **Start comparison**, or press Cmd+Enter (Ctrl+Enter on Windows and Linux).
 
 Each side becomes its own thread, titled `Compare · <model> · <prompt>`. Earlier comparisons are
 listed under the form; archive both threads to remove one from the list.
 
-Both agents work in the project folder itself, not in separate worktrees. If the prompt asks them
-to change files, they edit the same files at the same time. Comparisons work best for questions,
-reviews, and plans.
+With **No project**, the default, each agent gets an empty folder of its own, so both can build
+something from scratch without getting in each other's way. In a project, both agents work in the
+project folder itself, not in separate worktrees: if the prompt asks them to change files, they
+edit the same files at the same time, so there comparisons work best for questions, reviews, and
+plans.
 
 ## Keep going
 
-- The message box at the bottom of the comparison sends one follow-up to both sides.
-- **Review swap** sends each agent the other's newest finished answer, naming its provider, model,
+- The message box at the bottom of the comparison sends one follow-up to both sides. Attach files
+  or images with the paperclip, by pasting, or by dropping them on the box; both agents get them.
+- Below the box, each side has its own model and options pickers, as in a thread. A change applies
+  from the next message on. Switches a thread can't make, such as some provider changes, are
+  greyed out with the reason.
+- **Build**/**Plan** and the access level next to the paperclip apply to both agents.
+- **Review swap**, next to the send button, sends each agent the other's newest finished answer, naming its provider, model,
   and options, and asks it to compare the two and give its best answer. Run it as many times as you
   like; each round is labelled in both columns.
 - While the agents work, the message box's send button becomes a stop button that stops both.

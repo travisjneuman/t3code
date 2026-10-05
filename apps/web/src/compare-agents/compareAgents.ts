@@ -15,6 +15,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   COMPARE_AGENTS_WS_METHODS,
+  type CompareAgentsFollowUpInput,
   type CompareAgentsStartInput,
   comparePairOf,
   type EnvironmentId,
@@ -100,10 +101,9 @@ export const reviewSwap = (environmentId: EnvironmentId, pairId: string): Promis
 
 export const sendFollowUp = (
   environmentId: EnvironmentId,
-  pairId: string,
-  text: string,
+  input: CompareAgentsFollowUpInput,
 ): Promise<boolean> =>
-  runPairCommand(followUpCommand, environmentId, { pairId, text }, "Could not send the follow-up");
+  runPairCommand(followUpCommand, environmentId, input, "Could not send the follow-up");
 
 export const stopComparison = (environmentId: EnvironmentId, pairId: string): Promise<boolean> =>
   runPairCommand(stopCommand, environmentId, { pairId }, "Could not stop the agents");
