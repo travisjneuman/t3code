@@ -25,8 +25,8 @@ export interface RemoteAppSiteInfo {
 
 /**
  * The shared half of each site's registry entry. The desktop half (entry URL,
- * hosts, partition, menu icon, optional theme) lives in apps/desktop/src/remote-apps,
- * and the renderer icon in apps/web/src/remote-apps/RemoteAppSiteIcon.tsx.
+ * hosts, partition, optional theme) lives in apps/desktop/src/remote-apps; each
+ * surface's icon is in remoteAppIcons.ts.
  */
 export const REMOTE_APP_SITE_INFO: Record<RemoteAppSite, RemoteAppSiteInfo> = {
   chatgpt: { label: "ChatGPT", providerDriver: "codex" },
@@ -342,3 +342,5 @@ export interface DesktopRemoteAppBridge {
   // Asks for an official chat export and a destination, then writes Markdown.
   importChatExport: () => Promise<RemoteAppChatImportResult>;
 }
+
+export * from "./remoteAppIcons.ts";

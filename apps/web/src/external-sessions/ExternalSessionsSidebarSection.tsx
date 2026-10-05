@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   EDITORS,
+  externalSessionOpensInOrigin,
   externalSessionUnsupportedReason,
   type ContextMenuItem,
   type EditorId,
@@ -40,6 +41,7 @@ import {
   externalSessionArchive,
   externalSessionContinue,
   externalSessionEntriesAtom,
+  externalSessionOpenInOrigin,
   externalSessionOriginLabel,
   externalSessionProductName,
   externalSessionTitle,
@@ -57,6 +59,7 @@ const EDITOR_LABEL_BY_ID = new Map(EDITORS.map((editor) => [editor.id, editor.la
 
 type RowMenuAction =
   | "continue"
+  | "open-origin"
   | "copy-session-id"
   | "copy-path"
   | "open-folder"
@@ -103,6 +106,7 @@ export function ExternalSessionsSidebarSection() {
   const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
   const runArchive = useAtomCommand(externalSessionArchive, { reportFailure: false });
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
+  const runOpenInOrigin = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
   const activeKey = useParams({
     strict: false,
     select: (params) =>
@@ -195,6 +199,20 @@ export function ExternalSessionsSidebarSection() {
     });
   };
 
+  const openInOrigin = async (entry: ExternalSessionEntry) => {
+    const result = await runOpenInOrigin({
+      environmentId: entry.environmentId,
+      input: { key: entry.session.key },
+    });
+    if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+    const failure = squashAtomCommandFailure(result);
+    toastManager.add({
+      type: "error",
+      title: `Could not open ${externalSessionOriginLabel(entry.session)}`,
+      description: failure instanceof Error ? failure.message : "An error occurred.",
+    });
+  };
+
   // The row leaves the list on the server's next push; an open session's view stays put.
   const archiveSession = async (entry: ExternalSessionEntry) => {
     const result = await runArchive({
@@ -243,6 +261,9 @@ export function ExternalSessionsSidebarSection() {
         disabled: session.liveness === "running",
       });
     }
+    if (externalSessionOpensInOrigin(session)) {
+      items.push({ id: "open-origin", label: `Open in ${externalSessionOriginLabel(session)}` });
+    }
     items.push({
       id: "copy-session-id",
       label: "Copy session ID",
@@ -281,6 +302,9 @@ export function ExternalSessionsSidebarSection() {
         return;
       case "continue":
         await continueInT3(entry);
+        return;
+      case "open-origin":
+        await openInOrigin(entry);
         return;
       case "copy-session-id":
         copyToClipboard(nativeSessionId(session.key), { title: "Session ID copied" });

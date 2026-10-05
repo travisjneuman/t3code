@@ -24,6 +24,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   unarchive: "externalSessions.unarchive",
   subscribeArchived: "externalSessions.subscribeArchived",
   handBack: "externalSessions.handBack",
+  openInOrigin: "externalSessions.openInOrigin",
 } as const;
 
 /** The streaming methods, for the client's subscription tag union. */
@@ -391,6 +392,31 @@ export const ExternalSessionsHandBackRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS
   error: ExternalSessionRpcError,
 });
 
+/**
+ * Whether the app a session runs in can be opened on it: Claude desktop and
+ * the Codex app take a link to one session. Fork add-on.
+ */
+export const externalSessionOpensInOrigin = (session: {
+  readonly driver: string;
+  readonly origin: string | null;
+}): boolean =>
+  session.origin === "Desktop" && (session.driver === "claudeAgent" || session.driver === "codex");
+
+/** Opens a session in the app it runs in, on the server's machine. */
+export const ExternalSessionOpenInOriginInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+});
+export type ExternalSessionOpenInOriginInput = typeof ExternalSessionOpenInOriginInput.Type;
+
+export const ExternalSessionOpenInOriginResult = Schema.Struct({});
+export type ExternalSessionOpenInOriginResult = typeof ExternalSessionOpenInOriginResult.Type;
+
+export const ExternalSessionsOpenInOriginRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.openInOrigin, {
+  payload: ExternalSessionOpenInOriginInput,
+  success: ExternalSessionOpenInOriginResult,
+  error: ExternalSessionRpcError,
+});
+
 export const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
   {
@@ -411,6 +437,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsUnarchiveRpc,
   ExternalSessionsSubscribeArchivedRpc,
   ExternalSessionsHandBackRpc,
+  ExternalSessionsOpenInOriginRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -423,4 +450,5 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: AuthOrchestrationReadScope,
   [EXTERNAL_SESSIONS_WS_METHODS.handBack]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: AuthOrchestrationOperateScope,
 } as const;

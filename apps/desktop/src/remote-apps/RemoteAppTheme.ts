@@ -519,8 +519,6 @@ export const buildRemoteAppSurfaceMenuHtml = (
         width: 16px;
         height: 16px;
         margin-inline: -2px;
-        color: ${menu.mutedForeground};
-        opacity: 0.8;
       }
       .icon svg { width: 16px; height: 16px; }
       .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -291,3 +291,11 @@ back. Right-click the **Other Agents** header and choose **Show archived session
 Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
 Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here
 within a few seconds.
+
+Sessions from the Claude desktop app or the Codex app open in that app on the same session: click
+**Claude Desktop** or **Codex Desktop** under the session, or right-click the row and choose
+**Open in**. The app opens on the computer running T3, and Claude needs deep links turned on and
+you signed in. That is also where you stop a running session; T3 can't stop a session another app
+is running. Sessions from a terminal or an IDE have no such link.
+
+A session's view shows its latest 200 messages. **Continue in T3** brings over the whole history.
