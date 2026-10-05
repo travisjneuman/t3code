@@ -22,6 +22,7 @@ import {
   type ExternalSessionArchivedResult,
   type ExternalSessionArchivedSession,
   type ExternalSessionHandBackResult,
+  type ExternalSessionOpenInOriginResult,
   ExternalSessionBusyError,
   type ExternalSessionContinueInput,
   type ExternalSessionContinueResult,
@@ -53,6 +54,7 @@ import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.t
 import { makeAntigravitySource } from "./antigravitySource.ts";
 import * as ClaudeDesktopArchive from "./claudeDesktopArchive.ts";
 import * as HandBack from "./handBack.ts";
+import * as OpenInOrigin from "./openInOrigin.ts";
 import { makeClaudeSource } from "./claudeSource.ts";
 import * as CodexNativeArchive from "./codexNativeArchive.ts";
 import { makeCodexSource } from "./codexSource.ts";
@@ -138,6 +140,10 @@ export class ExternalSessions extends Context.Service<
     readonly handBack: (
       threadId: ThreadId,
     ) => Effect.Effect<ExternalSessionHandBackResult, ExternalSessionError>;
+    /** Opens the app a session runs in on that session (openInOrigin.ts). */
+    readonly openInOrigin: (
+      key: string,
+    ) => Effect.Effect<ExternalSessionOpenInOriginResult, ExternalSessionError>;
   }
 >()("t3/external-sessions/ExternalSessions") {}
 
@@ -194,6 +200,7 @@ const make = Effect.gen(function* () {
   const codexNativeArchive = yield* CodexNativeArchive.make;
   const claudeDesktopArchive = yield* ClaudeDesktopArchive.make;
   const { handBack } = yield* HandBack.make;
+  const origins = yield* OpenInOrigin.make(claudeDesktopArchive);
   const sources: ReadonlyArray<ExternalSessionSource> = [
     makeClaudeSource(),
     makeCodexSource(),
@@ -650,6 +657,23 @@ const make = Effect.gen(function* () {
     ),
   );
 
+  const openInOrigin: ExternalSessions["Service"]["openInOrigin"] = (key) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* RcRef.get(registryRef);
+        const entry = yield* registry.resolve(key);
+        const summary = registry.summaryFor(key);
+        if (entry === undefined || summary === null) {
+          return yield* new ExternalSessionError({ message: "This session is no longer listed." });
+        }
+        return yield* origins.openInOrigin({
+          driver: summary.driver,
+          origin: summary.origin,
+          sessionId: entry.info.id,
+        });
+      }),
+    );
+
   return ExternalSessions.of({
     subscribeList,
     subscribeSession,
@@ -660,6 +684,7 @@ const make = Effect.gen(function* () {
     unarchiveSession,
     subscribeArchived,
     handBack,
+    openInOrigin,
   });
 });
 

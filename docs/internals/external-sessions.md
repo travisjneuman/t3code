@@ -132,6 +132,18 @@ in T3, which binds an ordinary thread to that same session.
   Unarchive, because T3 never writes Claude's files. The scan rides the list's republish (at most
   every 10 seconds, only while the list is watched, re-reading only files whose mtime changed) and
   covers only sessions the registry knows, since their titles come from the transcripts.
+- **"Open in <app>" uses each app's own link, on the server's machine.**
+  [`openInOrigin.ts`](../../apps/server/src/external-sessions/openInOrigin.ts) opens
+  `claude://code/continue?session=local_<id>` for Claude desktop and `codex://threads/<id>` for the
+  Codex app through `ExternalLauncher.launchBrowser`. Claude's link takes its own `local_<id>`, the
+  record's file name, which the archive scan maps from `cliSessionId` for unarchived records; its
+  handler ignores archived ones and needs deep links on and a signed-in app. `claude://resume`
+  would import a CLI session as a new one, so it is not used. Ids are checked against what each
+  handler accepts before they go in a URL. Terminal and IDE sessions have no link.
+- **T3 does not stop sessions other apps run.** The other app owns the process and offers no
+  stop call; signalling a process found by matching its arguments would be killing by pattern and
+  could leave that app's session state broken. Stopping happens in the app, one click away through
+  "Open in".
 - **Stay mergeable with upstream.** All logic lives in the add-on folders: server
   `external-sessions/`, web `apps/web/src/external-sessions/` plus one route, and contracts
   `externalSessions.ts`. The contract exports the RPC tuple (`ExternalSessionsRpcs`), the scope

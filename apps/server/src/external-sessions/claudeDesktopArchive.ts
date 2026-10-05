@@ -2,10 +2,11 @@
  * Claude desktop's own archive, mirrored read-only. The Claude app (its Code
  * tab) keeps one `local_<id>.json` per session under
  * `<Claude app data>/claude-code-sessions/<uuid>/<uuid>/`. Only `cliSessionId`
- * and `isArchived` are kept from each; the rest of the record holds account
- * and bridge identifiers, so it is dropped right after parsing and never
- * logged or sent. T3 never writes these files, so a session archived there is
- * unarchived there. Fork add-on; see
+ * and `isArchived` are kept from each, plus the file's `local_<id>` name,
+ * which Claude's `claude://code/continue` link opens; the rest of the record
+ * holds account and bridge identifiers, so it is dropped right after parsing
+ * and never logged or sent. T3 never writes these files, so a session
+ * archived there is unarchived there. Fork add-on; see
  * docs/internals/external-sessions.md.
  *
  * @module external-sessions/claudeDesktopArchive
@@ -42,15 +43,27 @@ const claudeAppDataDir = (): string => {
   }
 };
 
-/** The archived CLI session id a record names, or null; nothing else leaves here. */
-const archivedSessionId = (text: string): string | null => {
+interface SessionRecord {
+  readonly cliSessionId: string;
+  readonly archived: boolean;
+}
+
+/** The CLI session id a record names and whether it is archived; nothing else leaves here. */
+const sessionRecord = (text: string): SessionRecord | null => {
   const record = parseJsonObject(text.trimStart());
-  return record?.isArchived === true ? asString(record.cliSessionId) : null;
+  const cliSessionId = asString(record?.cliSessionId);
+  return cliSessionId === null ? null : { cliSessionId, archived: record?.isArchived === true };
 };
 
 interface CachedFile {
   readonly mtimeMs: number;
-  readonly archivedId: string | null;
+  readonly record: SessionRecord | null;
+}
+
+interface Scan {
+  readonly archived: ReadonlyMap<string, number>;
+  /** Claude desktop's `local_<id>` for each listed (unarchived) CLI session id. */
+  readonly localIds: ReadonlyMap<string, string>;
 }
 
 export interface ClaudeDesktopArchive {
@@ -60,6 +73,11 @@ export interface ClaudeDesktopArchive {
    * re-read only when its mtime changes. Empty where Claude desktop is absent.
    */
   readonly archivedIds: Effect.Effect<ReadonlyMap<string, number>>;
+  /**
+   * Claude desktop's `local_<id>` for an unarchived CLI session, or null. A
+   * miss rescans at once, so a session just started there is found.
+   */
+  readonly localSessionId: (cliSessionId: string) => Effect.Effect<string | null>;
 }
 
 export const make = Effect.gen(function* () {
@@ -67,7 +85,7 @@ export const make = Effect.gen(function* () {
   const root = NodePath.join(claudeAppDataDir(), "claude-code-sessions");
   const lock = yield* Semaphore.make(1);
   const files = new Map<string, CachedFile>();
-  let archived: ReadonlyMap<string, number> = new Map();
+  let current: Scan = { archived: new Map(), localIds: new Map() };
   let scannedAt = Number.NEGATIVE_INFINITY;
 
   const readRecord = (path: string): Effect.Effect<CachedFile | null> =>
@@ -77,16 +95,18 @@ export const make = Effect.gen(function* () {
       const mtimeMs = Option.match(info.mtime, { onNone: () => 0, onSome: (d) => d.getTime() });
       const cached = files.get(path);
       if (cached !== undefined && cached.mtimeMs === mtimeMs) return cached;
-      const archivedId =
+      const record =
         Number(info.size) > MAX_FILE_BYTES
           ? null
-          : archivedSessionId(yield* fileSystem.readFileString(path));
-      return { mtimeMs, archivedId };
+          : sessionRecord(yield* fileSystem.readFileString(path));
+      return { mtimeMs, record };
     }).pipe(Effect.orElseSucceed(() => null));
 
   const scan = Effect.gen(function* () {
     const seen = new Set<string>();
-    const next = new Map<string, number>();
+    const archived = new Map<string, number>();
+    const localIds = new Map<string, string>();
+    const localMtimes = new Map<string, number>();
     // `<account>/<organization>/local_<id>.json`; anything else is skipped.
     for (const account of yield* listDirectory(root)) {
       for (const organization of yield* listDirectory(NodePath.join(root, account))) {
@@ -94,25 +114,42 @@ export const make = Effect.gen(function* () {
         for (const name of yield* listDirectory(dir)) {
           if (!SESSION_FILE.test(name)) continue;
           const path = NodePath.join(dir, name);
-          const record = yield* readRecord(path);
-          if (record === null) continue;
+          const file = yield* readRecord(path);
+          if (file === null) continue;
           seen.add(path);
-          files.set(path, record);
-          if (record.archivedId === null) continue;
-          next.set(record.archivedId, Math.max(next.get(record.archivedId) ?? 0, record.mtimeMs));
+          files.set(path, file);
+          if (file.record === null) continue;
+          const { cliSessionId, archived: isArchived } = file.record;
+          if (isArchived) {
+            archived.set(cliSessionId, Math.max(archived.get(cliSessionId) ?? 0, file.mtimeMs));
+          } else if (file.mtimeMs >= (localMtimes.get(cliSessionId) ?? -1)) {
+            localMtimes.set(cliSessionId, file.mtimeMs);
+            localIds.set(cliSessionId, name.slice(0, -".json".length));
+          }
         }
       }
     }
     for (const path of files.keys()) if (!seen.has(path)) files.delete(path);
-    archived = next;
+    current = { archived, localIds };
     scannedAt = Date.now();
-    return archived;
+    return current;
   }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem));
 
+  const latest = lock.withPermits(1)(
+    Effect.suspend(() => (Date.now() - scannedAt < RESCAN_MS ? Effect.succeed(current) : scan)),
+  );
+
   const desktopArchive: ClaudeDesktopArchive = {
-    archivedIds: lock.withPermits(1)(
-      Effect.suspend(() => (Date.now() - scannedAt < RESCAN_MS ? Effect.succeed(archived) : scan)),
-    ),
+    archivedIds: Effect.map(latest, (result) => result.archived),
+    localSessionId: (cliSessionId) =>
+      Effect.flatMap(latest, (result) =>
+        result.localIds.has(cliSessionId)
+          ? Effect.succeed(result.localIds.get(cliSessionId) ?? null)
+          : Effect.map(
+              lock.withPermits(1)(scan),
+              (fresh) => fresh.localIds.get(cliSessionId) ?? null,
+            ),
+      ),
   };
   return desktopArchive;
 });

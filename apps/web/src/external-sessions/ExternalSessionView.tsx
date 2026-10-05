@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   EXTERNAL_SESSION_UNSUPPORTED_MESSAGES,
+  externalSessionOpensInOrigin,
   externalSessionUnsupportedReason,
   MessageId,
   type EnvironmentId,
@@ -21,8 +22,9 @@ import {
   BrainIcon,
   ChevronDownIcon,
   CircleDashedIcon,
+  CopyIcon,
+  ExternalLinkIcon,
   GitBranchIcon,
-  InfoIcon,
   PlayIcon,
 } from "lucide-react";
 import {
@@ -36,7 +38,6 @@ import {
 } from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
-import { ComposerControl } from "../components/chat/ComposerControl";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
@@ -53,9 +54,9 @@ import {
   showAnchoredCopySuccessToast,
 } from "../components/ui/anchoredCopyToast";
 import { Button } from "../components/ui/button";
-import { Popover, PopoverPopup, PopoverTrigger } from "../components/ui/popover";
 import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
+import { toastManager } from "../components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { isElectron } from "../env";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
@@ -69,11 +70,12 @@ import { useConnectedEnvironmentIds } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildThreadRouteParams } from "../threadRoutes";
-import { formatChatTimestampTooltip } from "../timestampFormat";
+import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../timestampFormat";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 import {
   cwdBasename,
   externalSessionContinue,
+  externalSessionOpenInOrigin,
   externalSessionOriginLabel,
   externalSessionProductName,
   externalSessionSettingLabel,
@@ -614,21 +616,28 @@ function ExternalSessionComposerBlock(props: {
       <div className="relative">
         <ComposerSurface.Main>
           <div className="rounded-3xl">
-            {/* ChatComposer's body padding, then ComposerPromptEditorTiptap's
-                container and editor classes, so the prompt area keeps the
-                empty composer's height and type. Text only: nothing here
+            {/* ChatComposer's body padding and prompt type: the session's state
+                in the placeholder's style, then its details. Nothing here
                 accepts typing. */}
             <div className="relative px-3 pt-3.5 pb-2 sm:px-4 sm:pt-4">
-              <div className="relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)">
+              <div className="flex min-h-19.5 flex-col gap-2 font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)">
                 <p
                   role="status"
                   className={cn(
-                    "-m-1 block max-h-52 min-h-19.5 overflow-y-auto p-1 whitespace-pre-wrap wrap-break-word leading-relaxed",
+                    "line-clamp-2 wrap-break-word leading-relaxed",
                     tone === "error" ? "text-destructive-foreground" : "text-placeholder/75",
                   )}
                 >
                   {message}
+                  {props.truncated && props.hasMessages ? (
+                    <span className="ms-2 text-xs text-muted-foreground/70">
+                      Showing recent messages only.
+                    </span>
+                  ) : null}
                 </p>
+                {summary !== null ? (
+                  <SessionDetails summary={summary} timestampFormat={props.timestampFormat} />
+                ) : null}
               </div>
             </div>
             {/* ChatComposer's bottom toolbar: controls left, primary action right. */}
@@ -643,7 +652,7 @@ function ExternalSessionComposerBlock(props: {
                           ? formatModelSlugName(summary.model)
                           : externalSessionProductName(summary)
                       }
-                      className="-ms-2.5 min-w-13 shrink"
+                      className="-ms-2.5"
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-1.5">
                         <ProviderInstanceIcon
@@ -673,22 +682,17 @@ function ExternalSessionComposerBlock(props: {
                         ) : null}
                       </SessionChip>
                     ) : null}
-                    <SessionChip tooltip={`Session from ${externalSessionOriginLabel(summary)}`}>
-                      {externalSessionOriginLabel(summary)}
-                    </SessionChip>
+                    <OriginChip
+                      environmentId={environmentId}
+                      sessionKey={sessionKey}
+                      summary={summary}
+                    />
                     <SessionChip tooltip={LIVENESS_DESCRIPTION[summary.liveness]}>
                       {summary.liveness === "running" ? (
                         <CircleDashedIcon aria-hidden className="text-info" />
                       ) : null}
                       {LIVENESS_LABEL[summary.liveness]}
                     </SessionChip>
-                    {details !== undefined ? <SessionIdChip sessionId={details.sessionId} /> : null}
-                    <SessionInfoChip summary={summary} timestampFormat={props.timestampFormat} />
-                    {props.truncated && props.hasMessages ? (
-                      <span className="min-w-0 truncate ps-1.5 text-xs text-muted-foreground/70 @max-[480px]/composer-surface:hidden">
-                        Older messages not shown
-                      </span>
-                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -745,6 +749,47 @@ function SessionChip(props: { tooltip: ReactNode; className?: string; children: 
   );
 }
 
+/** Where the session runs; opens it there when that app takes a link to one session. */
+function OriginChip(props: {
+  environmentId: EnvironmentId;
+  sessionKey: string;
+  summary: ExternalSessionSummary;
+}) {
+  const { environmentId, sessionKey, summary } = props;
+  const label = externalSessionOriginLabel(summary);
+  const runOpen = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
+  const handleOpen = useCallback(async () => {
+    const result = await runOpen({ environmentId, input: { key: sessionKey } });
+    if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
+    const failure = squashAtomCommandFailure(result);
+    toastManager.add({
+      type: "error",
+      title: `Failed to open ${label}`,
+      description: failure instanceof Error ? failure.message : "An error occurred.",
+    });
+  }, [environmentId, label, runOpen, sessionKey]);
+  if (!externalSessionOpensInOrigin(summary)) {
+    return <SessionChip tooltip={`Session from ${label}`}>{label}</SessionChip>;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className={cn(SESSION_CHIP_CLASS_NAME, "cursor-pointer hover:text-foreground")}
+            onClick={() => void handleOpen()}
+          />
+        }
+      >
+        {label}
+        <ExternalLinkIcon aria-hidden className="size-3" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">Open this session in {label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 /** Every branch the session ran on, most recently used first. */
 function BranchList(props: { branches: ReadonlyArray<string> }) {
   if (props.branches.length === 1) return <>Branch: {props.branches[0]}</>;
@@ -759,7 +804,7 @@ function BranchList(props: { branches: ReadonlyArray<string> }) {
 }
 
 /** The agent's own session id, in full; clicking copies it. */
-function SessionIdChip(props: { sessionId: string }) {
+function SessionIdValue(props: { sessionId: string }) {
   const ref = useRef<HTMLButtonElement>(null);
   const { copyToClipboard } = useCopyToClipboard<void>({
     target: "session ID",
@@ -771,113 +816,113 @@ function SessionIdChip(props: { sessionId: string }) {
     <Tooltip>
       <TooltipTrigger
         render={
-          <ComposerControl
+          <button
             ref={ref}
+            type="button"
             aria-label={`Copy session ID ${props.sessionId}`}
-            className="min-w-20 shrink"
+            className="flex min-w-0 items-center gap-1 rounded-sm font-medium text-secondary-label hover:text-foreground focus-visible:outline-1 focus-visible:outline-ring"
             onClick={() => copyToClipboard(props.sessionId, undefined)}
           />
         }
       >
         <span className="min-w-0 truncate">{props.sessionId}</span>
+        <CopyIcon aria-hidden className="size-3 shrink-0 text-muted-foreground" />
       </TooltipTrigger>
-      <TooltipPopup side="top">
-        <div className="flex flex-col">
-          <span>Session ID: {props.sessionId}</span>
-          <span className="text-muted-foreground">Click to copy</span>
-        </div>
-      </TooltipPopup>
+      <TooltipPopup side="top">Click to copy</TooltipPopup>
     </Tooltip>
   );
 }
 
-interface DetailRow {
+interface DetailItem {
   readonly label: string;
-  readonly value: ReactNode;
+  readonly value: string;
+  /** Full text when the value is abbreviated. */
+  readonly title?: string;
 }
 
-/** What the agent's store records about the session, for the info chip. */
-function sessionDetailRows(
+/**
+ * What the agent's store records about the session, most useful first; the
+ * details row drops whole items from the end when they don't fit. Branches
+ * live in the toolbar.
+ */
+function sessionDetailItems(
   summary: ExternalSessionSummary,
   timestampFormat: TimestampFormat,
-): ReadonlyArray<DetailRow> {
+): ReadonlyArray<DetailItem> {
   const details = summary.details;
-  const rows: Array<DetailRow> = [];
-  const add = (label: string, value: ReactNode) => {
-    if (value !== undefined && value !== null && value !== "") rows.push({ label, value });
+  const items: Array<DetailItem> = [];
+  const add = (label: string, value: string | undefined, title?: string) => {
+    if (value !== undefined && value !== "")
+      items.push({ label, value, ...(title ? { title } : {}) });
   };
-  const timestamp = (iso: string | undefined) =>
-    iso === undefined ? undefined : formatChatTimestampTooltip(iso, timestampFormat);
+  const timestamp = (label: string, iso: string | undefined) => {
+    if (iso === undefined) return;
+    add(
+      label,
+      formatDayAwareTimestamp(iso, timestampFormat),
+      formatChatTimestampTooltip(iso, timestampFormat),
+    );
+  };
   const setting = (value: string | undefined) =>
     value === undefined ? undefined : externalSessionSettingLabel(value);
-  const count = (value: number | undefined) => value?.toLocaleString();
 
-  add("Folder", summary.cwd);
-  const branches = details?.gitBranches ?? [];
-  add(
-    branches.length > 1 ? "Branches" : "Branch",
-    branches.length === 0 ? undefined : (
-      <span className="flex flex-col">
-        {branches.map((branch) => (
-          <span key={branch}>{branch}</span>
-        ))}
-      </span>
-    ),
-  );
-  add("Version", details?.version);
-  add("Permissions", setting(details?.approval));
-  add("Sandbox", setting(details?.sandbox));
-  add("Started", timestamp(details?.createdAt));
-  add("Last active", timestamp(summary.updatedAt));
-  add("Messages", count(details?.messageCount));
-  add("Steps", count(details?.stepCount));
+  timestamp("Last active", summary.updatedAt);
+  timestamp("Started", details?.createdAt);
   if (details?.contextTokens !== undefined) {
     const used = formatContextWindowTokens(details.contextTokens);
     add(
       "Context",
       details.contextWindow === undefined
         ? used
-        : `${used}/${formatContextWindowTokens(details.contextWindow)}`,
+        : `${used} / ${formatContextWindowTokens(details.contextWindow)}`,
     );
   }
+  add("Permissions", setting(details?.approval));
+  add("Version", details?.version);
+  add("Sandbox", setting(details?.sandbox));
+  add("Messages", details?.messageCount?.toLocaleString());
+  add("Steps", details?.stepCount?.toLocaleString());
   if (details?.totalTokens !== undefined) {
     add("Total processed", formatContextWindowTokens(details.totalTokens));
   }
-  return rows;
+  return items;
 }
 
-/** ContextWindowMeter's hover popover, listing the session's details. */
-function SessionInfoChip(props: {
+/**
+ * The session's details in the prompt area, two rows so the block keeps the
+ * empty composer's height: where it lives, then what it recorded.
+ */
+function SessionDetails(props: {
   summary: ExternalSessionSummary;
   timestampFormat: TimestampFormat;
 }) {
-  const rows = sessionDetailRows(props.summary, props.timestampFormat);
-  if (rows.length === 0) return null;
+  const { summary } = props;
+  const items = sessionDetailItems(summary, props.timestampFormat);
   return (
-    <Popover>
-      <PopoverTrigger
-        openOnHover
-        delay={150}
-        render={<ComposerControl aria-label="Session details" />}
-      >
-        <InfoIcon aria-hidden />
-      </PopoverTrigger>
-      <PopoverPopup tooltipStyle side="top" align="end" padding="none" width="sm">
-        <div className="flex flex-col gap-2 p-(--floating-content-inset) text-left whitespace-normal">
-          <div className="font-medium text-muted-foreground text-xs">Session details</div>
-          {rows.map((row) => (
-            <div
-              key={row.label}
-              className="flex items-start justify-between gap-3 text-2xs leading-4"
-            >
-              <span className="shrink-0 text-secondary-label">{row.label}</span>
-              <span className="min-w-0 wrap-anywhere text-right font-medium tabular-nums text-secondary-label">
-                {row.value}
-              </span>
+    <div className="flex min-w-0 flex-col gap-1 text-xs leading-4">
+      <div className="flex min-w-0 items-center gap-4">
+        <span className="flex min-w-0 gap-1" title={summary.cwd}>
+          <span className="shrink-0 text-muted-foreground">Folder</span>
+          <span className="min-w-0 truncate font-medium text-secondary-label">{summary.cwd}</span>
+        </span>
+        {summary.details !== undefined ? (
+          <span className="flex min-w-0 gap-1">
+            <span className="shrink-0 text-muted-foreground">Session</span>
+            <SessionIdValue sessionId={summary.details.sessionId} />
+          </span>
+        ) : null}
+      </div>
+      {items.length > 0 ? (
+        // One line; items that wrap are clipped whole.
+        <dl className="flex h-4 min-w-0 flex-wrap gap-x-4 overflow-hidden">
+          {items.map((item) => (
+            <div key={item.label} className="flex shrink-0 gap-1" title={item.title}>
+              <dt className="text-muted-foreground">{item.label}</dt>
+              <dd className="font-medium tabular-nums text-secondary-label">{item.value}</dd>
             </div>
           ))}
-        </div>
-      </PopoverPopup>
-    </Popover>
+        </dl>
+      ) : null}
+    </div>
   );
 }

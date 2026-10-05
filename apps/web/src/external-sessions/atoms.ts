@@ -124,6 +124,12 @@ export const externalSessionHandBack = createEnvironmentRpcCommand(connectionAto
   tag: EXTERNAL_SESSIONS_WS_METHODS.handBack,
 });
 
+/** Opens the app a session runs in on that session, on the server's machine. */
+export const externalSessionOpenInOrigin = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:open-in-origin",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.openInOrigin,
+});
+
 /** Archived sessions of one environment, newest first, for Settings › Archived. */
 export const externalSessionsArchived = createEnvironmentRpcSubscriptionAtomFamily(
   connectionAtomRuntime,

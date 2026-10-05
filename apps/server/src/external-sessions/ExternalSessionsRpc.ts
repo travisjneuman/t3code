@@ -9,6 +9,7 @@ import {
   type ExternalSessionArchiveInput,
   type ExternalSessionContinueInput,
   type ExternalSessionHandBackInput,
+  type ExternalSessionOpenInOriginInput,
   type ExternalSessionUnarchiveInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -68,6 +69,12 @@ export const makeHandlers = Effect.gen(function* () {
       observeRpcEffect(
         EXTERNAL_SESSIONS_WS_METHODS.handBack,
         externalSessions.handBack(input.threadId),
+        traceAttributes,
+      ),
+    [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: (input: ExternalSessionOpenInOriginInput) =>
+      observeRpcEffect(
+        EXTERNAL_SESSIONS_WS_METHODS.openInOrigin,
+        externalSessions.openInOrigin(input.key),
         traceAttributes,
       ),
   };
