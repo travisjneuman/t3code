@@ -1,18 +1,39 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Link, useParams } from "@tanstack/react-router";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import {
+  EDITORS,
+  externalSessionUnsupportedReason,
+  type ContextMenuItem,
+  type EditorId,
+} from "@t3tools/contracts";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, PlusIcon } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { CircleDashedIcon } from "lucide-react";
+import { memo, useCallback, useMemo, useRef, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
 import { useSidebar } from "../components/ui/sidebar";
+import { toastManager } from "../components/ui/toast";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { cn } from "../lib/utils";
+import { readLocalApi } from "../localApi";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { waitForThreadShell } from "../state/entities";
+import { serverEnvironment } from "../state/server";
+import { shellEnvironment } from "../state/shell";
+import { useAtomCommand } from "../state/use-atom-command";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
   cwdBasename,
+  externalSessionContinue,
   externalSessionEntriesAtom,
   externalSessionOriginLabel,
   externalSessionProductName,
@@ -21,26 +42,66 @@ import {
   shortModelLabel,
   type ExternalSessionEntry,
 } from "./atoms";
+import { resolveHandoffTargets, type HandoffTo } from "./handoffTargets";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
-/** How many inactive sessions each "Show more" reveals. */
-const RECENT_PAGE_SIZE = 20;
+const HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
+/** Sessions leave the list after a few idle days, so old hidden keys only need a cap. */
+const MAX_HIDDEN_KEYS = 500;
+const HiddenKeysSchema = Schema.Array(Schema.String);
+
+const EDITOR_LABEL_BY_ID = new Map(EDITORS.map((editor) => [editor.id, editor.label]));
+
+type RowMenuAction =
+  | "continue"
+  | "continue-with"
+  | `handoff:${string}`
+  | "copy-session-id"
+  | "copy-path"
+  | "open-folder"
+  | "open-with"
+  | `editor:${EditorId}`
+  | "hide"
+  | "unhide-all";
+
+type MenuPosition = { readonly x: number; readonly y: number };
 
 function rowKey(environmentId: string, sessionKey: string): string {
   return `${environmentId}\u0000${sessionKey}`;
 }
 
+/** The provider's own session id: the key is `<driver>:<session id>`. */
+function nativeSessionId(sessionKey: string): string {
+  return sessionKey.slice(sessionKey.indexOf(":") + 1);
+}
+
+function unhideAllItem(hiddenCount: number): ContextMenuItem<RowMenuAction> {
+  return {
+    id: "unhide-all",
+    label: `Show ${hiddenCount} hidden session${hiddenCount === 1 ? "" : "s"}`,
+    icon: "refresh-cw",
+  };
+}
+
 /**
- * "Other agents" shelf: sessions running outside T3 on the connected
- * environments. Running and idle sessions always show; inactive ones page in
- * behind "Show more". Renders nothing while no environment reports any.
+ * "Other Agents" shelf: sessions running outside T3 on the connected
+ * environments, live ones first. Expanding shows every session. Right-click a
+ * row for its actions, or the header to bring hidden sessions back. Renders
+ * nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
   const entries = useAtomValue(externalSessionEntriesAtom);
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
-  const [recentShown, setRecentShown] = useState(0);
+  const [hiddenKeys, setHiddenKeys] = useLocalStorage<ReadonlyArray<string>, readonly string[]>(
+    HIDDEN_STORAGE_KEY,
+    [],
+    HiddenKeysSchema,
+  );
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
+  const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
+  const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const activeKey = useParams({
     strict: false,
     select: (params) =>
@@ -49,35 +110,211 @@ export function ExternalSessionsSidebarSection() {
         : null,
   });
 
-  const { live, recent } = useMemo(() => {
-    const liveEntries: Array<ExternalSessionEntry> = [];
-    const recentEntries: Array<ExternalSessionEntry> = [];
+  const { copyToClipboard } = useCopyToClipboard<{ title: string }>({
+    onCopy: ({ title }) => toastManager.add({ type: "success", title }),
+    onError: (error) =>
+      toastManager.add({
+        type: "error",
+        title: "Failed to copy",
+        description: error instanceof Error ? error.message : "An error occurred.",
+      }),
+  });
+
+  const hiddenSet = useMemo(() => new Set(hiddenKeys), [hiddenKeys]);
+  const { visible, hiddenCount } = useMemo(() => {
+    const live: Array<ExternalSessionEntry> = [];
+    const recent: Array<ExternalSessionEntry> = [];
+    let hidden = 0;
     for (const entry of entries) {
-      (entry.session.liveness === "recent" ? recentEntries : liveEntries).push(entry);
+      if (hiddenSet.has(rowKey(entry.environmentId, entry.session.key))) {
+        hidden += 1;
+        continue;
+      }
+      (entry.session.liveness === "recent" ? recent : live).push(entry);
     }
-    return { live: liveEntries, recent: recentEntries };
-  }, [entries]);
+    return { visible: [...live, ...recent], hiddenCount: hidden };
+  }, [entries, hiddenSet]);
 
   const toggleExpanded = useCallback(() => setExpanded((value) => !value), [setExpanded]);
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
 
+  // Without `handoffTo` the session continues in place; with it, a new thread
+  // on that agent starts from the session's history.
+  const continueInT3 = async (entry: ExternalSessionEntry, handoffTo?: HandoffTo) => {
+    const { environmentId, session } = entry;
+    const result = await runContinue({
+      environmentId,
+      input: handoffTo === undefined ? { key: session.key } : { key: session.key, handoffTo },
+    });
+    if (result._tag === "Failure") {
+      if (isAtomCommandInterrupted(result)) return;
+      const failure = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: handoffTo === undefined ? "Could not continue in T3" : "Could not hand off",
+        description:
+          failure instanceof Error ? failure.message : "Could not continue this session in T3.",
+      });
+      return;
+    }
+    const threadRef = scopeThreadRef(environmentId, result.value.threadId);
+    // The thread route treats a thread missing from the shell as gone.
+    if (!(await waitForThreadShell(threadRef))) {
+      toastManager.add({
+        type: "info",
+        title: "Thread created",
+        description: "It has not reached this client yet. Open it from the sidebar.",
+      });
+      return;
+    }
+    closeMobileSidebar();
+    await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(threadRef) });
+  };
+
+  const openFolder = async (entry: ExternalSessionEntry, editor: EditorId) => {
+    if (entry.session.cwd === null) return;
+    const result = await openInEditor({
+      environmentId: entry.environmentId,
+      input: { cwd: entry.session.cwd, editor },
+    });
+    if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+    toastManager.add({
+      type: "error",
+      title:
+        editor === "file-manager"
+          ? "Could not open folder"
+          : `Could not open in ${EDITOR_LABEL_BY_ID.get(editor) ?? editor}`,
+      description: entry.session.cwd,
+    });
+  };
+
+  const setHidden = (key: string | null) =>
+    setHiddenKeys((keys) =>
+      key === null ? [] : [key, ...keys.filter((k) => k !== key)].slice(0, MAX_HIDDEN_KEYS),
+    );
+
+  const showRowMenu = async (entry: ExternalSessionEntry, position: MenuPosition) => {
+    const api = readLocalApi();
+    if (api === undefined) return;
+    const { environmentId, session } = entry;
+    // Read at click time, so rows do not each subscribe to the server config.
+    const config = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId));
+    const editors = config?.availableEditors ?? [];
+    const handoffTargets = resolveHandoffTargets(config?.providers ?? [], session);
+    const otherEditors = editors.filter((id) => id !== "file-manager");
+    const items: Array<ContextMenuItem<RowMenuAction>> = [];
+    if (externalSessionUnsupportedReason(session) === null) {
+      items.push({
+        id: "continue",
+        label: "Continue in T3",
+        icon: "message-square-plus",
+        // Two writers on one native session would interleave its transcript.
+        disabled: session.liveness === "running",
+      });
+    }
+    if (handoffTargets.length > 0) {
+      // A handoff only reads the transcript, so a running session can still go.
+      items.push({
+        id: "continue-with",
+        label: "Continue with",
+        children: handoffTargets.map(({ entry: target }) => ({
+          id: `handoff:${target.instanceId}` as const,
+          label: target.displayName,
+        })),
+      });
+    }
+    items.push({
+      id: "copy-session-id",
+      label: "Copy session ID",
+      icon: "hash",
+      separatorBefore: items.length > 0,
+    });
+    if (session.cwd !== null) {
+      items.push({ id: "copy-path", label: "Copy folder path", icon: "copy" });
+      if (editors.includes("file-manager")) {
+        items.push({ id: "open-folder", label: "Open folder", icon: "folder" });
+      }
+      if (otherEditors.length > 0) {
+        items.push({
+          id: "open-with",
+          label: "Open folder in",
+          children: otherEditors.map((editorId) => ({
+            id: `editor:${editorId}` as const,
+            label: EDITOR_LABEL_BY_ID.get(editorId) ?? editorId,
+          })),
+        });
+      }
+    }
+    items.push({ id: "hide", label: "Hide from list", icon: "archive", separatorBefore: true });
+    if (hiddenCount > 0) items.push(unhideAllItem(hiddenCount));
+
+    const clicked = await api.contextMenu.show(items, position);
+    switch (clicked) {
+      case null:
+      case "open-with":
+      case "continue-with":
+        return;
+      case "continue":
+        await continueInT3(entry);
+        return;
+      case "copy-session-id":
+        copyToClipboard(nativeSessionId(session.key), { title: "Session ID copied" });
+        return;
+      case "copy-path":
+        if (session.cwd !== null) copyToClipboard(session.cwd, { title: "Path copied" });
+        return;
+      case "open-folder":
+        await openFolder(entry, "file-manager");
+        return;
+      case "hide":
+        setHidden(rowKey(environmentId, session.key));
+        return;
+      case "unhide-all":
+        setHidden(null);
+        return;
+      default:
+        if (clicked.startsWith("handoff:")) {
+          const instanceId = clicked.slice("handoff:".length);
+          const target = handoffTargets.find(({ entry: t }) => t.instanceId === instanceId);
+          if (target !== undefined) {
+            await continueInT3(entry, { instanceId: target.entry.instanceId, model: target.model });
+          }
+          return;
+        }
+        await openFolder(entry, clicked.slice("editor:".length) as EditorId);
+    }
+  };
+
+  // Rows are memoized, so they get one stable callback that runs the latest menu.
+  const showRowMenuRef = useRef(showRowMenu);
+  showRowMenuRef.current = showRowMenu;
+  const handleRowContextMenu = useCallback(
+    (entry: ExternalSessionEntry, position: MenuPosition) => {
+      void showRowMenuRef.current(entry, position);
+    },
+    [],
+  );
+
+  const handleHeaderContextMenu = async (event: MouseEvent) => {
+    const api = readLocalApi();
+    if (hiddenCount === 0 || api === undefined) return;
+    event.preventDefault();
+    const clicked = await api.contextMenu.show([unhideAllItem(hiddenCount)], {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (clicked === "unhide-all") setHidden(null);
+  };
+
   if (entries.length === 0) return null;
 
-  const visibleRecent = recentShown > 0 ? recent.slice(0, recentShown) : [];
-  const hiddenRecentCount = recent.length - visibleRecent.length;
-  const visible = visibleRecent.length > 0 ? [...live, ...visibleRecent] : live;
-
   return (
-    <section aria-label="Other agents" className="mt-2">
-      <div className="mx-0.5 h-8">
-        <CollapsibleSectionHeader
-          expanded={expanded}
-          onClick={toggleExpanded}
-          accessory={<span className="shrink-0 tabular-nums">{entries.length}</span>}
-        >
-          Other agents
+    <section aria-label="Other Agents" className="mt-2">
+      <div className="mx-0.5 h-8" onContextMenu={(event) => void handleHeaderContextMenu(event)}>
+        <CollapsibleSectionHeader expanded={expanded} onClick={toggleExpanded}>
+          {`Other Agents (${visible.length})`}
         </CollapsibleSectionHeader>
       </div>
       {expanded ? (
@@ -91,29 +328,10 @@ export function ExternalSessionsSidebarSection() {
                 isActive={activeKey === key}
                 nowMinute={nowMinute}
                 onNavigate={closeMobileSidebar}
+                onContextMenu={handleRowContextMenu}
               />
             );
           })}
-          {hiddenRecentCount > 0 || recentShown > 0 ? (
-            <li className="list-none">
-              <button
-                type="button"
-                onClick={() =>
-                  setRecentShown((shown) => (hiddenRecentCount > 0 ? shown + RECENT_PAGE_SIZE : 0))
-                }
-                className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-              >
-                {hiddenRecentCount > 0 ? (
-                  <>
-                    <PlusIcon aria-hidden className="size-4 shrink-0" />
-                    Show {Math.min(hiddenRecentCount, RECENT_PAGE_SIZE)} more
-                  </>
-                ) : (
-                  "Show less"
-                )}
-              </button>
-            </li>
-          ) : null}
         </ul>
       ) : null}
     </section>
@@ -139,6 +357,7 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
   isActive: boolean;
   nowMinute: string;
   onNavigate: () => void;
+  onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
   const { environmentId, environmentLabel, session } = props.entry;
   const title = externalSessionTitle(session);
@@ -165,6 +384,10 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
         aria-label={label}
         aria-current={props.isActive ? "page" : undefined}
         onClick={props.onNavigate}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
+        }}
         title={session.cwd === null ? title : `${title}\n${session.cwd}`}
         className={cn(
           "group/sidebar-row relative block w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

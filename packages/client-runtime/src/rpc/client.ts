@@ -1,6 +1,6 @@
 import {
   EnvironmentAuthorizationError,
-  EXTERNAL_SESSIONS_WS_METHODS,
+  type ExternalSessionsSubscriptionMethod, // Fork add-on: external sessions.
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
 } from "@t3tools/contracts";
@@ -67,8 +67,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.subscribeWorktreeSetup
   | typeof WS_METHODS.subscribeProjectClones
   | typeof WS_METHODS.terminalAttach
-  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeList
-  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeSession;
+  | ExternalSessionsSubscriptionMethod; // Fork add-on: external sessions.
 
 export type EnvironmentStreamCommandRpcTag =
   | typeof WS_METHODS.chatGptHandoffSubscribe

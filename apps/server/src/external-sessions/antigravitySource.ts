@@ -13,10 +13,12 @@ import * as NodeUrl from "node:url";
 import * as Effect from "effect/Effect";
 
 import {
+  asCount,
   asString,
   type ExternalSessionInfo,
   type ExternalSessionSource,
   firstLine,
+  sessionDetails,
   timestampMs,
 } from "./ExternalSessionSource.ts";
 
@@ -42,7 +44,7 @@ const readSummaries = (path: string): ReadonlyArray<ExternalSessionInfo> => {
     const rows = database
       .prepare(
         `SELECT conversation_id, title, preview, last_modified_time, last_user_input_time,
-                workspace_uris, status
+                workspace_uris, status, step_count
            FROM conversation_summaries
           WHERE nesting_depth = 0 OR nesting_depth IS NULL
           ORDER BY COALESCE(last_user_input_time, last_modified_time) DESC
@@ -66,6 +68,7 @@ const readSummaries = (path: string): ReadonlyArray<ExternalSessionInfo> => {
         origin: "CLI",
         updatedAtMs,
         busy: status.includes("RUNNING"),
+        details: sessionDetails(id, { stepCount: asCount(row.step_count) }),
       });
     }
     return infos;

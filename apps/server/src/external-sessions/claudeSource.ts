@@ -12,8 +12,10 @@ import type { ExternalSessionMessage } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import {
+  asCount,
   asRecord,
   asString,
+  BranchHistory,
   clipMessage,
   contentText,
   type ExternalSessionInfo,
@@ -24,7 +26,9 @@ import {
   parseJsonObject,
   readLines,
   readText,
+  sessionDetails,
   statMtimeMs,
+  timestampMs,
   toolLine,
 } from "./ExternalSessionSource.ts";
 
@@ -69,6 +73,26 @@ const toolDetail = (input: unknown): string | null => {
   );
 };
 
+/** Context at one request, counted the way the Claude adapter counts it. */
+const contextTokens = (usage: Record<string, unknown> | null): number | null => {
+  const input = asCount(usage?.input_tokens);
+  if (input === null) return null;
+  return (
+    input +
+    (asCount(usage?.cache_creation_input_tokens) ?? 0) +
+    (asCount(usage?.cache_read_input_tokens) ?? 0) +
+    (asCount(usage?.output_tokens) ?? 0)
+  );
+};
+
+/** Settings Claude stamps on its entries; each read keeps the latest. */
+interface Latest {
+  effort: string | null;
+  version: string | null;
+  permissionMode: string | null;
+  contextTokens: number | null;
+}
+
 interface RegistryEntry {
   readonly busy: boolean;
   readonly name: string | null;
@@ -112,6 +136,20 @@ export const makeClaudeSource = (): ExternalSessionSource => {
     }
     return entries;
   });
+
+  // Every entry names its branch, but a summary reads only the head and tail.
+  // Branches seen in earlier reads are kept, so a long session that switched
+  // branches while watched keeps all of them.
+  const branchesByPath = new Map<string, BranchHistory>();
+  const branchesFor = (path: string) => {
+    let history = branchesByPath.get(path);
+    if (history === undefined) {
+      if (branchesByPath.size > 1_000) branchesByPath.clear();
+      history = new BranchHistory();
+      branchesByPath.set(path, history);
+    }
+    return history;
+  };
 
   const transcriptFor = (sessionId: string, cwd: string) =>
     NodePath.join(projects, cwd.replace(/[^a-zA-Z0-9]/g, "-"), `${sessionId}.jsonl`);
@@ -158,10 +196,36 @@ export const makeClaudeSource = (): ExternalSessionSource => {
         let cwd: string | null = null;
         let entrypoint: string | null = null;
         let firstPrompt: string | null = null;
+        let createdAt: string | null = null;
+        const branches = branchesFor(path);
+        const latest: Latest = {
+          effort: null,
+          version: null,
+          permissionMode: null,
+          contextTokens: null,
+        };
+        // Subagent entries carry their own settings; the session's are on the main chain.
+        const track = (record: Record<string, unknown>) => {
+          if (record.isSidechain === true) return;
+          branches.add(record.gitBranch, timestampMs(record.timestamp, 0));
+          latest.version = asString(record.version) ?? latest.version;
+          if (record.type === "user") {
+            latest.permissionMode = asString(record.permissionMode) ?? latest.permissionMode;
+          }
+          if (record.type === "assistant") {
+            const message = asRecord(record.message);
+            // Synthetic replies ("<synthetic>") carry no real usage.
+            if (asString(message?.model)?.startsWith("<")) return;
+            latest.effort = asString(record.effort) ?? latest.effort;
+            latest.contextTokens = contextTokens(asRecord(message?.usage)) ?? latest.contextTokens;
+          }
+        };
         for (const line of head.lines) {
           const record = parseJsonObject(line);
           if (record === null) continue;
+          if (tail !== head) track(record);
           cwd ??= asString(record.cwd);
+          createdAt ??= asString(record.timestamp);
           entrypoint ??= asString(record.entrypoint);
           if (firstPrompt === null && record.type === "user" && record.isMeta !== true) {
             const text = userText(asRecord(record.message)?.content);
@@ -174,6 +238,7 @@ export const makeClaudeSource = (): ExternalSessionSource => {
         for (const line of tail?.lines ?? []) {
           const record = parseJsonObject(line);
           if (record === null) continue;
+          track(record);
           if (record.type === "custom-title")
             customTitle = asString(record.customTitle) ?? customTitle;
           if (record.type === "agent-name") agentName = asString(record.agentName) ?? agentName;
@@ -193,6 +258,14 @@ export const makeClaudeSource = (): ExternalSessionSource => {
           origin: originFor(entrypoint ?? live?.entrypoint ?? null),
           updatedAtMs: head.mtimeMs,
           busy: live?.busy ?? false,
+          details: sessionDetails(id, {
+            effort: latest.effort,
+            gitBranches: branches.list(),
+            version: latest.version,
+            approval: latest.permissionMode,
+            createdAt,
+            contextTokens: latest.contextTokens,
+          }),
         };
         return [info];
       }),

@@ -270,15 +270,6 @@ ${declarations({
 }
 ${pageBase(palette, colorScheme)}`;
 
-const SITE_THEME_BUILDERS: Record<
-  Exclude<RemoteAppSite, "chatgpt">,
-  (palette: Palette, colorScheme: string) => string
-> = {
-  claude: buildClaudeCss,
-  grok: buildGrokCss,
-  gemini: buildGeminiCss,
-};
-
 /* Sites ship app-region CSS for their own desktop apps (ChatGPT marks its whole
    52px header draggable). Inside a view that turns their header controls into
    window drag handles; the host titlebar already drags the window. */
@@ -294,34 +285,6 @@ const SITE_NO_DRAG_CSS = `*, *::before, *::after {
    stylesheet !important beats the inline custom properties Grok and ChatGPT
    set. */
 const PINNED = ":root[data-t3code-sidebar-width]";
-const SIDEBAR_WIDTH_CSS: Record<RemoteAppSite, string> = {
-  // Only while ChatGPT's own panel is open, so its collapse still works. The
-  // inner panel carries an inline width from --codex-sidebar-preferred-width.
-  chatgpt: `${PINNED} {
-  --codex-sidebar-preferred-width: var(--t3code-sidebar-width) !important;
-}
-${PINNED} [data-app-shell-sidebar-open="true"] [style*="--app-shell-left-panel-width"] {
-  --app-shell-left-panel-width: var(--t3code-sidebar-width) !important;
-}
-${PINNED} [data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div > div {
-  width: 100% !important;
-  min-width: 0 !important;
-}`,
-  claude: `${PINNED} aside.dframe-sidebar {
-  width: var(--t3code-sidebar-width) !important;
-  min-width: var(--t3code-sidebar-width) !important;
-  max-width: var(--t3code-sidebar-width) !important;
-}`,
-  // Grok's sidebar is content-box with a 1px edge border.
-  grok: `${PINNED},
-${PINNED} [style*="--sidebar-width"] {
-  --sidebar-width: calc(var(--t3code-sidebar-width) - 1px) !important;
-}`,
-  gemini: `${PINNED},
-${PINNED} bard-sidenav {
-  --bard-sidenav-open-width: var(--t3code-sidebar-width) !important;
-}`,
-};
 
 /** Sets or, for null, removes the sidebar width pin on the page's root element. */
 export const buildRemoteAppSidebarWidthScript = (width: number | null): string => {
@@ -353,17 +316,73 @@ const CHATGPT_HEADER_WRAP_CSS = `#app-shell-sidebar [class*="@container/navigati
   min-width: max-content !important;
 }`;
 
+interface RemoteSiteTheme {
+  /** Repaints the site's own design tokens with the active T3 palette. */
+  readonly css: (input: RemoteAppTheme, palette: Palette, colorScheme: string) => string;
+  /** Pins the site's sidebar to T3's width; see PINNED. */
+  readonly sidebarWidthCss: string;
+}
+
 /**
- * CSS that repaints a site's own design tokens with the active T3 palette.
- * ChatGPT keeps its fuller treatment; the others only remap their tokens, so
- * apart from the pinned sidebar width their layouts stay as the sites ship them.
+ * The theme treatment of each themeable site. ChatGPT keeps its fuller
+ * treatment; the others only remap their tokens, so apart from the pinned
+ * sidebar width their layouts stay as the sites ship them. A site without an
+ * entry keeps its own look and sidebar width.
+ */
+const SITE_THEMES: Partial<Record<RemoteAppSite, RemoteSiteTheme>> = {
+  chatgpt: {
+    css: (input) => `${buildRemoteAppThemeCss(input)}\n${CHATGPT_HEADER_WRAP_CSS}`,
+    // Only while ChatGPT's own panel is open, so its collapse still works. The
+    // inner panel carries an inline width from --codex-sidebar-preferred-width.
+    sidebarWidthCss: `${PINNED} {
+  --codex-sidebar-preferred-width: var(--t3code-sidebar-width) !important;
+}
+${PINNED} [data-app-shell-sidebar-open="true"] [style*="--app-shell-left-panel-width"] {
+  --app-shell-left-panel-width: var(--t3code-sidebar-width) !important;
+}
+${PINNED} [data-app-shell-sidebar-open="true"] aside.app-shell-left-panel > div > div {
+  width: 100% !important;
+  min-width: 0 !important;
+}`,
+  },
+  claude: {
+    css: (_input, palette, colorScheme) => buildClaudeCss(palette, colorScheme),
+    sidebarWidthCss: `${PINNED} aside.dframe-sidebar {
+  width: var(--t3code-sidebar-width) !important;
+  min-width: var(--t3code-sidebar-width) !important;
+  max-width: var(--t3code-sidebar-width) !important;
+}`,
+  },
+  grok: {
+    css: (_input, palette, colorScheme) => buildGrokCss(palette, colorScheme),
+    // Grok's sidebar is content-box with a 1px edge border.
+    sidebarWidthCss: `${PINNED},
+${PINNED} [style*="--sidebar-width"] {
+  --sidebar-width: calc(var(--t3code-sidebar-width) - 1px) !important;
+}`,
+  },
+  gemini: {
+    css: (_input, palette, colorScheme) => buildGeminiCss(palette, colorScheme),
+    sidebarWidthCss: `${PINNED},
+${PINNED} bard-sidenav {
+  --bard-sidenav-open-width: var(--t3code-sidebar-width) !important;
+}`,
+  },
+};
+
+/** Whether the site gets the T3 palette and the sidebar width pin. */
+export const isThemeableRemoteAppSite = (site: RemoteAppSite): boolean =>
+  SITE_THEMES[site] !== undefined;
+
+/**
+ * The stylesheet inserted into a site's own pages: for every site the no-drag
+ * rule, and for a themeable site the active T3 palette and the sidebar pin.
  */
 export const buildRemoteSiteThemeCss = (site: RemoteAppSite, input: RemoteAppTheme): string => {
+  const siteTheme = SITE_THEMES[site];
+  if (siteTheme === undefined) return `${SITE_NO_DRAG_CSS}\n`;
   const theme = normalizeRemoteAppTheme(input);
   const colorScheme = theme.appearance === "dark" ? "dark" : "light";
-  return `${SITE_NO_DRAG_CSS}\n${
-    site === "chatgpt"
-      ? `${buildRemoteAppThemeCss(input)}\n${CHATGPT_HEADER_WRAP_CSS}`
-      : SITE_THEME_BUILDERS[site](resolvePalette(theme.colors), colorScheme)
-  }\n\n${SIDEBAR_WIDTH_CSS[site]}\n`;
+  const css = siteTheme.css(input, resolvePalette(theme.colors), colorScheme);
+  return `${SITE_NO_DRAG_CSS}\n${css}\n\n${siteTheme.sidebarWidthCss}\n`;
 };

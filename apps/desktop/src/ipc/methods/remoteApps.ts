@@ -1,6 +1,8 @@
 import {
   DesktopSurfaceSchema,
   RemoteAppAvailabilitySchema,
+  RemoteAppFillPromptRequestSchema,
+  RemoteAppFillPromptResultSchema,
   RemoteAppSurfaceMenuAnchorSchema,
   RemoteAppStateSchema,
   RemoteAppThemeSchema,
@@ -8,6 +10,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { REMOTE_APP_FILL_SITE_PROMPT_CHANNEL } from "../../remote-apps/RemoteAppChannels.ts";
 import * as RemoteAppManager from "../../remote-apps/RemoteAppManager.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 import * as IpcChannels from "../channels.ts";
@@ -72,6 +75,17 @@ export const setActiveSurface = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.remoteApp.setActiveSurface")(function* (surface) {
     const manager = yield* RemoteAppManager.RemoteAppManager;
     return yield* manager.setActiveSurface(surface);
+  }),
+});
+
+export const fillSitePrompt = DesktopIpc.makeIpcMethod({
+  channel: REMOTE_APP_FILL_SITE_PROMPT_CHANNEL,
+  payload: RemoteAppFillPromptRequestSchema,
+  result: RemoteAppFillPromptResultSchema,
+  authorize,
+  handler: Effect.fn("desktop.ipc.remoteApp.fillSitePrompt")(function* (request) {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    return yield* manager.fillSitePrompt(request);
   }),
 });
 
@@ -151,4 +165,5 @@ export const methods = [
   resetZoom,
   retry,
   clearData,
+  fillSitePrompt,
 ] as const;

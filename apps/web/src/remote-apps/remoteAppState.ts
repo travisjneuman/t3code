@@ -1,6 +1,6 @@
 import {
   isRemoteAppSite,
-  REMOTE_APP_SITE_PROVIDER_DRIVERS,
+  REMOTE_APP_SITE_INFO,
   REMOTE_APP_SITES,
   type RemoteAppSite,
   type RemoteAppState,
@@ -27,22 +27,47 @@ export const isRemoteAppSurface = (value: unknown): value is RemoteAppState["act
 export const activeRemoteAppSite = (state: RemoteAppState): RemoteAppSite | undefined =>
   state.activeSurface === "t3code" ? undefined : state.activeSurface;
 
-/** The sites whose provider has any enabled instance on this machine's server. */
-export const resolveEnabledRemoteAppSites = (
-  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "enabled">>,
-): ReadonlyArray<RemoteAppSite> =>
-  REMOTE_APP_SITES.filter((site) =>
-    providers.some(
-      (provider) => provider.driver === REMOTE_APP_SITE_PROVIDER_DRIVERS[site] && provider.enabled,
-    ),
-  );
+/** Available sites, other than the one on screen, that finished a reply while hidden. */
+export const unreadRemoteAppSites = (
+  state: RemoteAppState,
+  available: ReadonlyArray<RemoteAppSite>,
+): ReadonlyArray<RemoteAppSite> => {
+  const unread = state.unreadSites ?? [];
+  return unread.length === 0
+    ? []
+    : available.filter((site) => site !== state.activeSurface && unread.includes(site));
+};
 
-/** A site is in the surface menu when its provider is enabled and the user has not hidden it. */
-export const resolveAvailableRemoteAppSites = (
-  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "enabled">>,
-  hiddenSites: ReadonlyArray<RemoteAppSite>,
+type RemoteAppProviders = ReadonlyArray<Pick<ServerProvider, "driver" | "enabled">>;
+
+/** The provider sites whose provider has any enabled instance on this machine's server. */
+export const resolveEnabledRemoteAppSites = (
+  providers: RemoteAppProviders,
 ): ReadonlyArray<RemoteAppSite> =>
-  resolveEnabledRemoteAppSites(providers).filter((site) => !hiddenSites.includes(site));
+  REMOTE_APP_SITES.filter((site) => {
+    const driver = REMOTE_APP_SITE_INFO[site].providerDriver;
+    return (
+      driver !== null &&
+      providers.some((provider) => provider.driver === driver && provider.enabled)
+    );
+  });
+
+/**
+ * The sites in the surface menu: a provider site while its provider is enabled
+ * and the user has not hidden it, and a standalone site once the user turns it on.
+ */
+export const resolveAvailableRemoteAppSites = (
+  providers: RemoteAppProviders,
+  hiddenSites: ReadonlyArray<RemoteAppSite>,
+  enabledStandaloneSites: ReadonlyArray<RemoteAppSite>,
+): ReadonlyArray<RemoteAppSite> => {
+  const enabledProviderSites = resolveEnabledRemoteAppSites(providers);
+  return REMOTE_APP_SITES.filter((site) =>
+    REMOTE_APP_SITE_INFO[site].providerDriver === null
+      ? enabledStandaloneSites.includes(site)
+      : enabledProviderSites.includes(site) && !hiddenSites.includes(site),
+  );
+};
 
 export const resolveRemoteAppState = (state: RemoteAppState | null | undefined): RemoteAppState =>
   state ?? DEFAULT_REMOTE_APP_STATE;

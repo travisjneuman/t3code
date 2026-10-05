@@ -13,8 +13,10 @@ import type { ExternalSessionMessage } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import {
+  asCount,
   asRecord,
   asString,
+  branchName,
   clipMessage,
   contentText,
   type ExternalSessionSource,
@@ -23,6 +25,7 @@ import {
   listDirectory,
   parseJsonObject,
   readLines,
+  sessionDetails,
   statMtimeMs,
   toolLine,
 } from "./ExternalSessionSource.ts";
@@ -60,12 +63,32 @@ const toolDetail = (name: string, payload: Record<string, unknown>): string | nu
 const patchFiles = (patch: string): string =>
   [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map((m) => m[1]).join(", ");
 
+/** Per-turn settings from `turn_context`; each read keeps the latest. */
+interface TurnSettings {
+  model: string | null;
+  effort: string | null;
+  approval: string | null;
+  sandbox: string | null;
+}
+
+const readTurnContext = (payload: Record<string, unknown> | null, into: TurnSettings) => {
+  into.model = asString(payload?.model) ?? into.model;
+  into.effort = asString(payload?.effort) ?? into.effort;
+  into.approval = asString(payload?.approval_policy) ?? into.approval;
+  into.sandbox = asString(asRecord(payload?.sandbox_policy)?.type) ?? into.sandbox;
+};
+
 interface CodexHead {
   readonly id: string;
   readonly cwd: string | null;
   readonly origin: string | null;
   readonly firstPrompt: string | null;
-  readonly model: string | null;
+  /** The first turn's settings, for a tail that holds no turn_context. */
+  readonly turn: Readonly<TurnSettings>;
+  readonly createdAt: string | null;
+  readonly version: string | null;
+  /** Codex records the branch once, when the session starts. */
+  readonly gitBranch: string | null;
 }
 
 export const makeCodexSource = (): ExternalSessionSource => {
@@ -100,11 +123,14 @@ export const makeCodexSource = (): ExternalSessionSource => {
       const id = asString(meta.id) ?? ROLLOUT_FILE.exec(NodePath.basename(path))?.[1] ?? null;
       if (id === null) return null;
       let firstPrompt: string | null = null;
-      let model: string | null = null;
+      let turn: TurnSettings | null = null;
       for (const line of slice.lines) {
         const record = parseJsonObject(line);
         const payload = asRecord(record?.payload);
-        if (record?.type === "turn_context") model ??= asString(payload?.model);
+        if (record?.type === "turn_context" && turn === null) {
+          turn = { model: null, effort: null, approval: null, sandbox: null };
+          readTurnContext(payload, turn);
+        }
         if (firstPrompt !== null || payload?.type !== "message" || payload.role !== "user")
           continue;
         const text = contentText(payload.content, ["input_text"]);
@@ -115,7 +141,10 @@ export const makeCodexSource = (): ExternalSessionSource => {
         cwd: asString(meta.cwd),
         origin: originFor(originator, meta.source),
         firstPrompt,
-        model,
+        turn: turn ?? { model: null, effort: null, approval: null, sandbox: null },
+        createdAt: asString(meta.timestamp),
+        version: asString(meta.cli_version),
+        gitBranch: branchName(asRecord(meta.git)?.branch),
       };
       if (firstPrompt !== null || slice.size > HEAD_BYTES) {
         if (heads.size > 1_000) heads.clear();
@@ -156,12 +185,14 @@ export const makeCodexSource = (): ExternalSessionSource => {
         if (head === null || head === "hidden") return head ?? [];
         const tail = yield* readLines(path, { fromEnd: true, maxBytes: TAIL_BYTES });
         if (tail === null) return [];
-        let model = head.model;
+        const turn: TurnSettings = { ...head.turn };
+        let tokens: Record<string, unknown> | null = null;
         let busy = false;
         for (const line of tail.lines) {
           const record = parseJsonObject(line);
           const payload = asRecord(record?.payload);
-          if (record?.type === "turn_context") model = asString(payload?.model) ?? model;
+          if (record?.type === "turn_context") readTurnContext(payload, turn);
+          if (payload?.type === "token_count") tokens = asRecord(payload.info) ?? tokens;
           if (payload?.type === "task_started") busy = true;
           if (payload?.type === "task_complete" || payload?.type === "turn_aborted") busy = false;
         }
@@ -172,10 +203,22 @@ export const makeCodexSource = (): ExternalSessionSource => {
               (yield* threadName(head.id)) ?? head.firstPrompt ?? "Untitled session",
             ),
             cwd: head.cwd,
-            model,
+            model: turn.model,
             origin: head.origin,
             updatedAtMs: tail.mtimeMs,
             busy,
+            details: sessionDetails(head.id, {
+              effort: turn.effort,
+              gitBranches: head.gitBranch === null ? null : [head.gitBranch],
+              version: head.version,
+              approval: turn.approval,
+              sandbox: turn.sandbox,
+              createdAt: head.createdAt,
+              // Counted the way the Codex adapter counts context.
+              contextTokens: asCount(asRecord(tokens?.last_token_usage)?.total_tokens),
+              contextWindow: asCount(tokens?.model_context_window),
+              totalTokens: asCount(asRecord(tokens?.total_token_usage)?.total_tokens),
+            }),
           },
         ];
       }),

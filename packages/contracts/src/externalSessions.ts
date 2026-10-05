@@ -7,15 +7,26 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 
-import { EnvironmentAuthorizationError } from "./auth.ts";
+import {
+  AuthOrchestrationOperateScope,
+  AuthOrchestrationReadScope,
+  EnvironmentAuthorizationError,
+} from "./auth.ts";
 import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 export const EXTERNAL_SESSIONS_WS_METHODS = {
   subscribeList: "externalSessions.subscribeList",
   subscribeSession: "externalSessions.subscribeSession",
   continue: "externalSessions.continue",
+  subscribeRunningElsewhere: "externalSessions.subscribeRunningElsewhere",
 } as const;
+
+/** The streaming methods, for the client's subscription tag union. */
+export type ExternalSessionsSubscriptionMethod =
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeList
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeSession
+  | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere;
 
 /**
  * running: written to in the last minute (or the provider reports it busy).
@@ -23,6 +34,38 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
  */
 export const ExternalSessionLiveness = Schema.Literals(["running", "idle", "recent"]);
 export type ExternalSessionLiveness = typeof ExternalSessionLiveness.Type;
+
+/**
+ * What the agent's own store records about a session beyond its summary. Each
+ * agent records a different subset, so everything but the id is optional.
+ * Values that change during a session hold the latest one. Mode and effort
+ * values are the agent's own terms ("xhigh", "bypassPermissions", "never").
+ */
+export const ExternalSessionDetails = Schema.Struct({
+  /** The agent's own session id. */
+  sessionId: Schema.String,
+  /** Reasoning effort or thinking level. */
+  effort: Schema.optional(Schema.String),
+  /** Every git branch the session ran on, most recently used first. */
+  gitBranches: Schema.optional(Schema.Array(Schema.String)),
+  /** Version of the CLI or app that last wrote the session. */
+  version: Schema.optional(Schema.String),
+  /** Approval or permission mode. */
+  approval: Schema.optional(Schema.String),
+  /** Sandbox mode. */
+  sandbox: Schema.optional(Schema.String),
+  createdAt: Schema.optional(Schema.String),
+  /** Messages, as the agent counts them. */
+  messageCount: Schema.optional(Schema.Number),
+  /** Agent steps, for agents that count steps instead of messages. */
+  stepCount: Schema.optional(Schema.Number),
+  /** Tokens in context at the latest model request. */
+  contextTokens: Schema.optional(Schema.Number),
+  contextWindow: Schema.optional(Schema.Number),
+  /** Tokens processed over the whole session, cached input included. */
+  totalTokens: Schema.optional(Schema.Number),
+});
+export type ExternalSessionDetails = typeof ExternalSessionDetails.Type;
 
 export const ExternalSessionSummary = Schema.Struct({
   /** Opaque, stable across restarts: `<driver>:<provider session id>`. */
@@ -35,6 +78,11 @@ export const ExternalSessionSummary = Schema.Struct({
   model: Schema.NullOr(Schema.String),
   updatedAt: Schema.String,
   liveness: ExternalSessionLiveness,
+  /**
+   * Set only on a session stream's summaries. The list is pushed whole to
+   * every subscriber on each change, so it leaves these out.
+   */
+  details: Schema.optional(ExternalSessionDetails),
 });
 export type ExternalSessionSummary = typeof ExternalSessionSummary.Type;
 
@@ -96,10 +144,21 @@ const ExternalSessionRpcError = Schema.Union([ExternalSessionError, EnvironmentA
 
 export const ExternalSessionContinueInput = Schema.Struct({
   key: TrimmedNonEmptyString,
+  /**
+   * Hand the history to this provider instance and model instead, for an agent
+   * other than the session's. That makes a new T3 thread every time, carrying
+   * the conversation as imported context; the original session stays unbound.
+   */
+  handoffTo: Schema.optional(
+    Schema.Struct({ instanceId: ProviderInstanceId, model: TrimmedNonEmptyString }),
+  ),
 });
 export type ExternalSessionContinueInput = typeof ExternalSessionContinueInput.Type;
 
-/** The T3 thread that now owns the session. Continuing twice returns the same thread. */
+/**
+ * Continuing in place returns the T3 thread that owns the session, the same
+ * one each time. A handoff returns the new thread it made.
+ */
 export const ExternalSessionContinueResult = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
@@ -152,6 +211,19 @@ export function externalSessionUnsupportedReason(
   summary: Pick<ExternalSessionSummary, "driver" | "cwd">,
 ): ExternalSessionUnsupportedReason | null {
   if (SEPARATE_STORE_DRIVERS.has(summary.driver)) return "separate-store";
+  if (!CONTINUABLE_DRIVERS.has(summary.driver)) return "provider";
+  if (summary.cwd === null) return "no-folder";
+  return null;
+}
+
+/**
+ * Whether a summary's history can be handed to a different agent. Unlike
+ * continuing in place, this only reads the transcript, so the agent's own
+ * runtime and store layout do not matter. The server checks again.
+ */
+export function externalSessionHandoffUnsupportedReason(
+  summary: Pick<ExternalSessionSummary, "driver" | "cwd">,
+): ExternalSessionUnsupportedReason | null {
   if (!CONTINUABLE_DRIVERS.has(summary.driver)) return "provider";
   if (summary.cwd === null) return "no-folder";
   return null;
@@ -217,3 +289,40 @@ export const ExternalSessionsContinueRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS
   success: ExternalSessionContinueResult,
   error: ExternalSessionContinueRpcError,
 });
+
+/** Continued T3 threads whose session is running in its own agent right now. */
+export const ExternalSessionRunningElsewhereInput = Schema.Struct({});
+export type ExternalSessionRunningElsewhereInput = typeof ExternalSessionRunningElsewhereInput.Type;
+
+/** The whole set, sent on subscribe and whenever it changes. */
+export const ExternalSessionRunningElsewhereResult = Schema.Struct({
+  threadIds: Schema.Array(ThreadId),
+});
+export type ExternalSessionRunningElsewhereResult =
+  typeof ExternalSessionRunningElsewhereResult.Type;
+
+export const ExternalSessionsSubscribeRunningElsewhereRpc = Rpc.make(
+  EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere,
+  {
+    payload: ExternalSessionRunningElsewhereInput,
+    success: ExternalSessionRunningElsewhereResult,
+    error: ExternalSessionRpcError,
+    stream: true,
+  },
+);
+
+/** Every external-session RPC, spread into the WebSocket RPC group. */
+export const ExternalSessionsRpcs = [
+  ExternalSessionsSubscribeListRpc,
+  ExternalSessionsSubscribeSessionRpc,
+  ExternalSessionsContinueRpc,
+  ExternalSessionsSubscribeRunningElsewhereRpc,
+] as const;
+
+/** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
+export const EXTERNAL_SESSIONS_RPC_SCOPES = {
+  [EXTERNAL_SESSIONS_WS_METHODS.subscribeList]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.subscribeSession]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.continue]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere]: AuthOrchestrationReadScope,
+} as const;

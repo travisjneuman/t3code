@@ -4,7 +4,11 @@
  *
  * @module external-sessions/ExternalSessionSource
  */
-import type { ExternalSessionMessage, ProviderDriverKind } from "@t3tools/contracts";
+import type {
+  ExternalSessionDetails,
+  ExternalSessionMessage,
+  ProviderDriverKind,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -19,6 +23,48 @@ export interface ExternalSessionInfo {
   readonly updatedAtMs: number;
   /** The provider says a turn is in progress right now. */
   readonly busy: boolean;
+  /** Sent only on the session's own stream, never in the list. */
+  readonly details: ExternalSessionDetails;
+}
+
+type DetailFields = {
+  readonly [K in Exclude<keyof ExternalSessionDetails, "sessionId">]?:
+    | ExternalSessionDetails[K]
+    | null;
+};
+
+/** Details without the fields the store did not record, so the wire object stays small. */
+export const sessionDetails = (sessionId: string, fields: DetailFields): ExternalSessionDetails => {
+  const details: Record<string, unknown> = { sessionId };
+  for (const [name, value] of Object.entries(fields)) {
+    if (value === null || value === undefined || value === "") continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    details[name] = value;
+  }
+  return details as ExternalSessionDetails;
+};
+
+/** A git branch name; detached checkouts report "HEAD", which names no branch. */
+export const branchName = (value: unknown): string | null => {
+  const name = typeof value === "string" ? value.trim() : "";
+  return name === "" || name === "HEAD" ? null : name;
+};
+
+/** Git branches a session ran on, with when each was last used. */
+export class BranchHistory {
+  private readonly lastUsed = new Map<string, number>();
+
+  add(branch: unknown, atMs: number): void {
+    const name = branchName(branch);
+    if (name === null) return;
+    const previous = this.lastUsed.get(name);
+    if (previous === undefined || atMs >= previous) this.lastUsed.set(name, atMs);
+  }
+
+  /** Most recently used first. */
+  list(): ReadonlyArray<string> {
+    return [...this.lastUsed].sort(([, a], [, b]) => b - a).map(([name]) => name);
+  }
 }
 
 /** Turns transcript lines into messages. A pushed line may grow the last message (same id). */
@@ -89,8 +135,13 @@ export const asRecord = (value: unknown): Record<string, unknown> | null =>
 export const asString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
 
+export const asCount = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+
 export const timestampMs = (value: unknown, fallback: number): number => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+  // Grok writes epoch seconds; the others write milliseconds or ISO strings.
+  if (typeof value === "number" && Number.isFinite(value))
+    return value < 1e12 ? value * 1000 : value;
   if (typeof value !== "string") return fallback;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : fallback;

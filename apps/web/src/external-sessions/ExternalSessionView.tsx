@@ -13,10 +13,18 @@ import {
   type ExternalSessionSummary,
   type ServerProvider,
 } from "@t3tools/contracts";
+import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { formatModelSlugName } from "@t3tools/shared/model";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDownIcon, CircleDashedIcon, PlayIcon } from "lucide-react";
+import {
+  BrainIcon,
+  ChevronDownIcon,
+  CircleDashedIcon,
+  GitBranchIcon,
+  InfoIcon,
+  PlayIcon,
+} from "lucide-react";
 import {
   type ReactNode,
   useCallback,
@@ -28,6 +36,7 @@ import {
 } from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
+import { ComposerControl } from "../components/chat/ComposerControl";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
@@ -38,31 +47,52 @@ import {
   WorkspaceBreadcrumbSeparator,
   WorkspaceBreadcrumbText,
 } from "../components/WorkspaceBreadcrumb";
+import {
+  ANCHORED_COPY_TOAST_TIMEOUT_MS,
+  showAnchoredCopyErrorToast,
+  showAnchoredCopySuccessToast,
+} from "../components/ui/anchoredCopyToast";
 import { Button } from "../components/ui/button";
+import { Group, GroupSeparator } from "../components/ui/group";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuItemLabel,
+  MenuPopup,
+  MenuTrigger,
+} from "../components/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "../components/ui/popover";
 import { SidebarInset } from "../components/ui/sidebar";
 import { Spinner } from "../components/ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { isElectron } from "../env";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
+import { formatContextWindowTokens } from "../lib/contextWindow";
 import { cn } from "../lib/utils";
 import type { TimelineEntry } from "../session-logic";
-import { waitForThreadShell } from "../state/entities";
+import { useServerConfigs, waitForThreadShell } from "../state/entities";
 import { useConnectedEnvironmentIds } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildThreadRouteParams } from "../threadRoutes";
+import { formatChatTimestampTooltip } from "../timestampFormat";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 import {
   cwdBasename,
   externalSessionContinue,
   externalSessionOriginLabel,
   externalSessionProductName,
+  externalSessionSettingLabel,
   externalSessionTitle,
   externalSessionTranscript,
   LIVENESS_LABEL,
   shortModelLabel,
 } from "./atoms";
+import { resolveHandoffTargets, type HandoffTo } from "./handoffTargets";
 
 const EMPTY_MESSAGES: ReadonlyArray<ExternalSessionMessage> = [];
 const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
@@ -380,6 +410,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
                               loaded={data !== null}
                               error={error}
                               connected={connected}
+                              timestampFormat={timestampFormat}
                               onRetry={refresh}
                             />
                           </div>
@@ -521,8 +552,9 @@ function resolveComposerBlockState(input: {
  * Stands in for the composer and keeps its shape. The prompt area explains the
  * session's state in the placeholder's style, the toolbar row shows the model
  * and status where the composer's pickers sit, and "Continue in T3" sits where
- * the send button does. The classes mirror ChatComposer's expanded layout;
- * each part names its source.
+ * the send button does, split with a menu that hands the history to another
+ * agent instead. The classes mirror ChatComposer's expanded layout; each part
+ * names its source.
  */
 function ExternalSessionComposerBlock(props: {
   environmentId: EnvironmentId;
@@ -533,39 +565,70 @@ function ExternalSessionComposerBlock(props: {
   loaded: boolean;
   error: string | null;
   connected: boolean;
+  timestampFormat: TimestampFormat;
   onRetry: () => void;
 }) {
   const { environmentId, sessionKey, summary } = props;
+  const details = summary?.details;
+  const effort = details?.effort === undefined ? null : externalSessionSettingLabel(details.effort);
+  const effortKind = summary?.driver === "pi" ? "Thinking level" : "Reasoning effort";
+  const branches = details?.gitBranches ?? [];
   const navigate = useNavigate();
   const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
   const [continuing, setContinuing] = useState(false);
   const [continueError, setContinueError] = useState<string | null>(null);
+  const providers = useServerConfigs().get(environmentId)?.providers ?? EMPTY_PROVIDERS;
+  const sessionDriver = summary?.driver ?? null;
+  const sessionCwd = summary?.cwd ?? null;
+  const handoffTargets = useMemo(
+    () =>
+      resolveHandoffTargets(
+        providers,
+        sessionDriver === null ? null : { driver: sessionDriver, cwd: sessionCwd },
+      ),
+    [providers, sessionCwd, sessionDriver],
+  );
 
-  const handleContinue = useCallback(async () => {
-    setContinuing(true);
-    setContinueError(null);
-    const result = await runContinue({ environmentId, input: { key: sessionKey } });
-    if (result._tag === "Failure") {
-      setContinuing(false);
-      if (!isAtomCommandInterrupted(result)) {
-        const failure = squashAtomCommandFailure(result);
-        setContinueError(
-          failure instanceof Error ? failure.message : "Could not continue this session in T3.",
-        );
+  // Without `handoffTo` the session continues in place; with it, a new thread
+  // on that agent starts from the session's history.
+  const handleContinue = useCallback(
+    async (handoffTo?: HandoffTo) => {
+      setContinuing(true);
+      setContinueError(null);
+      const result = await runContinue({
+        environmentId,
+        input: handoffTo === undefined ? { key: sessionKey } : { key: sessionKey, handoffTo },
+      });
+      if (result._tag === "Failure") {
+        setContinuing(false);
+        if (!isAtomCommandInterrupted(result)) {
+          const failure = squashAtomCommandFailure(result);
+          setContinueError(
+            failure instanceof Error
+              ? failure.message
+              : handoffTo === undefined
+                ? "Could not continue this session in T3."
+                : "Could not hand this session to that agent.",
+          );
+        }
+        return;
       }
-      return;
-    }
-    const threadRef = scopeThreadRef(environmentId, result.value.threadId);
-    // The thread route treats a thread missing from the shell as gone.
-    if (!(await waitForThreadShell(threadRef))) {
-      setContinuing(false);
-      setContinueError(
-        "The thread was created, but it has not reached this client yet. Open it from the sidebar.",
-      );
-      return;
-    }
-    await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(threadRef) });
-  }, [environmentId, navigate, runContinue, sessionKey]);
+      const threadRef = scopeThreadRef(environmentId, result.value.threadId);
+      // The thread route treats a thread missing from the shell as gone.
+      if (!(await waitForThreadShell(threadRef))) {
+        setContinuing(false);
+        setContinueError(
+          "The thread was created, but it has not reached this client yet. Open it from the sidebar.",
+        );
+        return;
+      }
+      await navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(threadRef),
+      });
+    },
+    [environmentId, navigate, runContinue, sessionKey],
+  );
 
   const { message, tone, blockedReason } = resolveComposerBlockState({
     summary,
@@ -578,6 +641,9 @@ function ExternalSessionComposerBlock(props: {
   const continueTooltip = continuing
     ? "Opening this session as a T3 thread…"
     : (blockedReason ?? "Open this session as a T3 thread and reply here");
+  const continueBlocked = blockedReason !== null || continuing;
+  // A handoff only reads the transcript, so a running session can still go.
+  const handoffBlocked = continuing || !props.connected || summary === null || !props.hasMessages;
 
   return (
     // ChatComposer's <form> and the wrapper around its main surface.
@@ -628,6 +694,22 @@ function ExternalSessionComposerBlock(props: {
                         </span>
                       </span>
                     </SessionChip>
+                    {effort !== null ? (
+                      // TraitsPicker's effort control, read-only.
+                      <SessionChip tooltip={`${effortKind}: ${effort}`}>
+                        <BrainIcon aria-hidden />
+                        {effort}
+                      </SessionChip>
+                    ) : null}
+                    {branches.length > 0 ? (
+                      <SessionChip tooltip={<BranchList branches={branches} />}>
+                        <GitBranchIcon aria-hidden />
+                        <span className="max-w-40 truncate">{branches[0]}</span>
+                        {branches.length > 1 ? (
+                          <span className="text-muted-foreground">+{branches.length - 1}</span>
+                        ) : null}
+                      </SessionChip>
+                    ) : null}
                     <SessionChip tooltip={`Session from ${externalSessionOriginLabel(summary)}`}>
                       {externalSessionOriginLabel(summary)}
                     </SessionChip>
@@ -637,6 +719,8 @@ function ExternalSessionComposerBlock(props: {
                       ) : null}
                       {LIVENESS_LABEL[summary.liveness]}
                     </SessionChip>
+                    {details !== undefined ? <SessionIdChip sessionId={details.sessionId} /> : null}
+                    <SessionInfoChip summary={summary} timestampFormat={props.timestampFormat} />
                     {props.truncated && props.hasMessages ? (
                       <span className="min-w-0 truncate ps-1.5 text-xs text-muted-foreground/70 @max-[480px]/composer-surface:hidden">
                         Older messages not shown
@@ -651,15 +735,23 @@ function ExternalSessionComposerBlock(props: {
                     Retry
                   </Button>
                 ) : (
-                  <Tooltip>
-                    {/* A disabled button gets no pointer events; the span keeps the reason reachable. */}
-                    <TooltipTrigger render={<span className="inline-flex" />}>
-                      <Button
-                        variant="default"
-                        size="default"
-                        disabled={blockedReason !== null || continuing}
-                        aria-busy={continuing || undefined}
-                        onClick={() => void handleContinue()}
+                  <Group>
+                    <Tooltip>
+                      {/* aria-disabled, not disabled: the button keeps pointer
+                          events, so the reason stays reachable, and stays a
+                          direct child of the group for its joined corners. */}
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="default"
+                            size="default"
+                            aria-disabled={continueBlocked || undefined}
+                            aria-busy={continuing || undefined}
+                            onClick={() => {
+                              if (!continueBlocked) void handleContinue();
+                            }}
+                          />
+                        }
                       >
                         {continuing ? (
                           <Spinner aria-hidden />
@@ -667,10 +759,53 @@ function ExternalSessionComposerBlock(props: {
                           <PlayIcon aria-hidden className="fill-current" />
                         )}
                         Continue in T3
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipPopup>{continueTooltip}</TooltipPopup>
-                  </Tooltip>
+                      </TooltipTrigger>
+                      <TooltipPopup>{continueTooltip}</TooltipPopup>
+                    </Tooltip>
+                    {handoffTargets.length > 0 ? (
+                      <>
+                        <GroupSeparator />
+                        <Menu>
+                          <MenuTrigger
+                            render={
+                              <Button
+                                variant="default"
+                                size="icon"
+                                aria-label="Continue with another agent"
+                                disabled={handoffBlocked}
+                              />
+                            }
+                          >
+                            <ChevronDownIcon aria-hidden />
+                          </MenuTrigger>
+                          <MenuPopup align="end" side="top">
+                            <MenuGroup>
+                              <MenuGroupLabel>New thread from this history</MenuGroupLabel>
+                              {handoffTargets.map(({ entry, model }) => (
+                                <MenuItem
+                                  key={entry.instanceId}
+                                  onClick={() =>
+                                    void handleContinue({ instanceId: entry.instanceId, model })
+                                  }
+                                >
+                                  <ProviderInstanceIcon
+                                    driverKind={entry.driverKind}
+                                    displayName={entry.displayName}
+                                    accentColor={entry.accentColor}
+                                    acpRegistryAgentId={entry.acpRegistryAgentId}
+                                    acpRegistryIconUrl={entry.acpRegistryIconUrl}
+                                    className="size-4"
+                                    iconClassName="size-4"
+                                  />
+                                  <MenuItemLabel>Continue with {entry.displayName}</MenuItemLabel>
+                                </MenuItem>
+                              ))}
+                            </MenuGroup>
+                          </MenuPopup>
+                        </Menu>
+                      </>
+                    ) : null}
+                  </Group>
                 )}
               </div>
             </div>
@@ -682,7 +817,7 @@ function ExternalSessionComposerBlock(props: {
 }
 
 /** A read-only toolbar chip; see SESSION_CHIP_CLASS_NAME. */
-function SessionChip(props: { tooltip: string; className?: string; children: ReactNode }) {
+function SessionChip(props: { tooltip: ReactNode; className?: string; children: ReactNode }) {
   return (
     <Tooltip>
       <TooltipTrigger render={<span className={cn(SESSION_CHIP_CLASS_NAME, props.className)} />}>
@@ -690,5 +825,142 @@ function SessionChip(props: { tooltip: string; className?: string; children: Rea
       </TooltipTrigger>
       <TooltipPopup side="top">{props.tooltip}</TooltipPopup>
     </Tooltip>
+  );
+}
+
+/** Every branch the session ran on, most recently used first. */
+function BranchList(props: { branches: ReadonlyArray<string> }) {
+  if (props.branches.length === 1) return <>Branch: {props.branches[0]}</>;
+  return (
+    <div className="flex flex-col">
+      <span>Branches, most recent first:</span>
+      {props.branches.map((branch) => (
+        <span key={branch}>{branch}</span>
+      ))}
+    </div>
+  );
+}
+
+/** The agent's own session id, in full; clicking copies it. */
+function SessionIdChip(props: { sessionId: string }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const { copyToClipboard } = useCopyToClipboard<void>({
+    target: "session ID",
+    onCopy: () => showAnchoredCopySuccessToast(ref),
+    onError: (error) => showAnchoredCopyErrorToast(ref, error),
+    timeout: ANCHORED_COPY_TOAST_TIMEOUT_MS,
+  });
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ComposerControl
+            ref={ref}
+            aria-label={`Copy session ID ${props.sessionId}`}
+            className="min-w-20 shrink"
+            onClick={() => copyToClipboard(props.sessionId, undefined)}
+          />
+        }
+      >
+        <span className="min-w-0 truncate">{props.sessionId}</span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        <div className="flex flex-col">
+          <span>Session ID: {props.sessionId}</span>
+          <span className="text-muted-foreground">Click to copy</span>
+        </div>
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+interface DetailRow {
+  readonly label: string;
+  readonly value: ReactNode;
+}
+
+/** What the agent's store records about the session, for the info chip. */
+function sessionDetailRows(
+  summary: ExternalSessionSummary,
+  timestampFormat: TimestampFormat,
+): ReadonlyArray<DetailRow> {
+  const details = summary.details;
+  const rows: Array<DetailRow> = [];
+  const add = (label: string, value: ReactNode) => {
+    if (value !== undefined && value !== null && value !== "") rows.push({ label, value });
+  };
+  const timestamp = (iso: string | undefined) =>
+    iso === undefined ? undefined : formatChatTimestampTooltip(iso, timestampFormat);
+  const setting = (value: string | undefined) =>
+    value === undefined ? undefined : externalSessionSettingLabel(value);
+  const count = (value: number | undefined) => value?.toLocaleString();
+
+  add("Folder", summary.cwd);
+  const branches = details?.gitBranches ?? [];
+  add(
+    branches.length > 1 ? "Branches" : "Branch",
+    branches.length === 0 ? undefined : (
+      <span className="flex flex-col">
+        {branches.map((branch) => (
+          <span key={branch}>{branch}</span>
+        ))}
+      </span>
+    ),
+  );
+  add("Version", details?.version);
+  add("Permissions", setting(details?.approval));
+  add("Sandbox", setting(details?.sandbox));
+  add("Started", timestamp(details?.createdAt));
+  add("Last active", timestamp(summary.updatedAt));
+  add("Messages", count(details?.messageCount));
+  add("Steps", count(details?.stepCount));
+  if (details?.contextTokens !== undefined) {
+    const used = formatContextWindowTokens(details.contextTokens);
+    add(
+      "Context",
+      details.contextWindow === undefined
+        ? used
+        : `${used}/${formatContextWindowTokens(details.contextWindow)}`,
+    );
+  }
+  if (details?.totalTokens !== undefined) {
+    add("Total processed", formatContextWindowTokens(details.totalTokens));
+  }
+  return rows;
+}
+
+/** ContextWindowMeter's hover popover, listing the session's details. */
+function SessionInfoChip(props: {
+  summary: ExternalSessionSummary;
+  timestampFormat: TimestampFormat;
+}) {
+  const rows = sessionDetailRows(props.summary, props.timestampFormat);
+  if (rows.length === 0) return null;
+  return (
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        delay={150}
+        render={<ComposerControl aria-label="Session details" />}
+      >
+        <InfoIcon aria-hidden />
+      </PopoverTrigger>
+      <PopoverPopup tooltipStyle side="top" align="end" padding="none" width="sm">
+        <div className="flex flex-col gap-2 p-(--floating-content-inset) text-left whitespace-normal">
+          <div className="font-medium text-muted-foreground text-xs">Session details</div>
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              className="flex items-start justify-between gap-3 text-2xs leading-4"
+            >
+              <span className="shrink-0 text-secondary-label">{row.label}</span>
+              <span className="min-w-0 wrap-anywhere text-right font-medium tabular-nums text-secondary-label">
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </PopoverPopup>
+    </Popover>
   );
 }

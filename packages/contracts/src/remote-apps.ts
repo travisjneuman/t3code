@@ -1,28 +1,39 @@
 import * as Schema from "effect/Schema";
 
 /** Web apps the desktop shell can host in their own isolated, persistent session. */
-export const RemoteAppSiteSchema = Schema.Literals(["chatgpt", "claude", "grok", "gemini"]);
+export const RemoteAppSiteSchema = Schema.Literals([
+  "chatgpt",
+  "claude",
+  "grok",
+  "gemini",
+  "perplexity",
+]);
 export type RemoteAppSite = typeof RemoteAppSiteSchema.Type;
 
 export const REMOTE_APP_SITES = RemoteAppSiteSchema.literals;
 
-export const REMOTE_APP_SITE_LABELS: Record<RemoteAppSite, string> = {
-  chatgpt: "ChatGPT",
-  claude: "Claude",
-  grok: "Grok",
-  gemini: "Gemini",
-};
+export interface RemoteAppSiteInfo {
+  readonly label: string;
+  /**
+   * The provider driver whose enabled instance offers the site in the surface
+   * menu unless the user hides it. Null marks a standalone site with no T3
+   * provider, which the user opts into instead. Either way the site's web
+   * session signs in on its own.
+   */
+  readonly providerDriver: string | null;
+}
 
 /**
- * The provider driver whose enabled instance makes a site available in the
- * surface menu, unless the user hides it. Each site's web session signs in on
- * its own.
+ * The shared half of each site's registry entry. The desktop half (entry URL,
+ * hosts, partition, menu icon, optional theme) lives in apps/desktop/src/remote-apps,
+ * and the renderer icon in apps/web/src/remote-apps/RemoteAppSiteIcon.tsx.
  */
-export const REMOTE_APP_SITE_PROVIDER_DRIVERS: Record<RemoteAppSite, string> = {
-  chatgpt: "codex",
-  claude: "claudeAgent",
-  grok: "grok",
-  gemini: "antigravity",
+export const REMOTE_APP_SITE_INFO: Record<RemoteAppSite, RemoteAppSiteInfo> = {
+  chatgpt: { label: "ChatGPT", providerDriver: "codex" },
+  claude: { label: "Claude", providerDriver: "claudeAgent" },
+  grok: { label: "Grok", providerDriver: "grok" },
+  gemini: { label: "Gemini", providerDriver: "antigravity" },
+  perplexity: { label: "Perplexity", providerDriver: null },
 };
 
 export const isRemoteAppSite = (value: unknown): value is RemoteAppSite =>
@@ -33,9 +44,16 @@ export type DesktopSurface = typeof DesktopSurfaceSchema.Type;
 
 export const RemoteAppAvailabilitySchema = Schema.Struct({
   sites: Schema.Array(RemoteAppSiteSchema).check(Schema.isMaxLength(REMOTE_APP_SITES.length)),
-  // Whether the shell loads available sites in the background before their
-  // first activation.
-  backgroundLoad: Schema.Boolean,
+  // The available sites the shell loads in the background before their first
+  // activation, in preload order. The shell keeps their views while hidden.
+  backgroundSites: Schema.Array(RemoteAppSiteSchema).check(
+    Schema.isMaxLength(REMOTE_APP_SITES.length),
+  ),
+  // Minutes a hidden site's view may go unshown before the shell releases it.
+  // Null keeps hidden views until the window closes.
+  idleUnloadMinutes: Schema.NullOr(
+    Schema.Number.check(Schema.isBetween({ minimum: 1, maximum: 1_440 })),
+  ),
 });
 export type RemoteAppAvailability = typeof RemoteAppAvailabilitySchema.Type;
 
@@ -95,8 +113,49 @@ export const RemoteAppStateSchema = Schema.Struct({
   zoomFactor: Schema.Number.check(Schema.isBetween({ minimum: 0.5, maximum: 3 })),
   recents: Schema.Array(RemoteAppRecentLocationSchema).check(Schema.isMaxLength(20)),
   error: Schema.NullOr(RemoteAppErrorSchema),
+  // Sites that finished a reply while hidden and haven't been shown since.
+  // Optional so state files written before the field existed still decode.
+  unreadSites: Schema.optionalKey(
+    Schema.Array(RemoteAppSiteSchema).check(Schema.isMaxLength(REMOTE_APP_SITES.length)),
+  ),
 });
 export type RemoteAppState = typeof RemoteAppStateSchema.Type;
+
+/** Longest text the shell moves between a web app and a T3 thread in one send. */
+export const REMOTE_APP_TRANSFER_TEXT_MAX_LENGTH = 200_000;
+
+const RemoteAppTransferTextSchema = Schema.String.check(
+  Schema.isMinLength(1),
+  Schema.isMaxLength(REMOTE_APP_TRANSFER_TEXT_MAX_LENGTH),
+);
+
+/** Text selected in a web app that the user sent to the current T3 thread. */
+export const RemoteAppSendToThreadSchema = Schema.Struct({
+  site: RemoteAppSiteSchema,
+  text: RemoteAppTransferTextSchema,
+});
+export type RemoteAppSendToThread = typeof RemoteAppSendToThreadSchema.Type;
+
+/** T3 text to place in a web app's prompt box. The shell never submits it. */
+export const RemoteAppFillPromptRequestSchema = Schema.Struct({
+  site: RemoteAppSiteSchema,
+  text: RemoteAppTransferTextSchema,
+});
+export type RemoteAppFillPromptRequest = typeof RemoteAppFillPromptRequestSchema.Type;
+
+/**
+ * "filled": the text is in the site's prompt box. "copied": the shell stayed on
+ * the site, put the text on the clipboard, and told the user on the page.
+ * "input-not-found": the shell is back on T3 and the text is on the clipboard.
+ * "unavailable": the site is not open; nothing changed.
+ */
+export const RemoteAppFillPromptResultSchema = Schema.Literals([
+  "filled",
+  "copied",
+  "input-not-found",
+  "unavailable",
+]);
+export type RemoteAppFillPromptResult = typeof RemoteAppFillPromptResultSchema.Type;
 
 const REMOTE_APP_THEME_COLOR_MAX_LENGTH = 128;
 // Browser-serialized stage artwork pigments can contain nested color-mix()
@@ -216,5 +275,9 @@ export interface DesktopRemoteAppBridge {
   resetZoom: () => Promise<RemoteAppState>;
   retry: () => Promise<RemoteAppState>;
   clearData: () => Promise<RemoteAppState>;
+  // Switches to the site and types the text into its prompt box without
+  // submitting. Anything but "filled" leaves the text for the caller to copy.
+  fillSitePrompt: (request: RemoteAppFillPromptRequest) => Promise<RemoteAppFillPromptResult>;
   onStateChange: (listener: (state: RemoteAppState) => void) => () => void;
+  onSendToThread: (listener: (send: RemoteAppSendToThread) => void) => () => void;
 }

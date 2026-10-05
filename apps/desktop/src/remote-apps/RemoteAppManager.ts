@@ -1,9 +1,13 @@
 import {
   isRemoteAppSite,
-  REMOTE_APP_SITE_LABELS,
+  REMOTE_APP_SITE_INFO,
   REMOTE_APP_SITES,
+  REMOTE_APP_TRANSFER_TEXT_MAX_LENGTH,
   type DesktopSurface,
   type RemoteAppAvailability,
+  type RemoteAppFillPromptRequest,
+  type RemoteAppFillPromptResult,
+  type RemoteAppSendToThread,
   type RemoteAppSite,
   type RemoteAppState,
   type RemoteAppSurfaceMenuAnchor,
@@ -37,7 +41,11 @@ import {
 } from "./RemoteAppPolicy.ts";
 import * as RemoteAppSession from "./RemoteAppSession.ts";
 import * as RemoteAppStateStore from "./RemoteAppStateStore.ts";
-import { buildRemoteAppSidebarWidthScript, buildRemoteSiteThemeCss } from "./RemoteAppSiteTheme.ts";
+import {
+  buildRemoteAppSidebarWidthScript,
+  buildRemoteSiteThemeCss,
+  isThemeableRemoteAppSite,
+} from "./RemoteAppSiteTheme.ts";
 import {
   buildRemoteAppInteractionScript,
   buildRemoteAppSurfaceMenuHtml,
@@ -49,6 +57,13 @@ import {
   type RemoteAppSurfaceMenuMaterial,
 } from "./RemoteAppTheme.ts";
 import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
+import { REMOTE_APP_SEND_TO_THREAD_CHANNEL } from "./RemoteAppChannels.ts";
+import {
+  buildRemoteAppActivityScript,
+  buildRemoteAppNoticeScript,
+  buildRemoteAppPromptFillScript,
+  REMOTE_APP_PAGE_WORLD_ID,
+} from "./RemoteAppPageScripts.ts";
 import { REMOTE_APP_VIEW_TOP_INSET, TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
 
 const REMOTE_APP_MAX_AUTOMATIC_RECOVERIES = 1;
@@ -60,6 +75,11 @@ const REMOTE_APP_PRELOAD_START_DELAY_MS = 4_000;
 const REMOTE_APP_PRELOAD_RESCHEDULE_DELAY_MS = 1_000;
 const REMOTE_APP_PRELOAD_LOAD_TIMEOUT = "20 seconds";
 const REMOTE_APP_PRELOAD_SETTLE_DELAY = "2 seconds";
+// The idle unload sweep is coarse: a hidden site goes up to this long past its
+// limit before it is released.
+const REMOTE_APP_IDLE_SWEEP_INTERVAL = "5 minutes";
+// How long a prompt fill waits for a site that is still loading.
+const REMOTE_APP_FILL_LOAD_TIMEOUT = "15 seconds";
 // SidebarChromeFooter is a 32px utility row with 8px padding on each side.
 // Keep the live remote document above the host footer's exact 48px strip so
 // the native Settings, Pull Requests, Usage, and update controls remain both
@@ -186,6 +206,9 @@ export class RemoteAppManager extends Context.Service<
     readonly resetZoom: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
     readonly retry: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
     readonly clearData: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    readonly fillSitePrompt: (
+      request: RemoteAppFillPromptRequest,
+    ) => Effect.Effect<RemoteAppFillPromptResult, RemoteAppManagerError>;
     readonly authorizeSender: (event: DesktopIpc.DesktopIpcInvokeEvent) => Effect.Effect<boolean>;
   }
 >()("@t3tools/desktop/remote-apps/RemoteAppManager") {}
@@ -205,6 +228,12 @@ const safeFilename = (filename: string): string => {
 const activeSiteOf = (state: RemoteAppState): RemoteAppSite | undefined =>
   canUseRemoteAppControl(state.activeSurface) ? state.activeSurface : undefined;
 
+/** Showing a site reads its finished reply, so its badge goes. */
+const clearUnread = (state: RemoteAppState, site: RemoteAppSite): RemoteAppState =>
+  state.unreadSites?.includes(site)
+    ? { ...state, unreadSites: state.unreadSites.filter((unread) => unread !== site) }
+    : state;
+
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const shell = yield* ElectronShell.ElectronShell;
@@ -219,6 +248,8 @@ export const make = Effect.gen(function* () {
   const themeCssLock = yield* Semaphore.make(1);
   const remoteThemeRef = yield* Ref.make<RemoteAppTheme>(DEFAULT_REMOTE_APP_THEME);
   const availableSitesRef = yield* Ref.make<ReadonlyArray<RemoteAppSite>>([]);
+  // The available sites the user keeps loaded in the background, in preload order.
+  const backgroundSitesRef = yield* Ref.make<ReadonlyArray<RemoteAppSite>>([]);
   // Views are created on first activation or by the background preload, and
   // kept while hidden, so switching sites is instant. Hidden views are detached
   // and background-throttled.
@@ -239,6 +270,18 @@ export const make = Effect.gen(function* () {
   const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
   const popupWindows = new Set<Electron.BrowserWindow>();
   let surfaceMenuWindow: Electron.BrowserWindow | null = null;
+  // When each kept view last left the screen (or was created hidden).
+  const hiddenSince = new Map<RemoteAppSite, number>();
+  // Sites the idle sweep released. The background preload leaves them alone
+  // until the user opens them again; the set is in memory, so a restart
+  // preloads them as usual.
+  const idleUnloadedSites = new Set<RemoteAppSite>();
+  let idleUnloadMinutes: number | null = null;
+  let idleSweepFiber: Fiber.Fiber<void> | undefined;
+  // The site an activation is switching to; the idle sweep never releases it.
+  let activatingSite: RemoteAppSite | undefined;
+  // The latest finished-reply watch armed in each view; older ones are stale.
+  const activityTokens = new WeakMap<Electron.WebContentsView, number>();
 
   const closeSurfaceMenu = (): void => {
     const menu = surfaceMenuWindow;
@@ -275,6 +318,7 @@ export const make = Effect.gen(function* () {
   const closeView = (site: RemoteAppSite, window: Option.Option<Electron.BrowserWindow>) => {
     const view = views.get(site);
     views.delete(site);
+    hiddenSince.delete(site);
     insertedThemeKeys.delete(site);
     recoveryCounts.delete(site);
     brokenSites.delete(site);
@@ -352,6 +396,46 @@ export const make = Effect.gen(function* () {
   const setLoadingState = (site: RemoteAppSite, loadState: RemoteAppState["loadState"]) =>
     updateSiteState(site, (current) => ({ ...current, loadState, error: null }));
 
+  /** Badges a site that finished a reply while another surface was on screen. */
+  const markUnread = (site: RemoteAppSite) =>
+    Effect.gen(function* () {
+      const isRead = (state: RemoteAppState) =>
+        state.activeSurface === site || (state.unreadSites ?? []).includes(site);
+      if (isRead(yield* stateStore.get)) return;
+      yield* updateState((state) =>
+        isRead(state) ? state : { ...state, unreadSites: [...(state.unreadSites ?? []), site] },
+      );
+    });
+
+  /**
+   * Watches the page for its next finished reply and re-arms after each one.
+   * The page script is event-driven (see RemoteAppPageScripts.ts), so a hidden,
+   * throttled view is never woken for it. Each document load arms afresh; a
+   * watch from an earlier document or a replaced view is ignored.
+   */
+  const armActivityWatch = (site: RemoteAppSite, view: Electron.WebContentsView): void => {
+    const hooks = REMOTE_APP_SITE_DEFINITIONS[site].page;
+    const contents = view.webContents;
+    if (hooks === undefined || contents.isDestroyed()) return;
+    // Sign-in pages on other hosts have no replies to watch.
+    if (!isTrustedRemoteUrl(site, contents.getURL())) return;
+    const token = (activityTokens.get(view) ?? 0) + 1;
+    activityTokens.set(view, token);
+    void contents
+      .executeJavaScriptInIsolatedWorld(REMOTE_APP_PAGE_WORLD_ID, [
+        { code: buildRemoteAppActivityScript(hooks.generating) },
+      ])
+      .then(
+        (signal: unknown) => {
+          if (signal !== "finished" || contents.isDestroyed()) return;
+          if (views.get(site) !== view || activityTokens.get(view) !== token) return;
+          runSafely(markUnread(site));
+          armActivityWatch(site, view);
+        },
+        () => undefined,
+      );
+  };
+
   const positionView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) =>
     Effect.flatMap(Ref.get(remoteThemeRef), (theme) =>
       Effect.try({
@@ -396,9 +480,11 @@ export const make = Effect.gen(function* () {
   };
 
   /**
-   * Every site gets the active T3 palette as a user stylesheet that repaints its
-   * own design tokens; auth pages on other hosts are left alone. ChatGPT also
-   * gets the interaction script that tidies its chrome.
+   * Every themeable site gets the active T3 palette as a user stylesheet that
+   * repaints its own design tokens, and its sidebar pinned to T3's width; a
+   * site with no theme gets only the no-drag rule. Auth pages on other hosts
+   * are left alone. ChatGPT also gets the interaction script that tidies its
+   * chrome.
    */
   const applyRemoteTheme = Effect.fn("remote-app.applyTheme")(function* (
     site: RemoteAppSite,
@@ -427,7 +513,7 @@ export const make = Effect.gen(function* () {
             catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
           }).pipe(Effect.catch(() => Effect.void));
         }
-        if (!themeable) return;
+        if (!themeable || !isThemeableRemoteAppSite(site)) return;
         yield* applySidebarWidth(view);
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
@@ -494,6 +580,7 @@ export const make = Effect.gen(function* () {
     for (const event of REMOTE_APP_THEME_DOCUMENT_EVENTS) {
       contents.on(event, () => runSafely(applyRemoteTheme(site, view)));
     }
+    contents.on("did-finish-load", () => armActivityWatch(site, view));
     // A failed load also stops loading; keep its failed state instead of "ready".
     contents.on("did-stop-loading", () =>
       runSafely(
@@ -561,7 +648,10 @@ export const make = Effect.gen(function* () {
       );
     });
     contents.on("destroyed", () => {
-      if (views.get(site) === view) views.delete(site);
+      if (views.get(site) === view) {
+        views.delete(site);
+        hiddenSince.delete(site);
+      }
       runSafely(
         updateSiteState(site, (state) => ({
           ...state,
@@ -575,6 +665,16 @@ export const make = Effect.gen(function* () {
       event.preventDefault();
       if (contents.isDestroyed() || window.isDestroyed()) return;
       const template: Electron.MenuItemConstructorOptions[] = [];
+      const selection = params.selectionText.trim();
+      if (selection.length > 0) {
+        template.push(
+          {
+            label: "Send to T3 Thread",
+            click: () => sendSelectionToThread(site, selection),
+          },
+          { type: "separator" },
+        );
+      }
       if (params.misspelledWord) {
         for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
           template.push({
@@ -720,6 +820,7 @@ export const make = Effect.gen(function* () {
     yield* positionView(window, view);
     view.setVisible(false);
     views.set(site, view);
+    hiddenSince.set(site, Date.now());
     return view;
   });
 
@@ -765,7 +866,10 @@ export const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const state = yield* stateStore.get;
           const available = yield* Ref.get(availableSitesRef);
-          if (activeSiteOf(state) === site || !available.includes(site)) return false;
+          const background = yield* Ref.get(backgroundSitesRef);
+          if (activeSiteOf(state) === site) return false;
+          if (!available.includes(site) || !background.includes(site)) return false;
+          if (idleUnloadedSites.has(site)) return false;
           if (Option.isSome(yield* getLiveView(site))) return false;
           const view = yield* createView(site, window);
           unseenViews.add(view);
@@ -796,9 +900,9 @@ export const make = Effect.gen(function* () {
   const runPreload = (delayMs: number) =>
     Effect.gen(function* () {
       yield* Effect.sleep(delayMs);
-      // Each site is rechecked at its turn; a later availability change
-      // reschedules the whole run.
-      for (const site of yield* Ref.get(availableSitesRef)) {
+      // Each site is rechecked at its turn; a later availability or
+      // background-list change reschedules the whole run.
+      for (const site of yield* Ref.get(backgroundSitesRef)) {
         yield* awaitPreloadLoad;
         const started = yield* preloadSite(site).pipe(Effect.catch(() => Effect.succeed(false)));
         if (!started) continue;
@@ -813,13 +917,47 @@ export const make = Effect.gen(function* () {
   };
 
   /** Restarts the background preload; the first run waits for T3's startup to settle. */
-  const schedulePreload = (enabled: boolean) => {
+  const schedulePreload = (backgroundSites: ReadonlyArray<RemoteAppSite>) => {
     cancelPreload();
-    if (!enabled) return;
+    if (backgroundSites.length === 0) return;
     const now = Date.now();
     preloadNotBefore ??= now + REMOTE_APP_PRELOAD_START_DELAY_MS;
     preloadFiber = Effect.runFork(
       runPreload(Math.max(REMOTE_APP_PRELOAD_RESCHEDULE_DELAY_MS, preloadNotBefore - now)),
+    );
+  };
+
+  /**
+   * Releases kept views that have stayed hidden past the user's limit. One
+   * coarse sweep covers every site; the active site, and one being switched
+   * to, are never released. Opening a released site loads it again.
+   */
+  const sweepIdleViews = Effect.gen(function* () {
+    if (idleUnloadMinutes === null) return;
+    const cutoff = Date.now() - idleUnloadMinutes * 60_000;
+    const activeSite = activeSiteOf(yield* stateStore.get);
+    const window = yield* getLiveWindow;
+    for (const [site, since] of [...hiddenSince]) {
+      if (site === activeSite || site === activatingSite || since > cutoff) continue;
+      if (!views.has(site)) continue;
+      closeView(site, window);
+      idleUnloadedSites.add(site);
+    }
+  });
+
+  const scheduleIdleSweep = (minutes: number | null) => {
+    if (minutes === idleUnloadMinutes && (minutes === null || idleSweepFiber !== undefined)) return;
+    idleUnloadMinutes = minutes;
+    idleSweepFiber?.interruptUnsafe();
+    idleSweepFiber = undefined;
+    if (minutes === null) return;
+    idleSweepFiber = Effect.runFork(
+      Effect.forever(
+        Effect.sleep(REMOTE_APP_IDLE_SWEEP_INTERVAL).pipe(
+          Effect.andThen(sweepIdleViews),
+          Effect.catch(() => Effect.void),
+        ),
+      ),
     );
   };
 
@@ -830,8 +968,10 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(window)) return;
       // Detach every other view so the host renderer owns the surface and the
       // next activation reinserts a clean layer beneath it.
+      const now = Date.now();
       for (const [site, view] of views) {
         if (site === surface || view.webContents.isDestroyed()) continue;
+        if (!hiddenSince.has(site)) hiddenSince.set(site, now);
         view.setVisible(false);
         window.value.contentView.removeChildView(view);
       }
@@ -842,6 +982,7 @@ export const make = Effect.gen(function* () {
         window.value.webContents.focus();
         return;
       }
+      hiddenSince.delete(surface);
       // Reattach before making it visible while preserving the host shell
       // above the remote page.
       window.value.contentView.removeChildView(view.value);
@@ -896,6 +1037,8 @@ export const make = Effect.gen(function* () {
     window.on("leave-full-screen", repositionAfterFullscreenTransition);
     window.on("closed", () => {
       cancelPreload();
+      idleSweepFiber?.interruptUnsafe();
+      idleSweepFiber = undefined;
       closeSurfaceMenu();
       for (const popup of popupWindows) {
         if (!popup.isDestroyed()) popup.close();
@@ -921,7 +1064,7 @@ export const make = Effect.gen(function* () {
         if (Option.isNone(view)) continue;
         // applyRemoteTheme pins the width too.
         if (presentationChanged) yield* applyRemoteTheme(site, view.value);
-        else yield* applySidebarWidth(view.value);
+        else if (isThemeableRemoteAppSite(site)) yield* applySidebarWidth(view.value);
       }
       if ((previous.sidebarWidth === null) !== (theme.sidebarWidth === null)) {
         const window = yield* getLiveWindow;
@@ -939,20 +1082,31 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const setAvailableSites = ({ sites, backgroundLoad }: RemoteAppAvailability) =>
+  const setAvailableSites = ({
+    sites,
+    backgroundSites,
+    idleUnloadMinutes: idleMinutes,
+  }: RemoteAppAvailability) =>
     Effect.gen(function* () {
+      scheduleIdleSweep(idleMinutes);
+      const background = backgroundSites.filter((site) => sites.includes(site));
       yield* Ref.set(availableSitesRef, sites);
-      // Release the memory of hidden sites that are no longer available,
-      // including one still preloading. The renderer moves off an active site
-      // that became unavailable.
+      const previousBackground = yield* Ref.getAndSet(backgroundSitesRef, background);
+      const backgroundChanged = previousBackground.join(",") !== background.join(",");
+      // Release the memory of hidden sites that are no longer available or no
+      // longer kept in the background, including one still preloading. A site
+      // opened by hand outside the background list keeps its view after the
+      // user leaves it, until the background list next changes. The renderer
+      // moves off an active site that became unavailable.
       const activeSite = activeSiteOf(yield* stateStore.get);
       const window = yield* getLiveWindow;
       for (const site of [...views.keys()]) {
-        if (site !== activeSite && !sites.includes(site)) closeView(site, window);
+        if (site === activeSite) continue;
+        if (!sites.includes(site) || (backgroundChanged && !background.includes(site))) {
+          closeView(site, window);
+        }
       }
-      // Turning background loading off stops further preloads; views already
-      // created stay until their site is unavailable.
-      schedulePreload(backgroundLoad);
+      schedulePreload(background);
     });
 
   const openSurfaceMenu = Effect.fn("remote-app.openSurfaceMenu")(function* (
@@ -1048,7 +1202,7 @@ export const make = Effect.gen(function* () {
     );
     menu.setBounds({ x, y, width: menuWidth, height: menuHeight });
     const documentUrl = `data:text/html;charset=utf-8,${encodeURIComponent(
-      buildRemoteAppSurfaceMenuHtml(theme, surfaces, material),
+      buildRemoteAppSurfaceMenuHtml(theme, surfaces, material, state.unreadSites ?? []),
     )}`;
     yield* Effect.tryPromise({
       try: () => menu.loadURL(documentUrl),
@@ -1070,52 +1224,68 @@ export const make = Effect.gen(function* () {
 
   const activateSite = (site: RemoteAppSite) =>
     Effect.gen(function* () {
+      activatingSite = site;
+      // Opening a site the idle sweep released brings it back into the preload.
+      idleUnloadedSites.delete(site);
       const view = yield* ensureView(site);
       const previous = yield* stateStore.get;
       yield* showSurface(site);
       if (brokenSites.has(site)) {
         brokenSites.delete(site);
         const url = resolveRemoteAppSiteUrl(site, view.webContents.getURL() || previous.currentUrl);
-        yield* updateState((state) => ({
-          ...state,
-          activeSurface: site,
-          loadState: "loading",
-          currentUrl: url,
-          error: null,
-        }));
+        yield* updateState((state) =>
+          clearUnread(
+            { ...state, activeSurface: site, loadState: "loading", currentUrl: url, error: null },
+            site,
+          ),
+        );
         yield* loadUrl(view, url);
         return;
       }
       // A preload that has not committed yet is already loading the right page.
       if (view.webContents.getURL().length === 0 && !view.webContents.isLoading()) {
         const url = resolveRemoteAppSiteUrl(site, previous.currentUrl);
-        yield* updateState((state) => ({
-          ...state,
-          activeSurface: site,
-          loadState: "loading",
-          currentUrl: url,
-          currentTitle: REMOTE_APP_SITE_LABELS[site],
-          canGoBack: false,
-          canGoForward: false,
-          error: null,
-        }));
+        yield* updateState((state) =>
+          clearUnread(
+            {
+              ...state,
+              activeSurface: site,
+              loadState: "loading",
+              currentUrl: url,
+              currentTitle: REMOTE_APP_SITE_INFO[site].label,
+              canGoBack: false,
+              canGoForward: false,
+              error: null,
+            },
+            site,
+          ),
+        );
         yield* loadUrl(view, url);
         return;
       }
       // A kept view already holds its page; describe it from the view itself.
       yield* updateState((state) => {
         const sameSite = state.activeSurface === site;
-        return {
-          ...updateNavigationState(view, {
-            ...state,
-            currentUrl: sameSite ? state.currentUrl : REMOTE_APP_SITE_DEFINITIONS[site].entryUrl,
-            currentTitle: sameSite ? state.currentTitle : REMOTE_APP_SITE_LABELS[site],
-          }),
-          activeSurface: site,
-          loadState: view.webContents.isLoading() ? "loading" : "ready",
-        };
+        return clearUnread(
+          {
+            ...updateNavigationState(view, {
+              ...state,
+              currentUrl: sameSite ? state.currentUrl : REMOTE_APP_SITE_DEFINITIONS[site].entryUrl,
+              currentTitle: sameSite ? state.currentTitle : REMOTE_APP_SITE_INFO[site].label,
+            }),
+            activeSurface: site,
+            loadState: view.webContents.isLoading() ? "loading" : "ready",
+          },
+          site,
+        );
       });
-    });
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (activatingSite === site) activatingSite = undefined;
+        }),
+      ),
+    );
 
   const setActiveSurface = (surface: DesktopSurface) =>
     Effect.gen(function* () {
@@ -1185,8 +1355,9 @@ export const make = Effect.gen(function* () {
       ...RemoteAppStateStore.DEFAULT_REMOTE_APP_STATE,
       activeSurface: current.activeSurface,
       currentUrl: entryUrl,
-      currentTitle: REMOTE_APP_SITE_LABELS[site],
+      currentTitle: REMOTE_APP_SITE_INFO[site].label,
       recents: current.recents.filter((recent) => resolveRemoteAppSiteForUrl(recent.url) !== site),
+      unreadSites: (current.unreadSites ?? []).filter((unread) => unread !== site),
     })).pipe(
       Effect.mapError(
         (error) => new RemoteAppManagerError({ operation: "clear-data", cause: error }),
@@ -1197,6 +1368,92 @@ export const make = Effect.gen(function* () {
     if (Option.isSome(view)) yield* loadUrl(view.value, entryUrl);
     return reset;
   });
+
+  /**
+   * Hands a web app selection to the renderer, which appends it to the most
+   * recent T3 thread's draft. T3 comes on screen first so the renderer can
+   * navigate to that thread.
+   */
+  const sendSelectionToThread = (site: RemoteAppSite, text: string) =>
+    runSafely(
+      Effect.gen(function* () {
+        yield* setActiveSurface("t3code");
+        const window = yield* getLiveWindow;
+        if (Option.isNone(window) || window.value.webContents.isDestroyed()) return;
+        const send: RemoteAppSendToThread = {
+          site,
+          text: text.slice(0, REMOTE_APP_TRANSFER_TEXT_MAX_LENGTH),
+        };
+        window.value.webContents.send(REMOTE_APP_SEND_TO_THREAD_CHANNEL, send);
+      }),
+    );
+
+  const awaitPageLoaded = (contents: Electron.WebContents) =>
+    contents.isLoading()
+      ? Effect.callback<void>((resume) => {
+          const done = () => resume(Effect.void);
+          contents.once("did-stop-loading", done);
+          return Effect.sync(() => {
+            if (!contents.isDestroyed()) contents.removeListener("did-stop-loading", done);
+          });
+        }).pipe(Effect.timeoutOption(REMOTE_APP_FILL_LOAD_TIMEOUT), Effect.asVoid)
+      : Effect.void;
+
+  // Runs a page script in the shell's isolated world; any failure reads as undefined.
+  const runPageScript = (contents: Electron.WebContents, code: string) =>
+    Effect.tryPromise({
+      try: (): Promise<unknown> =>
+        contents.executeJavaScriptInIsolatedWorld(REMOTE_APP_PAGE_WORLD_ID, [{ code }]),
+      catch: () => undefined,
+    }).pipe(Effect.catch(() => Effect.succeed<unknown>(undefined)));
+
+  /**
+   * Switches to an available site and types T3 text into its prompt box. It
+   * never submits: the page script inserts text only, and nothing here sends
+   * a key. When the box can't be filled, the text goes on the clipboard and the
+   * user is told on the site's page, because T3 toasts sit beneath the site's
+   * view; if the page can't show that either (a sign-in page, a failed load),
+   * the shell returns to T3 so the renderer's toast is visible.
+   */
+  const fillSitePrompt = ({ site, text }: RemoteAppFillPromptRequest) =>
+    Effect.gen(function* () {
+      if (!(yield* Ref.get(availableSitesRef)).includes(site)) {
+        return "unavailable" satisfies RemoteAppFillPromptResult;
+      }
+      yield* setActiveSurface(site);
+      const view = yield* getLiveView(site);
+      const contents = Option.isSome(view) ? view.value.webContents : undefined;
+      if (contents !== undefined && !contents.isDestroyed()) yield* awaitPageLoaded(contents);
+      // Never touch a sign-in page, or a site the user already left.
+      const stillActive = activeSiteOf(yield* stateStore.get) === site;
+      const page =
+        stillActive &&
+        contents !== undefined &&
+        !contents.isDestroyed() &&
+        isTrustedRemoteUrl(site, contents.getURL())
+          ? contents
+          : undefined;
+      const hooks = REMOTE_APP_SITE_DEFINITIONS[site].page;
+      if (page !== undefined && hooks !== undefined) {
+        const outcome = yield* runPageScript(
+          page,
+          buildRemoteAppPromptFillScript(hooks.promptInput, text),
+        );
+        if (outcome === "filled") return "filled" satisfies RemoteAppFillPromptResult;
+      }
+      yield* shell.copyText(text);
+      if (page !== undefined && !page.isDestroyed()) {
+        const shown = yield* runPageScript(
+          page,
+          buildRemoteAppNoticeScript(
+            `Couldn't find ${REMOTE_APP_SITE_INFO[site].label}'s prompt box. The text is on your clipboard; paste it there.`,
+          ),
+        );
+        if (shown === true) return "copied" satisfies RemoteAppFillPromptResult;
+      }
+      if (activeSiteOf(yield* stateStore.get) === site) yield* setActiveSurface("t3code");
+      return "input-not-found" satisfies RemoteAppFillPromptResult;
+    });
 
   return RemoteAppManager.of({
     attachMainWindow,
@@ -1218,6 +1475,7 @@ export const make = Effect.gen(function* () {
     resetZoom: zoom(null),
     retry,
     clearData,
+    fillSitePrompt,
     authorizeSender: (event) => {
       const senderId = event.sender?.id;
       const senderUrl = (() => {

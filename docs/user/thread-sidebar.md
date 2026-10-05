@@ -173,9 +173,17 @@ The linked pull request participates in automatic settlement.
 
 ## Find and reference work
 
-On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
-across connected environments. Message search starts after two characters and
-includes your messages and final agent responses.
+On web and desktop, open the command palette with `Cmd/Ctrl+K`, or type in the
+sidebar's **Search** box, to search threads across connected environments.
+Message search starts after two characters and includes your messages and final
+agent responses.
+
+Sidebar search also lists matching sessions from other agents under **Other
+Agents**: Claude Code, Codex, Grok, and Pi sessions from the last 90 days whose
+messages contain the text, and Antigravity sessions by title. Sessions that
+continue in T3 show up as threads instead. With very large session histories,
+the newest sessions are searched first; **Partial** means older ones weren't
+reached.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
@@ -226,13 +234,25 @@ several selected threads together. Choose **Wake thread** to bring a thread back
 
 ## Sessions from other agents
 
-**Other agents**, below your threads in the sidebar, lists recent sessions you started outside
+**Other Agents**, below your threads in the sidebar, lists recent sessions you started outside
 T3, such as Claude Code or Codex in a terminal, a desktop app, or an IDE. Open one to follow it
 live.
 
 To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then
 choose **Continue in T3**. The session becomes a regular thread in its folder's project, with its
-history, and leaves the Other agents list. It stays where it is: T3 resumes the same session, so
-you can go back to the other app later and pick it up there. Send from one app at a time;
-messages sent elsewhere after you continue don't appear in the T3 thread. Antigravity sessions
-can be followed but not continued, because T3 runs Antigravity with its own session store.
+history, and leaves the Other Agents list. It stays where it is: T3 resumes the same session, so
+you can go back to the other app later and pick it up there. What you send from the other app
+afterwards shows up in the T3 thread too. Send from one app at a time: while the other app is
+working in the session, the thread warns you above the composer. Antigravity sessions can be
+followed but not continued, because T3 runs Antigravity with its own session store.
+
+To work on a session with a different agent, open the menu next to **Continue in T3** and choose
+**Continue with** that agent. T3 starts a new thread that gives the agent the session's
+conversation as context. The original session is left untouched and stays in the list, so you
+can do this while it's still running, and as often as you like. That new thread doesn't follow
+later changes in the other app. To switch agents in a thread you already have, pick another
+provider in the composer's model picker; for a continued session, only what happened in T3 goes
+along.
+
+Right-click a session to continue it, hand it to another agent, copy its session ID or folder
+path, open its folder, or hide it. Right-click the **Other Agents** header to show hidden sessions again.
