@@ -1,3 +1,4 @@
+import { UPSTREAM_SYNC_PROMPT_PREFIX } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -21,7 +22,7 @@ const LOCKFILE_PATH = "pnpm-lock.yaml";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
 const MERGE_AGENT_RULES = [
-  "You are finishing a merge of the upstream T3 Code nightly (pingdotgg/t3code) into the ndev.t3code fork.",
+  `${UPSTREAM_SYNC_PROMPT_PREFIX} (pingdotgg/t3code) into the ndev.t3code fork.`,
   "The fork is an add-on: keep every upstream change and every fork addition.",
   "Never drop fork features (the ChatGPT, Claude, Grok, and Gemini remote app tabs, the local source updater, the ndev.t3code branding) and never revert upstream changes.",
   "Where upstream renamed or reshaped code the fork uses, adapt the fork code to the new upstream shape.",

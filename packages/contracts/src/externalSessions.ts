@@ -36,6 +36,13 @@ export type ExternalSessionsSubscriptionMethod =
   | typeof EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived;
 
 /**
+ * The local source updater's merge agent starts its prompt with this, so its
+ * Claude sessions can be listed as upstream sync runs ("t3 mmddyy hhmmss").
+ */
+export const UPSTREAM_SYNC_PROMPT_PREFIX =
+  "You are finishing a merge of the upstream T3 Code nightly";
+
+/**
  * running: written to in the last minute (or the provider reports it busy).
  * idle: touched within the last hour. recent: anything older still listed.
  */
@@ -296,10 +303,11 @@ export const ExternalSessionsSubscribeRunningElsewhereRpc = Rpc.make(
 
 /**
  * A session archived in T3, or in Claude desktop (see `archivedIn`). Archive
- * is T3's own state, so every client of the environment agrees; an archived
- * session leaves the list until unarchived.
- * The title and folder are kept from archive time, since an agent's own
- * archive (Codex) moves the session out of the store the list reads.
+ * is T3's own state, so every client of the environment agrees, and the
+ * session stays where it is in the agent's own app. An archived session leaves
+ * the list until unarchived, or until it runs again. The title and folder are
+ * kept from archive time, since older Codex archives also archived in Codex,
+ * which moves the session out of the store the list reads.
  */
 export const ExternalSessionArchivedSession = Schema.Struct({
   key: TrimmedNonEmptyString,
@@ -307,7 +315,10 @@ export const ExternalSessionArchivedSession = Schema.Struct({
   title: Schema.String,
   cwd: Schema.NullOr(Schema.String),
   archivedAt: Schema.String,
-  /** The agent archived it in its own store too, so unarchive restores it there. */
+  /**
+   * Archived in the agent's own store too (Codex archives made before T3's
+   * archive became T3-only), so unarchive restores it there.
+   */
   nativeArchived: Schema.Boolean,
   /**
    * Set when the agent's own app archived the session and T3 only mirrors
@@ -320,11 +331,6 @@ export type ExternalSessionArchivedSession = typeof ExternalSessionArchivedSessi
 
 export const ExternalSessionArchiveInput = Schema.Struct({
   key: TrimmedNonEmptyString,
-  /**
-   * Archive in the agent's own store as well, where it has one (Codex).
-   * Defaults to true; false archives in T3 only.
-   */
-  native: Schema.optional(Schema.Boolean),
 });
 export type ExternalSessionArchiveInput = typeof ExternalSessionArchiveInput.Type;
 
@@ -334,8 +340,9 @@ export const ExternalSessionUnarchiveInput = Schema.Struct({
 export type ExternalSessionUnarchiveInput = typeof ExternalSessionUnarchiveInput.Type;
 
 /**
- * `warning` says why the agent could not archive or unarchive the session in
- * its own store. The change in T3 happened regardless.
+ * `warning` says why the agent could not unarchive the session in its own
+ * store (an older Codex archive); archive never sets it. The change in T3
+ * happened regardless.
  */
 export const ExternalSessionArchiveResult = Schema.Struct({
   warning: Schema.NullOr(Schema.String),

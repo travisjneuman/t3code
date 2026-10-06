@@ -8,7 +8,7 @@
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import type { ExternalSessionMessage } from "@t3tools/contracts";
+import { type ExternalSessionMessage, UPSTREAM_SYNC_PROMPT_PREFIX } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import {
@@ -92,6 +92,20 @@ interface Latest {
   permissionMode: string | null;
   contextTokens: number | null;
 }
+
+const twoDigits = (value: number) => String(value).padStart(2, "0");
+
+/**
+ * The local source updater's merge agent runs are named by when they started,
+ * in local time ("t3 100626 143205"), so the name holds from start to finish.
+ */
+const upstreamSyncTitle = (createdAt: string | null): string => {
+  const start = new Date(createdAt ?? Number.NaN);
+  if (Number.isNaN(start.getTime())) return "t3 sync";
+  const date = [start.getMonth() + 1, start.getDate(), start.getFullYear() % 100];
+  const time = [start.getHours(), start.getMinutes(), start.getSeconds()];
+  return `t3 ${date.map(twoDigits).join("")} ${time.map(twoDigits).join("")}`;
+};
 
 interface RegistryEntry {
   readonly busy: boolean;
@@ -248,11 +262,13 @@ export const makeClaudeSource = (): ExternalSessionSource => {
           }
         }
         const live = (yield* readRegistry).get(id);
+        const fallbackTitle =
+          firstPrompt?.startsWith(UPSTREAM_SYNC_PROMPT_PREFIX) === true
+            ? upstreamSyncTitle(createdAt)
+            : (live?.name ?? firstPrompt ?? "Untitled session");
         const info: ExternalSessionInfo = {
           id,
-          title: firstLine(
-            customTitle ?? agentName ?? live?.name ?? firstPrompt ?? "Untitled session",
-          ),
+          title: firstLine(customTitle ?? agentName ?? fallbackTitle),
           cwd: cwd ?? live?.cwd ?? null,
           model,
           origin: originFor(entrypoint ?? live?.entrypoint ?? null),

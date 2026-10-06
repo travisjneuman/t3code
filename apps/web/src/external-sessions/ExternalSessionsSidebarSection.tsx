@@ -13,8 +13,8 @@ import {
 } from "@t3tools/contracts";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, type MouseEvent } from "react";
+import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon, PlusIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
@@ -55,33 +55,13 @@ import {
 } from "./atoms";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Sessions grouped by when they last moved, newest group first. A session
- * goes in the first group whose age it is within; live ones always go first.
- */
-const AGE_GROUPS = [
-  {
-    label: "Past 3 days",
-    maxAgeMs: 3 * DAY_MS,
-    storageKey: "t3code:sidebar:external-sessions-group-3d-expanded",
-    defaultExpanded: true,
-  },
-  {
-    label: "Past 7 days",
-    maxAgeMs: 7 * DAY_MS,
-    storageKey: "t3code:sidebar:external-sessions-group-7d-expanded",
-    defaultExpanded: true,
-  },
-  {
-    label: "Older",
-    maxAgeMs: Number.POSITIVE_INFINITY,
-    storageKey: "t3code:sidebar:external-sessions-group-older-expanded",
-    defaultExpanded: false,
-  },
-] as const;
-type AgeGroup = (typeof AGE_GROUPS)[number];
+const EARLIER_EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-earlier-expanded";
+/** Sessions that moved within this long are Recent; older ones are Earlier. */
+const RECENT_MS = 24 * 60 * 60 * 1000;
+/** Recent sessions shown before "Show more". */
+const RECENT_PAGE_COUNT = 8;
+/** Earlier sessions added per "Show more". */
+const EARLIER_PAGE_COUNT = 10;
 
 /** Per-browser "Hide from list" keys from before archive; archived once, then removed. */
 const LEGACY_HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
@@ -106,6 +86,28 @@ function rowKey(environmentId: string, sessionKey: string): string {
   return `${environmentId}\u0000${sessionKey}`;
 }
 
+/**
+ * Keeps a mouse click from focusing the section's buttons, so their focus ring
+ * shows only for keyboard focus.
+ */
+function preventMouseFocus(event: MouseEvent) {
+  event.preventDefault();
+}
+
+/** The first `count` entries, plus the open session when it falls past them. */
+function firstWithOpen(
+  entries: ReadonlyArray<ExternalSessionEntry>,
+  count: number,
+  activeKey: string | null,
+): ReadonlyArray<ExternalSessionEntry> {
+  if (count >= entries.length) return entries;
+  const open = entries
+    .slice(count)
+    .find((entry) => rowKey(entry.environmentId, entry.session.key) === activeKey);
+  const shown = entries.slice(0, count);
+  return open === undefined ? shown : [...shown, open];
+}
+
 /** The provider's own session id: the key is `<driver>:<session id>`. */
 function nativeSessionId(sessionKey: string): string {
   return sessionKey.slice(sessionKey.indexOf(":") + 1);
@@ -125,13 +127,21 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
 
 /**
  * "Other Agents" shelf: sessions running outside T3 on the connected
- * environments, in collapsible groups by age with live ones first. Right-click
+ * environments. Running ones always show, even with the shelf collapsed;
+ * expanded, the last day's follow, then a collapsible Earlier group. Right-click
  * a row for its actions, or the header to find archived sessions. Renders
  * nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
   const entries = useAtomValue(externalSessionEntriesAtom);
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
+  const [earlierExpanded, setEarlierExpanded] = useLocalStorage(
+    EARLIER_EXPANDED_STORAGE_KEY,
+    false,
+    Schema.Boolean,
+  );
+  const [recentCount, setRecentCount] = useState(RECENT_PAGE_COUNT);
+  const [earlierCount, setEarlierCount] = useState(EARLIER_PAGE_COUNT);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -157,35 +167,23 @@ export function ExternalSessionsSidebarSection() {
       }),
   });
 
-  const visible = useMemo(() => {
-    const live: Array<ExternalSessionEntry> = [];
-    const recent: Array<ExternalSessionEntry> = [];
-    for (const entry of entries) {
-      (entry.session.liveness === "recent" ? recent : live).push(entry);
-    }
-    return [...live, ...recent];
-  }, [entries]);
-  const runningCount = useMemo(
-    () => entries.filter((entry) => entry.session.liveness === "running").length,
-    [entries],
-  );
   // `nowMinute` is the UTC minute ("YYYY-MM-DDTHH:mm"); its ticks move sessions
-  // into older groups as they age.
-  const groups = useMemo(() => {
+  // from Recent to Earlier as they age. Entries come newest first.
+  const bands = useMemo(() => {
     const now = Date.parse(`${nowMinute}Z`);
-    const groupOf = (entry: ExternalSessionEntry): AgeGroup => {
-      if (entry.session.liveness !== "recent") return AGE_GROUPS[0];
-      const ageMs = now - Date.parse(entry.session.updatedAt);
-      return AGE_GROUPS.find((group) => ageMs <= group.maxAgeMs) ?? AGE_GROUPS[0];
-    };
-    return AGE_GROUPS.map((group) => ({
-      group,
-      entries: visible.filter((entry) => groupOf(entry) === group),
-    })).filter(({ entries: grouped }) => grouped.length > 0);
-  }, [visible, nowMinute]);
+    const active: Array<ExternalSessionEntry> = [];
+    const recent: Array<ExternalSessionEntry> = [];
+    const earlier: Array<ExternalSessionEntry> = [];
+    for (const entry of entries) {
+      if (entry.session.liveness === "running") active.push(entry);
+      else if (now - Date.parse(entry.session.updatedAt) < RECENT_MS) recent.push(entry);
+      else earlier.push(entry);
+    }
+    return { active, recent, earlier };
+  }, [entries, nowMinute]);
 
-  // Sessions hidden in this browser before archive existed are archived in T3
-  // only, once, on the first non-empty list. Keys of sessions not listed then
+  // Sessions hidden in this browser before archive existed are archived, once,
+  // on the first non-empty list. Keys of sessions not listed then
   // (aged out, or on an environment not yet connected) are dropped.
   const legacyMigrated = useRef(false);
   useEffect(() => {
@@ -195,11 +193,15 @@ export function ExternalSessionsSidebarSection() {
     if (hidden === null) return;
     for (const { environmentId, session } of entries) {
       if (!hidden.has(rowKey(environmentId, session.key))) continue;
-      void runArchive({ environmentId, input: { key: session.key, native: false } });
+      void runArchive({ environmentId, input: { key: session.key } });
     }
   }, [entries, runArchive]);
 
   const toggleExpanded = useCallback(() => setExpanded((value) => !value), [setExpanded]);
+  const toggleEarlier = useCallback(
+    () => setEarlierExpanded((value) => !value),
+    [setEarlierExpanded],
+  );
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
@@ -276,14 +278,6 @@ export function ExternalSessionsSidebarSection() {
         type: "error",
         title: "Could not archive session",
         description: failure instanceof Error ? failure.message : "An error occurred.",
-      });
-      return;
-    }
-    if (result.value.warning !== null) {
-      toastManager.add({
-        type: "warning",
-        title: "Archived in T3",
-        description: `${externalSessionProductName(entry.session)} could not archive it: ${result.value.warning}`,
       });
     }
   };
@@ -398,6 +392,13 @@ export function ExternalSessionsSidebarSection() {
   };
 
   if (entries.length === 0) return null;
+  const activeCount = bands.active.length;
+  const rowProps = {
+    activeKey,
+    nowMinute,
+    onNavigate: closeMobileSidebar,
+    onContextMenu: handleRowContextMenu,
+  };
 
   return (
     <section aria-label="Other Agents" className="mt-2">
@@ -408,90 +409,158 @@ export function ExternalSessionsSidebarSection() {
         <CollapsibleSectionHeader
           expanded={expanded}
           onClick={toggleExpanded}
+          onMouseDown={preventMouseFocus}
           accessory={
             // At the narrowest sidebar the word drops out, so the chevron stays in view.
-            runningCount > 0 ? (
+            activeCount > 0 ? (
               <span
-                title={`${runningCount} active`}
+                title={`${activeCount} active`}
                 className="inline-flex shrink-0 items-center gap-1 text-info tabular-nums"
               >
                 <CircleDashedIcon aria-hidden className="size-3 shrink-0" />
-                {runningCount}
+                {activeCount}
                 <span className="sr-only @min-[14.5rem]/other-agents:not-sr-only">{" active"}</span>
               </span>
             ) : null
           }
         >
-          {`Other Agents (${visible.length})`}
+          {`Other Agents (${entries.length})`}
         </CollapsibleSectionHeader>
       </div>
-      {expanded ? (
-        // Same hover timing as the thread list's cards.
-        <TooltipProvider delay={150} closeDelay={0} timeout={400}>
-          {groups.map(({ group, entries: grouped }) => (
-            <ExternalSessionAgeGroup
-              key={group.storageKey}
-              group={group}
-              entries={grouped}
-              activeKey={activeKey}
-              nowMinute={nowMinute}
-              onNavigate={closeMobileSidebar}
-              onContextMenu={handleRowContextMenu}
+      {/* Same hover timing as the thread list's cards. */}
+      <TooltipProvider delay={150} closeDelay={0} timeout={400}>
+        <ExternalSessionRows entries={bands.active} {...rowProps} />
+        {expanded ? (
+          <>
+            <ExternalSessionRows
+              entries={firstWithOpen(bands.recent, recentCount, activeKey)}
+              {...rowProps}
             />
-          ))}
-        </TooltipProvider>
-      ) : null}
+            <ShowMoreControls
+              total={bands.recent.length}
+              shown={recentCount}
+              pageCount={RECENT_PAGE_COUNT}
+              // Recent is one day of sessions, so the rest come in one go.
+              onShowMore={() => setRecentCount(bands.recent.length)}
+              onShowLess={() => setRecentCount(RECENT_PAGE_COUNT)}
+            />
+            {bands.earlier.length > 0 ? (
+              <div role="group" aria-label="Earlier">
+                <div className="mr-0.5 ml-2.5 h-8">
+                  <CollapsibleSectionHeader
+                    expanded={earlierExpanded}
+                    onClick={toggleEarlier}
+                    onMouseDown={preventMouseFocus}
+                  >
+                    {`Earlier (${bands.earlier.length})`}
+                  </CollapsibleSectionHeader>
+                </div>
+                <ExternalSessionRows
+                  entries={firstWithOpen(
+                    bands.earlier,
+                    earlierExpanded ? earlierCount : 0,
+                    activeKey,
+                  )}
+                  {...rowProps}
+                />
+                {earlierExpanded ? (
+                  <ShowMoreControls
+                    total={bands.earlier.length}
+                    shown={earlierCount}
+                    pageCount={EARLIER_PAGE_COUNT}
+                    onShowMore={() => setEarlierCount((count) => count + EARLIER_PAGE_COUNT)}
+                    onShowAll={() => setEarlierCount(bands.earlier.length)}
+                    onShowLess={() => setEarlierCount(EARLIER_PAGE_COUNT)}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </TooltipProvider>
     </section>
   );
 }
 
-/**
- * One age group of the shelf, collapsible on its own. Collapsed, it still
- * shows the session that is open, as the Settled shelf does for its thread.
- */
-function ExternalSessionAgeGroup(props: {
-  group: AgeGroup;
+function ExternalSessionRows(props: {
   entries: ReadonlyArray<ExternalSessionEntry>;
   activeKey: string | null;
   nowMinute: string;
   onNavigate: () => void;
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
-  const { group } = props;
-  const [expanded, setExpanded] = useLocalStorage(
-    group.storageKey,
-    group.defaultExpanded,
-    Schema.Boolean,
-  );
-  const toggleExpanded = useCallback(() => setExpanded((value) => !value), [setExpanded]);
-  const rows = expanded
-    ? props.entries
-    : props.entries.filter(
-        (entry) => rowKey(entry.environmentId, entry.session.key) === props.activeKey,
-      );
+  if (props.entries.length === 0) return null;
   return (
-    <div role="group" aria-label={group.label}>
-      <div className="mr-0.5 ml-2.5 h-8">
-        <CollapsibleSectionHeader expanded={expanded} onClick={toggleExpanded}>
-          {`${group.label} (${props.entries.length})`}
-        </CollapsibleSectionHeader>
-      </div>
-      {rows.length > 0 ? (
-        <ul className="flex flex-col">
-          {rows.map((entry) => {
-            const key = rowKey(entry.environmentId, entry.session.key);
-            return (
-              <ExternalSessionRow
-                key={key}
-                entry={entry}
-                isActive={props.activeKey === key}
-                nowMinute={props.nowMinute}
-                onNavigate={props.onNavigate}
-                onContextMenu={props.onContextMenu}
-              />
-            );
-          })}
-        </ul>
+    <ul className="flex flex-col">
+      {props.entries.map((entry) => {
+        const key = rowKey(entry.environmentId, entry.session.key);
+        return (
+          <ExternalSessionRow
+            key={key}
+            entry={entry}
+            isActive={props.activeKey === key}
+            nowMinute={props.nowMinute}
+            onNavigate={props.onNavigate}
+            onContextMenu={props.onContextMenu}
+          />
+        );
+      })}
+    </ul>
+  );
+}
+
+const SHOW_MORE_BUTTON_CLASS =
+  "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
+
+/**
+ * Paging under a list of `total` sessions showing `shown`: "Show N more" a page
+ * at a time, "Show all" when more than a page is left, and "Show less" back to
+ * the first page. Renders nothing when the list fits in one page.
+ */
+function ShowMoreControls(props: {
+  total: number;
+  shown: number;
+  pageCount: number;
+  onShowMore: () => void;
+  onShowAll?: () => void;
+  onShowLess: () => void;
+}) {
+  const hidden = props.total - props.shown;
+  if (props.total <= props.pageCount) return null;
+  return (
+    <div className="flex items-center gap-1 px-1 py-0.5">
+      {hidden > 0 ? (
+        <button
+          type="button"
+          onClick={props.onShowMore}
+          onMouseDown={preventMouseFocus}
+          className={SHOW_MORE_BUTTON_CLASS}
+        >
+          <PlusIcon aria-hidden className="size-3.5 shrink-0" />
+          {props.onShowAll === undefined
+            ? `Show ${hidden} more`
+            : `Show ${Math.min(hidden, props.pageCount)} more`}
+        </button>
+      ) : null}
+      {props.onShowAll !== undefined && hidden > props.pageCount ? (
+        <button
+          type="button"
+          onClick={props.onShowAll}
+          onMouseDown={preventMouseFocus}
+          className={SHOW_MORE_BUTTON_CLASS}
+        >
+          Show all
+        </button>
+      ) : null}
+      {props.shown > props.pageCount ? (
+        <button
+          type="button"
+          onClick={props.onShowLess}
+          onMouseDown={preventMouseFocus}
+          className={cn(SHOW_MORE_BUTTON_CLASS, "ml-auto")}
+        >
+          Show less
+        </button>
       ) : null}
     </div>
   );
