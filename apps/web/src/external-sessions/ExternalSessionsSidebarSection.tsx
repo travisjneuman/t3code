@@ -60,8 +60,6 @@ const EARLIER_EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-earlier-e
 const RECENT_MS = 24 * 60 * 60 * 1000;
 /** Recent sessions shown before "Show more". */
 const RECENT_PAGE_COUNT = 8;
-/** Earlier sessions added per "Show more". */
-const EARLIER_PAGE_COUNT = 10;
 
 /** Per-browser "Hide from list" keys from before archive; archived once, then removed. */
 const LEGACY_HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
@@ -128,9 +126,9 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
 /**
  * "Other Agents" shelf: sessions running outside T3 on the connected
  * environments. Running ones always show, even with the shelf collapsed;
- * expanded, the last day's follow, then a collapsible Earlier group. Right-click
- * a row for its actions, or the header to find archived sessions. Renders
- * nothing while no environment reports any.
+ * expanded, the last day's follow, then a collapsible Earlier group of
+ * one-line rows. Right-click a row for its actions, or the header to find
+ * archived sessions. Renders nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
   const entries = useAtomValue(externalSessionEntriesAtom);
@@ -141,7 +139,6 @@ export function ExternalSessionsSidebarSection() {
     Schema.Boolean,
   );
   const [recentCount, setRecentCount] = useState(RECENT_PAGE_COUNT);
-  const [earlierCount, setEarlierCount] = useState(EARLIER_PAGE_COUNT);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -456,23 +453,10 @@ export function ExternalSessionsSidebarSection() {
                   </CollapsibleSectionHeader>
                 </div>
                 <ExternalSessionRows
-                  entries={firstWithOpen(
-                    bands.earlier,
-                    earlierExpanded ? earlierCount : 0,
-                    activeKey,
-                  )}
+                  compact
+                  entries={firstWithOpen(bands.earlier, earlierExpanded ? Infinity : 0, activeKey)}
                   {...rowProps}
                 />
-                {earlierExpanded ? (
-                  <ShowMoreControls
-                    total={bands.earlier.length}
-                    shown={earlierCount}
-                    pageCount={EARLIER_PAGE_COUNT}
-                    onShowMore={() => setEarlierCount((count) => count + EARLIER_PAGE_COUNT)}
-                    onShowAll={() => setEarlierCount(bands.earlier.length)}
-                    onShowLess={() => setEarlierCount(EARLIER_PAGE_COUNT)}
-                  />
-                ) : null}
               </div>
             ) : null}
           </>
@@ -484,18 +468,21 @@ export function ExternalSessionsSidebarSection() {
 
 function ExternalSessionRows(props: {
   entries: ReadonlyArray<ExternalSessionEntry>;
+  /** One-line rows instead of cards. */
+  compact?: boolean;
   activeKey: string | null;
   nowMinute: string;
   onNavigate: () => void;
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
   if (props.entries.length === 0) return null;
+  const Row = props.compact === true ? ExternalSessionLine : ExternalSessionRow;
   return (
     <ul className="flex flex-col">
       {props.entries.map((entry) => {
         const key = rowKey(entry.environmentId, entry.session.key);
         return (
-          <ExternalSessionRow
+          <Row
             key={key}
             entry={entry}
             isActive={props.activeKey === key}
@@ -513,16 +500,15 @@ const SHOW_MORE_BUTTON_CLASS =
   "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
 
 /**
- * Paging under a list of `total` sessions showing `shown`: "Show N more" a page
- * at a time, "Show all" when more than a page is left, and "Show less" back to
- * the first page. Renders nothing when the list fits in one page.
+ * Under a list of `total` sessions showing `shown`: "Show N more" for the rest
+ * and "Show less" back to the first page. Renders nothing when the list fits
+ * in one page.
  */
 function ShowMoreControls(props: {
   total: number;
   shown: number;
   pageCount: number;
   onShowMore: () => void;
-  onShowAll?: () => void;
   onShowLess: () => void;
 }) {
   const hidden = props.total - props.shown;
@@ -537,19 +523,7 @@ function ShowMoreControls(props: {
           className={SHOW_MORE_BUTTON_CLASS}
         >
           <PlusIcon aria-hidden className="size-3.5 shrink-0" />
-          {props.onShowAll === undefined
-            ? `Show ${hidden} more`
-            : `Show ${Math.min(hidden, props.pageCount)} more`}
-        </button>
-      ) : null}
-      {props.onShowAll !== undefined && hidden > props.pageCount ? (
-        <button
-          type="button"
-          onClick={props.onShowAll}
-          onMouseDown={preventMouseFocus}
-          className={SHOW_MORE_BUTTON_CLASS}
-        >
-          Show all
+          {`Show ${hidden} more`}
         </button>
       ) : null}
       {props.shown > props.pageCount ? (
@@ -623,6 +597,19 @@ function compactTimeLabel(iso: string): string {
   return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
 
+/** What a screen reader hears for a session row. */
+function sessionRowLabel(session: ExternalSessionEntry["session"]): string {
+  return [
+    externalSessionTitle(session),
+    externalSessionOriginLabel(session),
+    cwdBasename(session.cwd),
+    shortModelLabel(session.model),
+    LIVENESS_LABEL[session.liveness],
+  ]
+    .filter((part): part is string => part !== null && part.length > 0)
+    .join(", ");
+}
+
 /**
  * One external session, laid out like a standard thread card and marked with
  * the same `data-fork-card-part`s so `sidebar-compact` sizes both alike:
@@ -646,15 +633,7 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
   const model = shortModelLabel(session.model);
   const recede = session.liveness === "recent";
   const running = session.liveness === "running";
-  const label = [
-    title,
-    externalSessionOriginLabel(session),
-    folder,
-    model,
-    LIVENESS_LABEL[session.liveness],
-  ]
-    .filter((part): part is string => part !== null && part.length > 0)
-    .join(", ");
+  const label = sessionRowLabel(session);
 
   return (
     <li
@@ -749,6 +728,59 @@ const ExternalSessionRow = memo(function ExternalSessionRow(props: {
                 iconClassName="size-3.5"
               />
             </span>
+          </span>
+        </TooltipTrigger>
+        <ExternalSessionHoverCard entry={props.entry} />
+      </Tooltip>
+    </li>
+  );
+});
+
+/**
+ * One external session on a single line, for the Earlier group: harness icon,
+ * title and age. The hover card and right-click menu match the full card's.
+ */
+const ExternalSessionLine = memo(function ExternalSessionLine(props: {
+  entry: ExternalSessionEntry;
+  isActive: boolean;
+  nowMinute: string;
+  onNavigate: () => void;
+  onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
+}) {
+  const { environmentId, session } = props.entry;
+  return (
+    <li className="list-none py-px">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              to="/external/$environmentId/$sessionKey"
+              params={{ environmentId, sessionKey: session.key }}
+              aria-label={sessionRowLabel(session)}
+              aria-current={props.isActive ? "page" : undefined}
+              onClick={props.onNavigate}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
+              }}
+              className={cn(
+                "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                props.isActive
+                  ? "bg-sidebar-row-active text-sidebar-foreground"
+                  : "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+              )}
+            />
+          }
+        >
+          <ProviderInstanceIcon
+            driverKind={session.driver}
+            displayName={externalSessionProductName(session)}
+            className="size-3.5 shrink-0"
+            iconClassName="size-3.5"
+          />
+          <span className="min-w-0 flex-1 truncate">{externalSessionTitle(session)}</span>
+          <span className="shrink-0 tabular-nums text-secondary-label">
+            {compactTimeLabel(session.updatedAt)}
           </span>
         </TooltipTrigger>
         <ExternalSessionHoverCard entry={props.entry} />

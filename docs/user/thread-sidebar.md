@@ -280,7 +280,7 @@ used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop 
 Open one to follow it live. Older sessions are still found by search. Sessions running right now
 come first and stay in view even when you collapse the list; the header counts them as active.
 Below them are the sessions active in the last 24 hours, then **Earlier**, which starts collapsed
-and shows 10 sessions at a time. Runs that the sidebar's sync button starts to finish an upstream
+and lists each older session on one line; hover one for its details. Runs that the sidebar's sync button starts to finish an upstream
 merge are named by when they started, such as **t3 100626 143205** for October 6, 2026 at
 14:32:05.
 

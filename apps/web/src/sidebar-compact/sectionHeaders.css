@@ -1,0 +1,15 @@
+/*
+ * Sidebar section and subsection headers (Working, Settled, Other Agents,
+ * Earlier, search groups) read at full contrast: deep black in light themes,
+ * bright white in dark ones. Only the default muted tone changes; Snoozed's
+ * blue and the drag-and-drop highlights keep their colors. The class match
+ * leaves upstream's CollapsibleSectionHeader untouched. Unlayered, so it wins
+ * over Tailwind's utilities layer. Fork add-on: compact sidebar.
+ */
+[data-sidebar="sidebar"] button[aria-expanded][class~="text-sidebar-muted-foreground/60"] {
+  color: #000;
+}
+
+.dark [data-sidebar="sidebar"] button[aria-expanded][class~="text-sidebar-muted-foreground/60"] {
+  color: #fff;
+}
