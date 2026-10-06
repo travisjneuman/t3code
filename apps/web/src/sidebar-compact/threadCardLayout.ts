@@ -1,7 +1,7 @@
 /**
  * Layout of the sidebar's full thread cards (active, pinned and working rows,
- * unsent new-thread drafts, and Other Agents sessions). Each row marks itself
- * with `data-fork-thread-card={THREAD_CARD_LAYOUT}` and its parts with
+ * and unsent new-thread drafts). Each row marks itself with
+ * `data-fork-thread-card={THREAD_CARD_LAYOUT}` and its parts with
  * `data-fork-card-part`; `threadCardLayout.css` styles each layout by that
  * value, so the upstream markup and classes stay untouched.
  *
