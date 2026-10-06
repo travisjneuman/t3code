@@ -16,8 +16,8 @@ import * as Path from "effect/Path";
 import { ChildProcessSpawner } from "effect/process";
 
 import { expandHomePath } from "../pathExpansion.ts";
-import { withCodexAppServerClient } from "../provider/Layers/CodexProvider.ts";
-import { resolveCodexLaunchArgs } from "../provider/Layers/codexLaunchArgs.ts";
+import { withCodexAppServerClient } from "../provider/CodexProvider.ts";
+import { resolveCodexLaunchArgs } from "../provider/codexLaunchArgs.ts";
 import { mergeProviderInstanceEnvironment } from "../provider/ProviderInstanceEnvironment.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { codexInstanceHome, enabledInstancesOf } from "./continueExternalSession.ts";
