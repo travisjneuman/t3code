@@ -13,8 +13,8 @@ import {
 } from "@t3tools/contracts";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon, PlusIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
@@ -37,7 +37,6 @@ import { waitForThreadShell } from "../state/entities";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { useAtomCommand } from "../state/use-atom-command";
-import { THREAD_CARD_LAYOUT } from "../sidebar-compact/threadCardLayout";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
@@ -58,8 +57,6 @@ const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
 const EARLIER_EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-earlier-expanded";
 /** Sessions that moved within this long are Recent; older ones are Earlier. */
 const RECENT_MS = 24 * 60 * 60 * 1000;
-/** Recent sessions shown before "Show more". */
-const RECENT_PAGE_COUNT = 8;
 
 /** Per-browser "Hide from list" keys from before archive; archived once, then removed. */
 const LEGACY_HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
@@ -125,10 +122,10 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
 
 /**
  * "Other Agents" shelf: sessions running outside T3 on the connected
- * environments. Running ones always show, even with the shelf collapsed;
- * expanded, the last day's follow, then a collapsible Earlier group of
- * one-line rows. Right-click a row for its actions, or the header to find
- * archived sessions. Renders nothing while no environment reports any.
+ * environments, one line each. Running ones always show, even with the shelf
+ * collapsed; expanded, the last day's follow, then a collapsible Earlier
+ * group. Right-click a row for its actions, or the header to find archived
+ * sessions. Renders nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
   const entries = useAtomValue(externalSessionEntriesAtom);
@@ -138,7 +135,6 @@ export function ExternalSessionsSidebarSection() {
     false,
     Schema.Boolean,
   );
-  const [recentCount, setRecentCount] = useState(RECENT_PAGE_COUNT);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -429,18 +425,7 @@ export function ExternalSessionsSidebarSection() {
         <ExternalSessionRows entries={bands.active} {...rowProps} />
         {expanded ? (
           <>
-            <ExternalSessionRows
-              entries={firstWithOpen(bands.recent, recentCount, activeKey)}
-              {...rowProps}
-            />
-            <ShowMoreControls
-              total={bands.recent.length}
-              shown={recentCount}
-              pageCount={RECENT_PAGE_COUNT}
-              // Recent is one day of sessions, so the rest come in one go.
-              onShowMore={() => setRecentCount(bands.recent.length)}
-              onShowLess={() => setRecentCount(RECENT_PAGE_COUNT)}
-            />
+            <ExternalSessionRows entries={bands.recent} {...rowProps} />
             {bands.earlier.length > 0 ? (
               <div role="group" aria-label="Earlier">
                 <div className="mr-0.5 ml-2.5 h-8">
@@ -453,7 +438,6 @@ export function ExternalSessionsSidebarSection() {
                   </CollapsibleSectionHeader>
                 </div>
                 <ExternalSessionRows
-                  compact
                   entries={firstWithOpen(bands.earlier, earlierExpanded ? Infinity : 0, activeKey)}
                   {...rowProps}
                 />
@@ -468,21 +452,18 @@ export function ExternalSessionsSidebarSection() {
 
 function ExternalSessionRows(props: {
   entries: ReadonlyArray<ExternalSessionEntry>;
-  /** One-line rows instead of cards. */
-  compact?: boolean;
   activeKey: string | null;
   nowMinute: string;
   onNavigate: () => void;
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
   if (props.entries.length === 0) return null;
-  const Row = props.compact === true ? ExternalSessionLine : ExternalSessionRow;
   return (
     <ul className="flex flex-col">
       {props.entries.map((entry) => {
         const key = rowKey(entry.environmentId, entry.session.key);
         return (
-          <Row
+          <ExternalSessionLine
             key={key}
             entry={entry}
             isActive={props.activeKey === key}
@@ -493,50 +474,6 @@ function ExternalSessionRows(props: {
         );
       })}
     </ul>
-  );
-}
-
-const SHOW_MORE_BUTTON_CLASS =
-  "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
-
-/**
- * Under a list of `total` sessions showing `shown`: "Show N more" for the rest
- * and "Show less" back to the first page. Renders nothing when the list fits
- * in one page.
- */
-function ShowMoreControls(props: {
-  total: number;
-  shown: number;
-  pageCount: number;
-  onShowMore: () => void;
-  onShowLess: () => void;
-}) {
-  const hidden = props.total - props.shown;
-  if (props.total <= props.pageCount) return null;
-  return (
-    <div className="flex items-center gap-1 px-1 py-0.5">
-      {hidden > 0 ? (
-        <button
-          type="button"
-          onClick={props.onShowMore}
-          onMouseDown={preventMouseFocus}
-          className={SHOW_MORE_BUTTON_CLASS}
-        >
-          <PlusIcon aria-hidden className="size-3.5 shrink-0" />
-          {`Show ${hidden} more`}
-        </button>
-      ) : null}
-      {props.shown > props.pageCount ? (
-        <button
-          type="button"
-          onClick={props.onShowLess}
-          onMouseDown={preventMouseFocus}
-          className={cn(SHOW_MORE_BUTTON_CLASS, "ml-auto")}
-        >
-          Show less
-        </button>
-      ) : null}
-    </div>
   );
 }
 
@@ -611,134 +548,11 @@ function sessionRowLabel(session: ExternalSessionEntry["session"]): string {
 }
 
 /**
- * One external session, laid out like a standard thread card and marked with
- * the same `data-fork-card-part`s so `sidebar-compact` sizes both alike:
- * folder and status, then the title, then model, machine and the harness icon
- * where a thread card shows its provider. Inactive sessions recede the way
- * settled threads do. `nowMinute` only exists to refresh the
- * relative time once a minute; the other props keep their identity across
- * unrelated pushes.
- */
-const ExternalSessionRow = memo(function ExternalSessionRow(props: {
-  entry: ExternalSessionEntry;
-  isActive: boolean;
-  nowMinute: string;
-  onNavigate: () => void;
-  onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
-}) {
-  const { environmentId, environmentLabel, session } = props.entry;
-  const title = externalSessionTitle(session);
-  const providerLabel = externalSessionProductName(session);
-  const folder = cwdBasename(session.cwd);
-  const model = shortModelLabel(session.model);
-  const recede = session.liveness === "recent";
-  const running = session.liveness === "running";
-  const label = sessionRowLabel(session);
-
-  return (
-    <li
-      data-fork-thread-card={THREAD_CARD_LAYOUT}
-      className="list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]"
-    >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              to="/external/$environmentId/$sessionKey"
-              params={{ environmentId, sessionKey: session.key }}
-              data-fork-card-part="surface"
-              aria-label={label}
-              aria-current={props.isActive ? "page" : undefined}
-              onClick={props.onNavigate}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
-              }}
-              className={cn(
-                "group/sidebar-row relative block w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                props.isActive
-                  ? "bg-sidebar-row-active text-sidebar-foreground"
-                  : recede
-                    ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                    : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
-              )}
-            />
-          }
-        >
-          <span
-            aria-hidden
-            data-fork-card-part="box"
-            className="relative z-10 block h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
-          >
-            <span data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
-              {folder !== null ? (
-                <FolderIcon className="size-4 shrink-0 stroke-muted-foreground" />
-              ) : null}
-              <span
-                data-fork-card-part="project"
-                className={cn(
-                  "min-w-0 flex-1 truncate text-xs text-secondary-label",
-                  recede ? "font-normal" : "font-medium",
-                )}
-              >
-                {folder ?? externalSessionOriginLabel(session)}
-              </span>
-              <span
-                data-fork-card-part="status"
-                className="ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end text-xs tabular-nums text-secondary-label"
-              >
-                {running ? (
-                  <span className="inline-flex items-center gap-1 font-medium text-info">
-                    <CircleDashedIcon className="size-4 shrink-0" />
-                    Running
-                  </span>
-                ) : (
-                  compactTimeLabel(session.updatedAt)
-                )}
-              </span>
-            </span>
-            <span data-fork-card-part="title" className="mt-1 flex min-w-0">
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate text-sm",
-                  recede && !props.isActive
-                    ? "font-normal text-secondary-label"
-                    : "font-medium text-foreground/90",
-                )}
-              >
-                {title}
-              </span>
-            </span>
-            <span
-              data-fork-card-part="meta"
-              className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-secondary-label"
-            >
-              {model !== null ? (
-                <span className="min-w-0 shrink truncate text-muted-foreground/60">{model}</span>
-              ) : null}
-              {environmentLabel !== null ? (
-                <span className="min-w-0 shrink-[3] truncate text-muted-foreground/60">
-                  {environmentLabel}
-                </span>
-              ) : null}
-              <ProviderInstanceIcon
-                driverKind={session.driver}
-                displayName={providerLabel}
-                className="ml-auto size-3.5 shrink-0"
-                iconClassName="size-3.5"
-              />
-            </span>
-          </span>
-        </TooltipTrigger>
-        <ExternalSessionHoverCard entry={props.entry} />
-      </Tooltip>
-    </li>
-  );
-});
-
-/**
- * One external session on a single line, for the Earlier group: harness icon,
- * title and age. The hover card and right-click menu match the full card's.
+ * One external session on a single line: harness icon, title, then its age or
+ * a running spinner. Sessions that are not running or idle recede the way
+ * settled threads do; the hover card holds the folder, model and machine.
+ * `nowMinute` only exists to refresh the age once a minute; the other props
+ * keep their identity across unrelated pushes.
  */
 const ExternalSessionLine = memo(function ExternalSessionLine(props: {
   entry: ExternalSessionEntry;
@@ -748,6 +562,7 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
   const { environmentId, session } = props.entry;
+  const running = session.liveness === "running";
   return (
     <li className="list-none py-px">
       <Tooltip>
@@ -767,7 +582,9 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
                 "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 props.isActive
                   ? "bg-sidebar-row-active text-sidebar-foreground"
-                  : "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+                  : session.liveness === "recent"
+                    ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-row-hover",
               )}
             />
           }
@@ -779,9 +596,13 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
             iconClassName="size-3.5"
           />
           <span className="min-w-0 flex-1 truncate">{externalSessionTitle(session)}</span>
-          <span className="shrink-0 tabular-nums text-secondary-label">
-            {compactTimeLabel(session.updatedAt)}
-          </span>
+          {running ? (
+            <CircleDashedIcon aria-hidden className="size-3.5 shrink-0 text-info" />
+          ) : (
+            <span className="shrink-0 tabular-nums text-secondary-label">
+              {compactTimeLabel(session.updatedAt)}
+            </span>
+          )}
         </TooltipTrigger>
         <ExternalSessionHoverCard entry={props.entry} />
       </Tooltip>

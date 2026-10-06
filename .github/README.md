@@ -48,6 +48,7 @@ Open ChatGPT, Claude, Grok, Gemini and Perplexity from the titlebar switcher, ri
 
 Claude Code, Codex, Grok, Pi and Antigravity sessions that you started outside T3 are listed under **Other Agents** in the sidebar. That covers sessions from a terminal, a desktop app or an IDE.
 
+- Each session is one line: harness icon, title and age. Hover one for its folder, model and machine.
 - Running sessions stay on top, even with the list collapsed. The last day's sessions follow, then an Earlier group.
 - Follow any session live, or find one through the command palette search.
 - **Continue in T3** turns a session into a normal thread with its whole history. The original session stays usable in its own app.
@@ -96,7 +97,7 @@ For now this needs push access to this repo, so it only works on the maintainer'
 
 ### Compact cards
 
-Thread cards in the sidebar keep their three lines (project, title, branch) one text size smaller, with a thin outline and tighter spacing, so more threads fit on screen. Other Agents sessions use the same card: folder, title, then model, machine and harness icon.
+Thread cards in the sidebar keep their three lines (project, title, branch) one text size smaller, with a thin outline and tighter spacing, so more threads fit on screen.
 
 ## Build it yourself
 
