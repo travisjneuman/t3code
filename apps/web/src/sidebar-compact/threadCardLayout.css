@@ -1,3 +1,5 @@
+@import "./sectionHeaders.css";
+
 /*
  * Compact thread cards (see threadCardLayout.ts). These rules are unlayered,
  * so they win over Tailwind's utilities layer. Heights add up to the 60px

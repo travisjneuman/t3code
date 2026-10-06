@@ -25,7 +25,7 @@ const MERGE_AGENT_RULES = [
   `${UPSTREAM_SYNC_PROMPT_PREFIX} (pingdotgg/t3code) into the ndev.t3code fork.`,
   "The fork is an add-on: keep every upstream change and every fork addition.",
   "Never drop fork features (the ChatGPT, Claude, Grok, and Gemini remote app tabs, the local source updater, the ndev.t3code branding) and never revert upstream changes.",
-  "Where upstream renamed or reshaped code the fork uses, adapt the fork code to the new upstream shape.",
+  "Where upstream renamed or reshaped code the fork uses, adapt the fork code to the new upstream shape, using upstream's current names and paths, and fix every reference to a moved module or renamed identifier, not just the first.",
   'Product text stays "ndev.t3code". Change only what the task needs.',
 ].join(" ");
 const NIGHTLY_TAG_GLOB = "v*-nightly.*";
@@ -625,7 +625,10 @@ export const make = Effect.gen(function* () {
   // Whatever the rename pass cannot settle (real conflicts, or a merge that no
   // longer builds) goes to a headless Claude Code run limited to file tools: it
   // can edit the checkout but cannot run git or shells or reach the network.
-  // The build remains the gate, and nothing is committed before it passes.
+  // It loads only the repo's settings: user-level hooks (such as one that
+  // commits at session end) would commit its edits and the build's version
+  // stamp before the build passes. The build remains the gate, and nothing is
+  // committed before it passes.
   const runMergeAgent = (repo: string, task: string) =>
     runCommand({
       operation: "merge",
@@ -633,6 +636,8 @@ export const make = Effect.gen(function* () {
       args: [
         "-p",
         `${MERGE_AGENT_RULES}\n\n${task}`,
+        "--setting-sources",
+        "project,local",
         "--permission-mode",
         "acceptEdits",
         "--disallowedTools",
