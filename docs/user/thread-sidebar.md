@@ -277,11 +277,12 @@ machine that runs the environment, and the folders must already exist.
 
 **Other Agents**, below your threads in the sidebar, lists sessions you started outside T3 and
 used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop app, or an IDE.
-Open one to follow it live. Older sessions are still found by search. Sessions are grouped by
-when they were last active: **Past 3 days**, **Past 7 days**, and **Older**, which starts
-collapsed. Click a group's header to show or hide it. The header shows how many sessions are
-active right now. Runs that the sidebar's sync button starts to finish an upstream merge are
-titled **Upstream sync** with their date.
+Open one to follow it live. Older sessions are still found by search. Sessions running right now
+come first and stay in view even when you collapse the list; the header counts them as active.
+Below them are the sessions active in the last 24 hours, then **Earlier**, which starts collapsed
+and shows 10 sessions at a time. Runs that the sidebar's sync button starts to finish an upstream
+merge are named by when they started, such as **t3 100626 143205** for October 6, 2026 at
+14:32:05.
 
 To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then
 choose **Continue in T3**. The session becomes a regular thread in its folder's project, with its
@@ -306,9 +307,9 @@ Other Agents again. Choosing **Continue in T3** on it later brings the same thre
 a continued thread any other way does the same.
 
 Right-click a session to continue it, copy its session ID or folder path, open its folder, or
-archive it. Archiving takes the session off the list; a Codex session is
-archived in Codex too, as if you had archived it there. A running session can't be archived until
-it stops. Archived sessions are listed in **Settings › Archived**, where **Unarchive** brings them
+archive it. Archiving only takes the session off T3's list: it stays where it is in the agent's
+own app. A running session can't be archived until it stops, and an archived session that runs
+again comes back to the list on its own. Archived sessions are listed in **Settings › Archived**, where **Unarchive** brings them
 back. Right-click the **Other Agents** header and choose **Show archived sessions** to go there.
 Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
 Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here

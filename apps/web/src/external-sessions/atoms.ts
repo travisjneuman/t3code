@@ -107,7 +107,7 @@ export const externalSessionContinue = createEnvironmentRpcCommand(connectionAto
   tag: EXTERNAL_SESSIONS_WS_METHODS.continue,
 });
 
-/** Hides a session from the list until unarchived; Codex archives it too. */
+/** Hides a session from T3's list until unarchived or until it runs again. */
 export const externalSessionArchive = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:archive",
   tag: EXTERNAL_SESSIONS_WS_METHODS.archive,
@@ -335,27 +335,8 @@ export function cwdBasename(cwd: string | null): string | null {
   return segments.at(-1) ?? cwd;
 }
 
-// The opening of the desktop updater's merge-agent prompt (MERGE_AGENT_RULES in
-// apps/desktop/src/updates/LocalSourceUpdates.ts), which those sessions take as their title.
-const MERGE_AGENT_TITLE_PREFIX = "You are finishing a merge of the upstream T3 Code";
-const SYNC_DATE_FORMAT = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
-
-/** A run the sidebar's Sync button started to finish an upstream merge. */
-function isUpstreamSyncSession(session: { readonly title: string }): boolean {
-  return session.title.trimStart().startsWith(MERGE_AGENT_TITLE_PREFIX);
-}
-
-/** The session's title; a sync run's is "Upstream sync", dated when `updatedAt` is known. */
-export function externalSessionTitle(session: {
-  readonly title: string;
-  readonly updatedAt?: string;
-}): string {
-  if (isUpstreamSyncSession(session)) {
-    const updatedAt = new Date(session.updatedAt ?? Number.NaN);
-    return Number.isNaN(updatedAt.getTime())
-      ? "Upstream sync"
-      : `Upstream sync, ${SYNC_DATE_FORMAT.format(updatedAt)}`;
-  }
+/** The session's title, or "Untitled session" when it has none. */
+export function externalSessionTitle(session: { readonly title: string }): string {
   const title = session.title.trim();
   return title.length > 0 ? title : "Untitled session";
 }

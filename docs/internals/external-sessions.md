@@ -116,14 +116,15 @@ in T3, which binds an ordinary thread to that same session.
   - cwds under the T3 home or worktrees (scratch threads)
   - Codex rollouts whose originator is T3
   - Codex subagent rollouts, which belong to their parent
-- **Archive is T3 state, plus Codex's own archive.** Archived keys live in
+- **Archive is T3 state only.** Archived keys live in
   `<state dir>/external-sessions-archive.json` (not SQLite, so upstream keeps its migration
-  numbering), and the list leaves them out. For Codex, archive and unarchive also call the
-  app-server's `thread/archive` / `thread/unarchive` through the enabled, unmanaged Codex
-  instance whose shared home is `~/.codex`, the store the list reads. A Codex failure leaves the
-  T3 archive in place and comes back as a warning. Other agents have no archive of their own, so
-  theirs is T3-only. Each entry keeps its title, cwd and driver because Codex moves the rollout out
-  of `sessions/`, where the list no longer finds it.
+  numbering), and the list leaves them out; the agent's own app keeps the session, so it can still
+  be found there. A T3-archived session that writes again after its `archivedAt` while running is
+  unarchived by the list's republish, so a session in use is never hidden. Archive used to call
+  Codex's `thread/archive` too; entries from then carry `nativeArchived`, and unarchiving them
+  still calls `thread/unarchive` through the enabled, unmanaged Codex instance whose shared home is
+  `~/.codex`, with a failure returned as a warning. Each entry keeps its title, cwd and driver
+  because those Codex rollouts left `sessions/`, where the list no longer finds them.
 - **Claude desktop's archive is mirrored read-only.**
   [`claudeDesktopArchive.ts`](../../apps/server/src/external-sessions/claudeDesktopArchive.ts)
   keeps only `cliSessionId` and `isArchived` from the Claude app's

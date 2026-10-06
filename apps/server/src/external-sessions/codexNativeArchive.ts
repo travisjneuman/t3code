@@ -1,8 +1,8 @@
 /**
- * Archive and unarchive a Codex session in Codex itself, through a
- * short-lived `codex app-server` (`thread/archive`, `thread/unarchive`).
- * Codex moves the rollout between `sessions/` and `archived_sessions/`; T3
- * never touches those files. Fork add-on; see docs/internals/external-sessions.md.
+ * Unarchive a Codex session in Codex itself, through a short-lived
+ * `codex app-server` (`thread/unarchive`). T3's archive no longer archives in
+ * Codex, but older T3 archives did, and Codex moved those rollouts to
+ * `archived_sessions/`; T3 never touches those files. Fork add-on; see docs/internals/external-sessions.md.
  *
  * @module external-sessions/codexNativeArchive
  */
@@ -24,7 +24,7 @@ import { codexInstanceHome, enabledInstancesOf } from "./continueExternalSession
 
 const REQUEST_TIMEOUT = "20 seconds";
 
-export type CodexArchiveMethod = "thread/archive" | "thread/unarchive";
+export type CodexArchiveMethod = "thread/unarchive";
 
 export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;

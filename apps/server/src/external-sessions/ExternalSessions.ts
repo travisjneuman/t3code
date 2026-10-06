@@ -6,8 +6,10 @@
  * binds a T3 thread to that same session (continueExternalSession.ts), after
  * which it is listed as that thread instead. Handing one to a different agent
  * makes a separate thread from its history and leaves the session listed.
- * Archiving one hides it from the list (externalSessionArchive.ts) and, for
- * Codex, archives it in Codex too (codexNativeArchive.ts). Claude sessions
+ * Archiving one hides it from the list (externalSessionArchive.ts) and leaves
+ * it where it is in the agent's own app; it comes back when it runs again.
+ * Older Codex archives also archived in Codex, so unarchiving those restores
+ * them there (codexNativeArchive.ts). Claude sessions
  * archived in Claude desktop are hidden and listed as archived too, read-only
  * (claudeDesktopArchive.ts). Fork add-on; see docs/internals/external-sessions.md.
  *
@@ -116,8 +118,8 @@ export class ExternalSessions extends Context.Service<
      */
     readonly ownedSessionIds: Effect.Effect<ReadonlySet<string>>;
     /**
-     * Hide a session from the list until unarchived; Codex sessions are
-     * archived in Codex too unless `native` is false. Refused while running.
+     * Hide a session from the list until unarchived or until it runs again.
+     * T3 only: the agent's own app keeps it. Refused while running.
      */
     readonly archiveSession: (
       input: ExternalSessionArchiveInput,
@@ -125,7 +127,7 @@ export class ExternalSessions extends Context.Service<
       ExternalSessionArchiveResult,
       ExternalSessionNotFoundError | ExternalSessionError
     >;
-    /** List the session again, restoring it in Codex when Codex archived it. */
+    /** List the session again, restoring it in Codex when an older archive archived it there. */
     readonly unarchiveSession: (
       key: string,
     ) => Effect.Effect<ExternalSessionArchiveResult, ExternalSessionError>;
@@ -339,6 +341,17 @@ const make = Effect.gen(function* () {
       // Claude desktop's archive hides a Claude session just as T3's does.
       const claudeArchivedAt = (entry: Entry) =>
         entry.source.driver === "claudeAgent" ? inClaude.get(entry.info.id) : undefined;
+      // A session archived in T3 that runs again after that comes back to the list.
+      for (const [key, entry] of listable) {
+        const archived = archive.get(key);
+        if (
+          archived !== undefined &&
+          toSummary(key, entry, now).liveness === "running" &&
+          entry.info.updatedAtMs > Date.parse(archived.archivedAt)
+        ) {
+          yield* archive.remove(key).pipe(Effect.ignore);
+        }
+      }
       const sessions = listable
         .filter(
           ([key, entry]) => archive.get(key) === undefined && claudeArchivedAt(entry) === undefined,
@@ -628,7 +641,7 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const archiveSession: ExternalSessions["Service"]["archiveSession"] = ({ key, native }) =>
+  const archiveSession: ExternalSessions["Service"]["archiveSession"] = ({ key }) =>
     Effect.scoped(
       Effect.gen(function* () {
         if (archive.get(key) !== undefined) return { warning: null };
@@ -638,27 +651,22 @@ const make = Effect.gen(function* () {
         if (entry === undefined || summary === null) {
           return yield* new ExternalSessionNotFoundError({ key });
         }
-        // It may be in use in the other app; Codex would archive it mid-turn.
+        // It would come straight back on its next write.
         if (summary.liveness === "running") {
           return yield* new ExternalSessionError({
             message: "This session is still running. Stop it in the other app, then archive it.",
           });
         }
-        const archived = {
+        yield* archive.put({
           key,
           driver: summary.driver,
           title: summary.title,
           cwd: summary.cwd,
           archivedAt: new Date().toISOString(),
           nativeArchived: false,
-        };
-        // T3 first, so the row leaves the list without waiting on Codex.
-        yield* archive.put(archived);
+        });
         yield* registry.publish;
-        if (native === false || summary.driver !== "codex") return { warning: null };
-        const warning = yield* codexNativeArchive.run("thread/archive", entry.info.id);
-        if (warning === null) yield* archive.put({ ...archived, nativeArchived: true });
-        return { warning };
+        return { warning: null };
       }),
     );
 
