@@ -41,7 +41,7 @@ const hostFlag = Flag.String("host").pipe(
 );
 export const baseDirFlag = Flag.String("base-dir").pipe(
   Flag.withDescription(
-    "Explicit ndev.t3code data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME).",
+    "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME).",
   ),
   Flag.optional,
 );

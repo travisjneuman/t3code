@@ -22,7 +22,7 @@ const layerClientPresentation = Layer.succeed(
   ClientCapabilities.ClientPresentation,
   ClientCapabilities.ClientPresentation.of({
     metadata: {
-      label: "ndev.t3code Test",
+      label: "T3 Code Test",
       deviceType: "desktop",
       os: "Test OS",
     },
@@ -124,7 +124,7 @@ describe("connection onboarding", () => {
       const tokenParams = new URLSearchParams(tokenBody);
       expect(tokenParams.get("subject_token")).toBe("pairing-token");
       expect(tokenParams.get("scope")).toBe(AuthStandardClientScopes.join(" "));
-      expect(tokenParams.get("client_label")).toBe("ndev.t3code Test");
+      expect(tokenParams.get("client_label")).toBe("T3 Code Test");
     }),
   );
 

@@ -40,14 +40,14 @@ describe("deriveAuthClientMetadata", () => {
         },
       } as never,
       presented: {
-        label: "ndev.t3code Mobile",
+        label: "T3 Code Mobile",
         deviceType: "mobile",
         os: "iOS",
       },
     });
 
     expect(metadata).toMatchObject({
-      label: "ndev.t3code Mobile",
+      label: "T3 Code Mobile",
       browser: "Electron",
       deviceType: "mobile",
       ipAddress: "192.168.213.72",

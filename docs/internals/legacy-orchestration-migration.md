@@ -53,7 +53,7 @@ schema changes belong in a separate migration table or outside the migrator enti
 
 ## Recovery
 
-Thread export is one-way; nothing imports it back. Recovery uses an untouched copy of the environment's
+There is no supported whole-thread export API. Recovery uses an untouched copy of the environment's
 `userdata` directory and opens that copy with SQLite's read-only mode. The user guide documents the
 queries against `projection_threads` and `projection_thread_messages`. Never start a server against
 the recovery copy because startup can run migrations and write new state.

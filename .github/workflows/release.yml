@@ -7,8 +7,8 @@ on:
       - "!v*-nightly.*"
       - "!v*-preview.*"
   schedule:
-    # Off minute zero: GitHub delays scheduled runs most at the top of the hour.
-    - cron: "7 */3 * * *"
+    # Avoid minute zero, when GitHub scheduled jobs are busiest.
+    - cron: "8,38 * * * *"
   workflow_dispatch:
     inputs:
       channel:
@@ -203,7 +203,7 @@ jobs:
             echo "release_channel=stable" >> "$GITHUB_OUTPUT"
             echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "name=ndev.t3code v$version" >> "$GITHUB_OUTPUT"
+            echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
             echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
             if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "is_prerelease=false" >> "$GITHUB_OUTPUT"

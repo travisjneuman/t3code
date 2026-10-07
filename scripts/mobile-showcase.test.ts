@@ -310,7 +310,7 @@ it("selects a reachable LAN IPv4 address", () => {
 it("seeds a playful multi-environment project spectrum", () => {
   assert.deepStrictEqual(
     SHOWCASE_PROJECTS.map((project) => project.title),
-    ["ndev.t3code", "React", "Linux"],
+    ["T3 Code", "React", "Linux"],
   );
   assert.deepStrictEqual(
     SHOWCASE_ENVIRONMENTS.map((environment) => environment.label),

@@ -119,7 +119,7 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId,
-          title: "ndev.t3code",
+          title: "T3 Code",
           workspaceRoot: "/work/t3code",
         },
       ],
@@ -145,13 +145,13 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId: "env-1" as EnvironmentId,
-          title: "ndev.t3code · one",
+          title: "T3 Code · one",
           workspaceRoot: "/work/t3code-1",
         },
         {
           id: projectId,
           environmentId: "env-2" as EnvironmentId,
-          title: "ndev.t3code · two",
+          title: "T3 Code · two",
           workspaceRoot: "/work/t3code-2",
         },
       ],

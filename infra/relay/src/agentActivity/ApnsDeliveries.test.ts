@@ -77,7 +77,7 @@ const state: RelayAgentActivityState = {
 };
 
 const aggregate: RelayAgentActivityAggregateState = {
-  title: "ndev.t3code",
+  title: "T3 Code",
   subtitle: "Agent work in progress",
   activeCount: 1,
   updatedAt: state.updatedAt,
