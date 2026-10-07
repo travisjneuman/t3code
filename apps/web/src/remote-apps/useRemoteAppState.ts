@@ -129,3 +129,12 @@ export function useRemoteAppState(): RemoteAppContextValue {
   const bridge = readBridge();
   return useMemo(() => ({ state, bridge, ...actions }), [bridge, state]);
 }
+
+/** Only the desktop window's active surface, for components that re-render on nothing else. */
+export function useRemoteAppActiveSurface(): RemoteAppState["activeSurface"] {
+  return useSyncExternalStore(
+    subscribe,
+    () => snapshot.activeSurface,
+    () => DEFAULT_REMOTE_APP_STATE.activeSurface,
+  );
+}

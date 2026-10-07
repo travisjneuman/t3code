@@ -7,19 +7,12 @@
 import { SESSION_SEARCH_WS_METHODS, type SessionSearchInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import { observeRpcEffect } from "../observability/RpcInstrumentation.ts";
 import * as SessionSearch from "./SessionSearch.ts";
-
-const traceAttributes = { "rpc.aggregate": "sessionSearch" };
 
 export const makeHandlers = Effect.gen(function* () {
   const sessionSearch = yield* SessionSearch.SessionSearch;
   return {
     [SESSION_SEARCH_WS_METHODS.search]: (input: SessionSearchInput) =>
-      observeRpcEffect(
-        SESSION_SEARCH_WS_METHODS.search,
-        sessionSearch.search(input),
-        traceAttributes,
-      ),
+      sessionSearch.search(input),
   };
 }).pipe(Effect.provide(SessionSearch.layer));

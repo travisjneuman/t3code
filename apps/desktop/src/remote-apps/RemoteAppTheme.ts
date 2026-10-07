@@ -389,6 +389,10 @@ export const buildRemoteAppInteractionScript = (): string => `
 
 const surfaceMenuUrl = (surface: DesktopSurface): string => `t3code-surface://select/${surface}`;
 
+// Lucide's panel-right, the icon T3 uses for its right panel.
+const SIDE_PANEL_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>';
+
 /**
  * The surface picker is rendered in a small host-owned window. A remote
  * WebContentsView is composited above the renderer, so a renderer popover
@@ -460,13 +464,19 @@ export const buildRemoteAppSurfaceMenuHtml = (
         separated && index === 1 ? '\n      <div class="separator" role="separator"></div>' : "";
       const unread = unreadSurfaces.includes(surface);
       const label = surfaceLabel(surface);
-      return `${separator}
-      <a role="menuitem" href="${surfaceMenuUrl(surface)}"${
+      const item = `
+      <a role="menuitem" class="item" href="${surfaceMenuUrl(surface)}"${
         unread ? ` aria-label="${label}, finished reply"` : ""
       }>
         <span class="icon">${REMOTE_APP_SURFACE_ICONS[surface]}</span>
         <span class="label">${label}</span>${unread ? '\n        <span class="unread"></span>' : ""}
       </a>`;
+      if (surface === "t3code") return `${separator}${item}`;
+      // A site row also opens the site beside the current thread.
+      return `${separator}
+      <div class="row">${item}
+        <a role="menuitem" class="panel" href="t3code-surface://panel/${surface}" aria-label="Open ${label} in Side Panel" title="Open in Side Panel">${SIDE_PANEL_ICON}</a>
+      </div>`;
     })
     .join("");
   // The native window clips the corners (roundedCorners) and draws the shadow.
@@ -523,6 +533,22 @@ export const buildRemoteAppSurfaceMenuHtml = (
       .icon svg { width: 16px; height: 16px; }
       .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .separator { height: 1px; margin: 4px 8px; background: ${menu.separator}; }
+      /* The side-panel button overlays the row's end, over its unread dot, and
+         shows only while the row is hovered or focused. */
+      .row { position: relative; }
+      .panel {
+        position: absolute;
+        inset-block: 0;
+        inset-inline-end: 0;
+        justify-content: center;
+        width: 28px;
+        padding: 0;
+        color: ${menu.mutedForeground};
+        opacity: 0;
+      }
+      .panel svg { width: 16px; height: 16px; }
+      .row:hover .panel, .row:focus-within .panel { opacity: 1; }
+      .row:hover .unread, .row:focus-within .unread { visibility: hidden; }
       .unread {
         flex: none;
         width: 6px;
@@ -537,19 +563,28 @@ export const buildRemoteAppSurfaceMenuHtml = (
     <div role="menu" aria-label="Switch app surface">${items}
     </div>
     <script>
-      const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
+      // Up and down move between surfaces; right and left between a site and
+      // its side-panel button.
+      const all = Array.from(document.querySelectorAll('[role="menuitem"]'));
+      const items = all.filter((item) => item.classList.contains("item"));
       const focusAt = (index) => items[(index + items.length) % items.length]?.focus();
-      for (const item of items) {
+      for (const item of all) {
         item.addEventListener("mousemove", () => item.focus());
         item.addEventListener("mouseleave", () => item.blur());
       }
       document.addEventListener("keydown", (event) => {
-        const index = items.indexOf(document.activeElement);
+        const active = document.activeElement;
+        const row = active?.closest(".row");
+        const index = items.indexOf(row ? row.querySelector(".item") : active);
         if (event.key === "ArrowDown") focusAt(index + 1);
         else if (event.key === "ArrowUp") focusAt(index < 0 ? items.length - 1 : index - 1);
         else if (event.key === "Home") focusAt(0);
         else if (event.key === "End") focusAt(items.length - 1);
-        else if (event.key === "Enter" || event.key === " ") items[index]?.click();
+        else if (event.key === "ArrowRight" && row) row.querySelector(".panel")?.focus();
+        else if (event.key === "ArrowLeft" && row) row.querySelector(".item")?.focus();
+        else if (event.key === "Enter" || event.key === " ") {
+          if (all.includes(active)) active.click();
+        }
         else if (event.key === "Escape") window.location.href = "t3code-surface://close";
         else return;
         event.preventDefault();

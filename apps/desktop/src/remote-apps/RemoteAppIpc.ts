@@ -1,10 +1,13 @@
 import {
   DesktopSurfaceSchema,
+  PositiveInt,
   RemoteAppAvailabilitySchema,
   RemoteAppChatImportResultSchema,
   RemoteAppDownloadIdSchema,
   RemoteAppFillPromptRequestSchema,
   RemoteAppFillPromptResultSchema,
+  RemoteAppPanelNavigatedSchema,
+  RemoteAppSiteSchema,
   RemoteAppSurfaceMenuAnchorSchema,
   RemoteAppStateSchema,
   RemoteAppThemeSchema,
@@ -137,6 +140,45 @@ export const importChatExport = authorized(
   }),
 );
 
+// Side panel: the preload sends each call's arguments as one object.
+
+export const attachPanel = authorized(
+  DesktopIpc.makeIpcMethod({
+    channel: IpcChannels.REMOTE_APP_ATTACH_PANEL_CHANNEL,
+    payload: Schema.Struct({ site: RemoteAppSiteSchema, webContentsId: PositiveInt }),
+    result: Schema.Void,
+    handler: Effect.fn("desktop.ipc.remoteApp.attachPanel")(function* ({ site, webContentsId }) {
+      const manager = yield* RemoteAppManager.RemoteAppManager;
+      yield* manager.attachPanel(site, webContentsId);
+    }),
+  }),
+);
+
+export const setPanelVisible = authorized(
+  DesktopIpc.makeIpcMethod({
+    channel: IpcChannels.REMOTE_APP_SET_PANEL_VISIBLE_CHANNEL,
+    payload: Schema.Struct({ site: RemoteAppSiteSchema, visible: Schema.Boolean }),
+    result: Schema.Void,
+    handler: Effect.fn("desktop.ipc.remoteApp.setPanelVisible")(function* ({ site, visible }) {
+      const manager = yield* RemoteAppManager.RemoteAppManager;
+      yield* manager.setPanelVisible(site, visible);
+    }),
+  }),
+);
+
+export const navigatePanel = authorized(
+  DesktopIpc.makeIpcMethod({
+    channel: IpcChannels.REMOTE_APP_NAVIGATE_PANEL_CHANNEL,
+    // Same shape the shell reports through onPanelNavigated.
+    payload: RemoteAppPanelNavigatedSchema,
+    result: Schema.Void,
+    handler: Effect.fn("desktop.ipc.remoteApp.navigatePanel")(function* ({ site, url }) {
+      const manager = yield* RemoteAppManager.RemoteAppManager;
+      yield* manager.navigatePanel(site, url);
+    }),
+  }),
+);
+
 const makeAction = <const Name extends string>(
   name: Name,
   channel: string,
@@ -214,4 +256,7 @@ export const methods = [
   fillSitePrompt,
   showDownloadInFolder,
   importChatExport,
+  attachPanel,
+  setPanelVisible,
+  navigatePanel,
 ] as const;

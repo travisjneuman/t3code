@@ -16,73 +16,30 @@ import {
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 
-import { observeRpcEffect, observeRpcStream } from "../observability/RpcInstrumentation.ts";
 import * as ExternalSessions from "./ExternalSessions.ts";
-
-const traceAttributes = { "rpc.aggregate": "externalSessions" };
 
 export const makeHandlers = Effect.gen(function* () {
   const externalSessions = yield* ExternalSessions.ExternalSessions;
   return {
     [EXTERNAL_SESSIONS_WS_METHODS.subscribeList]: (_input: unknown) =>
-      observeRpcStream(
-        EXTERNAL_SESSIONS_WS_METHODS.subscribeList,
-        externalSessions.subscribeList,
-        traceAttributes,
-      ),
+      externalSessions.subscribeList,
     [EXTERNAL_SESSIONS_WS_METHODS.subscribeSession]: (input: { readonly key: string }) =>
-      observeRpcStream(
-        EXTERNAL_SESSIONS_WS_METHODS.subscribeSession,
-        externalSessions.subscribeSession(input.key),
-        traceAttributes,
-      ),
+      externalSessions.subscribeSession(input.key),
     [EXTERNAL_SESSIONS_WS_METHODS.continue]: (input: ExternalSessionContinueInput) =>
-      observeRpcEffect(
-        EXTERNAL_SESSIONS_WS_METHODS.continue,
-        externalSessions.continueSession(input),
-        traceAttributes,
-      ),
+      externalSessions.continueSession(input),
     [EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere]: (_input: unknown) =>
-      observeRpcStream(
-        EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere,
-        externalSessions.subscribeRunningElsewhere.pipe(Stream.map((threadIds) => ({ threadIds }))),
-        traceAttributes,
-      ),
+      externalSessions.subscribeRunningElsewhere.pipe(Stream.map((threadIds) => ({ threadIds }))),
     [EXTERNAL_SESSIONS_WS_METHODS.archive]: (input: ExternalSessionArchiveInput) =>
-      observeRpcEffect(
-        EXTERNAL_SESSIONS_WS_METHODS.archive,
-        externalSessions.archiveSession(input),
-        traceAttributes,
-      ),
+      externalSessions.archiveSession(input),
     [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: (input: ExternalSessionUnarchiveInput) =>
-      observeRpcEffect(
-        EXTERNAL_SESSIONS_WS_METHODS.unarchive,
-        externalSessions.unarchiveSession(input.key),
-        traceAttributes,
-      ),
+      externalSessions.unarchiveSession(input.key),
     [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: (_input: unknown) =>
-      observeRpcStream(
-        EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
-        externalSessions.subscribeArchived,
-        traceAttributes,
-      ),
+      externalSessions.subscribeArchived,
     [EXTERNAL_SESSIONS_WS_METHODS.handBack]: (input: ExternalSessionHandBackInput) =>
-      observeRpcEffect(
-        EXTERNAL_SESSIONS_WS_METHODS.handBack,
-        externalSessions.handBack(input.threadId),
-        traceAttributes,
-      ),
+      externalSessions.handBack(input.threadId),
     [EXTERNAL_SESSIONS_WS_METHODS.release]: (input: ExternalSessionReleaseInput) =>
-      observeRpcEffect(
-        EXTERNAL_SESSIONS_WS_METHODS.release,
-        externalSessions.release(input.threadId),
-        traceAttributes,
-      ),
+      externalSessions.release(input.threadId),
     [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: (input: ExternalSessionOpenInOriginInput) =>
-      observeRpcEffect(
-        EXTERNAL_SESSIONS_WS_METHODS.openInOrigin,
-        externalSessions.openInOrigin(input.key),
-        traceAttributes,
-      ),
+      externalSessions.openInOrigin(input.key),
   };
 });

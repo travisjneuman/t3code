@@ -477,6 +477,8 @@ import {
 import { useLinkedThreadPullRequest } from "./ThreadStatusIndicators";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { useForkComposerBanners } from "../forkComposerBanners"; // Fork add-on: external sessions, compare agents.
+import { renderRemoteAppPanel } from "../remote-apps/panel/RemoteAppPanelView"; // Fork add-on: remote app panel.
+import { useRemoteAppPanelThread } from "../remote-apps/panel/remoteAppPanelThread"; // Fork add-on: remote app panel.
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import {
@@ -2196,6 +2198,7 @@ export default function ChatView(props: ChatViewProps) {
   }, [activeThreadKnownSessions]);
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  useRemoteAppPanelThread(activeThreadRef); // Fork add-on: remote app panel.
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
     activeThreadRef?.environmentId ?? null,
   );
@@ -10809,7 +10812,7 @@ export default function ChatView(props: ChatViewProps) {
           workspaceMutationId={workspaceMutationId}
         />
       </Suspense>
-    ) : null
+    ) : renderRemoteAppPanel(renderedRightPanelSurface, rightPanelOpen, activeThreadRef) // Fork add-on: remote app panel.
   ) : null;
   const threadDetailsPanelProps: ThreadDetailsPanelProps = {
     anchor: threadPanelPopoverAnchorRef,

@@ -25,9 +25,16 @@ export const REMOTE_APP_CLEAR_DATA_CHANNEL = "remote-app:clear-data";
 export const REMOTE_APP_FILL_SITE_PROMPT_CHANNEL = "remote-app:fill-site-prompt";
 export const REMOTE_APP_SHOW_DOWNLOAD_CHANNEL = "remote-app:show-download";
 export const REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL = "remote-app:import-chat-export";
+export const REMOTE_APP_ATTACH_PANEL_CHANNEL = "remote-app:attach-panel";
+export const REMOTE_APP_SET_PANEL_VISIBLE_CHANNEL = "remote-app:set-panel-visible";
+export const REMOTE_APP_NAVIGATE_PANEL_CHANNEL = "remote-app:navigate-panel";
 // Main to renderer: the remote app state changed.
 export const REMOTE_APP_STATE_CHANGE_CHANNEL = "remote-app:state-change";
 // Main to renderer: text the user sent from a web app to the current T3 thread.
 export const REMOTE_APP_SEND_TO_THREAD_CHANNEL = "remote-app:send-to-thread";
 // Main to renderer: a text file or archive downloaded from a web app was saved.
 export const REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL = "remote-app:download-captured";
+// Main to renderer: a side-panel page moved to a new page.
+export const REMOTE_APP_PANEL_NAVIGATED_CHANNEL = "remote-app:panel-navigated";
+// Main to renderer: the surface menu's "Open in Side Panel" chose a site.
+export const REMOTE_APP_OPEN_IN_PANEL_CHANNEL = "remote-app:open-in-panel";
