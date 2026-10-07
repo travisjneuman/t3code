@@ -174,8 +174,7 @@ export type ExternalSessionContinueResult = typeof ExternalSessionContinueResult
  * its own private session store, which cannot see the session. `no-folder`:
  * the session has no working folder. `folder-missing`: that folder no longer
  * exists. `no-instance`: no enabled provider instance reads this session
- * store. `too-large`: the transcript is too big to import. `empty`: nothing
- * to continue yet.
+ * store. `empty`: nothing to continue yet.
  */
 export const ExternalSessionUnsupportedReason = Schema.Literals([
   "provider",
@@ -183,7 +182,6 @@ export const ExternalSessionUnsupportedReason = Schema.Literals([
   "no-folder",
   "folder-missing",
   "no-instance",
-  "too-large",
   "empty",
 ]);
 export type ExternalSessionUnsupportedReason = typeof ExternalSessionUnsupportedReason.Type;
@@ -198,7 +196,6 @@ export const EXTERNAL_SESSION_UNSUPPORTED_MESSAGES: Record<
   "no-folder": "This session has no working folder to open as a project.",
   "folder-missing": "This session's working folder no longer exists.",
   "no-instance": "No enabled provider in T3 reads this session's folder.",
-  "too-large": "This session's transcript is too large to continue here.",
   empty: "This session has no messages to continue yet.",
 };
 

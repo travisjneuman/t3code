@@ -178,8 +178,9 @@ in T3, which binds an ordinary thread to that same session.
   `task_started` without a matching completion) or the transcript changed in the last minute. A
   session left open but quiet in another app reads as idle, so continue can't refuse it. The
   composer block asks the user to stop it there first.
-- Continue reads the whole transcript, up to 64 MB. A larger one is refused instead of being
-  truncated.
+- Continue reads the whole transcript up to 64 MB. A larger one is read as its first 1 MB and
+  last 32 MB, which still covers the first prompt and the newest messages that history keeps. The
+  agent resumes the full session from its own store.
 - Synced messages are runless. Reverting or rolling back a T3 run does not hide them, and a fork
   copies only run items. A rewind in the other app shows up as more messages after the old ones.
   Message text is clipped at 20,000 characters, as in the live view.
