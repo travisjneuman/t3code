@@ -275,6 +275,7 @@ function PoolSegment({
             }}
           />
         ) : null}
+        <ForkPaceTick window={window} now={now} />{/* Fork add-on: pace line, under the labels. */}
         <span
           aria-hidden
           className="absolute inset-0 flex items-center justify-center text-3xs leading-none font-semibold text-foreground/80 tabular-nums @2xl/pool:hidden"
@@ -307,7 +308,6 @@ function PoolSegment({
             ) : null}
           </span>
         </div>
-        <ForkPaceTick window={window} now={now} />{/* Fork add-on: pace line. */}
       </PopoverTrigger>
       <LegendRow account={account} window={window} color={color} now={now} index={index} />
       {account.redeem ? (
