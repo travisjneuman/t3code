@@ -2649,8 +2649,8 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
-      <RemoteAppSendMessageAction message={message} visible={showCopyButton && !copyStreaming} />
       {/* Fork add-on: send replies to desktop web apps. */}
+      <RemoteAppSendMessageAction message={message} visible={showCopyButton && !copyStreaming} />
       {!message.streaming && (
         <Tooltip>
           <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>

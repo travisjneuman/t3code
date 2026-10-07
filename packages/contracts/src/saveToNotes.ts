@@ -4,7 +4,7 @@
  * Markdown file in the saved-threads folder. "Save summary" asks the thread's
  * own agent to write a summary note into the notes folder, filed by that
  * folder's own instructions. Both folders are server settings. Fork add-on;
- * see docs/user/thread-sidebar.md.
+ * see docs/user/save-and-export-threads.md#save-a-thread-to-your-notes.
  */
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";

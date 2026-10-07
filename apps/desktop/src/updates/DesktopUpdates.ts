@@ -5,7 +5,6 @@ import {
   type DesktopUpdateActionResult,
   type DesktopUpdateChannel,
   type DesktopUpdateCheckResult,
-  type DesktopSourceSyncResult,
   type DesktopUpdateState,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -29,12 +28,10 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
-import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
-import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
@@ -52,9 +49,6 @@ import {
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
-// Fork add-on: local source builds merge each new upstream nightly in the background.
-const SOURCE_SYNC_STARTUP_DELAY = "1 minute";
-const SOURCE_SYNC_INTERVAL = "30 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
@@ -193,8 +187,6 @@ export class DesktopUpdates extends Context.Service<
     readonly installPrepared: (
       expectedVersion: string,
     ) => Effect.Effect<DesktopPreparedUpdateInstallResult>;
-    /** Merges upstream/main into the local source checkout, then rechecks for updates. */
-    readonly syncSource: Effect.Effect<DesktopSourceSyncResult>;
   }
 >()("@t3tools/desktop/updates/DesktopUpdates") {}
 
@@ -223,12 +215,10 @@ function createBaseUpdateState(
   channel: DesktopUpdateChannel,
   enabled: boolean,
   environment: DesktopEnvironment.DesktopEnvironment["Service"],
-  sourceUpdate = false,
 ): DesktopUpdateState {
   return {
     ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
     enabled,
-    sourceUpdate,
     status: enabled ? "idle" : "disabled",
   };
 }
@@ -288,14 +278,11 @@ export const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const desktopState = yield* DesktopState.DesktopState;
-  const electronApp = yield* ElectronApp.ElectronApp;
   const electronUpdater = yield* ElectronUpdater.ElectronUpdater;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
-  const localSourceUpdates = yield* LocalSourceUpdates.LocalSourceUpdates;
-  const localSourceUpdateEnabled = yield* localSourceUpdates.enabled;
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -359,17 +346,11 @@ export const make = Effect.gen(function* () {
       : false;
 
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
-    Effect.map(
-      (appUpdateYmlConfig) =>
-        localSourceUpdateEnabled ||
-        ((!environment.isPackaged || environment.autoUpdateEnabled !== false) &&
-          (Option.isSome(appUpdateYmlConfig) || config.mockUpdates)),
-    ),
+    Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
   );
 
   const resolveDisabledReason = Effect.gen(function* () {
     const hasFeedConfig = yield* hasUpdateFeedConfig;
-    if (localSourceUpdateEnabled) return Option.none<string>();
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
         isDevelopment: environment.isDevelopment,
@@ -449,56 +430,6 @@ export const make = Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
-      if (localSourceUpdateEnabled) {
-        return yield* localSourceUpdates.inspect.pipe(
-          Effect.flatMap(
-            Effect.fn("desktop.updates.handleLocalSourceCheck")(function* (inspection) {
-              const checkedAt = yield* currentIsoTimestamp;
-              // A sync can merge a nightly before it is built, so a contained
-              // nightly newer than this build still counts as available.
-              if (
-                inspection.behind === 0 &&
-                environment.appVersion === inspection.upstreamVersion
-              ) {
-                yield* setState(reduceDesktopUpdateStateOnNoUpdate(state, checkedAt));
-                return true;
-              }
-              // The fork's version is the upstream nightly it would merge.
-              yield* setState(
-                reduceDesktopUpdateStateOnUpdateAvailable(
-                  state,
-                  inspection.upstreamVersion,
-                  checkedAt,
-                  [],
-                ),
-              );
-              yield* logUpdaterInfo("upstream nightly available for the local source build", {
-                ahead: inspection.ahead,
-                behind: inspection.behind,
-                currentCommit: inspection.currentCommit,
-                upstreamTag: inspection.upstreamTag,
-                upstreamCommit: inspection.upstreamCommit,
-              });
-              return true;
-            }),
-          ),
-          Effect.catchTag(
-            "LocalSourceUpdateError",
-            Effect.fn("desktop.updates.handleLocalSourceCheckFailure")(function* (error) {
-              const failedAt = yield* currentIsoTimestamp;
-              yield* updateState((current) =>
-                reduceDesktopUpdateStateOnCheckFailure(current, error.message, failedAt),
-              );
-              yield* logUpdaterError(error.message, {
-                errorTag: error._tag,
-                operation: error.operation,
-              });
-              return true;
-            }),
-          ),
-        );
-      }
-
       return yield* electronUpdater.checkForUpdates.pipe(
         Effect.as(true),
         Effect.catchTags({
@@ -535,31 +466,6 @@ export const make = Effect.gen(function* () {
 
     if (!(yield* tryStartUpdateAction("download"))) {
       return { accepted: false, completed: false };
-    }
-
-    if (localSourceUpdateEnabled) {
-      return yield* Effect.gen(function* () {
-        yield* setState(reduceDesktopUpdateStateOnDownloadStart(state));
-        yield* logUpdaterInfo("merging upstream nightly and building local source update");
-        const build = yield* localSourceUpdates.syncAndBuild;
-        yield* setState(reduceDesktopUpdateStateOnDownloadComplete(state, build.version));
-        return { accepted: true, completed: true };
-      }).pipe(
-        Effect.catchTag(
-          "LocalSourceUpdateError",
-          Effect.fn("desktop.updates.handleLocalSourceDownloadFailure")(function* (error) {
-            yield* updateState((current) =>
-              reduceDesktopUpdateStateOnDownloadFailure(current, error.message),
-            );
-            yield* logUpdaterError(error.message, {
-              errorTag: error._tag,
-              operation: error.operation,
-            });
-            return { accepted: true, completed: false };
-          }),
-        ),
-        Effect.ensuring(finishUpdateAction("download")),
-      );
     }
 
     return yield* Effect.gen(function* () {
@@ -737,30 +643,13 @@ export const make = Effect.gen(function* () {
             (instance) => instance.stop({ timeout: Duration.seconds(5) }),
             { concurrency: "unbounded" },
           );
-          if (localSourceUpdateEnabled) {
-            // The swap helper waits for this process to exit, replaces the
-            // bundle, and relaunches it.
-            yield* localSourceUpdates.install;
-            yield* electronApp.quit;
-          } else {
-            yield* electronUpdater.quitAndInstall({
-              isSilent: true,
-              isForceRunAfter: true,
-            });
-          }
+          yield* electronUpdater.quitAndInstall({
+            isSilent: true,
+            isForceRunAfter: true,
+          });
           return { accepted: true, completed: false, failed: false };
         }).pipe(
           Effect.catchTags({
-            LocalSourceUpdateError: Effect.fn("desktop.updates.handleLocalSourceInstallFailure")(
-              function* (error) {
-                yield* recoverFailedInstall(error.message);
-                yield* logUpdaterError(error.message, {
-                  errorTag: error._tag,
-                  operation: error.operation,
-                });
-                return { accepted: true, completed: false, failed: true };
-              },
-            ),
             ElectronUpdaterQuitAndInstallError: Effect.fn("desktop.updates.handleInstallFailure")(
               function* (error) {
                 yield* recoverFailedInstall(error.message);
@@ -844,35 +733,6 @@ export const make = Effect.gen(function* () {
       Effect.forkScoped,
     );
   }).pipe(Effect.withSpan("desktop.updates.startPollers"));
-
-  /**
-   * Fork add-on: merges a newly released upstream nightly into the fork and
-   * pushes it, then refreshes the update state so it shows as available. Building
-   * and installing stay on Check for updates. A dirty checkout or a conflict
-   * the rename pass cannot settle skips that round (LocalSourceUpdates).
-   */
-  const startSourceSyncPoller: Effect.Effect<void, never, Scope.Scope> = Effect.gen(function* () {
-    const syncOnce = localSourceUpdates.autoSyncSource.pipe(
-      Effect.flatMap((result) =>
-        logUpdaterInfo("background source sync finished", { merged: result.merged }).pipe(
-          Effect.andThen(checkForUpdates("source-sync")),
-        ),
-      ),
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : logUpdaterWarning("background source sync skipped", {
-              cause: Cause.pretty(cause),
-            }),
-      ),
-    );
-    yield* Effect.sleep(SOURCE_SYNC_STARTUP_DELAY).pipe(
-      Effect.andThen(
-        syncOnce.pipe(Effect.andThen(Effect.sleep(SOURCE_SYNC_INTERVAL)), Effect.forever),
-      ),
-      Effect.forkScoped,
-    );
-  }).pipe(Effect.withSpan("desktop.updates.startSourceSyncPoller"));
 
   const handleUpdateAvailable = Effect.fn("desktop.updates.handleUpdateAvailable")(function* (
     raw: unknown,
@@ -1052,29 +912,6 @@ export const make = Effect.gen(function* () {
         void Effect.runPromiseWith(context)(effect);
       };
 
-      const settings = yield* desktopSettings.get;
-      const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(
-        createBaseUpdateState(
-          settings.updateChannel,
-          enabled,
-          environment,
-          localSourceUpdateEnabled,
-        ),
-      );
-      if (!enabled) {
-        return;
-      }
-      yield* Ref.set(updaterConfiguredRef, true);
-
-      if (localSourceUpdateEnabled) {
-        yield* logUpdaterInfo("using local source update mode", {
-          repositoryPath: environment.sourceRepositoryPath ?? null,
-        });
-        yield* startSourceSyncPoller; // Fork add-on: background upstream sync.
-        return;
-      }
-
       const appUpdateYmlConfig = yield* readAppUpdateYml;
       yield* Ref.set(appUpdateYmlConfigRef, appUpdateYmlConfig);
 
@@ -1084,6 +921,14 @@ export const make = Effect.gen(function* () {
           url: `http://localhost:${config.mockUpdateServerPort}`,
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
       }
+
+      const settings = yield* desktopSettings.get;
+      const enabled = yield* shouldEnableAutoUpdates;
+      yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+      if (!enabled) {
+        return;
+      }
+      yield* Ref.set(updaterConfiguredRef, true);
 
       yield* electronUpdater.setAutoDownload(false);
       yield* electronUpdater.setAutoInstallOnAppQuit(false);
@@ -1150,15 +995,9 @@ export const make = Effect.gen(function* () {
           );
 
         const enabled = yield* shouldEnableAutoUpdates;
-        yield* setState(
-          createBaseUpdateState(nextChannel, enabled, environment, localSourceUpdateEnabled),
-        );
+        yield* setState(createBaseUpdateState(nextChannel, enabled, environment));
 
         if (!enabled || !(yield* Ref.get(updaterConfiguredRef))) {
-          return yield* Ref.get(updateStateRef);
-        }
-
-        if (localSourceUpdateEnabled) {
           return yield* Ref.get(updateStateRef);
         }
 
@@ -1197,32 +1036,6 @@ export const make = Effect.gen(function* () {
       Effect.map(({ accepted, completed, state }) => ({ accepted, completed, state })),
     ),
     installPrepared: (expectedVersion) => installWithExpectedVersion(expectedVersion),
-    syncSource: Effect.gen(function* () {
-      if (!localSourceUpdateEnabled) {
-        return {
-          ok: false,
-          merged: 0,
-          message: "Syncing is only available in local source builds.",
-        };
-      }
-      const result = yield* localSourceUpdates.syncSource;
-      yield* checkForUpdates("source-sync");
-      return {
-        ok: true,
-        merged: result.merged,
-        message:
-          result.merged === 0
-            ? "Already includes everything from the official repository."
-            : `Merged ${result.merged} official commit${result.merged === 1 ? "" : "s"} and pushed the fork.`,
-      };
-    }).pipe(
-      Effect.catchTag("LocalSourceUpdateError", (error) =>
-        logUpdaterError(error.message, { errorTag: error._tag, operation: error.operation }).pipe(
-          Effect.as({ ok: false, merged: 0, message: error.message }),
-        ),
-      ),
-      Effect.withSpan("desktop.updates.syncSource"),
-    ),
   });
 });
 

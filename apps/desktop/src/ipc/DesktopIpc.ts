@@ -5,10 +5,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 export interface DesktopIpcInvokeEvent {
-  readonly sender: {
-    readonly id: number;
-    readonly getURL?: () => string;
-  };
+  readonly sender: { readonly id: number };
 }
 
 export interface DesktopIpcSyncEvent {
@@ -64,7 +61,6 @@ export type DesktopIpcError = typeof DesktopIpcError.Type;
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
   readonly handler: (raw: unknown, event?: DesktopIpcInvokeEvent) => Effect.Effect<unknown, E, R>;
-  readonly authorize?: (event: DesktopIpcInvokeEvent) => Effect.Effect<boolean, never, R>;
 }
 
 export interface DesktopSyncIpcMethod<E, R> {
@@ -89,7 +85,6 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
     handle: Effect.fn("desktop.ipc.registerInvoke")(function* <E, R>({
       channel,
       handler,
-      authorize,
     }: DesktopIpcMethod<E, R>) {
       yield* Effect.annotateCurrentSpan({ channel });
       const context = yield* Effect.context<R>();
@@ -103,12 +98,6 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
               runPromise(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });
-                  const authorized = authorize ? yield* authorize(event) : true;
-                  if (!authorized) {
-                    return yield* Effect.die(
-                      new Error(`Rejected unauthorized desktop IPC invocation for ${channel}.`),
-                    );
-                  }
                   return yield* handler(raw, event);
                 }).pipe(Effect.annotateLogs({ channel }), Effect.withSpan("desktop.ipc.invoke")),
               ),
@@ -195,7 +184,6 @@ export interface DesktopIpcMethodRegistration<
     ResultEncodingServices
   >;
   readonly handler: (input: Payload, event?: DesktopIpcInvokeEvent) => Effect.Effect<Result, E, R>;
-  readonly authorize?: (event: DesktopIpcInvokeEvent) => Effect.Effect<boolean, never, R>;
 }
 
 export const makeIpcMethod = <
@@ -229,10 +217,7 @@ export const makeIpcMethod = <
   const decode = Schema.decodeUnknownEffect(method.payload);
   const encode = Schema.encodeUnknownEffect(method.result);
 
-  const result: DesktopIpcMethod<
-    E | Schema.SchemaError,
-    PayloadDecodingServices | R | ResultEncodingServices
-  > = {
+  return {
     channel: method.channel,
     handler: (raw, event) =>
       decode(raw).pipe(
@@ -241,7 +226,6 @@ export const makeIpcMethod = <
         Effect.withSpan("desktop.ipc.method", { attributes: { channel: method.channel } }),
       ),
   };
-  return method.authorize === undefined ? result : { ...result, authorize: method.authorize };
 };
 
 export interface DesktopSyncIpcMethodRegistration<

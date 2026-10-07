@@ -352,12 +352,12 @@ describe("DesktopUpdates", () => {
       }),
   );
 
-  it.effect("does not close the desktop scope before native update handoff", () =>
+  it.effect("rejects refresh checks while install is in progress", () =>
     Effect.gen(function* () {
       const installStarted = yield* Deferred.make<void>();
       const releaseInstall = yield* Deferred.make<void>();
       const harness = makeHarness({
-        quitAndInstall: Deferred.succeed(installStarted, undefined).pipe(
+        stopBackend: Deferred.succeed(installStarted, undefined).pipe(
           Effect.andThen(Deferred.await(releaseInstall)),
         ),
       });
@@ -375,12 +375,10 @@ describe("DesktopUpdates", () => {
           const checkResult = yield* updates.check("manual");
           assert.isFalse(checkResult.checked);
           assert.equal(harness.checkCount(), 0);
-          assert.equal(harness.quitAndInstalls(), 1);
 
           yield* Deferred.succeed(releaseInstall, undefined);
           const installResult = yield* Fiber.join(installFiber);
           assert.isTrue(installResult.accepted);
-          assert.equal(harness.quitAndInstalls(), 1);
         }),
       ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
     }),
@@ -513,53 +511,6 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("uses the local source updater without touching the Electron feed", () => {
-    let syncAndBuildCalls = 0;
-    const harness = makeHarness({
-      localSourceUpdates: {
-        enabled: true,
-        inspect: Effect.succeed({
-          repositoryPath: "/Users/alice/web-dev/t3code",
-          currentCommit: "current",
-          upstreamTag: "v0.0.46-nightly.20261003.2610",
-          upstreamVersion: "0.0.46-nightly.20261003.2610",
-          upstreamCommit: "upstream",
-          ahead: 112,
-          behind: 47,
-        }),
-        syncAndBuild: Effect.sync(() => {
-          syncAndBuildCalls += 1;
-          return {
-            version: "0.0.46-nightly.20261003.2610",
-            applicationBundlePath: "/Users/alice/.t3/userdata/source-updates/ndev.t3code.app",
-          };
-        }),
-        install: Effect.die("unexpected local source update install"),
-      },
-    });
-
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const updates = yield* DesktopUpdates.DesktopUpdates;
-        yield* updates.configure;
-
-        const checked = yield* updates.check("manual");
-        assert.isTrue(checked.checked);
-        assert.equal(checked.state.sourceUpdate, true);
-        assert.equal(checked.state.status, "available");
-        assert.equal(checked.state.availableVersion, "0.0.46-nightly.20261003.2610");
-        assert.equal(harness.checkCount(), 0);
-        assert.equal(harness.feedUrls().length, 0);
-
-        const built = yield* updates.download;
-        assert.isTrue(built.accepted);
-        assert.isTrue(built.completed);
-        assert.equal(syncAndBuildCalls, 1);
-        assert.equal((yield* updates.getState).status, "downloaded");
-      }),
-    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-  });
-
   it.effect("restores download state and permits retry after interruption", () =>
     Effect.gen(function* () {
       const actionStarted = yield* Deferred.make<void>();
@@ -602,7 +553,7 @@ describe("DesktopUpdates", () => {
 
   it.effect("clears quitting state after an unexpected install setup failure", () => {
     const harness = makeHarness({
-      quitAndInstall: Effect.die(new Error("native update handoff failed")),
+      stopBackend: Effect.die(new Error("backend stop failed")),
     });
 
     return Effect.scoped(

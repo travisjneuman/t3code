@@ -56,8 +56,7 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { RemoteAppSwitcher } from "../remote-apps/RemoteAppSwitcher";
-import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
+import { RemoteAppTitlebar } from "../remote-apps/RemoteAppTitlebar"; // Fork add-on: remote apps.
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
 
@@ -218,30 +217,8 @@ function ProjectProjectionRetention() {
   return null;
 }
 
-function RemoteAppTitlebar({ isElectron }: { readonly isElectron: boolean }) {
-  const { bridge, state } = useRemoteAppState();
-  if (!isElectron || bridge === undefined) return null;
-
-  // Electron resolves drag regions in DOM order, ignoring pointer-events, so a
-  // draggable strip here would swallow clicks on the chat header's controls.
-  // It only drags while a web tab hides that header.
-  return (
-    <div
-      className={cn(
-        "pointer-events-none fixed inset-x-0 top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center border-b border-border/60 bg-transparent",
-        state.activeSurface !== "t3code" && "drag-region",
-      )}
-      data-remote-app-titlebar
-      data-remote-app-active-surface={state.activeSurface}
-    >
-      <RemoteAppSwitcher />
-    </div>
-  );
-}
-
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { state: remoteAppState } = useRemoteAppState();
   const legacySidebarEnabled = useLegacySidebarEnabled();
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
     usePanelAnimationSettings();
@@ -326,7 +303,6 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       <SidebarProvider
         className="h-dvh! min-h-0!"
         data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
-        data-remote-app-surface={remoteAppState.activeSurface === "t3code" ? "t3code" : "remote"}
         defaultOpen
         style={sidebarProviderStyle}
       >
@@ -361,7 +337,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           <SidebarRail onDoubleClick={resetSidebarWidth} />
         </Sidebar>
         {children}
-        <RemoteAppTitlebar isElectron={isElectron} />
+        {/* Fork add-on: remote apps. */}
+        <RemoteAppTitlebar />
         <SidebarControl />
         <NavigationHistoryShortcuts />
         <MainAppLocationTracker />

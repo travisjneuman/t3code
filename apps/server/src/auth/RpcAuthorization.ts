@@ -7,9 +7,6 @@ import {
   AuthRelayWriteScope,
   AuthReviewWriteScope,
   AuthTerminalOperateScope,
-  EXTERNAL_SESSIONS_RPC_SCOPES, // Fork add-on: external sessions.
-  SAVE_TO_NOTES_RPC_SCOPES, // Fork add-on: save to notes.
-  COMPARE_AGENTS_RPC_SCOPES, // Fork add-on: compare agents.
   ORCHESTRATION_V2_WS_METHODS,
   type AuthEnvironmentScope,
   EnvironmentAuthorizationError,
@@ -20,6 +17,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type * as RpcGroup from "effect/rpc/RpcGroup";
+import { FORK_RPC_REQUIRED_SCOPES } from "./forkRpcScopes.ts"; // Fork add-on: add-on RPC scopes.
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 
@@ -211,11 +209,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscribeServerLifecycle]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeAuthAccess]: AuthAccessReadScope,
   [WS_METHODS.subscribeBackgroundPolicy]: AuthOrchestrationReadScope,
-  ...EXTERNAL_SESSIONS_RPC_SCOPES, // Fork add-on: external sessions.
-  "sessionSearch.search": AuthOrchestrationReadScope, // Fork add-on: session search.
-  "threadExport.export": AuthOrchestrationReadScope, // Fork add-on: thread export.
-  ...SAVE_TO_NOTES_RPC_SCOPES, // Fork add-on: save to notes.
-  ...COMPARE_AGENTS_RPC_SCOPES, // Fork add-on: compare agents.
+  ...FORK_RPC_REQUIRED_SCOPES, // Fork add-on: add-on RPC scopes.
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {

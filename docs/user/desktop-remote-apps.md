@@ -28,4 +28,4 @@ To keep your chat history as Markdown, request a data export from ChatGPT or Cla
 
 Use the clear-session-data control in a site's titlebar (for example “Clear Claude session data”) to sign out of that site and remove its local session data and history. Other sites, ndev.t3code projects, and server data are not affected.
 
-ndev.t3code's maintainer desktop build updates from its configured local source checkout rather than from GitHub Releases. See [Updating ndev.t3code](./updating.md) for how **Check for Updates** follows the upstream nightly release.
+A desktop app you build yourself updates from the checkout it was built from rather than from GitHub Releases. See [Build and update ndev.t3code](./fork-updating.md) for how it follows the upstream nightly release.

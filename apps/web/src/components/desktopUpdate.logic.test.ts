@@ -3,7 +3,6 @@ import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/con
 
 import {
   canCheckForUpdate,
-  getDesktopUpdateActionLabel,
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
@@ -127,16 +126,6 @@ describe("desktop update button state", () => {
     };
     expect(isDesktopUpdateButtonDisabled(state)).toBe(true);
     expect(getDesktopUpdateButtonTooltip(state)).toContain("42%");
-  });
-
-  it("labels source updates as local sync and install actions", () => {
-    expect(getDesktopUpdateActionLabel({ sourceUpdate: true }, "download")).toBe("Sync & Build");
-    expect(getDesktopUpdateActionLabel({ sourceUpdate: true }, "install")).toBe(
-      "Restart & Install",
-    );
-    expect(
-      getDesktopUpdateButtonTooltip({ ...baseState, sourceUpdate: true, status: "available" }),
-    ).toContain("build locally");
   });
 });
 
@@ -270,7 +259,7 @@ describe("desktop update UI helpers", () => {
         availableVersion: "1.1.0",
         downloadedVersion: "1.1.1",
       }),
-    ).toContain("Install update 1.1.1 and restart ndev.t3code?");
+    ).toContain("Install update 1.1.1 and restart T3 Code?");
   });
 
   it("falls back to generic install confirmation copy when no version is available", () => {
@@ -279,7 +268,7 @@ describe("desktop update UI helpers", () => {
         availableVersion: null,
         downloadedVersion: null,
       }),
-    ).toContain("Install update and restart ndev.t3code?");
+    ).toContain("Install update and restart T3 Code?");
   });
 
   it("keeps the same install confirmation copy across desktop platforms", () => {
@@ -289,18 +278,8 @@ describe("desktop update UI helpers", () => {
         downloadedVersion: "1.1.0",
       }),
     ).toBe(
-      "Install update 1.1.0 and restart ndev.t3code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
+      "Install update 1.1.0 and restart T3 Code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
     );
-  });
-
-  it("explains that a source update replaces the installed app from the local build", () => {
-    expect(
-      getDesktopUpdateInstallConfirmationMessage({
-        sourceUpdate: true,
-        availableVersion: "abc123",
-        downloadedVersion: "abc123",
-      }),
-    ).toContain("installed app will be replaced from the local build");
   });
 });
 

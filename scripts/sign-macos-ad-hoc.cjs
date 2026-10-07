@@ -25,7 +25,7 @@ module.exports = async function signMacAdHoc(context) {
     "--sign",
     "-",
     "--requirements",
-    '=designated => identifier "dev.neuman.t3code"',
+    `=designated => identifier "${context.packager.appInfo.id}"`,
     appPath,
   ]);
 };

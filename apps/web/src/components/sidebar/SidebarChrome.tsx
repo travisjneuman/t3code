@@ -5,7 +5,6 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
-import { useRemoteAppState } from "../../remote-apps/useRemoteAppState";
 import { usePullRequestsSupported } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
 import {
@@ -28,12 +27,13 @@ import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPr
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
-import { SidebarSourceSyncButton } from "./SidebarSourceSyncButton";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
-// Fork add-on: compare agents.
+// Fork add-on: compare agents, remote apps, local source updates, compact sidebar.
 import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem";
-import "../../sidebar-compact/footerButtons.css"; // Fork add-on: compact sidebar.
+import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate";
+import { SidebarSourceSyncButton } from "~/source-updates/SidebarSourceSyncButton";
+import "../../sidebar-compact/footerButtons.css";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -67,18 +67,16 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       />
       {/* One visible line: the pill wraps onto the clipped second line once it no longer fits.
           The padding keeps the brand's focus ring inside the clip. */}
-      {isElectron ? null : (
-        <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5">
-          <SidebarBrand onBackdrop={backdropVariant !== null} />
-          {pillLabel ? (
-            <div className="ml-1 flex h-7 items-center">
-              <Badge data-environment-identification="pill" size="sm" variant="secondary">
-                {pillLabel}
-              </Badge>
-            </div>
-          ) : null}
-        </div>
-      )}
+      <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5">
+        <SidebarBrand onBackdrop={backdropVariant !== null} />
+        {pillLabel ? (
+          <div className="ml-1 flex h-7 items-center">
+            <Badge data-environment-identification="pill" size="sm" variant="secondary">
+              {pillLabel}
+            </Badge>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 });
@@ -172,9 +170,8 @@ function SidebarUtilityItem({
 }
 
 export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
-  const navigate = useNavigate();
+  const navigate = useT3SurfaceNavigate(useNavigate()); // Fork add-on: remote apps.
   const navigateToMainApp = useNavigateToMainApp();
-  const { setActiveSurface } = useRemoteAppState();
   const { isMobile, setOpenMobile } = useSidebar();
   const isOnUtilityPage = useLocation({
     select: (location) => isSidebarUtilityPage(location.pathname),
@@ -187,28 +184,22 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   }, [isMobile, setOpenMobile]);
   const handlePullRequestsClick = useCallback(() => {
     closeMobileSidebar();
-    void setActiveSurface("t3code").then(() => {
-      void navigate({
-        to: "/pull-requests",
-        search: readPullRequestListPreferences(),
-      });
+    void navigate({
+      to: "/pull-requests",
+      search: readPullRequestListPreferences(),
     });
-  }, [closeMobileSidebar, navigate, setActiveSurface]);
+  }, [closeMobileSidebar, navigate]);
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
-    void setActiveSurface("t3code").then(() => {
-      void navigate({ to: "/settings" });
-    });
-  }, [closeMobileSidebar, navigate, setActiveSurface]);
+    void navigate({ to: "/settings" });
+  }, [closeMobileSidebar, navigate]);
 
   const handleUsageClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
     }
-    void setActiveSurface("t3code").then(() => {
-      void navigate({ to: "/usage" });
-    });
-  }, [isMobile, navigate, setActiveSurface, setOpenMobile]);
+    void navigate({ to: "/usage" });
+  }, [isMobile, navigate, setOpenMobile]);
 
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
@@ -247,6 +238,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           <CompareAgentsSidebarItem />
         </>
       )}
+      {/* Fork add-on: local source updates. */}
       <SidebarSourceSyncButton />
       <SidebarUpdatePill />
     </SidebarMenu>

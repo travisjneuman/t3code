@@ -170,7 +170,7 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
-import { buildDraftActionMenuItems, buildThreadActionMenuItems } from "./threadActionMenu.logic";
+import { buildDraftActionMenuItems } from "./threadActionMenu.logic"; // Fork add-on: the thread builder comes from forkThreadMenu.
 import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
@@ -281,11 +281,12 @@ import {
 import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection";
 import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on: session search.
 import { ContinuedFromLine, ContinuedThreadMarker } from "../external-sessions/handBack"; // Fork add-on: external-session hand back.
+// Fork add-on: thread export, save to notes, hand back, open comparison.
 import {
+  forkThreadActionMenuBuilder,
   isForkThreadMenuId,
   runForkThreadMenuItem,
-  withForkThreadMenuItems,
-} from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back.
+} from "../forkThreadMenu";
 import { THREAD_CARD_LAYOUT } from "../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
 import "../sidebar-compact/threadCardLayout.css"; // Fork add-on: compact sidebar cards.
 
@@ -509,8 +510,8 @@ function SidebarThreadTooltip({
             </div>
           </div>
         ) : null}
-        <ContinuedFromLine threadId={thread.id} environmentId={thread.environmentId} />{" "}
         {/* Fork add-on: external-session hand back. */}
+        <ContinuedFromLine threadId={thread.id} environmentId={thread.environmentId} />
         {previousProviderNames.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
             <ArrowRightLeftIcon className="size-3 shrink-0 stroke-muted-foreground" />
@@ -880,6 +881,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     [draftId, onDiscard],
   );
   return (
+    // Fork add-on: compact sidebar cards.
     <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5">
       <div
         role="button"
@@ -887,7 +889,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         aria-label={accessibility.label}
         aria-current={accessibility.current}
         data-testid="sidebar-draft-row"
-        data-fork-card-part="surface"
+        data-fork-card-part="surface" // Fork add-on: compact sidebar cards.
         className={cn(
           "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left text-sidebar-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
           props.isActive ? "bg-sidebar-row-active" : draftSurfaceClassName,
@@ -897,21 +899,25 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         onKeyDown={handleKeyDown}
       >
         <span className="sr-only">{preview}</span>
+        {/* Fork add-on: compact sidebar cards. */}
         <div
           data-fork-card-part="box"
           className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
         >
+          {/* Fork add-on: compact sidebar cards. */}
           <div data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
             <SquarePenIcon aria-hidden className={draftPenClassName} />
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
+            {/* Fork add-on: compact sidebar cards. */}
             <span
               data-fork-card-part="project"
               className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label"
             >
               {props.projectDisplayName}
             </span>
+            {/* Fork add-on: compact sidebar cards. */}
             <span
               data-fork-card-part="status"
               className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end"
@@ -933,6 +939,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               </Tooltip>
             </span>
           </div>
+          {/* Fork add-on: compact sidebar cards. */}
           <div
             aria-hidden
             data-fork-card-part="title"
@@ -1936,7 +1943,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   return (
     <li
       data-thread-item={threadKey}
-      data-fork-thread-card={THREAD_CARD_LAYOUT}
+      data-fork-thread-card={THREAD_CARD_LAYOUT} // Fork add-on: compact sidebar cards.
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
@@ -1955,7 +1962,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               aria-label={accessibility.label}
               aria-current={accessibility.current}
               data-testid="sidebar-row-card"
-              data-fork-card-part="surface"
+              data-fork-card-part="surface" // Fork add-on: compact sidebar cards.
               aria-busy={isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
               onClick={handleClick}
@@ -1966,10 +1973,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         >
           {accessibleTitle}
+          {/* Fork add-on: compact sidebar cards. */}
           <div
             data-fork-card-part="box"
             className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
           >
+            {/* Fork add-on: compact sidebar cards. */}
             <div data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
               {props.project ? (
@@ -1977,7 +1986,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : null}
               {props.projectDisplayName ? (
                 <span
-                  data-fork-card-part="project"
+                  data-fork-card-part="project" // Fork add-on: compact sidebar cards.
                   className={cn(
                     "min-w-0 flex-1 truncate text-secondary-label text-xs",
                     shouldRecede ? "font-normal" : "font-medium",
@@ -1997,7 +2006,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 dragDestination
               ) : (
                 <span
-                  data-fork-card-part="status"
+                  data-fork-card-part="status" // Fork add-on: compact sidebar cards.
                   className={cn(
                     "group/sidebar-status-slot relative ml-auto flex h-5 min-w-8 shrink-0 items-stretch justify-end text-xs",
                     props.sweepAction !== null && "hidden",
@@ -2134,6 +2143,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   release click still fires and is consumed. */}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
+            {/* Fork add-on: compact sidebar cards. */}
             <div data-fork-card-part="title" className="mt-1 flex min-w-0">
               {title}
               {isRegeneratingTitle ? (
@@ -2142,6 +2152,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 </span>
               ) : null}
             </div>
+            {/* Fork add-on: compact sidebar cards. */}
             <div
               data-fork-card-part="meta"
               className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs"
@@ -2180,8 +2191,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     />
                   </span>
                 ) : null}
-                <ContinuedThreadMarker threadId={thread.id} />{" "}
                 {/* Fork add-on: external-session hand back. */}
+                <ContinuedThreadMarker threadId={thread.id} />
                 <SidebarProviderStack
                   thread={thread}
                   providerEntryByInstanceId={props.providerEntryByInstanceId}
@@ -4505,42 +4516,40 @@ export default function Sidebar() {
                 projectRef.projectId === thread.projectId,
             ),
           ) ?? null;
+        const buildThreadActionMenuItems = forkThreadActionMenuBuilder(thread); // Fork add-on: thread export, save to notes, external-session hand back.
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
-            withForkThreadMenuItems(
-              buildThreadActionMenuItems({
-                // Fork add-on: thread export, save to notes, external-session hand back.
-                branch: thread.branch ?? null,
-                projectFilter: threadProjectGroup
-                  ? {
-                      label: threadProjectGroup.displayName,
-                      isActive: projectScopeKey === threadProjectGroup.projectKey,
-                    }
-                  : null,
-                isPinned,
-                isSettled,
-                autoSettleEnabled: thread.autoSettleDisabledAt == null,
-                isSnoozed,
-                canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
-                isRegeneratingTitle,
-                isRunning: !threadRuntimeCanArchive(thread.runtime),
-                supports: {
-                  settlement: supportsSettlement,
-                  autoSettleOptOut: supportsAutoSettleOptOut,
-                  snooze: supportsSnooze,
-                  pinning: supportsPinning,
-                  titleRegeneration: supportsTitleRegeneration,
-                },
-                snoozePresets,
-              }),
-              thread,
-            ), // Fork add-on: thread export, save to notes, external-session hand back.
+            buildThreadActionMenuItems({
+              branch: thread.branch ?? null,
+              projectFilter: threadProjectGroup
+                ? {
+                    label: threadProjectGroup.displayName,
+                    isActive: projectScopeKey === threadProjectGroup.projectKey,
+                  }
+                : null,
+              isPinned,
+              isSettled,
+              autoSettleEnabled: thread.autoSettleDisabledAt == null,
+              isSnoozed,
+              canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+              isRegeneratingTitle,
+              isRunning: !threadRuntimeCanArchive(thread.runtime),
+              supports: {
+                settlement: supportsSettlement,
+                autoSettleOptOut: supportsAutoSettleOptOut,
+                snooze: supportsSnooze,
+                pinning: supportsPinning,
+                titleRegeneration: supportsTitleRegeneration,
+              },
+              snoozePresets,
+            }),
             position,
           ),
         );
         if (clicked._tag === "Failure") return;
+        // Fork add-on: thread export, save to notes, hand back, open comparison.
         if (isForkThreadMenuId(clicked.value))
-          return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on: thread export, save to notes, hand back, open comparison.
+          return runForkThreadMenuItem(threadRef, clicked.value, router);
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
@@ -5105,8 +5114,8 @@ export default function Sidebar() {
               </p>
             )
           ) : null}
-          <SessionSearchResults query={threadSearchQuery} />
           {/* Fork add-on: session search. */}
+          <SessionSearchResults query={threadSearchQuery} />
           {!isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"
@@ -5470,6 +5479,7 @@ export default function Sidebar() {
               )}
             </div>
           ) : null}
+          {/* Fork add-on: read-only sessions from agents running outside T3. */}
           {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null}
         </SidebarGroup>
       </SidebarContent>

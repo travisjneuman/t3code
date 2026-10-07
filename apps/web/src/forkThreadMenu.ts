@@ -31,6 +31,7 @@ import {
   type ThreadExportMenuId,
   withExportMenuItem,
 } from "./thread-export/threadExport";
+import { buildThreadActionMenuItems } from "./components/threadActionMenu.logic";
 import type { AppRouter } from "./router";
 
 export type ForkThreadMenuId =
@@ -47,6 +48,16 @@ export const withForkThreadMenuItems = <T extends string>(
     withHandBackMenuItem(withSaveToNotesMenuItem(withExportMenuItem(items)), thread),
     thread,
   );
+
+/**
+ * `buildThreadActionMenuItems` for one thread, with the fork's items added. The
+ * sidebar shadows the upstream builder with this, so its long menu call stays
+ * as upstream wrote it.
+ */
+export const forkThreadActionMenuBuilder =
+  (thread: Parameters<typeof withHandBackMenuItem>[1]) =>
+  (state: Parameters<typeof buildThreadActionMenuItems>[0]) =>
+    withForkThreadMenuItems(buildThreadActionMenuItems(state), thread);
 
 export const isForkThreadMenuId = (value: string | null): value is ForkThreadMenuId =>
   isExportMenuId(value) ||

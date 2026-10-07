@@ -9,29 +9,26 @@ import { useCallback } from "react";
 
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../components/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
-import { useRemoteAppState } from "../remote-apps/useRemoteAppState";
+import { useT3SurfaceNavigate } from "../remote-apps/useT3SurfaceNavigate";
 import { usePrimaryEnvironmentId } from "../state/environments";
 
 const LABEL = "Compare agents";
 
 export function CompareAgentsSidebarItem() {
-  const navigate = useNavigate();
+  const navigate = useT3SurfaceNavigate(useNavigate());
   const environmentId = usePrimaryEnvironmentId();
-  const { setActiveSurface } = useRemoteAppState();
   const { isMobile, setOpenMobile } = useSidebar();
   const isActive = useLocation({ select: (location) => location.pathname.startsWith("/compare/") });
 
   const open = useCallback(() => {
     if (environmentId === null) return;
     if (isMobile) setOpenMobile(false);
-    void setActiveSurface("t3code").then(() => {
-      void navigate({
-        to: "/compare/$environmentId",
-        params: { environmentId },
-        search: {},
-      });
+    void navigate({
+      to: "/compare/$environmentId",
+      params: { environmentId },
+      search: {},
     });
-  }, [environmentId, isMobile, navigate, setActiveSurface, setOpenMobile]);
+  }, [environmentId, isMobile, navigate, setOpenMobile]);
 
   if (environmentId === null) return null;
 

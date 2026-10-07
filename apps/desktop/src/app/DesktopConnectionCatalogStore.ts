@@ -431,6 +431,7 @@ export const make = Effect.gen(function* () {
   });
 
   const migrateLegacyCatalog = Effect.gen(function* () {
+    // Fork add-on: the keychain check moved below the empty-registry check (no needless prompt).
     const records = yield* savedEnvironments.getRegistry.pipe(
       Effect.mapError(
         (cause) =>
@@ -444,12 +445,7 @@ export const make = Effect.gen(function* () {
     if (records.length === 0) {
       return Option.none<string>();
     }
-    // Do not touch the OS keychain during a clean packaged launch. A new
-    // isolated distribution has no legacy records to migrate, so checking
-    // safeStorage first would create a needless macOS Keychain prompt.
-    if (!(yield* encryptionAvailable)) {
-      return Option.none<string>();
-    }
+    if (!(yield* encryptionAvailable)) return Option.none<string>(); // Fork add-on: see above.
     const catalog = yield* migrateSavedEnvironmentRecords(records, savedEnvironments, catalogPath);
     const encoded = yield* encodeRuntimeConnectionCatalogDocumentJson(catalog).pipe(
       Effect.mapError(

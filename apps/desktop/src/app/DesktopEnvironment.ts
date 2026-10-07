@@ -16,7 +16,7 @@ import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
-import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts";
+import { forkAppScheme, REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
 export interface MakeDesktopEnvironmentInput {
@@ -29,8 +29,6 @@ export interface MakeDesktopEnvironmentInput {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
-  /** Test/runtime override; packaged TJN builds default to the fork-backed updater. */
-  readonly autoUpdateEnabled?: boolean;
 }
 
 export class DesktopEnvironment extends Context.Service<
@@ -44,8 +42,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly isDevelopment: boolean;
     readonly appVersion: string;
     readonly appPath: string;
-    /** Optional maintainer checkout used by the local source updater. */
-    readonly sourceRepositoryPath: string | undefined;
     readonly resourcesPath: string;
     readonly homeDirectory: string;
     readonly appDataDirectory: string;
@@ -87,8 +83,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly branding: DesktopAppBranding;
     readonly displayName: string;
     readonly appUserModelId: string;
-    /** Custom distributions may opt out of the configured distribution updater feed. */
-    readonly autoUpdateEnabled?: boolean;
     readonly linuxDesktopEntryName: string;
     readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
@@ -100,7 +94,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = REMOTE_APP_DISTRIBUTION.baseName;
+const APP_BASE_NAME = REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on: identity.
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -121,7 +115,7 @@ export function resolveDesktopAppBranding(input: {
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
-    displayName: APP_BASE_NAME,
+    displayName: APP_BASE_NAME, // Fork add-on: the Dock and window name carry no stage label.
   };
 }
 
@@ -174,23 +168,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
     joinPath: path.join,
-    // Packaged TJN builds must never inherit an ambient T3CODE_HOME from a
-    // shell or another installed distribution. Development keeps the
-    // explicit override for normal maintainer workflows.
-    t3Home: input.isPackaged ? Option.none() : config.t3Home,
-    ...(input.isPackaged
-      ? {
-          defaultBaseDir: path.join(homeDirectory, REMOTE_APP_DISTRIBUTION.packagedBaseDirName),
-        }
-      : {}),
+    t3Home: config.t3Home,
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
-  const configuredSourceRepositoryPath = Option.getOrUndefined(config.sourceRepositoryPath);
-  const defaultSourceRepositoryPath =
-    input.platform === "darwin" && REMOTE_APP_DISTRIBUTION.distribution === "tjn"
-      ? path.join(homeDirectory, "web-dev", "t3code")
-      : undefined;
   const serverRoot =
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
@@ -221,7 +202,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
     isDevelopment,
     appVersion: input.appVersion,
     appPath: input.appPath,
-    sourceRepositoryPath: configuredSourceRepositoryPath ?? defaultSourceRepositoryPath,
     resourcesPath,
     homeDirectory,
     appDataDirectory,
@@ -256,15 +236,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
     otlpProtocol: config.otlpProtocol,
     branding,
     displayName,
-    appUserModelId: Option.getOrElse(
-      config.appUserModelIdOverride,
-      () => REMOTE_APP_DISTRIBUTION.appId,
+    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
+      isDevelopment ? `${REMOTE_APP_DISTRIBUTION.appId}.dev` : REMOTE_APP_DISTRIBUTION.appId, // Fork add-on: identity.
     ),
-    autoUpdateEnabled: input.autoUpdateEnabled ?? REMOTE_APP_DISTRIBUTION.autoUpdateEnabled,
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment
-      ? `${REMOTE_APP_DISTRIBUTION.protocol}-dev`
-      : REMOTE_APP_DISTRIBUTION.protocol,
+    linuxWmClass: forkAppScheme(isDevelopment), // Fork add-on: identity.
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

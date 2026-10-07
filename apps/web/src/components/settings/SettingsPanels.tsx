@@ -57,7 +57,6 @@ import { IS_NIGHTLY_BUILD, NightlyMobileBetaRow } from "../NightlyMobileBeta";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
-  getDesktopUpdateActionLabel,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
@@ -98,7 +97,7 @@ import {
   deriveProviderInstanceEntries,
   sortProviderInstanceEntries,
 } from "../../providerInstances";
-import { confirmDesktopUpdateInstall, ensureLocalApi, readLocalApi } from "../../localApi";
+import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { isMacPlatform } from "../../lib/utils";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
@@ -167,7 +166,12 @@ import {
   useSettingsSearchTargetId,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
-import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on
+// Fork add-on: save to notes, local source updates.
+import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings";
+import {
+  SOURCE_UPDATE_ACTION_LABELS,
+  withSourceUpdateDescription,
+} from "../../source-updates/sourceUpdateWording";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 
@@ -344,7 +348,7 @@ function AboutVersionSection() {
       setIsUpdateActionPending(true);
       let confirmed = false;
       try {
-        confirmed = await confirmDesktopUpdateInstall(
+        confirmed = await ensureLocalApi().dialogs.confirm(
           getDesktopUpdateInstallConfirmationMessage(
             updateState ?? { availableVersion: null, downloadedVersion: null },
           ),
@@ -412,20 +416,18 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
+  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
+  if (updateState?.sourceUpdate) Object.assign(actionLabel, SOURCE_UPDATE_ACTION_LABELS); // Fork add-on: local source updates.
   const statusLabel: Record<string, string> = {
     checking: "Checking…",
     downloading: "Downloading…",
     "up-to-date": "Up to Date",
   };
   const buttonLabel =
-    getDesktopUpdateActionLabel(updateState, action) ??
-    statusLabel[updateState?.status ?? ""] ??
-    "Check for Updates";
+    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
   const description =
     action === "download" || action === "install"
-      ? updateState?.sourceUpdate
-        ? "Merges the latest upstream nightly into this fork and builds the app locally."
-        : "Update available."
+      ? withSourceUpdateDescription(updateState, "Update available.") // Fork add-on: local source updates.
       : "Current version of the application.";
 
   return (

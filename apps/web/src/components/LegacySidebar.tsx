@@ -112,7 +112,7 @@ import {
 } from "../keybindings";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { confirmDesktopUpdateInstall, ensureLocalApi, readLocalApi } from "../localApi";
+import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
@@ -129,9 +129,9 @@ import {
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { Kbd } from "./ui/kbd";
+import { SourceUpdateActionLabel } from "../source-updates/SourceUpdateActionLabel"; // Fork add-on: local source updates.
 import {
   getArm64IntelBuildWarningDescription,
-  getDesktopUpdateActionLabel,
   getDesktopUpdateActionError,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
@@ -2878,7 +2878,6 @@ function SortableProjectItem({
 interface SidebarProjectsContentProps {
   showArm64IntelBuildWarning: boolean;
   arm64IntelBuildWarningDescription: string | null;
-  desktopUpdateIsSourceUpdate: boolean;
   desktopUpdateButtonAction: "download" | "install" | "none";
   desktopUpdateButtonDisabled: boolean;
   desktopUpdateActionPending: boolean;
@@ -2922,7 +2921,6 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   const {
     showArm64IntelBuildWarning,
     arm64IntelBuildWarningDescription,
-    desktopUpdateIsSourceUpdate,
     desktopUpdateButtonAction,
     desktopUpdateButtonDisabled,
     desktopUpdateActionPending,
@@ -3013,11 +3011,12 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                   disabled={desktopUpdateButtonDisabled || desktopUpdateActionPending}
                   onClick={handleDesktopUpdateButtonClick}
                 >
-                  {desktopUpdateIsSourceUpdate
-                    ? getDesktopUpdateActionLabel({ sourceUpdate: true }, desktopUpdateButtonAction)
-                    : desktopUpdateButtonAction === "download"
+                  {/* Fork add-on: local source updates. */}
+                  <SourceUpdateActionLabel action={desktopUpdateButtonAction}>
+                    {desktopUpdateButtonAction === "download"
                       ? "Download ARM build"
                       : "Install ARM build"}
+                  </SourceUpdateActionLabel>
                 </Button>
               </AlertAction>
             ) : null}
@@ -3710,7 +3709,7 @@ export default function LegacySidebar() {
     if (desktopUpdateButtonAction === "install") {
       let confirmed = false;
       try {
-        confirmed = await confirmDesktopUpdateInstall(
+        confirmed = await ensureLocalApi().dialogs.confirm(
           getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
         );
       } catch (error) {
@@ -3788,7 +3787,6 @@ export default function LegacySidebar() {
       <SidebarProjectsContent
         showArm64IntelBuildWarning={showArm64IntelBuildWarning}
         arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}
-        desktopUpdateIsSourceUpdate={desktopUpdateState?.sourceUpdate === true}
         desktopUpdateButtonAction={desktopUpdateButtonAction}
         desktopUpdateButtonDisabled={desktopUpdateButtonDisabled}
         desktopUpdateActionPending={desktopUpdateActionPending}

@@ -10,7 +10,7 @@ and mode selections, unless the destination project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
 
-When you change a new thread's project, ndev.t3code stays in the current environment
+When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
 ### Start without a project
@@ -99,7 +99,7 @@ position, so using **Un-settle** returns it to the top. Pinning and snoozing pre
 position until you move it again. Thread activity does not change the order. The settled shelf
 continues to use settlement time.
 
-If dragging is unavailable for one environment, update the ndev.t3code server running in that
+If dragging is unavailable for one environment, update the T3 Code server running in that
 environment. Pinned and active reordering require server support. Threads from older servers keep
 their default order until the server is updated.
 
@@ -107,7 +107,7 @@ To generate a fresh title from the conversation, open a thread's menu and choose
 **Regenerate title**. The action is unavailable while title generation is in progress
 or when the connected environment needs a server update.
 
-Agents connected through ndev.t3code can use the same server-owned metadata workflow to
+Agents connected through T3 Code can use the same server-owned metadata workflow to
 rename a thread, regenerate its title, or link and unlink a pull request. These changes
 appear on web, desktop, and mobile without requiring the originating browser to remain
 open.
@@ -173,16 +173,9 @@ The linked pull request participates in automatic settlement.
 
 ## Find and reference work
 
-On web and desktop, open the command palette with `Cmd/Ctrl+K`, or type in the
-sidebar's **Search** box, to search threads across connected environments.
-Message search starts after two characters and includes your messages and final
-agent responses.
-
-Both also list matching sessions from other agents under **Other Agents**: Claude Code, Codex, Grok, and Pi sessions from the last 90 days whose
-messages contain the text, and Antigravity sessions by title. Sessions that
-continue in T3 show up as threads instead. With very large session histories,
-the newest sessions are searched first; **Partial** means older ones weren't
-reached; the palette labels the group **Other Agents (partial)**.
+On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
+across connected environments. Message search starts after two characters and
+includes your messages and final agent responses.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
@@ -231,94 +224,3 @@ Choose **Snooze → Custom…** from a thread's menu to pick a date and time in 
 local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
-
-## Export a thread
-
-On web and desktop, choose **Export…** from a thread's menu, either by right-clicking it in the
-sidebar or from the menu in the thread header. Then pick **Markdown** or **JSON**. Desktop asks
-where to save the file. A browser saves it like any other download.
-
-The export is built by the environment from everything it stores for the thread, not just what
-your app has loaded.
-
-- **Markdown** is a readable transcript. It starts with the thread's details: project folder,
-  model, and where it was forked or imported from. Then it shows every run with its model,
-  status, and token usage. It also includes every message, reasoning summary, tool call, command,
-  file change, plan, approval, and error, in order. Outputs are kept in full.
-- **JSON** is the complete record, for scripts and other tools. It starts with
-  `"format": "t3-thread-export"` and a `version`.
-
-Both formats include:
-
-- history the timeline hides, such as turns you rolled back, marked as such
-- a fork's inherited history
-
-Attachments are listed by name, without their contents. Both formats leave out:
-
-- long binary data inside tool results
-- answers you gave to sign-in prompts
-
-The mobile app can't export threads yet.
-
-## Save a thread to your notes
-
-**Save to notes…** in a thread's menu files the thread into a notes folder, such as an Obsidian
-vault. Set the folders once in **Settings → General → Projects & threads**. They are paths on the
-machine that runs the environment, and the folders must already exist.
-
-- **Summary** sends the thread's agent a message asking it to write a summary note into your
-  **Notes folder**. The agent first reads that folder's `AGENTS.md` or `CLAUDE.md`, so a vault with
-  its own placement rules gets the note where those rules say. It replies with the note's path.
-  This runs as a normal turn, after any work already in progress.
-- **Full copy** writes the thread's prompts and final answers, without tool output, to your
-  **Saved threads folder** as one Markdown file. Saving the same thread again replaces its file.
-
-## Sessions from other agents
-
-**Other Agents**, below your threads in the sidebar, lists sessions you started outside T3 and
-used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop app, or an IDE.
-Open one to follow it live. Older sessions are still found by search. Sessions running right now
-come first and stay in view even when you collapse the list; the header counts them as active.
-Each session takes one line; hover it for its folder, model and machine. Below the running ones
-are the sessions active in the last 24 hours, then **Earlier**, which starts collapsed. Runs that
-the sidebar's sync button starts to finish an upstream merge are named by when they started, such
-as **t3 100626 143205** for October 6, 2026 at 14:32:05.
-
-To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then
-choose **Continue in T3**. The session becomes a regular thread in its folder's project, with its
-history, and leaves the Other Agents list. It stays where it is: T3 resumes the same session, so
-you can go back to the other app later and pick it up there. What you send from the other app
-afterwards shows up in the T3 thread too. Send from one app at a time: while the other app is
-working in the session, the thread warns you above the composer. Antigravity sessions can be
-followed but not continued, because T3 runs Antigravity with its own session store.
-
-A continued thread shows a small import icon in the sidebar, and its hover card says which agent
-it came from. You can switch it to another agent with the model picker; the new agent gets the
-session's whole history, including what happened before T3. Its own turns stay in T3, though: the
-original session only records turns its own agent ran. Before going back to the other app,
-right-click the thread and choose **Hand back to** the original agent. T3 sends a short "Handing
-back" message on the model and reasoning level the session was continued with, the agent is told
-what the other agents did, and that turn is saved in the original session. The item shows only
-while the thread is set to a different agent, and it is not on mobile yet.
-
-Continued a session by mistake, or done with it in T3? Right-click the thread and choose **Move
-back to Other Agents**. Nothing is sent: the thread is archived and the session is listed under
-Other Agents again. Choosing **Continue in T3** on it later brings the same thread back. Archiving
-a continued thread any other way does the same.
-
-Right-click a session to continue it, copy its session ID or folder path, open its folder, or
-archive it. Archiving only takes the session off T3's list: it stays where it is in the agent's
-own app. A running session can't be archived until it stops, and an archived session that runs
-again comes back to the list on its own. Archived sessions are listed in **Settings › Archived**, where **Unarchive** brings them
-back. Right-click the **Other Agents** header and choose **Show archived sessions** to go there.
-Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
-Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here
-within a few seconds. Sessions you delete in the Claude desktop app leave the list as well.
-
-Sessions from the Claude desktop app or the Codex app open in that app on the same session: click
-**Claude Desktop** or **Codex Desktop** under the session, or right-click the row and choose
-**Open in**. The app opens on the computer running T3, and Claude needs deep links turned on and
-you signed in. That is also where you stop a running session; T3 can't stop a session another app
-is running. Sessions from a terminal or an IDE have no such link.
-
-A session's view shows its latest 200 messages. **Continue in T3** brings over the whole history.

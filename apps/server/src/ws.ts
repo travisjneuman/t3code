@@ -248,12 +248,7 @@ import {
 } from "@t3tools/shared/usageLimits";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
-// Fork add-on: read-only sessions from agents running outside T3.
-import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts";
-import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts"; // Fork add-on: session search.
-import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts"; // Fork add-on: thread export.
-import * as SaveToNotesRpc from "./save-to-notes/SaveToNotesRpc.ts"; // Fork add-on: save to notes.
-import * as CompareAgentsRpc from "./compare-agents/CompareAgentsRpc.ts"; // Fork add-on: compare agents.
+import * as ForkRpcHandlers from "./forkRpcHandlers.ts"; // Fork add-on: add-on RPC handlers.
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -1257,7 +1252,6 @@ const layerWsRpc = (
         yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const agentSessionScanner = yield* AgentSessionScanner.AgentSessionScanner;
       const agentSessionImporter = yield* AgentSessionImporter.AgentSessionImporter;
-      const externalSessionsHandlers = yield* ExternalSessionsRpc.makeHandlers;
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const environmentTheme = yield* EnvironmentTheme.EnvironmentThemeService;
@@ -1814,11 +1808,7 @@ const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
-        ...externalSessionsHandlers,
-        ...(yield* SessionSearchRpc.makeHandlers), // Fork add-on: session search.
-        ...(yield* ThreadExportRpc.makeHandlers), // Fork add-on: thread export.
-        ...(yield* SaveToNotesRpc.makeHandlers), // Fork add-on: save to notes.
-        ...(yield* CompareAgentsRpc.makeHandlers), // Fork add-on: compare agents.
+        ...(yield* ForkRpcHandlers.makeHandlers), // Fork add-on: add-on RPC handlers.
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.dispatchCommand,

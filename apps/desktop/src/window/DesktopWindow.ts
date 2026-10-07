@@ -26,7 +26,7 @@ import {
   WINDOW_FULLSCREEN_STATE_CHANNEL,
 } from "../ipc/channels.ts";
 import * as PreviewManager from "../preview/Manager.ts";
-import * as RemoteAppManager from "../remote-apps/RemoteAppManager.ts";
+import * as ForkWindow from "../fork/window.ts"; // Fork add-on: remote apps.
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -54,7 +54,6 @@ const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linu
 const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
 const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
 const MAIN_WINDOW_BOUNDS_PERSIST_DEBOUNCE_MS = 500;
-const MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS = 5_000;
 const DEVELOPMENT_LOAD_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000] as const;
 // Renderer crash (usually V8 OOM on long sessions) recovery: reload after a
 // short delay, at most MAX_ATTEMPTS times per rolling WINDOW so a renderer
@@ -326,7 +325,6 @@ export const make = Effect.gen(function* () {
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
   const electronApp = yield* ElectronApp.ElectronApp;
-  const remoteAppManager = yield* Effect.serviceOption(RemoteAppManager.RemoteAppManager);
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
   // Window-side latch for the primary backend's readiness. Set by
   // handleBackendReady (driven by the pool's onReady callback), cleared
@@ -340,20 +338,8 @@ export const make = Effect.gen(function* () {
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
   const runFork = Effect.runForkWith(context);
   const runPromise = Effect.runPromiseWith(context);
+  const fork = yield* ForkWindow.make; // Fork add-on: remote apps.
   let flushMainWindowBounds: Effect.Effect<void> = Effect.void;
-
-  const reassertRemoteAppSurface = () => {
-    if (Option.isNone(remoteAppManager)) return;
-    void runPromise(
-      remoteAppManager.value.syncLayout.pipe(
-        Effect.catchTag("RemoteAppManagerError", (error) =>
-          logWindowWarning("failed to restore remote app surface after main renderer load", {
-            error: error.message,
-          }),
-        ),
-      ),
-    ).catch(() => undefined);
-  };
 
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
@@ -440,26 +426,7 @@ export const make = Effect.gen(function* () {
     });
 
     yield* rendererHistory.register(window.webContents, { surface: "main" });
-    if (Option.isSome(remoteAppManager)) {
-      yield* remoteAppManager.value.attachMainWindow(window).pipe(
-        Effect.catch((error) =>
-          logWindowWarning("failed to attach remote app surface", {
-            error: error.message,
-          }),
-        ),
-      );
-      const remoteAppState = yield* remoteAppManager.value.getState;
-      if (remoteAppState.activeSurface !== "t3code") {
-        yield* remoteAppManager.value.setActiveSurface(remoteAppState.activeSurface).pipe(
-          Effect.catch((error) =>
-            logWindowWarning("failed to restore remote app surface", {
-              error: error.message,
-            }),
-          ),
-        );
-      }
-    }
-
+    yield* fork.attach(window); // Fork add-on: remote apps.
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }
@@ -785,7 +752,7 @@ export const make = Effect.gen(function* () {
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
-      reassertRemoteAppSurface();
+      fork.reassertSurface(); // Fork add-on: remote apps.
       if (environment.platform === "darwin") syncMacosWindowButtons(window);
     });
     window.webContents.on(
@@ -852,26 +819,11 @@ export const make = Effect.gen(function* () {
       );
     });
 
-    const revealSubscribers: RevealSubscription[] = [
-      (fire) => window.once("ready-to-show", fire),
-      // A WebContentsView attached during boot can prevent macOS from
-      // emitting ready-to-show even though the host renderer finished loading.
-      // Keep the reveal one-shot, but never leave a healthy app headless.
-      (fire) => window.webContents.once("did-finish-load", fire),
-      // If both lifecycle events are suppressed by a native child view, the
-      // window is still safe to reveal after this bounded boot grace period.
-      (fire) =>
-        setTimeout(() => {
-          if (!window.isDestroyed()) {
-            window.show();
-            if (environment.platform === "darwin") {
-              Electron.app.focus({ steal: true });
-            }
-            window.focus();
-          }
-          fire();
-        }, MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS),
-    ];
+    const revealSubscribers: RevealSubscription[] = [(fire) => window.once("ready-to-show", fire)];
+    if (environment.platform === "linux") {
+      revealSubscribers.push((fire) => window.webContents.once("did-finish-load", fire));
+    }
+    revealSubscribers.push(...fork.revealSubscribers(window)); // Fork add-on: reveal fallbacks.
     bindFirstRevealTrigger(revealSubscribers, () => {
       // Boot is done; hand the window back to normal hidden-window throttling
       // (see the backgroundThrottling comment on the create options above).
@@ -883,12 +835,7 @@ export const make = Effect.gen(function* () {
       if (persistedSettings.mainWindowMaximized) {
         window.maximize();
       }
-      void runPromise(
-        Effect.andThen(
-          electronWindow.reveal(window),
-          Effect.andThen(dismissConnectingSplash, Effect.sync(reassertRemoteAppSurface)),
-        ),
-      );
+      void runPromise(fork.afterReveal(electronWindow.reveal(window), dismissConnectingSplash)); // Fork add-on: remote apps.
     });
 
     loadApplication();
@@ -1084,15 +1031,7 @@ export const make = Effect.gen(function* () {
       // the previewed page along with the app UI. The preview browser keeps its
       // own zoom, so put each guest back where the preview left it.
       yield* previewManager.reapplyZoom();
-      if (Option.isSome(remoteAppManager)) {
-        yield* remoteAppManager.value.syncLayout.pipe(
-          Effect.catchTag("RemoteAppManagerError", (error) =>
-            logWindowWarning("failed to reflow remote app surface after app zoom", {
-              error: error.message,
-            }),
-          ),
-        );
-      }
+      yield* fork.afterZoom; // Fork add-on: remote apps.
     }),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;

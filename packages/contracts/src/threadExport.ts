@@ -1,7 +1,7 @@
 /**
  * Thread export: renders everything T3 persists for one thread as a Markdown
  * transcript or as complete JSON, built on the server from the orchestration
- * projection. Fork add-on; see docs/user/thread-sidebar.md.
+ * projection. Fork add-on; see docs/user/save-and-export-threads.md#export-a-thread.
  */
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";

@@ -2278,13 +2278,14 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
+  // Fork add-on: compare agents.
   actionItems.push(
     ...useCompareAgentsPaletteItems({
       navigate,
       environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId,
       activeThread: activeThread ?? null,
     }),
-  ); // Fork add-on: compare agents.
+  );
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
   const settingsSearchItems: CommandPaletteActionItem[] = searchSettings(
     deferredQuery,

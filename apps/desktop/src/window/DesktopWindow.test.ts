@@ -47,7 +47,6 @@ import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
-import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import {
   MENU_ACTION_CHANNEL,
   SNAP_SHOT_EVENT_CHANNEL,
@@ -641,7 +640,7 @@ describe("DesktopWindow", () => {
         assert.isTrue(createdWindowOptions[0]?.disableAutoHideCursor);
         assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
-        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], [ElectronProtocol.getDesktopUrl(true)]);
+        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
         assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
       }).pipe(Effect.provide(layer));
     }),
@@ -1323,8 +1322,8 @@ describe("DesktopWindow", () => {
 
         yield* TestClock.adjust(100);
         assert.deepEqual(fakeWindow.loadURL.mock.calls, [
-          [ElectronProtocol.getDesktopUrl(true)],
-          [ElectronProtocol.getDesktopUrl(true)],
+          ["t3code-dev://app/"],
+          ["t3code-dev://app/"],
         ]);
         assert.equal(fakeWindow.reload.mock.calls.length, 0);
 

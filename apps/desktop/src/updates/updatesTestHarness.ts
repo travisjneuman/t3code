@@ -9,13 +9,11 @@ import * as Option from "effect/Option";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
-import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
-import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 
 /** Shared DesktopUpdates test harness: a fully stubbed updater layer whose
     electron-updater events are driven by hand via `emit`. Used by
@@ -35,18 +33,6 @@ export interface UpdatesHarnessOptions {
   readonly quitAndInstall?: Effect.Effect<void, ElectronUpdater.ElectronUpdaterQuitAndInstallError>;
   readonly stopBackend?: Effect.Effect<void>;
   readonly startBackend?: Effect.Effect<void>;
-  readonly localSourceUpdates?: {
-    readonly enabled: boolean;
-    readonly inspect: Effect.Effect<
-      LocalSourceUpdates.LocalSourceUpdateInspection,
-      LocalSourceUpdates.LocalSourceUpdateError
-    >;
-    readonly syncAndBuild: Effect.Effect<
-      LocalSourceUpdates.LocalSourceUpdateBuild,
-      LocalSourceUpdates.LocalSourceUpdateError
-    >;
-    readonly install: Effect.Effect<void, LocalSourceUpdates.LocalSourceUpdateError>;
-  };
   readonly env?: Record<string, string | undefined>;
   readonly platform?: NodeJS.Platform;
   /** Contents of the resources/package-type marker a Linux package ships. */
@@ -63,14 +49,6 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
   const installSteps: string[] = [];
-  const localSourceUpdates =
-    options.localSourceUpdates ??
-    ({
-      enabled: false,
-      inspect: Effect.die("unexpected local source update inspection"),
-      syncAndBuild: Effect.die("unexpected local source update build"),
-      install: Effect.die("unexpected local source update install"),
-    } satisfies UpdatesHarnessOptions["localSourceUpdates"]);
 
   const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
     const eventListeners = listeners.get(eventName) ?? new Set();
@@ -271,17 +249,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
         ...options.env,
       }),
     ),
-    Layer.provideMerge(
-      Layer.succeed(LocalSourceUpdates.LocalSourceUpdates, {
-        enabled: Effect.succeed(localSourceUpdates.enabled),
-        inspect: localSourceUpdates.inspect,
-        syncAndBuild: localSourceUpdates.syncAndBuild,
-        install: localSourceUpdates.install,
-        syncSource: Effect.die("unexpected syncSource"),
-      }),
-    ),
     Layer.provideMerge(layerEnvironment),
-    Layer.provideMerge(ElectronApp.layer),
     Layer.provideMerge(NodeServices.layer),
   );
 

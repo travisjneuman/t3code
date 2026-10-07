@@ -12,7 +12,6 @@ import { AuthAccessTokenResult, AuthSessionState, AuthWebSocketTicketResult } fr
 import { AdvertisedEndpoint } from "./remoteAccess.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
-import type { DesktopRemoteAppBridge } from "./remote-apps.ts";
 import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
 
@@ -270,8 +269,7 @@ export interface DesktopRuntimeInfo {
 
 export interface DesktopUpdateState {
   enabled: boolean;
-  /** True when the desktop update action syncs and builds the configured source checkout. */
-  sourceUpdate?: boolean;
+  sourceUpdate?: boolean; // Fork add-on: true when updates sync and build a local source checkout.
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
   currentVersion: string;
@@ -303,7 +301,7 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 
 export const DesktopUpdateStateSchema = Schema.Struct({
   enabled: Schema.Boolean,
-  sourceUpdate: Schema.optionalKey(Schema.Boolean),
+  sourceUpdate: Schema.optionalKey(Schema.Boolean), // Fork add-on: local source updates.
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
   currentVersion: Schema.String,
@@ -341,20 +339,6 @@ export interface DesktopUpdateCheckResult {
 export const DesktopUpdateCheckResultSchema = Schema.Struct({
   checked: Schema.Boolean,
   state: DesktopUpdateStateSchema,
-});
-
-/** Outcome of merging upstream/main into a local source checkout without building. */
-export interface DesktopSourceSyncResult {
-  ok: boolean;
-  /** Upstream commits merged; 0 when the checkout already had them all. */
-  merged: number;
-  message: string;
-}
-
-export const DesktopSourceSyncResultSchema = Schema.Struct({
-  ok: Schema.Boolean,
-  merged: Schema.Number,
-  message: Schema.String,
 });
 
 // Stable id for the Windows-native primary backend. Desktop side wraps
@@ -1222,18 +1206,11 @@ export interface DesktopBridge {
   onQuitShortcut?: (listener: (event: QuitShortcutHintEvent) => void) => () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;
-  /**
-   * Presents a native confirmation above embedded WebContentsViews. Optional
-   * so older desktop shells can continue using the renderer confirmation host.
-   */
-  confirm?: (message: string) => Promise<boolean>;
   getUpdateState: () => Promise<DesktopUpdateState>;
   setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
   installUpdate: () => Promise<DesktopUpdateActionResult>;
-  /** Merges the official upstream into a local source build's checkout and pushes it. */
-  syncSource: () => Promise<DesktopSourceSyncResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
   /** Present when the desktop shell accepts `t3 app` activation requests. */
   appActivation?: {
@@ -1246,8 +1223,6 @@ export interface DesktopBridge {
    * Electron desktop build; web builds have `preview === undefined`.
    */
   preview?: DesktopPreviewBridge;
-  /** Desktop-only isolated ChatGPT surface. */
-  remoteApps?: DesktopRemoteAppBridge;
 }
 
 /** Renderer callback invoked by Electron with a fresh user gesture before display-media capture. */

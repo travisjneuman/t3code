@@ -1,4 +1,4 @@
-# Updating ndev.t3code
+# Updating T3 Code
 
 The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, an update notice appears in the
@@ -71,38 +71,6 @@ update can roll back to the previous version. If the update still fails:
 1. Retry the offered action once.
 2. Check that you updated the server's machine, not only the device you are using.
 3. For a command-line server, stop it and relaunch the exact version shown in the notice.
-
-## Updating the fork from upstream nightly
-
-The ndev.t3code macOS app updates from its own source checkout instead of a
-download feed. When the latest upstream T3 Code nightly is newer than your
-checkout, the update button and **Settings → General → About** offer
-**Sync & Build** and name that nightly's version.
-
-**Sync & Build** merges the nightly into your fork, builds the app on this Mac,
-then pushes the merge to your fork. Every upstream change up to that nightly
-is merged in, and your fork's additions are kept. Conflicts and build breaks
-are resolved for you, by Claude Code when needed, so it must be installed and
-signed in. Nothing is pushed unless the new build succeeds. Then **Restart &
-Install** replaces the installed app with the new build and removes the old
-copy and the build files.
-
-The app checks for a new official nightly a minute after it starts and every
-30 minutes after that. When one is out, it merges that nightly into your fork
-and pushes it, without building, and the update button then offers **Sync &
-Build** for it. The background check never uses Claude Code: if the official
-changes conflict with the fork's in a way it can't settle by itself, it skips
-that nightly until a newer one is out or you press the merge button.
-
-The merge button beside the update button (**Sync fork with official T3 Code**)
-merges everything on the official `main` branch into your fork and pushes it,
-without building, including changes that are not in a nightly yet. The update
-button builds them with the next nightly.
-
-Sync and update refuse to start while the checkout has uncommitted changes, is
-not on `main`, or is in the middle of another merge. If it still cannot merge
-or build, the checkout is left as it was before the update and the message
-lists the files involved.
 
 ## Update providers
 
