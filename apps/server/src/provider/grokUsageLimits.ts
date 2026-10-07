@@ -50,6 +50,7 @@ export function grokUsageResponseToLimits(
     // freshly signed-in Grok account would vanish with no explanation until it
     // happened to be used, and `applyUsageLimitsUpdate` would refuse the
     // mid-turn windows that could have recovered it.
+    if (usedPercent === undefined) return grokUsageResponseToLimits({ config: { ...response.config, creditUsagePercent: 0 } }, checkedAt); // Fork add-on: show it as 0% used.
     return makeUsageLimits({ checkedAt, windows: [] });
   }
   const period = response.config?.currentPeriod;
