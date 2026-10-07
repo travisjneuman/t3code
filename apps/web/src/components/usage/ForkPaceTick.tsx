@@ -1,13 +1,14 @@
 import type { ServerProviderUsageWindow } from "@t3tools/contracts";
 import { elapsedShare } from "@t3tools/shared/usageLimits";
 
-// Over 3 s: a slow 1.5 s fade in, 0.9 s at full, a quick 0.3 s fade out, 0.3 s gone.
+// Over 3 s: a slow 1.5 s fade up, 0.9 s at full, a quick 0.3 s fade down, 0.3 s
+// dim. It never fades below a quarter, so the line is always there.
 const PULSE: Keyframe[] = [
-  { opacity: 0, offset: 0, easing: "ease-out" },
+  { opacity: 0.25, offset: 0, easing: "ease-out" },
   { opacity: 1, offset: 0.5 },
   { opacity: 1, offset: 0.8, easing: "ease-in" },
-  { opacity: 0, offset: 0.9 },
-  { opacity: 0, offset: 1 },
+  { opacity: 0.25, offset: 0.9 },
+  { opacity: 0.25, offset: 1 },
 ];
 
 // Opacity alone runs on the compositor, so the pulse never touches layout,
