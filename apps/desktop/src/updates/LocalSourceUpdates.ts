@@ -1,9 +1,11 @@
 import { UPSTREAM_SYNC_PROMPT_PREFIX } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
@@ -12,7 +14,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
-import { resolveRenameOnlyConflict, resolveRenameOnlyHunks } from "./forkMergeResolution.ts";
+import * as DesktopObservability from "../app/DesktopObservability.ts";
 
 const COMMAND_OUTPUT_LIMIT = 16_000;
 const LOCAL_UPDATE_HELPER_PATH = "local-source-update-helper.sh";
@@ -21,17 +23,26 @@ const SOURCE_UPDATE_BUILDS_DIR = "source-updates";
 const LOCKFILE_PATH = "pnpm-lock.yaml";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
+// Overrides the checkout path the build recorded in the packaged package.json.
+const SOURCE_REPOSITORY_PATH_ENV = "T3CODE_SOURCE_REPOSITORY_PATH";
+const UPSTREAM_REPOSITORY = "pingdotgg/t3code";
+const UPSTREAM_REMOTE_URL = "https://github.com/pingdotgg/t3code.git";
+// The scheme, user, and host of a GitHub remote: https, ssh, scp-style, or git protocol.
+const GITHUB_REMOTE_PREFIX =
+  /^(?:(?:https?|ssh|git|git\+ssh):\/\/)?(?:[^@/]+@)?(?:www\.)?github\.com(?::\d+)?[/:]/iu;
+/** Every line the fork adds or changes in an upstream file carries this text. */
+export const FORK_MARKER = "Fork add-on";
 const MERGE_AGENT_RULES = [
-  `${UPSTREAM_SYNC_PROMPT_PREFIX} (pingdotgg/t3code) into the ndev.t3code fork.`,
-  "The fork is an add-on: keep every upstream change and every fork addition.",
-  "Never drop fork features (the ChatGPT, Claude, Grok, and Gemini remote app tabs, the local source updater, the ndev.t3code branding) and never revert upstream changes.",
-  "Where upstream renamed or reshaped code the fork uses, adapt the fork code to the new upstream shape, using upstream's current names and paths, and fix every reference to a moved module or renamed identifier, not just the first.",
-  'Product text stays "ndev.t3code". Change only what the task needs.',
+  `${UPSTREAM_SYNC_PROMPT_PREFIX} (${UPSTREAM_REPOSITORY}) into this fork.`,
+  "Keep upstream's text and code everywhere; never revert or reword an upstream change.",
+  `The fork changes upstream files only through lines that contain the text "${FORK_MARKER}", or code directly under a comment line that does; keep every one of them, adapted to upstream's current names and shapes.`,
+  "Fork features live in fork-owned files. The fork's identity lives in apps/desktop/src/remote-apps/RemoteAppDistribution.ts and packages/shared/src/branding.ts.",
+  "Where upstream renamed or moved code a fork add-on uses, update the add-on and every reference to the moved module or renamed identifier, not just the first.",
+  "Change only what the task needs.",
 ].join(" ");
 const NIGHTLY_TAG_GLOB = "v*-nightly.*";
 const NIGHTLY_TAG_PATTERN = /^v\d+\.\d+\.\d+-nightly\.\d+\.\d+$/u;
 const UNRESOLVED_PATH_LIST_LIMIT = 10;
-const REGULAR_FILE_MODES: ReadonlySet<string> = new Set(["100644", "100755"]);
 // Upstream's release workflow stamps the nightly version into these manifests
 // before building (scripts/update-release-package-versions.ts). The server
 // reports its own package version, so an unstamped build shows a client/server
@@ -43,6 +54,12 @@ const RELEASE_PACKAGE_FILES = [
   "packages/contracts/package.json",
 ] as const;
 const PACKAGE_VERSION_PATTERN = /("version":\s*")[^"]*(")/u;
+
+// scripts/build-desktop-artifact.ts records the checkout it built from here.
+const RecordedSourceRepository = Schema.fromJsonString(
+  Schema.Struct({ t3codeSourceRepositoryPath: Schema.optionalKey(Schema.String) }),
+);
+const decodeRecordedSourceRepository = Schema.decodeUnknownEffect(RecordedSourceRepository);
 
 const LocalSourceUpdateOperation = Schema.Literals([
   "configuration",
@@ -82,30 +99,41 @@ export interface LocalSourceUpdateInspection {
   readonly behind: number;
 }
 
+/** Pushing to origin is best effort: whoever builds the fork may not be able to push it. */
+export type ForkPushResult =
+  | { readonly pushed: true }
+  | { readonly pushed: false; readonly reason: string };
+
 export interface LocalSourceUpdateBuild {
   readonly version: string;
   readonly applicationBundlePath: string;
+  readonly push: ForkPushResult;
 }
 
 export interface LocalSourceSyncResult {
   /** Upstream commits the sync merged; 0 when the fork already had them all. */
   readonly merged: number;
   readonly upstreamTag: string;
+  /** Null when nothing was merged, so nothing was pushed. */
+  readonly push: ForkPushResult | null;
 }
 
 export class LocalSourceUpdates extends Context.Service<
   LocalSourceUpdates,
   {
     readonly enabled: Effect.Effect<boolean>;
+    /** The source checkout updates build from, when one is configured. */
+    readonly repositoryPath: Option.Option<string>;
     readonly inspect: Effect.Effect<LocalSourceUpdateInspection, LocalSourceUpdateError>;
     readonly syncAndBuild: Effect.Effect<LocalSourceUpdateBuild, LocalSourceUpdateError>;
     readonly install: Effect.Effect<void, LocalSourceUpdateError>;
+    /** Merges upstream/main with the merge agent and pushes, without building. */
     readonly syncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
     /**
-     * Fork add-on: for the background poller. Merges only the newest upstream
-     * nightly, without the merge agent. Conflicts the rename pass cannot
-     * settle abort the merge, and that nightly is skipped until a newer one
-     * lands or the sync button (which has the agent) merges it.
+     * For the background poller. Merges only the newest upstream nightly,
+     * without the merge agent. A conflict or a dropped fork add-on line aborts
+     * the merge, and that nightly is skipped until a newer one lands or the
+     * sync button (which has the agent) merges it.
      */
     readonly autoSyncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
   }
@@ -116,6 +144,9 @@ interface CommandResult {
   readonly stderr: string;
   readonly exitCode: number;
 }
+
+const { logInfo: logSourceInfo, logWarning: logSourceWarning } =
+  DesktopObservability.makeComponentLogger("desktop-updater");
 
 const LOCAL_UPDATE_HELPER = `#!/bin/sh
 set -eu
@@ -167,14 +198,16 @@ function parseCountPair(output: string): readonly [number, number] | null {
   return [values[0]!, values[1]!];
 }
 
-function normalizeRemoteUrl(value: string): string {
+/**
+ * Reduces a GitHub remote URL (https, ssh, scp-style, or git protocol) to a
+ * lowercase `owner/repo`. Other hosts come back whole, so they never match.
+ */
+export function normalizeGitHubRemote(value: string): string {
   return value
     .trim()
-    .replace(/\.git$/u, "")
-    .replace(/^https?:\/\/github\.com\//u, "")
-    .replace(/^git@github\.com:/u, "")
-    .replace(/^ssh:\/\/git@github\.com\//u, "")
+    .replace(GITHUB_REMOTE_PREFIX, "")
     .replace(/\/+$/u, "")
+    .replace(/\.git$/iu, "")
     .toLowerCase();
 }
 
@@ -192,48 +225,112 @@ export function selectNewestNightlyTag(output: string): string | null {
 
 export const nightlyVersionFromTag = (tag: string): string => tag.replace(/^v/u, "");
 
-export interface UnmergedPath {
-  readonly path: string;
-  /** Index stage (1 base, 2 ours, 3 theirs) to file mode. A missing stage was deleted on that side. */
-  readonly stages: ReadonlyMap<number, string>;
-}
-
-/** Parses `git ls-files -u -z` records: `<mode> <object> <stage>\t<path>\0`. */
-export function parseUnmergedPaths(output: string): ReadonlyArray<UnmergedPath> {
-  const byPath = new Map<string, Map<number, string>>();
-  for (const record of output.split("\0")) {
-    const tab = record.indexOf("\t");
-    if (tab < 0) continue;
-    const [mode, , stageText] = record.slice(0, tab).split(" ");
-    const stage = Number(stageText);
-    if (!mode || (stage !== 1 && stage !== 2 && stage !== 3)) continue;
-    const path = record.slice(tab + 1);
-    const stages = byPath.get(path) ?? new Map<number, string>();
-    stages.set(stage, mode);
-    byPath.set(path, stages);
+/**
+ * Parses `git grep -c -z` output (`<name>\0<count>` per line). `prefix` strips
+ * a tree name such as `HEAD:`.
+ */
+export function parseMarkerCounts(output: string, prefix = ""): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const line of output.split("\n")) {
+    const separator = line.lastIndexOf("\0");
+    if (separator < 0) continue;
+    const name = line.slice(0, separator);
+    const count = Number(line.slice(separator + 1));
+    if (!Number.isInteger(count) || count <= 0) continue;
+    counts.set(name.startsWith(prefix) ? name.slice(prefix.length) : name, count);
   }
-  return Array.from(byPath, ([path, stages]) => ({ path, stages }));
+  return counts;
 }
 
-// Only plain text files whose mode both sides agree on are rewritten; links,
-// submodules, and mode changes are left for a human.
-const isRewritableConflict = (entry: UnmergedPath): boolean => {
-  const modes = Array.from(entry.stages.values());
-  const ours = entry.stages.get(2);
-  const theirs = entry.stages.get(3);
+export interface MergeChanges {
+  /** Old path to new path, for files the merge renamed. */
+  readonly renamed: ReadonlyMap<string, string>;
+  readonly deleted: ReadonlySet<string>;
+}
+
+/** Parses `git diff --name-status -z` output: `<status>\0<path>\0`, with two paths for renames. */
+export function parseNameStatus(output: string): MergeChanges {
+  const renamed = new Map<string, string>();
+  const deleted = new Set<string>();
+  const fields = output.split("\0");
+  let index = 0;
+  while (index < fields.length) {
+    const status = fields[index] ?? "";
+    if (status.length === 0) {
+      index += 1;
+      continue;
+    }
+    if (status.startsWith("R") || status.startsWith("C")) {
+      const from = fields[index + 1];
+      const to = fields[index + 2];
+      if (status.startsWith("R") && from && to) renamed.set(from, to);
+      index += 3;
+      continue;
+    }
+    const path = fields[index + 1];
+    if (status === "D" && path) deleted.add(path);
+    index += 2;
+  }
+  return { renamed, deleted };
+}
+
+export interface LostForkMarkers {
+  /** The file's path before the merge. */
+  readonly path: string;
+  /** Where the file is now, or null when the merge deleted it. */
+  readonly currentPath: string | null;
+  readonly expected: number;
+  readonly found: number;
+}
+
+const sumCounts = (counts: ReadonlyMap<string, number>): number =>
+  Array.from(counts.values()).reduce((total, count) => total + count, 0);
+
+/**
+ * Files that hold fewer fork markers after the merge than before. A deleted
+ * file only counts when its markers did not reappear elsewhere.
+ */
+export function findLostForkMarkers(
+  before: ReadonlyMap<string, number>,
+  after: ReadonlyMap<string, number>,
+  changes: MergeChanges,
+): ReadonlyArray<LostForkMarkers> {
+  const lost: Array<LostForkMarkers> = [];
+  const removed: Array<LostForkMarkers> = [];
+  for (const [path, expected] of before) {
+    if (changes.deleted.has(path)) {
+      removed.push({ path, currentPath: null, expected, found: 0 });
+      continue;
+    }
+    const currentPath = changes.renamed.get(path) ?? path;
+    const found = after.get(currentPath) ?? 0;
+    if (found < expected) lost.push({ path, currentPath, expected, found });
+  }
+  if (removed.length > 0 && sumCounts(after) < sumCounts(before)) lost.push(...removed);
+  return lost;
+}
+
+/** The line of `git push` output that says why it failed. */
+export function summarizePushFailure(output: string): string {
+  const lines = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("hint:"));
   return (
-    modes.every((mode) => REGULAR_FILE_MODES.has(mode)) &&
-    (ours === undefined || theirs === undefined || ours === theirs)
+    lines.find((line) => /^(?:fatal|error|remote):|rejected|denied/iu.test(line)) ??
+    lines.at(-1) ??
+    "git push failed"
   );
-};
+}
 
-const isBinaryText = (value: string | null): boolean => value !== null && value.includes("\u0000");
-
-function describeUnresolvedPaths(paths: ReadonlyArray<string>): string {
+function describePaths(paths: ReadonlyArray<string>): string {
   const listed = paths.slice(0, UNRESOLVED_PATH_LIST_LIMIT).join(", ");
   const rest = paths.length - UNRESOLVED_PATH_LIST_LIMIT;
   return rest > 0 ? `${listed}, and ${rest} more` : listed;
 }
+
+const describeLostMarkers = (lost: ReadonlyArray<LostForkMarkers>): string =>
+  describePaths(lost.map((entry) => entry.currentPath ?? entry.path));
 
 export function resolveMacApplicationBundlePath(
   executablePath: string,
@@ -248,7 +345,40 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const builtUpdateRef = yield* Ref.make<LocalSourceUpdateBuild | null>(null);
-  const repositoryPath = environment.sourceRepositoryPath;
+
+  // The environment variable wins; otherwise the path the build recorded.
+  const resolveRepositoryPath = Effect.gen(function* () {
+    const override = yield* Config.String(SOURCE_REPOSITORY_PATH_ENV).pipe(
+      Config.option,
+      Effect.orElseSucceed(() => Option.none<string>()),
+    );
+    const overridePath = Option.getOrUndefined(override)?.trim();
+    const packageJsonPath = environment.path.join(environment.appPath, "package.json");
+    const recordedPath = overridePath
+      ? overridePath
+      : yield* fileSystem.readFileString(packageJsonPath).pipe(
+          Effect.flatMap(decodeRecordedSourceRepository),
+          Effect.map((packageJson) => packageJson.t3codeSourceRepositoryPath?.trim()),
+          Effect.orElseSucceed(() => undefined),
+        );
+    if (!recordedPath) return undefined;
+    const resolved = environment.path.resolve(recordedPath);
+    // git reports the resolved checkout root, so compare against the real path.
+    return yield* fileSystem.realPath(resolved).pipe(Effect.orElseSucceed(() => resolved));
+  });
+
+  const isGitWorkTree = (path: string) =>
+    Effect.all([
+      fileSystem.stat(path),
+      fileSystem.exists(environment.path.join(path, ".git")),
+    ]).pipe(
+      Effect.map(([stat, hasGit]) => stat.type === "Directory" && hasGit),
+      Effect.orElseSucceed(() => false),
+    );
+
+  const supported = environment.platform === "darwin" && environment.isPackaged;
+  const repositoryPath = supported ? yield* resolveRepositoryPath : undefined;
+  const enabled = repositoryPath !== undefined && (yield* isGitWorkTree(repositoryPath));
 
   const makeError = (
     operation: LocalSourceUpdateOperation,
@@ -258,7 +388,7 @@ export const make = Effect.gen(function* () {
   ) => new LocalSourceUpdateError({ operation, repositoryPath: path, detail, cause });
 
   const requireRepositoryPath = Effect.gen(function* () {
-    if (environment.platform !== "darwin" || !environment.isPackaged) {
+    if (!supported) {
       return yield* makeError(
         "configuration",
         "local source updates are only supported by packaged macOS builds",
@@ -267,9 +397,8 @@ export const make = Effect.gen(function* () {
     if (!repositoryPath) {
       return yield* makeError("configuration", "no source repository is configured");
     }
-    const stat = yield* fileSystem.stat(repositoryPath).pipe(Effect.option);
-    if (stat._tag === "None" || stat.value.type !== "Directory") {
-      return yield* makeError("configuration", "the source repository is not a directory");
+    if (!(yield* isGitWorkTree(repositoryPath))) {
+      return yield* makeError("configuration", "the source repository is not a git work tree");
     }
     return repositoryPath;
   });
@@ -416,20 +545,34 @@ export const make = Effect.gen(function* () {
         repo,
       );
     }
-    const origin = yield* gitChecked("inspect", ["config", "--get", "remote.origin.url"]);
-    if (normalizeRemoteUrl(origin.stdout) !== "travisjneuman/t3code") {
+    // Nothing names a particular fork: origin is wherever the fork is pushed,
+    // as long as it is not upstream itself.
+    const origin = yield* git("inspect", ["config", "--get", "remote.origin.url"]);
+    const originUrl = origin.exitCode === 0 ? origin.stdout.trim() : "";
+    if (!originUrl) {
       return yield* makeError(
         "inspect",
-        `origin is ${origin.stdout.trim()}; expected travisjneuman/t3code`,
-        new Error("origin mismatch"),
+        "the checkout has no origin remote; add the fork you push to as origin",
+        new Error("origin missing"),
         repo,
       );
     }
-    const upstream = yield* gitChecked("inspect", ["config", "--get", "remote.upstream.url"]);
-    if (normalizeRemoteUrl(upstream.stdout) !== "pingdotgg/t3code") {
+    if (normalizeGitHubRemote(originUrl) === UPSTREAM_REPOSITORY) {
       return yield* makeError(
         "inspect",
-        `upstream is ${upstream.stdout.trim()}; expected pingdotgg/t3code`,
+        `origin is the official repository (${originUrl}); point origin at your fork`,
+        new Error("origin is upstream"),
+        repo,
+      );
+    }
+    const upstream = yield* git("inspect", ["config", "--get", "remote.upstream.url"]);
+    const upstreamUrl = upstream.exitCode === 0 ? upstream.stdout.trim() : "";
+    if (normalizeGitHubRemote(upstreamUrl) !== UPSTREAM_REPOSITORY) {
+      return yield* makeError(
+        "inspect",
+        upstreamUrl
+          ? `upstream is ${upstreamUrl}; expected ${UPSTREAM_REPOSITORY}. Run: git remote set-url upstream ${UPSTREAM_REMOTE_URL}`
+          : `the checkout has no upstream remote. Run: git remote add upstream ${UPSTREAM_REMOTE_URL}`,
         new Error("upstream mismatch"),
         repo,
       );
@@ -515,120 +658,26 @@ export const make = Effect.gen(function* () {
     return yield* makeError("build", `no macOS application bundle was produced under ${root}`);
   });
 
-  const listUnmergedPaths = (repo: string) =>
+  const gitMerge = (repo: string, args: ReadonlyArray<string>) =>
     runChecked({
       operation: "merge",
       command: "git",
-      args: ["ls-files", "--unmerged", "-z"],
+      args,
       cwd: repo,
       outputLimit: Number.POSITIVE_INFINITY,
-    }).pipe(Effect.map((result) => parseUnmergedPaths(result.stdout)));
-
-  // A stage missing from the index means the file was deleted on that side.
-  const readStage = (repo: string, entry: UnmergedPath, stage: 1 | 2 | 3) =>
-    entry.stages.has(stage)
-      ? runChecked({
-          operation: "merge",
-          command: "git",
-          args: ["show", `:${stage}:${entry.path}`],
-          cwd: repo,
-          outputLimit: Number.POSITIVE_INFINITY,
-        }).pipe(Effect.map((result): string | null => result.stdout))
-      : Effect.succeed<string | null>(null);
-
-  const writeWorkingFile = (repo: string, path: string, contents: string) =>
-    fileSystem
-      .writeFileString(environment.path.join(repo, path), contents)
-      .pipe(Effect.mapError((cause) => makeError("merge", `could not write ${path}`, cause, repo)));
-
-  const stagePath = (repo: string, path: string) =>
-    runChecked({ operation: "merge", command: "git", args: ["add", "--", path], cwd: repo });
-
-  // Whole-file pass: the fork's entire change to the file is the rename.
-  const resolveWholeFile = Effect.fn("desktop.localSourceUpdates.resolveWholeFile")(function* (
-    repo: string,
-    entry: UnmergedPath,
-  ): Effect.fn.Return<boolean, LocalSourceUpdateError> {
-    if (!isRewritableConflict(entry)) return false;
-    const base = yield* readStage(repo, entry, 1);
-    const ours = yield* readStage(repo, entry, 2);
-    const theirs = yield* readStage(repo, entry, 3);
-    if ([base, ours, theirs].some(isBinaryText)) return false;
-    const resolution = resolveRenameOnlyConflict({ base, ours, theirs });
-    if (resolution === null) return false;
-    if (resolution.kind === "delete") {
-      yield* runChecked({
-        operation: "merge",
-        command: "git",
-        args: ["rm", "--quiet", "--", entry.path],
-        cwd: repo,
-      });
-      return true;
-    }
-    yield* writeWorkingFile(repo, entry.path, resolution.contents);
-    yield* stagePath(repo, entry.path);
-    return true;
-  });
-
-  // Hunk pass: rewrite the file with diff3 markers and resolve each
-  // rename-only hunk. The file is written and staged only when no hunk is
-  // left; any leftover aborts the whole merge anyway.
-  const resolveHunks = Effect.fn("desktop.localSourceUpdates.resolveHunks")(function* (
-    repo: string,
-    entry: UnmergedPath,
-  ): Effect.fn.Return<boolean, LocalSourceUpdateError> {
-    if (!isRewritableConflict(entry) || entry.stages.size !== 3) return false;
-    yield* runChecked({
-      operation: "merge",
-      command: "git",
-      args: ["checkout", "--conflict=diff3", "--", entry.path],
-      cwd: repo,
     });
-    const text = yield* fileSystem
-      .readFileString(environment.path.join(repo, entry.path))
-      .pipe(
-        Effect.mapError((cause) => makeError("merge", `could not read ${entry.path}`, cause, repo)),
-      );
-    if (isBinaryText(text)) return false;
-    const { contents, unresolved } = resolveRenameOnlyHunks(text);
-    if (unresolved > 0) return false;
-    yield* writeWorkingFile(repo, entry.path, contents);
-    yield* stagePath(repo, entry.path);
-    return true;
-  });
 
-  /** Resolves rename-only conflicts and returns the paths a human still has to merge. */
-  const resolveForkConflicts = Effect.fn("desktop.localSourceUpdates.resolveForkConflicts")(
-    function* (repo: string): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
-      for (const entry of yield* listUnmergedPaths(repo)) {
-        if (entry.path === LOCKFILE_PATH) {
-          // Take upstream's lockfile; the install before the build regenerates
-          // it from the merged package manifests.
-          yield* runChecked({
-            operation: "merge",
-            command: "git",
-            args: ["checkout", "--theirs", "--", entry.path],
-            cwd: repo,
-          });
-          yield* stagePath(repo, entry.path);
-          continue;
-        }
-        yield* resolveWholeFile(repo, entry);
-      }
-      for (const entry of yield* listUnmergedPaths(repo)) {
-        yield* resolveHunks(repo, entry);
-      }
-      return (yield* listUnmergedPaths(repo)).map((entry) => entry.path);
-    },
-  );
+  const listConflictedPaths = (repo: string) =>
+    gitMerge(repo, ["diff", "--name-only", "--diff-filter=U", "-z"]).pipe(
+      Effect.map((result) => result.stdout.split("\0").filter((path) => path.length > 0)),
+    );
 
-  // Whatever the rename pass cannot settle (real conflicts, or a merge that no
-  // longer builds) goes to a headless Claude Code run limited to file tools: it
-  // can edit the checkout but cannot run git or shells or reach the network.
-  // It loads only the repo's settings: user-level hooks (such as one that
-  // commits at session end) would commit its edits and the build's version
-  // stamp before the build passes. The build remains the gate, and nothing is
-  // committed before it passes.
+  // Conflicts (and a merge that no longer builds) go to a headless Claude Code
+  // run limited to file tools: it can edit the checkout but cannot run git or
+  // shells or reach the network. It loads only the repo's settings: user-level
+  // hooks (such as one that commits at session end) would commit its edits and
+  // the build's version stamp before the build passes. The build remains the
+  // gate, and nothing is committed before it passes.
   const runMergeAgent = (repo: string, task: string) =>
     runCommand({
       operation: "merge",
@@ -660,7 +709,7 @@ export const make = Effect.gen(function* () {
       Effect.asVoid,
     );
 
-  /** Hands remaining conflicts to the agent and returns the paths it left unresolved. */
+  /** Hands conflicts to the agent and returns the paths it left unresolved. */
   const resolveWithAgent = Effect.fn("desktop.localSourceUpdates.resolveWithAgent")(function* (
     repo: string,
     paths: ReadonlyArray<string>,
@@ -678,14 +727,118 @@ export const make = Effect.gen(function* () {
         left.push(path);
         continue;
       }
-      yield* runChecked({
-        operation: "merge",
-        command: "git",
-        args: text._tag === "Some" ? ["add", "--", path] : ["rm", "--quiet", "--", path],
-        cwd: repo,
-      });
+      yield* gitMerge(
+        repo,
+        text._tag === "Some" ? ["add", "--", path] : ["rm", "--quiet", "--", path],
+      );
     }
     return left;
+  });
+
+  /** Settles the open merge's conflicts and returns the paths still unmerged. */
+  const resolveConflicts = Effect.fn("desktop.localSourceUpdates.resolveConflicts")(function* (
+    repo: string,
+    agent: boolean,
+  ): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
+    const conflicted: Array<string> = [];
+    for (const path of yield* listConflictedPaths(repo)) {
+      if (path !== LOCKFILE_PATH) {
+        conflicted.push(path);
+        continue;
+      }
+      // Take upstream's lockfile; the install before the build regenerates it
+      // from the merged package manifests.
+      yield* gitMerge(repo, ["checkout", "--theirs", "--", path]);
+      yield* gitMerge(repo, ["add", "--", path]);
+    }
+    return conflicted.length > 0 && agent ? yield* resolveWithAgent(repo, conflicted) : conflicted;
+  });
+
+  // Counts fork markers per file in HEAD, or in the working tree when `tree` is omitted.
+  const countForkMarkers = Effect.fn("desktop.localSourceUpdates.countForkMarkers")(function* (
+    repo: string,
+    tree?: "HEAD",
+  ): Effect.fn.Return<ReadonlyMap<string, number>, LocalSourceUpdateError> {
+    const result = yield* runCommand({
+      operation: "merge",
+      command: "git",
+      args: ["grep", "-c", "-z", "-I", "-F", "-e", FORK_MARKER, ...(tree ? [tree] : []), "--"],
+      cwd: repo,
+      outputLimit: Number.POSITIVE_INFINITY,
+    });
+    // git grep exits 1 when nothing matches.
+    if (result.exitCode === 1) return new Map<string, number>();
+    if (result.exitCode !== 0) {
+      return yield* makeError(
+        "merge",
+        `could not count ${FORK_MARKER} lines: ${trimOutput(result)}`,
+        new Error(trimOutput(result)),
+        repo,
+      );
+    }
+    return parseMarkerCounts(result.stdout, tree ? `${tree}:` : "");
+  });
+
+  const findLostMarkers = (repo: string, before: ReadonlyMap<string, number>) =>
+    Effect.all([
+      countForkMarkers(repo),
+      gitMerge(repo, ["diff", "--cached", "-M", "--name-status", "-z", "HEAD"]),
+    ]).pipe(
+      Effect.map(([after, changes]) =>
+        findLostForkMarkers(before, after, parseNameStatus(changes.stdout)),
+      ),
+    );
+
+  /**
+   * Fork changes to upstream files are the lines marked `Fork add-on`, so a file
+   * that holds fewer of them after the merge lost a fork hook. The agent gets one
+   * pass at restoring the exact lines; whatever is still missing fails the merge.
+   */
+  const checkForkMarkers = Effect.fn("desktop.localSourceUpdates.checkForkMarkers")(function* (
+    repo: string,
+    label: string,
+    before: ReadonlyMap<string, number>,
+    agent: boolean,
+  ): Effect.fn.Return<void, LocalSourceUpdateError> {
+    const lost = yield* findLostMarkers(repo, before);
+    if (lost.length === 0) return;
+    if (!agent) {
+      return yield* makeError(
+        "merge",
+        `merging ${label} dropped ${FORK_MARKER} lines from ${describeLostMarkers(lost)}, so the merge was aborted. Sync fork with official T3 Code restores them with the merge agent.`,
+        new Error("fork markers lost"),
+        repo,
+      );
+    }
+    const sections = yield* Effect.forEach(lost, (entry) =>
+      runCommand({
+        operation: "merge",
+        command: "git",
+        args: ["grep", "-n", "-F", "-e", FORK_MARKER, "HEAD", "--", entry.path],
+        cwd: repo,
+      }).pipe(
+        Effect.map((result) => {
+          const target = entry.currentPath
+            ? `${entry.currentPath} (now ${entry.found} of ${entry.expected} marked lines)`
+            : `${entry.path} (deleted by the merge; restore its marked lines where that code now lives)`;
+          return `${target}. Marked lines before the merge, as HEAD:path:line:text:\n${result.stdout.trim()}`;
+        }),
+      ),
+    );
+    yield* runMergeAgent(
+      repo,
+      `The merge dropped fork add-on lines. Restore every marked line listed below in the merged file, adapted to upstream's current code, keeping the "${FORK_MARKER}" text on each restored line or on a comment line directly above the block.\n\n${sections.join("\n\n")}`,
+    );
+    yield* gitMerge(repo, ["add", "-A"]);
+    const stillLost = yield* findLostMarkers(repo, before);
+    if (stillLost.length > 0) {
+      return yield* makeError(
+        "merge",
+        `merging ${label} dropped ${FORK_MARKER} lines the merge agent could not restore, so the merge was aborted. Merge ${label} into main by hand, push it, then try again. Files: ${describeLostMarkers(stillLost)}`,
+        new Error("fork markers lost"),
+        repo,
+      );
+    }
   });
 
   const abortMerge = (repo: string) =>
@@ -694,9 +847,9 @@ export const make = Effect.gen(function* () {
     );
 
   /**
-   * Merges `target` without committing and settles conflicts (rename pass, then
-   * the agent unless `agent` is false). Fails with the merge still open;
-   * callers abort it.
+   * Merges `target` without committing, settles conflicts (the agent unless
+   * `agent` is false), and checks that no fork add-on line was dropped. Fails
+   * with the merge still open; callers abort it.
    */
   const mergeUpstream = Effect.fn("desktop.localSourceUpdates.mergeUpstream")(function* (
     repo: string,
@@ -705,6 +858,7 @@ export const make = Effect.gen(function* () {
     message: string,
     agent = true,
   ): Effect.fn.Return<void, LocalSourceUpdateError> {
+    const markersBefore = yield* countForkMarkers(repo, "HEAD");
     // --no-commit leaves the merge open so a failed resolution or build can
     // still be undone with `git merge --abort`.
     const merge = yield* runCommand({
@@ -713,35 +867,33 @@ export const make = Effect.gen(function* () {
       args: ["merge", "--no-ff", "--no-commit", "-m", message, target],
       cwd: repo,
     });
-    if (merge.exitCode === 0) return;
-    const output = trimOutput(merge);
-    const mergeHead = yield* runCommand({
-      operation: "merge",
-      command: "git",
-      args: ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-      cwd: repo,
-    });
-    if (mergeHead.exitCode !== 0) {
-      return yield* makeError(
-        "merge",
-        `upstream merge of ${label} failed${output ? `: ${output}` : ""}`,
-        new Error(output),
-        repo,
-      );
+    if (merge.exitCode !== 0) {
+      const output = trimOutput(merge);
+      const mergeHead = yield* runCommand({
+        operation: "merge",
+        command: "git",
+        args: ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+        cwd: repo,
+      });
+      if (mergeHead.exitCode !== 0) {
+        return yield* makeError(
+          "merge",
+          `upstream merge of ${label} failed${output ? `: ${output}` : ""}`,
+          new Error(output),
+          repo,
+        );
+      }
+      const unresolved = yield* resolveConflicts(repo, agent);
+      if (unresolved.length > 0) {
+        return yield* makeError(
+          "merge",
+          `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. ${agent ? `Merge ${label} into main by hand, push it, then try again.` : "Sync fork with official T3 Code resolves them with the merge agent."} Conflicted: ${describePaths(unresolved)}`,
+          new Error(output),
+          repo,
+        );
+      }
     }
-    const unresolved = yield* resolveForkConflicts(repo).pipe(
-      Effect.flatMap((paths) =>
-        paths.length > 0 && agent ? resolveWithAgent(repo, paths) : Effect.succeed(paths),
-      ),
-    );
-    if (unresolved.length > 0) {
-      return yield* makeError(
-        "merge",
-        `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. ${agent ? `Merge ${label} into main by hand, push it, then try again.` : "Sync fork with official T3 Code resolves them with the merge agent."} Conflicted: ${describeUnresolvedPaths(unresolved)}`,
-        new Error(output),
-        repo,
-      );
-    }
+    yield* checkForkMarkers(repo, label, markersBefore, agent);
   });
 
   // Only the working tree is stamped; restoring from the index keeps a pending
@@ -782,13 +934,31 @@ export const make = Effect.gen(function* () {
       cwd: repo,
     }).pipe(Effect.map((result) => result.exitCode !== 0));
 
-  const pushFork = (repo: string) =>
-    runChecked({
+  // Pushes only to origin, never to upstream. A failed push never fails the
+  // sync or build: the merge stands locally and the result says why it was skipped.
+  const pushFork = Effect.fn("desktop.localSourceUpdates.pushFork")(function* (repo: string) {
+    const result = yield* runCommand({
       operation: "push",
       command: "git",
       args: ["push", "origin", "HEAD:main"],
       cwd: repo,
+    }).pipe(
+      Effect.catchTag("LocalSourceUpdateError", (error) =>
+        Effect.succeed<CommandResult>({ stdout: "", stderr: error.message, exitCode: -1 }),
+      ),
+    );
+    if (result.exitCode === 0) {
+      yield* logSourceInfo("pushed the fork to origin", { repositoryPath: repo });
+      return { pushed: true } satisfies ForkPushResult;
+    }
+    const reason = summarizePushFailure(trimOutput(result));
+    yield* logSourceWarning("fork push skipped", {
+      repositoryPath: repo,
+      reason,
+      exitCode: result.exitCode,
     });
+    return { pushed: false, reason } satisfies ForkPushResult;
+  });
 
   // Sync and update both rewrite the checkout, so they never overlap.
   const repositoryLock = yield* Semaphore.make(1);
@@ -800,8 +970,7 @@ export const make = Effect.gen(function* () {
     if (!merging) {
       const pendingBuild = yield* Ref.get(builtUpdateRef);
       if (pendingBuild) {
-        yield* pushFork(repo);
-        return pendingBuild;
+        return { ...pendingBuild, push: yield* pushFork(repo) } satisfies LocalSourceUpdateBuild;
       }
       // Sync already merged this nightly; it still needs building when the
       // running app predates it.
@@ -828,7 +997,13 @@ export const make = Effect.gen(function* () {
       : runCommand({
           operation: "build",
           command: "git",
-          args: ["stash", "push", "--include-untracked", "-m", "ndev.t3code: unbuilt update fixes"],
+          args: [
+            "stash",
+            "push",
+            "--include-untracked",
+            "-m",
+            "local source update: unbuilt fixes",
+          ],
           cwd: repo,
         }).pipe(Effect.ignore);
     const built = yield* Effect.gen(function* () {
@@ -918,12 +1093,13 @@ export const make = Effect.gen(function* () {
         restoreCheckout.pipe(Effect.andThen(removeBuilds), Effect.andThen(Effect.failCause(cause))),
       ),
     );
+    const push = yield* pushFork(repo);
     const build = {
       version: inspection.upstreamVersion,
       applicationBundlePath: built.applicationBundlePath,
+      push,
     } satisfies LocalSourceUpdateBuild;
     yield* Ref.set(builtUpdateRef, build);
-    yield* pushFork(repo);
     return build;
   }).pipe(
     repositoryLock.withPermits(1),
@@ -951,7 +1127,11 @@ export const make = Effect.gen(function* () {
         ? Number((yield* git(["rev-list", "--count", `HEAD..${target}`])).stdout.trim())
         : inspection.behind;
       if (behind === 0 || (!agent && (yield* Ref.get(autoSyncBlockedRef)) === target)) {
-        return { merged: 0, upstreamTag: inspection.upstreamTag } satisfies LocalSourceSyncResult;
+        return {
+          merged: 0,
+          upstreamTag: inspection.upstreamTag,
+          push: null,
+        } satisfies LocalSourceSyncResult;
       }
       const label = agent
         ? `upstream main ${target.slice(0, 10)}`
@@ -968,10 +1148,10 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
-      yield* pushFork(repo);
       return {
         merged: behind,
         upstreamTag: inspection.upstreamTag,
+        push: yield* pushFork(repo),
       } satisfies LocalSourceSyncResult;
     }).pipe(
       repositoryLock.withPermits(1),
@@ -1041,9 +1221,8 @@ export const make = Effect.gen(function* () {
   }).pipe(Effect.withSpan("desktop.localSourceUpdates.install"));
 
   return LocalSourceUpdates.of({
-    enabled: Effect.succeed(
-      environment.platform === "darwin" && environment.isPackaged && repositoryPath !== undefined,
-    ),
+    enabled: Effect.succeed(enabled),
+    repositoryPath: Option.fromNullishOr(repositoryPath),
     // Locked so a poll never inspects mid-merge.
     inspect: inspect.pipe(repositoryLock.withPermits(1)),
     syncAndBuild,

@@ -186,8 +186,8 @@ in T3, which binds an ordinary thread to that same session.
 - If the other app and T3 write the same session at the same time, the other app's entries inside
   T3's window are not copied, and a detach can race a turn the user sends right then.
 - A continued thread is "native" so its own provider resumes without replaying history, but
-  upstream reads runless items as handoff context only for `v1_import` threads. The
-  `carriesImportedHistory` hook in `Orchestrator.ts` also counts `import:` threads, so a switch to
+  upstream reads runless items as handoff context only for `v1_import` threads. In
+  `Orchestrator.ts`, `handoffHistoryOrigin` (`importedHistory.ts`) also counts `import:` threads, so a switch to
   another provider carries the imported and synced history; the first same-provider turn still
   skips it, because `shouldPrepareLegacyImportHandoff` keeps requiring `v1_import`.
 - Turns run by another provider never reach the original session. When the thread switches back,

@@ -1,0 +1,6 @@
+/* The Sync button takes the footer row's `ml-auto`, so the update pill that
+   follows it sits right beside it. Unlayered, so it wins over Tailwind's
+   `ml-auto` on the pill. */
+[data-source-sync] + [data-sidebar="menu-item"] {
+  margin-left: 0;
+}

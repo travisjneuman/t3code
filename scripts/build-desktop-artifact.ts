@@ -52,10 +52,10 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { REMOTE_APP_DISTRIBUTION } from "../apps/desktop/src/remote-apps/RemoteAppDistribution.ts";
+import * as Fork from "./lib/fork-desktop-artifact.ts"; // Fork add-on: identity and local source updates.
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = REMOTE_APP_DISTRIBUTION.appId;
+const DESKTOP_APP_ID = Fork.REMOTE_APP_DISTRIBUTION.appId; // Fork add-on: identity.
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -949,7 +949,7 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!**/node_modules/@cursor/sdk-*/**/*",
   "!apps/desktop/prod-resources/cursor-sdk",
   "!apps/desktop/prod-resources/cursor-sdk/**/*",
-  // ndev.t3code always passes the user's installed Claude executable to the SDK,
+  // T3 Code always passes the user's installed Claude executable to the SDK,
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
@@ -2001,7 +2001,7 @@ const hasNativeLoaderMarkers = Effect.fn("hasNativeLoaderMarkers")(function* (pa
 });
 
 export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservingSymlinks")(
-  function* (source: string, destination: string, linkStyle: "absolute" | "relative" = "absolute") {
+  function* (source: string, destination: string) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
@@ -2035,19 +2035,10 @@ export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservin
                 output: `Refusing to copy symlink ${sourceEntry}: its target ${absoluteSourceTarget} escapes the packaged tree.`,
               });
             }
-            const targetPath = path.join(destination, sourceRelativeTarget);
-            const target =
-              linkStyle === "relative"
-                ? path.relative(path.dirname(destinationEntry), targetPath)
-                : targetPath;
+            const target = path.join(destination, sourceRelativeTarget);
             yield* fs.remove(destinationEntry, { recursive: true, force: true });
             yield* Effect.tryPromise({
-              try: () =>
-                NodeFSP.symlink(
-                  target,
-                  destinationEntry,
-                  linkStyle === "relative" ? undefined : "junction",
-                ),
+              try: () => NodeFSP.symlink(target, destinationEntry, "junction"),
               catch: (cause) =>
                 new BundleNotSelfContainedError({
                   exitCode: -1,
@@ -2578,7 +2569,6 @@ export function resolveDesktopRuntimeDependencies(
 export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig")(function* (
   updateChannel: "latest" | "nightly",
 ) {
-  if (!REMOTE_APP_DISTRIBUTION.autoUpdateEnabled) return undefined;
   const env = yield* Config.all({
     updateRepository: Config.String("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
     githubRepository: Config.String("GITHUB_REPOSITORY").pipe(Config.option),
@@ -2586,7 +2576,7 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
     Option.getOrUndefined(env.githubRepository)?.trim() ||
-    REMOTE_APP_DISTRIBUTION.updateRepository
+    ""
   ).trim();
   if (!rawRepo) return undefined;
 
@@ -2654,8 +2644,9 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
+// Fork add-on: one app name for every channel, without a stage label.
 export function resolveDesktopProductName(_version: string): string {
-  return REMOTE_APP_DISTRIBUTION.baseName;
+  return Fork.REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on: identity.
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2680,7 +2671,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: `${REMOTE_APP_DISTRIBUTION.baseName}-\${version}-\${arch}.\${ext}`,
+    artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2725,9 +2716,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
-    if (!signed) {
-      buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs");
-    }
+    // Fork add-on: seal unsigned builds, and record the checkout for local source updates.
+    if (!signed) buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs");
+    buildConfig.extraMetadata = { t3codeSourceRepositoryPath: repoRoot }; // Fork add-on
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -2738,8 +2729,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: REMOTE_APP_DISTRIBUTION.baseName,
-          schemes: [REMOTE_APP_DISTRIBUTION.protocol, `${REMOTE_APP_DISTRIBUTION.protocol}-dev`],
+          name: "T3 Code",
+          schemes: [Fork.forkAppScheme(false), Fork.forkAppScheme(true)], // Fork add-on: identity.
         },
       ],
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
@@ -2787,7 +2778,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // resources/package-type into the .deb only, so electron-updater updates
       // each install in its own format.
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "t3code-tjn",
+      executableName: Fork.forkAppScheme(false), // Fork add-on: identity.
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
@@ -2798,13 +2789,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // t3code:// OAuth callbacks to the app.
       protocols: [
         {
-          name: REMOTE_APP_DISTRIBUTION.baseName,
-          schemes: [REMOTE_APP_DISTRIBUTION.protocol, `${REMOTE_APP_DISTRIBUTION.protocol}-dev`],
+          name: "T3 Code",
+          schemes: [Fork.forkAppScheme(false), Fork.forkAppScheme(true)], // Fork add-on: identity.
         },
       ],
       desktop: {
         entry: {
-          StartupWMClass: "t3code-tjn",
+          StartupWMClass: Fork.forkAppScheme(false), // Fork add-on: identity.
         },
       },
     };
@@ -3496,16 +3487,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   if (!options.skipBuild) {
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
-    // The web bundle reads APP_VERSION at Vite build time. Keep it aligned
-    // with the artifact version even when a local Nightly build is requested
-    // without first rewriting the workspace package manifests.
-    const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"], {
-      env: { ...process.env, APP_VERSION: appVersion },
-    });
+    const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"]);
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: repoRoot,
-        env: { ...process.env, APP_VERSION: appVersion },
         shell: spawnCommand.shell,
       }),
       { label: "vp run build:desktop", verbose: options.verbose },
@@ -3723,7 +3708,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: REMOTE_APP_DISTRIBUTION.packageName,
+    name: Fork.REMOTE_APP_DISTRIBUTION.packageName, // Fork add-on: its own ShipIt cache.
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
@@ -3940,15 +3925,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   for (const entry of stageEntries) {
     const from = path.join(stageDistDir, entry);
     const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
-    if (!stat) continue;
-
-    const to = path.join(options.outputDir, entry);
-    if (options.platform === "mac" && options.target === "dir" && stat.type === "Directory") {
-      yield* copyDirectoryPreservingSymlinks(from, to, "relative");
-      copiedArtifacts.push(to);
+    // Fork add-on: a mac `dir` build also outputs its app, which local source updates install.
+    if (stat?.type === "Directory" && options.platform === "mac" && options.target === "dir") {
+      const bundleOutput = path.join(options.outputDir, entry);
+      copiedArtifacts.push(yield* Fork.copyForkAppBundle(from, bundleOutput));
       continue;
     }
-    if (stat.type !== "File") continue;
+    if (!stat || stat.type !== "File") continue;
+
+    const to = path.join(options.outputDir, entry);
     yield* fs.copyFile(from, to);
     copiedArtifacts.push(to);
   }
@@ -4025,7 +4010,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for ndev.t3code."),
+  Command.withDescription("Build a desktop artifact for T3 Code."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

@@ -27,10 +27,6 @@
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"
     },
-    "./sidebarStageArtwork": {
-      "types": "./src/sidebarStageArtwork.ts",
-      "import": "./src/sidebarStageArtwork.ts"
-    },
     "./themePreview": {
       "types": "./src/themePreview.ts",
       "import": "./src/themePreview.ts"

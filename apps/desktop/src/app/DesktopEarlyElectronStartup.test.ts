@@ -82,8 +82,8 @@ describe("DesktopEarlyElectronStartup", () => {
 
     assert.deepEqual(options, {
       isDevelopment: true,
-      linuxWmClass: "t3code-tjn-dev",
-      linuxDesktopEntryName: "t3code-tjn-dev.desktop",
+      linuxWmClass: "t3code-dev",
+      linuxDesktopEntryName: "com.t3tools.T3Code.Development.desktop",
       passwordStore: "gnome-libsecret",
     });
   });
@@ -119,19 +119,5 @@ describe("DesktopEarlyElectronStartup", () => {
     });
 
     assert.equal(preference, "gnome-libsecret");
-  });
-
-  it("keeps packaged fork settings under the official base directory", () => {
-    const preference = resolveEarlyLinuxPasswordStorePreference({
-      env: {},
-      homeDirectory: "/home/user",
-      joinPath,
-      readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3/userdata/desktop-settings.json");
-        return JSON.stringify({ linuxPasswordStore: "auto" });
-      },
-    });
-
-    assert.equal(preference, "auto");
   });
 });

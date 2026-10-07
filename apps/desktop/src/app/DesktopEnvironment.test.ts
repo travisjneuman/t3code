@@ -14,9 +14,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/ndev.t3code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/ndev.t3code.app/Contents/Resources",
+  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -76,9 +76,9 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "dev.neuman.t3code");
-      assert.equal(environment.linuxWmClass, "t3code-tjn-dev");
-      assert.equal(environment.linuxDesktopEntryName, "t3code-tjn-dev.desktop");
+      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
+      assert.equal(environment.linuxWmClass, "t3code-dev");
+      assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.Development.desktop");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -150,29 +150,7 @@ describe("DesktopEnvironment", () => {
         resourcesPath: "/tmp/.mount_t3code/resources",
       });
 
-      assert.equal(environment.linuxDesktopEntryName, "t3code-tjn.desktop");
-    }),
-  );
-
-  it.effect("keeps packaged fork state in the official ~/.t3 directory", () =>
-    Effect.gen(function* () {
-      const environment = yield* makeEnvironment({ isPackaged: true });
-
-      assert.equal(environment.baseDir, "/Users/alice/.t3");
-      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
-      assert.equal(environment.serverSettingsPath, "/Users/alice/.t3/userdata/settings.json");
-    }),
-  );
-
-  it.effect("does not let packaged fork state inherit an ambient T3CODE_HOME", () =>
-    Effect.gen(function* () {
-      const environment = yield* makeEnvironment(
-        { isPackaged: true },
-        { T3CODE_HOME: "/Users/alice/elsewhere" },
-      );
-
-      assert.equal(environment.baseDir, "/Users/alice/.t3");
-      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.desktop");
     }),
   );
 

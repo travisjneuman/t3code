@@ -30,7 +30,6 @@ import * as Electron from "electron";
 import * as NodeCrypto from "node:crypto";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
-import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import { getDesktopOrigin } from "../electron/ElectronProtocol.ts";
 import {
@@ -62,11 +61,11 @@ import {
   resolveRemoteAppSurfaceMenuHeight,
   type RemoteAppSurfaceMenuMaterial,
 } from "./RemoteAppTheme.ts";
-import { REMOTE_APP_STATE_CHANGE_CHANNEL } from "../ipc/channels.ts";
 import {
   REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL,
   REMOTE_APP_SEND_TO_THREAD_CHANNEL,
-} from "./RemoteAppChannels.ts";
+  REMOTE_APP_STATE_CHANGE_CHANNEL,
+} from "../fork/channels.ts";
 import { importRemoteAppChatExport } from "./RemoteAppChatImport.ts";
 import { readRemoteAppDownloadCapture } from "./RemoteAppDownloads.ts";
 import { safeFilename } from "./RemoteAppFiles.ts";
@@ -200,6 +199,12 @@ export class RemoteAppManagerError extends Schema.TaggedError<RemoteAppManagerEr
 
 const isRemoteAppManagerError = Schema.is(RemoteAppManagerError);
 
+/** The IPC sender fields remote app authorization reads; Electron's WebContents has both. */
+export interface RemoteAppIpcSender {
+  readonly id: number;
+  readonly getURL?: () => string;
+}
+
 export class RemoteAppManager extends Context.Service<
   RemoteAppManager,
   {
@@ -227,7 +232,7 @@ export class RemoteAppManager extends Context.Service<
     readonly fillSitePrompt: (
       request: RemoteAppFillPromptRequest,
     ) => Effect.Effect<RemoteAppFillPromptResult, RemoteAppManagerError>;
-    readonly authorizeSender: (event: DesktopIpc.DesktopIpcInvokeEvent) => Effect.Effect<boolean>;
+    readonly authorizeSender: (sender: RemoteAppIpcSender | undefined) => Effect.Effect<boolean>;
     // Reveals a download captured this session; an unknown id does nothing.
     readonly showDownloadInFolder: (id: string) => Effect.Effect<void>;
     readonly importChatExport: Effect.Effect<RemoteAppChatImportResult>;
@@ -1652,11 +1657,11 @@ export const make = Effect.gen(function* () {
     fillSitePrompt,
     showDownloadInFolder,
     importChatExport,
-    authorizeSender: (event) => {
-      const senderId = event.sender?.id;
+    authorizeSender: (sender) => {
+      const senderId = sender?.id;
       const senderUrl = (() => {
         try {
-          return event.sender?.getURL?.();
+          return sender?.getURL?.();
         } catch {
           return undefined;
         }

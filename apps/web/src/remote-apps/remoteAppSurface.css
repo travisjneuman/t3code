@@ -1,0 +1,122 @@
+/* Remote-app surface styling. `RemoteAppTitlebar` mirrors the active surface
+   onto <html> as data-remote-app-surface; the surface rules only reach inside
+   the sidebar wrapper, so portalled UI keeps its normal look. These rules are
+   unlayered on purpose: they must win over Tailwind's layered utilities. */
+
+/* The live remote WebContentsView is layered beneath the host renderer. In
+   that surface the host owns the shared title bar and the native sidebar
+   footer, while the remote page supplies the content behind those regions.
+   Keep the host renderer transparent only for this explicit surface so the
+   normal T3 page remains unchanged. */
+html[data-remote-app-surface="remote"],
+html[data-remote-app-surface="remote"] body,
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"],
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-inset"],
+html[data-remote-app-surface="remote"]
+  [data-slot="sidebar-wrapper"]
+  [data-remote-app-host-workspace] {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+html[data-remote-app-surface="remote"]
+  [data-slot="sidebar-wrapper"]
+  [data-slot="sidebar-container"],
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-inner"] {
+  background-color: var(--sidebar) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+html[data-remote-app-surface="remote"]
+  [data-slot="sidebar-wrapper"]
+  [data-slot="sidebar-container"] {
+  pointer-events: none !important;
+}
+
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-content"],
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-rail"] {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-header"] {
+  pointer-events: none !important;
+}
+
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-footer"] {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 1;
+  visibility: visible !important;
+}
+
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-inset"] {
+  pointer-events: none !important;
+}
+
+html[data-remote-app-surface="remote"]
+  [data-slot="sidebar-wrapper"]
+  [data-remote-app-host-workspace],
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-remote-app-host-column] {
+  background-color: var(--background) !important;
+  background-image: none !important;
+  pointer-events: none !important;
+}
+
+html[data-remote-app-surface="remote"]
+  [data-slot="sidebar-wrapper"]
+  [data-remote-app-host-column]
+  > :not([data-chat-header]),
+html[data-remote-app-surface="remote"]
+  [data-slot="sidebar-wrapper"]
+  [data-remote-app-host-workspace]
+  > [data-workspace-titlebar-controls] {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* The header stays as the window's drag strip, but its breadcrumb and panel
+   toggles belong to the hidden chat: the panels they open sit behind the
+   remote page. */
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-chat-header] {
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-chat-header] > * {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* The rail sits under the site view, which would swallow its drags; resize the
+   sidebar from T3 and every site follows. */
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] [data-slot="sidebar-rail"] {
+  display: none;
+}
+
+/* Site views start level with the Search row (8px under the header line), so
+   the stage artwork finishes fading in that strip instead of being cut off by
+   the page. Keep in sync with REMOTE_APP_VIEW_TOP_INSET. */
+html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] .sidebar-stage-backdrop {
+  mask-image: linear-gradient(to bottom, black 0, black 44px, transparent 60px);
+  -webkit-mask-image: linear-gradient(to bottom, black 0, black 44px, transparent 60px);
+}
+
+/* The surface switcher sits at the titlebar content inset, so with the sidebar
+   collapsed the page headers start after it instead of underneath it. 5rem
+   covers the switcher's "T3 Code" label at any font size. */
+html[data-remote-app-surface="t3code"]
+  [data-slot="sidebar-wrapper"][data-sidebar-state="collapsed"]:has([data-remote-app-switcher])
+  [data-slot="sidebar-inset"] {
+  --workspace-titlebar-content-left: calc(
+    var(--workspace-controls-left) + var(--workspace-titlebar-control-size) +
+      var(--workspace-titlebar-control-gap) * 2 + 5rem
+  );
+}
+
+/* The surface switcher takes the sidebar brand's place in the desktop
+   titlebar, so the brand row (and its environment pill) is not shown. */
+html[data-remote-app-surface] div:has(> a[aria-label="Go to threads"]) {
+  display: none;
+}

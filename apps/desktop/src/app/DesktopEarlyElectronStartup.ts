@@ -14,7 +14,7 @@ import {
   resolveDesktopStateDir,
   type JoinPath,
 } from "./DesktopStatePaths.ts";
-import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts";
+import { forkAppScheme } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
 
 interface EarlyDesktopSettingsInput {
   readonly env: NodeJS.ProcessEnv;
@@ -33,9 +33,7 @@ export interface EarlyLinuxElectronOptions {
 }
 
 export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
-  isDevelopment
-    ? `${REMOTE_APP_DISTRIBUTION.protocol}-dev.desktop`
-    : `${REMOTE_APP_DISTRIBUTION.protocol}.desktop`;
+  `${forkAppScheme(isDevelopment)}.desktop`; // Fork add-on: identity.
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
@@ -62,14 +60,6 @@ function resolveEarlyDesktopSettingsPath(input: {
     homeDirectory: input.homeDirectory,
     joinPath: input.joinPath,
     t3Home,
-    ...(!isDevelopmentEnvironment(input.env)
-      ? {
-          defaultBaseDir: input.joinPath(
-            input.homeDirectory,
-            REMOTE_APP_DISTRIBUTION.packagedBaseDirName,
-          ),
-        }
-      : {}),
   });
   const stateDir = resolveDesktopStateDir({
     baseDir,
@@ -99,9 +89,7 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxWmClass: isDevelopment
-      ? `${REMOTE_APP_DISTRIBUTION.protocol}-dev`
-      : REMOTE_APP_DISTRIBUTION.protocol,
+    linuxWmClass: forkAppScheme(isDevelopment), // Fork add-on: identity.
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,

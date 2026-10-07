@@ -3,9 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
-import { RemoteAppProvider } from "./remote-apps/useRemoteAppState";
-import { RemoteAppSiteSync } from "./remote-apps/RemoteAppSiteSync";
-import { RemoteAppThemeSync } from "./remote-apps/RemoteAppThemeSync";
+import { RemoteAppSync } from "./remote-apps/RemoteAppSync"; // Fork add-on: remote apps.
 import type { AppRouter } from "./router";
 
 /**
@@ -16,13 +14,11 @@ import type { AppRouter } from "./router";
 export function AppRoot({ router }: { readonly router: AppRouter }) {
   return (
     <AppAtomRegistryProvider>
-      <RemoteAppProvider>
-        <RemoteAppThemeSync />
-        <RemoteAppSiteSync />
-        <RouterProvider router={router} />
-        <ElectronBrowserHost />
-        <QuitHoldOverlay />
-      </RemoteAppProvider>
+      {/* Fork add-on: remote apps. */}
+      <RemoteAppSync />
+      <RouterProvider router={router} />
+      <ElectronBrowserHost />
+      <QuitHoldOverlay />
     </AppAtomRegistryProvider>
   );
 }

@@ -122,7 +122,7 @@ import {
   ThreadForkServiceV2,
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
-import { carriesImportedHistory } from "../external-sessions/importedHistory.ts"; // Fork add-on
+import { handoffHistoryOrigin } from "../external-sessions/importedHistory.ts"; // Fork add-on: continued external sessions.
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
   "OrchestratorDispatchError",
@@ -1420,9 +1420,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 run.ordinal <= latestHandoffRun.ordinal,
             );
       const needsFullContext = deliveryProviderThread.nativeThreadRef === null;
-      const legacyImportItems = carriesImportedHistory(projection.thread) // Fork add-on: continued external sessions.
-        ? yield* readHandoffItems(threadId, [null])
-        : [];
+      const legacyImportItems =
+        handoffHistoryOrigin(projection.thread) === "v1_import" // Fork add-on: continued external sessions.
+          ? yield* readHandoffItems(threadId, [null])
+          : [];
       const handoffStrategy = needsFullContext
         ? ("full_thread_summary" as const)
         : ("delta_since_target_last_seen" as const);
@@ -5143,9 +5144,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const runId = idAllocator.derive.run({ threadId: command.threadId, ordinal });
       const latestCompletedRun = projection.runs.findLast((run) => run.status === "completed");
       const latestHandoffRun = projection.runs.findLast(isHandoffSourceRun);
-      const legacyImportItems = carriesImportedHistory(projection.thread) // Fork add-on: continued external sessions.
-        ? yield* readHandoffItems(command.threadId, [null])
-        : [];
+      const legacyImportItems =
+        handoffHistoryOrigin(projection.thread) === "v1_import" // Fork add-on: continued external sessions.
+          ? yield* readHandoffItems(command.threadId, [null])
+          : [];
       const isProviderSwitch =
         activeProviderThread !== undefined &&
         activeProviderThread.providerInstanceId !== modelSelection.instanceId;
@@ -5681,8 +5683,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               ...sourceProjection.runs
                 .filter((run) => run.ordinal <= sourceRun.ordinal)
                 .map((run) => run.id),
-              // Fork add-on: continued external sessions.
-              ...(carriesImportedHistory(sourceProjection.thread) ? [null] : []),
+              ...(handoffHistoryOrigin(sourceProjection.thread) === "v1_import" ? [null] : []), // Fork add-on: continued external sessions.
             ]);
       const portableForkHandoff =
         !requiresPortableFork ||

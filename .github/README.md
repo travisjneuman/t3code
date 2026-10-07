@@ -19,7 +19,7 @@
 
 Everything T3 Code does comes from the official project at **[pingdotgg/t3code](https://github.com/pingdotgg/t3code)**. Go there to learn about T3 Code itself, its providers, the mobile app and contributing.
 
-This fork follows the upstream nightly and adds the features below. Each add-on lives in its own module, and upstream files get only one-line hooks marked `Fork add-on`. That keeps merges from upstream small.
+This fork follows the upstream nightly and adds the features below. Each add-on lives in its own files, and upstream files get only one-line hooks marked `Fork add-on`. That keeps merges from upstream small ([how the fork is built](https://github.com/travisjneuman/t3code/blob/main/docs/internals/fork-add-ons.md)).
 
 ## What's added
 
@@ -55,7 +55,7 @@ Claude Code, Codex, Grok, Pi and Antigravity sessions that you started outside T
 - **Hand back to** gives the session back to the agent it came from. **Move back to Other Agents** undoes the continue.
 - Sessions from the Claude desktop app and the Codex app can be opened in those apps, and any session can be archived in T3 without touching the original app.
 
-[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/thread-sidebar.md#sessions-from-other-agents)
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/other-agents.md)
 
 ### Compare agents
 
@@ -75,25 +75,24 @@ Choose **Save to notes…** in a thread's menu.
 - **Summary**: the agent writes a summary note into your notes folder, following that folder's `AGENTS.md` or `CLAUDE.md` rules.
 - **Full copy**: saves the thread's prompts and final answers as one Markdown file.
 
-[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/thread-sidebar.md#save-a-thread-to-your-notes)
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md#save-a-thread-to-your-notes)
 
 ### Export a thread
 
 Choose **Export…** in a thread's menu to save everything the server stores for that thread, including every run, message, tool call, file change and plan. Pick a readable Markdown transcript or a complete JSON record.
 
-[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/thread-sidebar.md#export-a-thread)
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md#export-a-thread)
 
 ### Upstream sync
 
-This is how the fork stays current. The maintainer's desktop app updates from its source checkout instead of a download feed.
+A Mac app you build yourself updates from the checkout it was built from instead of a download feed.
 
-- Every 30 minutes the app merges any new official nightly into the fork and pushes it.
-- **Sync & Build** builds the merged source on the Mac. **Restart & Install** then swaps in the new app.
-- When needed, Claude Code fixes merge conflicts and build breaks. Nothing is pushed unless the build succeeds.
+- Every 30 minutes the app merges any new official nightly into the checkout's `main`.
+- **Sync & Build** builds the merged source on your Mac. **Restart & Install** then swaps in the new app.
+- When needed, Claude Code fixes merge conflicts and build breaks. Nothing is committed unless the build succeeds.
+- The merge is pushed to your fork (`origin`) when you can write to it, and never to the official repository. Without write access, the merge and build still finish locally.
 
-For now this needs push access to this repo, so it only works on the maintainer's machine. A copy you build yourself updates by pulling and rebuilding.
-
-[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/updating.md#updating-the-fork-from-upstream-nightly)
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-updating.md#update-from-source)
 
 ### Compact cards
 
@@ -110,7 +109,15 @@ vp i
 vp run dist:desktop:dmg:arm64   # on an Intel Mac, use dist:desktop:dmg:x64
 ```
 
-The app is saved in `release/`. To update it, run `git pull`, then build again.
+The app is saved in `release/`. Keep the checkout where it is: the installed app updates from the folder it was built from.
+
+For those updates, add the official repository as `upstream`. Point `origin` at your own fork if you want the merges pushed there.
+
+```bash
+git remote add upstream https://github.com/pingdotgg/t3code.git
+```
+
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-updating.md)
 
 ---
 

@@ -1,13 +1,10 @@
-# ndev.t3code docs
+# T3 Code docs
 
-ndev.t3code is Travis J. Neuman's fork of [T3 Code](https://github.com/pingdotgg/t3code). The fork's source and releases are published at [github.com/travisjneuman/t3code](https://github.com/travisjneuman/t3code). The project site is planned for [t3code.neuman.dev](https://t3code.neuman.dev), but it is not live yet.
-
-## Using ndev.t3code
+## Using T3 Code
 
 - [Install T3 Code](./user/install.md)
 - [Messages and context](./user/composer.md)
 - [Working with threads](./user/thread-sidebar.md)
-- [Compare agents](./user/compare-agents.md)
 - [Permission modes](./user/permission-modes.md)
 - [Terminal history](./user/terminal.md)
 - [Source control](./user/source-control.md)
@@ -27,7 +24,7 @@ ndev.t3code is Travis J. Neuman's fork of [T3 Code](https://github.com/pingdotgg
 
 ---
 
-## Working on ndev.t3code
+## Working on T3 Code
 
 Start with the [development runbook](./operations/development.md) and
 [contribution policy](../CONTRIBUTING.md).

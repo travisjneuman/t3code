@@ -4,12 +4,6 @@ import type {
   DesktopPreviewRecordingInputEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
-  RemoteAppDownloadCapture,
-  RemoteAppFillPromptRequest,
-  RemoteAppSendToThread,
-  RemoteAppSurfaceMenuAnchor,
-  RemoteAppTheme,
-  RemoteAppState,
   DesktopSnapShotEvent,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
@@ -17,60 +11,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
 import { mergeLegacyLocalStorage } from "./legacyLocalStorageMerge.ts";
-import * as RemoteAppChannels from "./remote-apps/RemoteAppChannels.ts";
-
-// Mirrors RemoteAppSiteSchema; the preload imports contract types only.
-const REMOTE_APP_SURFACES = new Set([
-  "t3code",
-  "chatgpt",
-  "claude",
-  "grok",
-  "gemini",
-  "perplexity",
-]);
-
-function isRemoteAppState(value: unknown): value is RemoteAppState {
-  if (typeof value !== "object" || value === null) return false;
-  const state = value as Partial<RemoteAppState>;
-  return (
-    state.schemaVersion === 1 &&
-    typeof state.activeSurface === "string" &&
-    REMOTE_APP_SURFACES.has(state.activeSurface) &&
-    typeof state.currentTitle === "string" &&
-    typeof state.zoomFactor === "number" &&
-    Array.isArray(state.recents)
-  );
-}
-
-function isRemoteAppSendToThread(value: unknown): value is RemoteAppSendToThread {
-  if (typeof value !== "object" || value === null) return false;
-  const send = value as Partial<RemoteAppSendToThread>;
-  return (
-    typeof send.site === "string" &&
-    send.site !== "t3code" &&
-    REMOTE_APP_SURFACES.has(send.site) &&
-    typeof send.text === "string" &&
-    send.text.length > 0
-  );
-}
-
-function isRemoteAppDownloadCapture(value: unknown): value is RemoteAppDownloadCapture {
-  if (typeof value !== "object" || value === null) return false;
-  const capture = value as Partial<RemoteAppDownloadCapture>;
-  return (
-    typeof capture.id === "string" &&
-    typeof capture.site === "string" &&
-    capture.site !== "t3code" &&
-    REMOTE_APP_SURFACES.has(capture.site) &&
-    typeof capture.filename === "string" &&
-    typeof capture.path === "string" &&
-    (capture.kind === "text" || capture.kind === "archive") &&
-    typeof capture.bytes === "number" &&
-    typeof capture.language === "string" &&
-    (capture.text === null || typeof capture.text === "string") &&
-    typeof capture.addNow === "boolean"
-  );
-}
+import { makeForkDesktopBridge } from "./fork/preloadBridge.ts"; // Fork add-on: bridge members.
 
 const SNAP_SHOT_EVENT_TYPES = new Set([
   "requested",
@@ -136,6 +77,7 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  ...makeForkDesktopBridge(ipcRenderer), // Fork add-on: confirm, source sync, remote apps.
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {
@@ -311,7 +253,6 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   getWindowFullscreenState: () =>
     ipcRenderer.sendSync(IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL) === true,
-  confirm: (message) => ipcRenderer.invoke(IpcChannels.CONFIRM_DIALOG_CHANNEL, message),
   onWindowFullscreenStateChange: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, fullscreen: unknown) => {
       if (typeof fullscreen !== "boolean") return;
@@ -329,7 +270,6 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   checkForUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_CHECK_CHANNEL),
   downloadUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_DOWNLOAD_CHANNEL),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_INSTALL_CHANNEL),
-  syncSource: () => ipcRenderer.invoke(IpcChannels.UPDATE_SYNC_SOURCE_CHANNEL),
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;
@@ -359,64 +299,6 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         );
       };
     },
-  },
-  remoteApps: {
-    getState: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GET_STATE_CHANNEL),
-    setTheme: (theme: RemoteAppTheme) =>
-      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_THEME_CHANNEL, theme),
-    openSurfaceMenu: (anchor: RemoteAppSurfaceMenuAnchor) =>
-      ipcRenderer.invoke(IpcChannels.REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL, anchor),
-    setAvailableSites: (availability) =>
-      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_AVAILABLE_SITES_CHANNEL, availability),
-    setActiveSurface: (surface) =>
-      ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL, surface),
-    goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),
-    goForward: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_FORWARD_CHANNEL),
-    reload: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RELOAD_CHANNEL),
-    zoomIn: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_ZOOM_IN_CHANNEL),
-    zoomOut: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_ZOOM_OUT_CHANNEL),
-    resetZoom: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RESET_ZOOM_CHANNEL),
-    retry: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RETRY_CHANNEL),
-    clearData: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_CLEAR_DATA_CHANNEL),
-    fillSitePrompt: (request: RemoteAppFillPromptRequest) =>
-      ipcRenderer.invoke(RemoteAppChannels.REMOTE_APP_FILL_SITE_PROMPT_CHANNEL, request),
-    onStateChange: (listener) => {
-      const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
-        if (isRemoteAppState(state)) listener(state);
-      };
-      ipcRenderer.on(IpcChannels.REMOTE_APP_STATE_CHANGE_CHANNEL, wrappedListener);
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.REMOTE_APP_STATE_CHANGE_CHANNEL, wrappedListener);
-      };
-    },
-    onSendToThread: (listener) => {
-      const wrappedListener = (_event: Electron.IpcRendererEvent, send: unknown) => {
-        if (isRemoteAppSendToThread(send)) listener(send);
-      };
-      ipcRenderer.on(RemoteAppChannels.REMOTE_APP_SEND_TO_THREAD_CHANNEL, wrappedListener);
-      return () => {
-        ipcRenderer.removeListener(
-          RemoteAppChannels.REMOTE_APP_SEND_TO_THREAD_CHANNEL,
-          wrappedListener,
-        );
-      };
-    },
-    onDownloadCaptured: (listener) => {
-      const wrappedListener = (_event: Electron.IpcRendererEvent, capture: unknown) => {
-        if (isRemoteAppDownloadCapture(capture)) listener(capture);
-      };
-      ipcRenderer.on(RemoteAppChannels.REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL, wrappedListener);
-      return () => {
-        ipcRenderer.removeListener(
-          RemoteAppChannels.REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL,
-          wrappedListener,
-        );
-      };
-    },
-    showDownloadInFolder: (id: string) =>
-      ipcRenderer.invoke(RemoteAppChannels.REMOTE_APP_SHOW_DOWNLOAD_CHANNEL, id),
-    importChatExport: () =>
-      ipcRenderer.invoke(RemoteAppChannels.REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL),
   },
   preview: {
     setForwardedShortcuts: (shortcuts) =>

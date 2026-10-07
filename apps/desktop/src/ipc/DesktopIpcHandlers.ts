@@ -36,14 +36,12 @@ import {
   getUpdateState,
   installUpdate,
   setUpdateChannel,
-  syncSource,
 } from "./methods/updates.ts";
 import {
   getAppBranding,
   getLocalEnvironmentBootstraps,
   getLocalEnvironmentBearerToken,
   getSystemLocale,
-  confirm,
   getWindowFullscreenState,
   openExternal,
   openSystemSettings,
@@ -77,7 +75,7 @@ import {
   takeLegacyLocalStorage,
 } from "./methods/legacyLocalStorage.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
-import * as RemoteAppIpc from "./methods/remoteApps.ts";
+import { installForkIpcHandlers } from "../fork/ipcHandlers.ts"; // Fork add-on: fork IPC methods.
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
@@ -92,7 +90,6 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handleSync(getAppBranding);
   yield* ipc.handleSync(getSystemLocale);
   yield* ipc.handleSync(getWindowFullscreenState);
-  yield* ipc.handle(confirm);
   yield* ipc.handleSync(getLocalEnvironmentBootstraps);
   yield* ipc.handleSync(getLocalEnvironmentEnabled);
   yield* ipc.handle(setLocalEnvironmentEnabled);
@@ -153,13 +150,10 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(downloadUpdate);
   yield* ipc.handle(installUpdate);
   yield* ipc.handle(checkForUpdate);
-  yield* ipc.handle(syncSource);
   for (const previewMethod of PreviewIpc.methods) {
     yield* ipc.handle(previewMethod);
   }
-  for (const remoteAppMethod of RemoteAppIpc.methods) {
-    yield* ipc.handle(remoteAppMethod);
-  }
   yield* ipc.handle(PreviewIpc.listBrowserImportSources);
   yield* ipc.handle(PreviewIpc.importBrowserCookies);
+  yield* installForkIpcHandlers(ipc); // Fork add-on: confirm, source sync, remote apps.
 });

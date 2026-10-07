@@ -1,17 +1,18 @@
 import { GitMergeIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import { isElectron } from "../../env";
-import { cn } from "../../lib/utils";
-import { useDesktopUpdateState } from "../../state/desktopUpdate";
-import { Spinner } from "../ui/spinner";
-import { SidebarMenuItem } from "../ui/sidebar";
-import { stackedThreadToast, toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Spinner } from "../components/ui/spinner";
+import { SidebarMenuItem } from "../components/ui/sidebar";
+import { stackedThreadToast, toastManager } from "../components/ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
+import { isElectron } from "../env";
+import { cn } from "../lib/utils";
+import { useDesktopUpdateState } from "../state/desktopUpdate";
+import "./sourceSync.css";
 
 /** Merges the official repository into a local source build's fork; shown only for those builds. */
 export function SidebarSourceSyncButton() {
-  return isElectron ? <SidebarSourceSyncControl /> : null;
+  return isElectron && window.desktopBridge?.sourceSync ? <SidebarSourceSyncControl /> : null;
 }
 
 function SidebarSourceSyncControl() {
@@ -19,11 +20,11 @@ function SidebarSourceSyncControl() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSync = useCallback(() => {
-    const bridge = window.desktopBridge;
-    if (!bridge || isSyncing) return;
+    const sourceSync = window.desktopBridge?.sourceSync;
+    if (!sourceSync || isSyncing) return;
     setIsSyncing(true);
-    void bridge
-      .syncSource()
+    void sourceSync
+      .sync()
       .then((result) => {
         toastManager.add(
           stackedThreadToast({

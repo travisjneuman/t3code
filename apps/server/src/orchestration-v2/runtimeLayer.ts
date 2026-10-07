@@ -8,8 +8,7 @@ import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as AgentSessionImporter from "../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../project/AgentSessionScanner.ts";
-// Fork add-on: read-only sessions from agents running outside T3.
-import * as ExternalSessions from "../external-sessions/ExternalSessions.ts";
+import * as ExternalSessions from "../external-sessions/ExternalSessions.ts"; // Fork add-on: external sessions.
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -341,13 +340,14 @@ export const layerProduction = Layer.mergeAll(
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
+  // Fork add-on: read-only sessions from agents running outside T3 (whole block).
   ExternalSessions.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         layerProjectService,
         layerOrchestratorProvided,
         layerEventSinkProvided,
-        layerEventStoreProvided, // Fork add-on: external-session hand back.
+        layerEventStoreProvided,
         IdAllocator.layer,
         ProviderSessionRuntime.layer,
       ),

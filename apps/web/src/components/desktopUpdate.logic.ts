@@ -1,4 +1,5 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
+import * as SourceUpdate from "../source-updates/sourceUpdateWording"; // Fork add-on: local source updates.
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
@@ -62,54 +63,33 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 
   const action = resolveDesktopUpdateButtonAction(state);
   if (action === "download") {
-    return "This Mac has Apple Silicon, but ndev.t3code is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.";
+    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.";
   }
   if (action === "install") {
-    return "This Mac has Apple Silicon, but ndev.t3code is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.";
+    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.";
   }
-  return "This Mac has Apple Silicon, but ndev.t3code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.";
-}
-
-export function getDesktopUpdateActionLabel(
-  state: Pick<DesktopUpdateState, "sourceUpdate"> | null,
-  action: DesktopUpdateButtonAction,
-): string | null {
-  if (action === "none") return null;
-  if (state?.sourceUpdate) {
-    return action === "download" ? "Sync & Build" : "Restart & Install";
-  }
-  return action === "download" ? "Download" : "Install";
+  return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.";
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
+  const sourceTooltip = SourceUpdate.getSourceUpdateButtonTooltip(state); // Fork add-on: local source updates.
+  if (sourceTooltip !== null) return sourceTooltip; // Fork add-on: local source updates.
   if (state.status === "available") {
-    if (state.sourceUpdate) {
-      return `Upstream nightly${state.availableVersion ? ` ${state.availableVersion}` : ""} available. Click to merge the upstream nightly into this fork and build locally.`;
-    }
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
   if (state.status === "downloading") {
     const progress =
       typeof state.downloadPercent === "number" ? ` (${Math.floor(state.downloadPercent)}%)` : "";
-    return `${state.sourceUpdate ? "Building local update" : "Downloading update"}${progress}`;
+    return `Downloading update${progress}`;
   }
   if (state.status === "downloaded") {
-    if (state.sourceUpdate) {
-      return `Local build ${state.downloadedVersion ?? state.availableVersion ?? "ready"}. Click to restart and replace the installed app.`;
-    }
     return `Update ${state.downloadedVersion ?? state.availableVersion ?? "ready"} downloaded. Click to restart and install.`;
   }
   if (state.status === "error") {
     if (state.errorContext === "download" && state.availableVersion) {
-      if (state.sourceUpdate) {
-        return `Merging or building ${state.availableVersion} failed. Click to retry.`;
-      }
       return `Download failed for ${state.availableVersion}. Click to retry.`;
     }
     if (state.errorContext === "install" && state.downloadedVersion) {
-      if (state.sourceUpdate) {
-        return `Local install failed for ${state.downloadedVersion}. Click to retry.`;
-      }
       return `Install failed for ${state.downloadedVersion}. Click to retry.`;
     }
     if (state.downloadedVersion) {
@@ -121,14 +101,12 @@ export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string
 }
 
 export function getDesktopUpdateInstallConfirmationMessage(
-  state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion"> &
-    Partial<Pick<DesktopUpdateState, "sourceUpdate">>,
+  state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion">,
 ): string {
+  const sourceMessage = SourceUpdate.getSourceUpdateInstallConfirmationMessage(state); // Fork add-on: local source updates.
+  if (sourceMessage !== null) return sourceMessage; // Fork add-on: local source updates.
   const version = state.downloadedVersion ?? state.availableVersion;
-  if (state.sourceUpdate) {
-    return `Install the locally built source update${version ? ` ${version}` : ""} and restart ndev.t3code?\n\nAny running tasks will be interrupted. The installed app will be replaced from the local build.`;
-  }
-  return `Install update${version ? ` ${version}` : ""} and restart ndev.t3code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.`;
+  return `Install update${version ? ` ${version}` : ""} and restart T3 Code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.`;
 }
 
 export function getDesktopUpdateActionError(result: DesktopUpdateActionResult): string | null {

@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import { isElectron } from "../../env";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
-import { confirmDesktopUpdateInstall, ensureLocalApi } from "../../localApi";
+import { ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
@@ -214,7 +214,7 @@ function SidebarUpdateControl() {
     if (action === "install") {
       let confirmed = false;
       try {
-        confirmed = await confirmDesktopUpdateInstall(
+        confirmed = await ensureLocalApi().dialogs.confirm(
           getDesktopUpdateInstallConfirmationMessage(state),
         );
       } catch (error) {
@@ -348,8 +348,7 @@ function SidebarUpdateControl() {
   );
 
   return (
-    // The sync button, when shown, takes the auto margin so the pair stays together.
-    <SidebarMenuItem className="ml-auto shrink-0 [[data-source-sync]+&]:ml-0">
+    <SidebarMenuItem className="ml-auto shrink-0">
       <Popover
         handle={releaseNotesPopoverHandle}
         onOpenChange={(open, details) => {

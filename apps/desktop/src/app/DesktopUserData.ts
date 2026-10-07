@@ -3,8 +3,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
-
-import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts";
+import { forkUserDataDirNames } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
 
 export class DesktopUserDataInitializationError extends Schema.TaggedError<DesktopUserDataInitializationError>()(
   "DesktopUserDataInitializationError",
@@ -42,17 +41,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    // The fork keeps its own Electron profile so it never opens the official
-    // app's Chromium databases or remote-app sessions.
-    const names = input.isDevelopment
-      ? {
-          current: REMOTE_APP_DISTRIBUTION.developmentUserDataDirName,
-          legacy: `${REMOTE_APP_DISTRIBUTION.developmentUserDataDirName}-legacy`,
-        }
-      : {
-          current: REMOTE_APP_DISTRIBUTION.packagedUserDataDirName,
-          legacy: `${REMOTE_APP_DISTRIBUTION.packagedUserDataDirName}-legacy`,
-        };
+    const names = forkUserDataDirNames(input.isDevelopment); // Fork add-on: never the official profile.
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>
@@ -73,7 +62,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const legacyState = path.join(legacyPath, "Local State");
     const sourceState = (yield* inspect(legacyState))
       ? legacyState
-      : path.join(input.appDataDirectory, REMOTE_APP_DISTRIBUTION.packagedUserDataDirName, "Local State");
+      : path.join(input.appDataDirectory, names.current, "Local State"); // Fork add-on: never the official profile.
     if (!(yield* inspect(sourceState))) return destinationPath;
     // Windows safeStorage keys live here. Copy only these preferences, never locked databases.
     const state = yield* fs

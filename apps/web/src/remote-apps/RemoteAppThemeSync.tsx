@@ -13,9 +13,10 @@ import {
   type ThemeHalves,
   type ThemePreference,
 } from "../themePalette";
-import { THEME_CHANGE_EVENT, useTheme } from "../hooks/useTheme";
+import { useTheme } from "../hooks/useTheme";
 import { useEnvironmentIdentificationMode } from "../hooks/useSettings";
 import { useSidebarStageBackdropVariant } from "../components/SidebarStageBackdrop";
+import { THEME_CHANGE_EVENT } from "./themeChangeEvent";
 import { useRemoteAppState } from "./useRemoteAppState";
 
 const REMOTE_THEME_ROLES = [

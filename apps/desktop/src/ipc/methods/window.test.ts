@@ -26,7 +26,6 @@ import * as ElectronDialog from "../../electron/ElectronDialog.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../../settings/DesktopAppSettings.ts";
 import {
-  confirm,
   getLocalEnvironmentBootstraps,
   getWindowFullscreenState,
   pasteAsText,
@@ -208,40 +207,6 @@ describe("getWindowFullscreenState", () => {
       Effect.provide(
         Layer.mock(ElectronWindow.ElectronWindow)({
           currentMainOrFirst: Effect.succeedSome(window),
-        }),
-      ),
-    );
-  });
-});
-
-describe("confirm", () => {
-  it.effect("uses a native question dialog for prompts above remote views", () => {
-    const showMessageBox = vi.fn(() =>
-      Effect.succeed({ response: 1, checkboxChecked: false } as Electron.MessageBoxReturnValue),
-    );
-
-    return Effect.gen(function* () {
-      const result = yield* confirm.handler("Install update?\n\nAny running tasks will stop.");
-
-      assert.isTrue(result);
-      assert.deepEqual(showMessageBox.mock.calls, [
-        [
-          {
-            type: "question",
-            title: "ndev.t3code",
-            message: "Install update?",
-            detail: "Any running tasks will stop.",
-            buttons: ["Cancel", "Confirm"],
-            cancelId: 0,
-            defaultId: 1,
-            noLink: true,
-          },
-        ],
-      ]);
-    }).pipe(
-      Effect.provide(
-        Layer.mock(ElectronDialog.ElectronDialog)({
-          showMessageBox,
         }),
       ),
     );

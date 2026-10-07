@@ -54,7 +54,8 @@ export * from "./browserProfile.ts";
 export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
-export * from "./remote-apps.ts";
+export * from "./remote-apps.ts"; // Fork add-on: remote apps.
+export * from "./forkDesktopBridge.ts"; // Fork add-on: desktop bridge additions.
 export * from "./externalSessions.ts"; // Fork add-on: external sessions.
 export * from "./sessionSearch.ts"; // Fork add-on: cross-agent session search.
 export * from "./threadExport.ts"; // Fork add-on: thread export.

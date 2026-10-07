@@ -128,7 +128,7 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
               ? "bg-(--provider-accent) text-white"
               : "bg-card text-muted-foreground",
             props.badgeClassName,
-            badgeContent === "none" && "h-1 min-w-1 border-0 px-0",
+            badgeContent === "none" && "h-1 min-w-1 border-0 px-0", // Fork add-on: accent dot.
           )}
           style={{ borderColor: indicatorBackground }}
           aria-hidden

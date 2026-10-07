@@ -1,11 +1,7 @@
 import * as MacPermissions from "./permissions/MacPermissions.ts";
 for (const stream of [process.stdout, process.stderr]) {
   stream.on("error", (err: NodeJS.ErrnoException) => {
-    // Electron can be launched from a terminal during development or from a
-    // packaged app shortcut. When the parent terminal disappears, macOS may
-    // report the closed output stream as EIO rather than EPIPE. Neither error
-    // should become an uncaught exception in the desktop main process.
-    if (err.code !== "EPIPE" && err.code !== "EIO") throw err;
+    if (err.code !== "EPIPE" && err.code !== "EIO") throw err; // Fork add-on: macOS reports EIO too.
   });
 }
 
@@ -67,8 +63,7 @@ import * as DesktopState from "./app/DesktopState.ts";
 import * as DesktopLegacyLocalStorage from "./app/DesktopLegacyLocalStorage.ts";
 import * as DesktopTelemetryPublisher from "./telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopRendererHistory from "./telemetry/DesktopRendererHistory.ts";
-import * as DesktopUpdates from "./updates/DesktopUpdates.ts";
-import * as LocalSourceUpdates from "./updates/LocalSourceUpdates.ts";
+import * as ForkDesktopUpdates from "./updates/ForkDesktopUpdates.ts"; // Fork add-on: replaces DesktopUpdates.
 import * as BrowserImport from "./preview/BrowserImport/BrowserImport.ts";
 import * as LinuxBrowserSecret from "./preview/BrowserImport/LinuxBrowserSecret.ts";
 import * as BrowserSession from "./preview/BrowserSession.ts";
@@ -78,9 +73,7 @@ import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
-import * as RemoteAppManager from "./remote-apps/RemoteAppManager.ts";
-import * as RemoteAppSession from "./remote-apps/RemoteAppSession.ts";
-import * as RemoteAppStateStore from "./remote-apps/RemoteAppStateStore.ts";
+import * as ForkLayers from "./fork/layers.ts"; // Fork add-on: remote apps.
 
 if (process.argv.includes("--version")) {
   try {
@@ -160,23 +153,8 @@ const layerDesktopFoundation = Layer.mergeAll(
   DesktopRendererHistory.layer,
 ).pipe(Layer.provideMerge(layerDesktopEnvironment));
 
-const layerRemoteAppFoundation = Layer.mergeAll(
-  RemoteAppStateStore.layer,
-  RemoteAppSession.layer,
-).pipe(Layer.provideMerge(layerDesktopFoundation));
-
-const layerDesktopRemoteApp = RemoteAppManager.layer.pipe(
-  Layer.provideMerge(layerRemoteAppFoundation),
-  Layer.provideMerge(layerElectron),
-);
-
 const layerDesktopSsh = layerDesktopSshEnvironment.pipe(
   Layer.provideMerge(DesktopSshPasswordPrompts.layer()),
-);
-
-const layerDesktopLocalSourceUpdates = LocalSourceUpdates.layer.pipe(
-  Layer.provideMerge(layerDesktopEnvironment),
-  Layer.provideMerge(NodeServices.layer),
 );
 
 const layerDesktopServerExposure = DesktopServerExposure.layer.pipe(
@@ -240,10 +218,10 @@ const layerDesktopApplication = Layer.mergeAll(
   layerDesktopSsh,
 ).pipe(
   Layer.provideMerge(layerDesktopSnapShot),
-  Layer.provideMerge(DesktopUpdates.layer.pipe(Layer.provideMerge(layerDesktopLocalSourceUpdates))),
+  Layer.provideMerge(ForkDesktopUpdates.layer), // Fork add-on: replaces DesktopUpdates.layer.
   Layer.provideMerge(layerDesktopWslBackend),
   Layer.provideMerge(layerDesktopLocalEnvironmentAuth),
-  Layer.provideMerge(layerDesktopRemoteApp),
+  Layer.provideMerge(ForkLayers.remoteApps.pipe(Layer.provideMerge(layerDesktopFoundation))), // Fork add-on: remote apps.
 );
 
 // Clerk resolves userData before Electron is ready, so it gets the synchronous FileSystem.

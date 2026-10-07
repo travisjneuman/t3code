@@ -5,7 +5,7 @@
  * sends the thread's own agent one message asking it to write a summary note
  * into the notes folder, filed by that folder's own instructions, so the
  * folder's rules decide where it goes. Both folders are server settings.
- * Fork add-on; see docs/user/thread-sidebar.md.
+ * Fork add-on; see docs/user/save-and-export-threads.md#save-a-thread-to-your-notes.
  *
  * @module save-to-notes/SaveToNotes
  */
