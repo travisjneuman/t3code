@@ -1,11 +1,12 @@
 import type { ServerProviderUsageWindow } from "@t3tools/contracts";
 import { elapsedShare } from "@t3tools/shared/usageLimits";
 
-// Hidden for the first third, fading in and back out over the other two.
+// Over 3 s: a slow 1.5 s fade in, 0.9 s at full, a quick 0.3 s fade out, 0.3 s gone.
 const PULSE: Keyframe[] = [
-  { opacity: 0, offset: 0 },
-  { opacity: 0, offset: 1 / 3, easing: "ease-in-out" },
-  { opacity: 1, offset: 2 / 3, easing: "ease-in-out" },
+  { opacity: 0, offset: 0, easing: "ease-out" },
+  { opacity: 1, offset: 0.5 },
+  { opacity: 1, offset: 0.8, easing: "ease-in" },
+  { opacity: 0, offset: 0.9 },
   { opacity: 0, offset: 1 },
 ];
 
@@ -14,7 +15,7 @@ const PULSE: Keyframe[] = [
 // pulses together, and skipped when the system asks for reduced motion.
 function pulse(node: HTMLSpanElement | null) {
   if (!node || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const animation = node.animate(PULSE, { duration: 1500, iterations: Infinity });
+  const animation = node.animate(PULSE, { duration: 3000, iterations: Infinity });
   animation.startTime = 0;
   return () => animation.cancel();
 }
