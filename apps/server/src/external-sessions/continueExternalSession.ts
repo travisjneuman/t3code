@@ -62,15 +62,24 @@ import {
 import * as ProjectService from "../project/ProjectService.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { asString, parseJsonObject, type TranscriptParser } from "./ExternalSessionSource.ts";
+import {
+  asString,
+  parseJsonObject,
+  readLines,
+  type TranscriptParser,
+} from "./ExternalSessionSource.ts";
 
 // Same prefix and id shapes as AgentSessionImporter, so a session continued
 // here and one imported during onboarding are the same thread.
 const IMPORT_EVENT_PREFIX = "agent-session-import:v2";
 const CLAUDE_SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-// The parser holds the whole transcript in memory; past this it is not worth it.
-const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+// The parser holds the transcript in memory, so a longer one is read as its
+// opening lines (first prompt, session metadata) plus its newest part. History
+// keeps only those ends, and the agent resumes the full session itself.
+const MAX_WHOLE_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+const LONG_TRANSCRIPT_HEAD_BYTES = 1024 * 1024;
+const LONG_TRANSCRIPT_TAIL_BYTES = 32 * 1024 * 1024;
 // Same retention as the importer: the first prompt plus the newest messages.
 const MAX_HISTORY_MESSAGES = 200;
 
@@ -493,6 +502,21 @@ export const make = Effect.gen(function* () {
       return bootstrapped;
     });
 
+  /** A long transcript's opening and newest complete lines, and the byte offset after the last. */
+  const readLongTranscript = (path: string) =>
+    Effect.gen(function* () {
+      const head = yield* readLines(path, { maxBytes: LONG_TRANSCRIPT_HEAD_BYTES });
+      const tail = yield* readLines(path, {
+        fromEnd: true,
+        maxBytes: LONG_TRANSCRIPT_TAIL_BYTES,
+      });
+      if (head === null || tail === null) return yield* failed(new Error("unreadable"));
+      return {
+        contents: [...head.lines, ...tail.lines].join("\n") + "\n",
+        syncOffset: tail.end,
+      };
+    }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem));
+
   /** Reads the transcript; only ever reads it. */
   const readHistory = Effect.fn("ExternalSessions.readHistory")(function* (
     target: ContinueTarget,
@@ -503,10 +527,20 @@ export const make = Effect.gen(function* () {
     const stats = yield* fileSystem
       .stat(target.transcriptPath)
       .pipe(Effect.mapError(() => unsupported("empty")));
-    if (Number(stats.size) > MAX_TRANSCRIPT_BYTES) return yield* unsupported("too-large");
-    const contents = yield* fileSystem
-      .readFileString(target.transcriptPath)
-      .pipe(Effect.mapError(failed));
+    const { contents, syncOffset } =
+      Number(stats.size) <= MAX_WHOLE_TRANSCRIPT_BYTES
+        ? yield* fileSystem.readFileString(target.transcriptPath).pipe(
+            Effect.mapError(failed),
+            Effect.map((whole) => {
+              const lastNewline = whole.lastIndexOf("\n");
+              return {
+                contents: whole,
+                syncOffset:
+                  lastNewline === -1 ? 0 : Buffer.byteLength(whole.slice(0, lastNewline + 1)),
+              };
+            }),
+          )
+        : yield* readLongTranscript(target.transcriptPath);
     const history: ContinueHistory | null =
       target.driver === "claudeAgent" || target.driver === "codex"
         ? parseAgentSessionTranscript({
@@ -518,7 +552,7 @@ export const make = Effect.gen(function* () {
           })
         : parsedHistory(target, contents);
     if (history === null) return yield* unsupported("empty");
-    return { stats, contents, history };
+    return { stats, contents, syncOffset, history };
   });
 
   const continueSession = Effect.fn("ExternalSessions.continueSession")(function* (
@@ -527,7 +561,10 @@ export const make = Effect.gen(function* () {
     const unsupported = (reason: ExternalSessionUnsupportedError["reason"]) =>
       new ExternalSessionUnsupportedError({ key: target.key, reason });
     const providerInstanceId = yield* resolveInstance(target);
-    const { stats, contents, history } = yield* readHistory(target, providerInstanceId);
+    const { stats, contents, syncOffset, history } = yield* readHistory(
+      target,
+      providerInstanceId,
+    );
     // Claude resumes only by a UUID session id.
     if (
       target.driver === "claudeAgent" &&
@@ -692,13 +729,12 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.mapError(failed));
     // Everything up to the last complete line is in the history above; the
     // sync picks up whatever is appended after it.
-    const lastNewline = contents.lastIndexOf("\n");
     const syncStart: ContinueSyncStart = {
       threadId,
       driver: target.driver,
       sessionId: history.providerSessionId,
       transcriptPath: target.transcriptPath,
-      offset: lastNewline === -1 ? 0 : Buffer.byteLength(contents.slice(0, lastNewline + 1)),
+      offset: syncOffset,
     };
     if (importerSource === null) {
       return { threadId, projectId, syncStart } satisfies ContinueOutcome;
