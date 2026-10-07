@@ -34,6 +34,7 @@ import {
   resetCreditsSummary,
   useResetCredit,
 } from "./UsageLimits";
+import { ForkPaceTick } from "./ForkPaceTick"; // Fork add-on: pace line.
 
 /** `someone@example.com` → `SE`: enough to tell accounts apart, too little to identify one. */
 function accountInitials(email: string): string {
@@ -306,6 +307,7 @@ function PoolSegment({
             ) : null}
           </span>
         </div>
+        <ForkPaceTick window={window} now={now} />{/* Fork add-on: pace line. */}
       </PopoverTrigger>
       <LegendRow account={account} window={window} color={color} now={now} index={index} />
       {account.redeem ? (
