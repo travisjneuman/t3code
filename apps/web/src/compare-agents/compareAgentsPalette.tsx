@@ -11,6 +11,7 @@ import { useMatch, type useNavigate } from "@tanstack/react-router";
 import { ArchiveIcon, Columns2Icon, PencilIcon, Trash2Icon } from "lucide-react";
 
 import { type CommandPaletteActionItem, ITEM_ICON_CLASS } from "../components/CommandPalette.logic";
+import { useRemoteAppPanelPaletteItems } from "../remote-apps/panel/remoteAppPanelPalette";
 import { useThreadShell } from "../state/entities";
 import { startCompareRename } from "./compareRenameStore";
 import { readComparePairSides, useComparePairRemoval } from "./useComparePairMenu";
@@ -41,6 +42,9 @@ export function useCompareAgentsPaletteItems(input: {
   const right = useThreadShell(
     current === null || rightId === null ? null : scopeThreadRef(current.environmentId, rightId),
   );
+
+  // Also carries the remote app side-panel actions, so the palette needs no second hook.
+  const remoteAppPanelItems = useRemoteAppPanelPaletteItems();
 
   const items: CommandPaletteActionItem[] = [];
   if (current !== null && (left !== null || right !== null)) {
@@ -140,5 +144,6 @@ export function useCompareAgentsPaletteItems(input: {
       },
     });
   }
+  items.push(...remoteAppPanelItems);
   return items;
 }

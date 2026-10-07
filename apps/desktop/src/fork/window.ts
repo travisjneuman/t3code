@@ -8,6 +8,7 @@ import * as Electron from "electron";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as RemoteAppManager from "../remote-apps/RemoteAppManager.ts";
+import { guardRemoteAppWebview, isRemoteAppWebview } from "../remote-apps/RemoteAppWebview.ts";
 
 const MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS = 5_000;
 
@@ -97,5 +98,26 @@ export const make = Effect.gen(function* () {
         ),
       );
 
-  return { attach, reassertSurface, revealSubscribers, afterReveal, afterZoom };
+  /**
+   * The `will-attach-webview` hook: true when the attach is a remote app's
+   * side panel and has been hardened or rejected here. Without the manager
+   * nothing adopts such a page, so the upstream gate rejects it.
+   */
+  const guardWebview = (
+    event: Electron.Event,
+    webPreferences: Electron.WebPreferences,
+    params: Record<string, string>,
+  ): boolean =>
+    Option.isSome(remoteAppManager) &&
+    guardRemoteAppWebview(event, webPreferences, params, environment.isDevelopment);
+
+  return {
+    attach,
+    reassertSurface,
+    revealSubscribers,
+    afterReveal,
+    afterZoom,
+    guardWebview,
+    isRemoteAppWebview,
+  };
 });

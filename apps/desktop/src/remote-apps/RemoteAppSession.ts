@@ -32,9 +32,11 @@ export class RemoteAppSession extends Context.Service<
 /**
  * Electron's default user agent names Electron and this app, which sign-in
  * device checks (xAI's, for one) treat as an untrusted embedded browser. The
- * sites get the plain Chrome agent of the bundled Chromium instead.
+ * sites get the plain Chrome agent of the bundled Chromium instead. A session's
+ * agent applies only to pages created after it is set, so a side-panel page
+ * that Chromium created first sets it on itself.
  */
-const resolveRemoteAppUserAgent = (): string => {
+export const resolveRemoteAppUserAgent = (): string => {
   const appToken = `${Electron.app.getName()}/`;
   return Electron.app.userAgentFallback
     .split(" ")

@@ -4,6 +4,7 @@ import type { OpenPreviewMutation } from "./browser/openFileInPreview";
 import type { ClosedView, ClosedViewEntry } from "./closedViewStore";
 import type { PullRequestListPreferences } from "./components/pullRequest/pullRequestListPreferences";
 import { openPreviewSession } from "./components/preview/openPreviewSession";
+import { reopenRemoteAppPanelTab } from "./remote-apps/panel/remoteAppPanelTabs"; // Fork add-on: remote app panel.
 import {
   type RightPanelSurface,
   type ThreadRightPanelState,
@@ -143,6 +144,8 @@ export async function reopenClosedView(
     case "pull-request":
       panels.openPullRequest(ref, surface);
       break;
+    case "remote-app": // Fork add-on: remote app panel.
+      return reopenRemoteAppPanelTab(ref, surface); // Fork add-on: remote app panel.
     default:
       panels.open(ref, surface.kind);
   }

@@ -42,6 +42,7 @@ import {
 import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
+import { RemoteAppPanelTab } from "~/remote-apps/panel/RemoteAppPanelTab"; // Fork add-on: remote app panel.
 import { cn } from "~/lib/utils";
 import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
 import { readLocalApi } from "~/localApi";
@@ -572,6 +573,8 @@ function RightPanelEmptyState(props: {
               />
             ),
           )}
+          {/* Fork add-on: remote app panel. */}
+          <RemoteAppPanelTab.LauncherItems />
         </div>
       </div>
     </div>
@@ -603,6 +606,8 @@ function surfaceTitle(
       return "Pull requests";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "remote-app": // Fork add-on: remote app panel.
+      return RemoteAppPanelTab.title(surface); // Fork add-on: remote app panel.
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -692,6 +697,8 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
+    case "remote-app": // Fork add-on: remote app panel.
+      return <RemoteAppPanelTab.Icon surface={surface} />; // Fork add-on: remote app panel.
   }
 }
 
@@ -1329,6 +1336,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                       </SurfaceMenuItem>
                     );
                   })}
+                  {/* Fork add-on: remote app panel. */}
+                  <RemoteAppPanelTab.MenuItems />
                 </MenuPopup>
               </Menu>
             ) : null}

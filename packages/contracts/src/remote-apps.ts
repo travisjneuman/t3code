@@ -36,6 +36,23 @@ export const REMOTE_APP_SITE_INFO: Record<RemoteAppSite, RemoteAppSiteInfo> = {
   perplexity: { label: "Perplexity", providerDriver: null },
 };
 
+/**
+ * Each site's persistent session. The full-window view and the side-panel
+ * `<webview>` share it, so one sign-in serves both. Renaming one signs the
+ * user out of that site.
+ */
+export const REMOTE_APP_PARTITIONS: Record<RemoteAppSite, string> = {
+  // The original single-site partition name keeps existing ChatGPT sign-ins.
+  chatgpt: "persist:tjn-remote-chatgpt-v1",
+  claude: "persist:tjn-remote-claude-v1",
+  grok: "persist:tjn-remote-grok-v1",
+  gemini: "persist:tjn-remote-gemini-v1",
+  perplexity: "persist:tjn-remote-perplexity-v1",
+};
+
+export const remoteAppSiteForPartition = (partition: string): RemoteAppSite | undefined =>
+  REMOTE_APP_SITES.find((site) => REMOTE_APP_PARTITIONS[site] === partition);
+
 export const isRemoteAppSite = (value: unknown): value is RemoteAppSite =>
   typeof value === "string" && (REMOTE_APP_SITES as ReadonlyArray<string>).includes(value);
 
@@ -135,6 +152,17 @@ export const RemoteAppSendToThreadSchema = Schema.Struct({
   text: RemoteAppTransferTextSchema,
 });
 export type RemoteAppSendToThread = typeof RemoteAppSendToThreadSchema.Type;
+
+/**
+ * The side-panel copy of a site moved to a new page. `url` is the sanitized
+ * first-party location (query and hash stripped), or null for a page that is
+ * not safe to remember, such as a sign-in step.
+ */
+export const RemoteAppPanelNavigatedSchema = Schema.Struct({
+  site: RemoteAppSiteSchema,
+  url: Schema.NullOr(Schema.String.check(Schema.isMaxLength(4_096))),
+});
+export type RemoteAppPanelNavigated = typeof RemoteAppPanelNavigatedSchema.Type;
 
 /** T3 text to place in a web app's prompt box. The shell never submits it. */
 export const RemoteAppFillPromptRequestSchema = Schema.Struct({
@@ -341,6 +369,24 @@ export interface DesktopRemoteAppBridge {
   showDownloadInFolder: (id: string) => Promise<void>;
   // Asks for an official chat export and a destination, then writes Markdown.
   importChatExport: () => Promise<RemoteAppChatImportResult>;
+
+  // Side panel: a site shown in a `<webview>` in the right panel next to a
+  // thread, on the site's own partition (REMOTE_APP_PARTITIONS). The renderer
+  // owns the element and its placement; the shell adopts its page.
+  // Hands the panel page to the shell once the `<webview>` attaches. The shell
+  // checks it is a guest of the main window on that site's partition, then
+  // applies the same navigation guards, theme, and context menu as the
+  // full-window view.
+  attachPanel: (site: RemoteAppSite, webContentsId: number) => Promise<void>;
+  // Whether the panel page is on screen. A visible panel never gets the
+  // finished-reply badge, and "Send to <site>" fills it in place.
+  setPanelVisible: (site: RemoteAppSite, visible: boolean) => Promise<void>;
+  // Loads a page the shell reported earlier through onPanelNavigated, or the
+  // site's homepage for null. Anything else loads the homepage.
+  navigatePanel: (site: RemoteAppSite, url: string | null) => Promise<void>;
+  onPanelNavigated: (listener: (navigated: RemoteAppPanelNavigated) => void) => () => void;
+  // The native surface menu's "Open in Side Panel" item.
+  onOpenInPanel: (listener: (site: RemoteAppSite) => void) => () => void;
 }
 
 export * from "./remoteAppIcons.ts";

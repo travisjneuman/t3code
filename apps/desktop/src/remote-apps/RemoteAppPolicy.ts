@@ -1,8 +1,16 @@
-import { REMOTE_APP_SITES, type DesktopSurface, type RemoteAppSite } from "@t3tools/contracts";
+import {
+  REMOTE_APP_PARTITIONS,
+  REMOTE_APP_SITES,
+  type DesktopSurface,
+  type RemoteAppSite,
+} from "@t3tools/contracts";
 
 export interface RemoteAppSiteDefinition {
   readonly entryUrl: string;
-  /** Each site keeps its own persistent cookie jar, isolated from the host and the other sites. */
+  /**
+   * Each site keeps its own persistent cookie jar, isolated from the host and
+   * the other sites. Shared with the side panel through REMOTE_APP_PARTITIONS.
+   */
   readonly partition: string;
   /** Hosts (and their subdomains) that stay inside the embedded view. */
   readonly hosts: ReadonlyArray<string>;
@@ -33,8 +41,7 @@ export interface RemoteAppPageHooks {
 export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDefinition> = {
   chatgpt: {
     entryUrl: "https://chatgpt.com/",
-    // The original single-site partition name keeps existing ChatGPT sign-ins.
-    partition: "persist:tjn-remote-chatgpt-v1",
+    partition: REMOTE_APP_PARTITIONS.chatgpt,
     hosts: ["chatgpt.com", "openai.com"],
     authHosts: [],
     page: {
@@ -49,7 +56,7 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
   },
   claude: {
     entryUrl: "https://claude.ai/",
-    partition: "persist:tjn-remote-claude-v1",
+    partition: REMOTE_APP_PARTITIONS.claude,
     hosts: ["claude.ai", "claude.com", "anthropic.com"],
     authHosts: [],
     page: {
@@ -59,7 +66,7 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
   },
   grok: {
     entryUrl: "https://grok.com/",
-    partition: "persist:tjn-remote-grok-v1",
+    partition: REMOTE_APP_PARTITIONS.grok,
     hosts: ["grok.com", "x.ai"],
     // Sign-in hops the whole tab through each xAI property's auth.*/set-cookie to seed first-party cookies.
     authHosts: [
@@ -78,7 +85,7 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
   },
   gemini: {
     entryUrl: "https://gemini.google.com/app",
-    partition: "persist:tjn-remote-gemini-v1",
+    partition: REMOTE_APP_PARTITIONS.gemini,
     hosts: ["gemini.google.com"],
     // Google's sign-in hops through accounts.youtube.com to set its cookies.
     authHosts: ["accounts.youtube.com"],
@@ -90,7 +97,7 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
   // Standalone: no T3 provider. Google and Apple sign-in use the shared hosts.
   perplexity: {
     entryUrl: "https://www.perplexity.ai/",
-    partition: "persist:tjn-remote-perplexity-v1",
+    partition: REMOTE_APP_PARTITIONS.perplexity,
     hosts: ["perplexity.ai"],
     authHosts: [],
     page: {

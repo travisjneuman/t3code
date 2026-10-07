@@ -519,6 +519,7 @@ export const make = Effect.gen(function* () {
 
     yield* previewManager.setMainWindow(window);
     window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+      if (fork.guardWebview(event, webPreferences, params)) return; // Fork add-on: remote app side panel.
       if (
         typeof params.partition !== "string" ||
         !previewManager.isBrowserPartition(params.partition)
@@ -606,6 +607,7 @@ export const make = Effect.gen(function* () {
     };
     installContextMenu(window, window.webContents);
     window.webContents.on("did-attach-webview", (_event, contents) => {
+      if (fork.isRemoteAppWebview(contents)) return; // Fork add-on: RemoteAppManager.attachPanel adopts it.
       installContextMenu(window, contents);
       void runPromise(previewManager.prepareWebview(contents));
     });

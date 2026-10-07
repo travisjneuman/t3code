@@ -4,7 +4,9 @@
 import type {
   DesktopBridge,
   RemoteAppDownloadCapture,
+  RemoteAppPanelNavigated,
   RemoteAppSendToThread,
+  RemoteAppSite,
   RemoteAppState,
 } from "@t3tools/contracts";
 
@@ -22,6 +24,19 @@ const REMOTE_APP_SURFACES = new Set([
   "perplexity",
 ]);
 
+function isRemoteAppSiteValue(value: unknown): value is RemoteAppSite {
+  return typeof value === "string" && value !== "t3code" && REMOTE_APP_SURFACES.has(value);
+}
+
+function isRemoteAppPanelNavigated(value: unknown): value is RemoteAppPanelNavigated {
+  if (typeof value !== "object" || value === null) return false;
+  const navigated = value as Partial<RemoteAppPanelNavigated>;
+  return (
+    isRemoteAppSiteValue(navigated.site) &&
+    (navigated.url === null || typeof navigated.url === "string")
+  );
+}
+
 function isRemoteAppState(value: unknown): value is RemoteAppState {
   if (typeof value !== "object" || value === null) return false;
   const state = value as Partial<RemoteAppState>;
@@ -38,13 +53,7 @@ function isRemoteAppState(value: unknown): value is RemoteAppState {
 function isRemoteAppSendToThread(value: unknown): value is RemoteAppSendToThread {
   if (typeof value !== "object" || value === null) return false;
   const send = value as Partial<RemoteAppSendToThread>;
-  return (
-    typeof send.site === "string" &&
-    send.site !== "t3code" &&
-    REMOTE_APP_SURFACES.has(send.site) &&
-    typeof send.text === "string" &&
-    send.text.length > 0
-  );
+  return isRemoteAppSiteValue(send.site) && typeof send.text === "string" && send.text.length > 0;
 }
 
 function isRemoteAppDownloadCapture(value: unknown): value is RemoteAppDownloadCapture {
@@ -52,9 +61,7 @@ function isRemoteAppDownloadCapture(value: unknown): value is RemoteAppDownloadC
   const capture = value as Partial<RemoteAppDownloadCapture>;
   return (
     typeof capture.id === "string" &&
-    typeof capture.site === "string" &&
-    capture.site !== "t3code" &&
-    REMOTE_APP_SURFACES.has(capture.site) &&
+    isRemoteAppSiteValue(capture.site) &&
     typeof capture.filename === "string" &&
     typeof capture.path === "string" &&
     (capture.kind === "text" || capture.kind === "archive") &&
@@ -127,6 +134,33 @@ export function makeForkDesktopBridge(ipcRenderer: Electron.IpcRenderer): ForkDe
       showDownloadInFolder: (id) =>
         ipcRenderer.invoke(IpcChannels.REMOTE_APP_SHOW_DOWNLOAD_CHANNEL, id),
       importChatExport: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL),
+      attachPanel: (site, webContentsId) =>
+        ipcRenderer.invoke(IpcChannels.REMOTE_APP_ATTACH_PANEL_CHANNEL, { site, webContentsId }),
+      setPanelVisible: (site, visible) =>
+        ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_PANEL_VISIBLE_CHANNEL, { site, visible }),
+      navigatePanel: (site, url) =>
+        ipcRenderer.invoke(IpcChannels.REMOTE_APP_NAVIGATE_PANEL_CHANNEL, { site, url }),
+      onPanelNavigated: (listener) => {
+        const wrappedListener = (_event: Electron.IpcRendererEvent, navigated: unknown) => {
+          if (isRemoteAppPanelNavigated(navigated)) listener(navigated);
+        };
+        ipcRenderer.on(IpcChannels.REMOTE_APP_PANEL_NAVIGATED_CHANNEL, wrappedListener);
+        return () => {
+          ipcRenderer.removeListener(
+            IpcChannels.REMOTE_APP_PANEL_NAVIGATED_CHANNEL,
+            wrappedListener,
+          );
+        };
+      },
+      onOpenInPanel: (listener) => {
+        const wrappedListener = (_event: Electron.IpcRendererEvent, site: unknown) => {
+          if (isRemoteAppSiteValue(site)) listener(site);
+        };
+        ipcRenderer.on(IpcChannels.REMOTE_APP_OPEN_IN_PANEL_CHANNEL, wrappedListener);
+        return () => {
+          ipcRenderer.removeListener(IpcChannels.REMOTE_APP_OPEN_IN_PANEL_CHANNEL, wrappedListener);
+        };
+      },
     },
   };
 }

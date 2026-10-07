@@ -29,3 +29,15 @@ To keep your chat history as Markdown, request a data export from ChatGPT or Cla
 Use the clear-session-data control in a site's titlebar (for example “Clear Claude session data”) to sign out of that site and remove its local session data and history. Other sites, ndev.t3code projects, and server data are not affected.
 
 A desktop app you build yourself updates from the checkout it was built from rather than from GitHub Releases. See [Build and update ndev.t3code](./fork-updating.md) for how it follows the upstream nightly release.
+
+## Web apps in the side panel
+
+To use a site beside a thread, open it in the right panel: pick it from the panel's **+** menu or its empty-panel launcher, choose **Open in Side Panel** next to it in the app switcher, or search for "Side Panel" in the command palette. The panel shows the same signed-in site as the full window. There is one panel page per site, which follows you between threads.
+
+A new web app tab is pinned and opens the site's home page. A pinned tab shows in every thread, and while it is the panel's active tab the panel stays open as you switch threads. Use the menu in the tab's header bar to change this:
+
+- **Pin to all threads** turns pinning off or on. Unpinned, the tab stays only in the thread you are on.
+- **Same chat in every thread** keeps one page for all threads. **A chat per thread** makes each thread remember the page it was last on in that site. A thread without one opens the home page, and the first chat you open there becomes that thread's chat.
+- **This thread** overrides the app setting for the current thread: keep its own chat, use the shared chat, or follow the app setting. **Forget this thread's chat** clears what it remembered.
+
+Closing a pinned web app tab unpins it in every thread; reopen a closed tab like any other panel tab. **Open full window** in the header bar switches to the site's full-window view. Web app tabs are available only in the desktop app.
