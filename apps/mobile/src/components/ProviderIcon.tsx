@@ -156,8 +156,8 @@ export function ProviderIcon(props: ProviderIconProps) {
 }
 
 /**
- * `ProviderIcon` plus the web sidebar's account badge: an accent-color dot,
- * or an initials bubble when uncolored, in the bottom-right corner, drawn when `showBadge` is set
+ * `ProviderIcon` plus the web sidebar's account badge: an accent-color
+ * initials bubble in the bottom-right corner, drawn when `showBadge` is set
  * (accent color present, or several instances share this driver). The glyph
  * dims to 60% opacity while the badge stays fully saturated, matching
  * `apps/web/src/components/chat/ProviderInstanceIcon.tsx`.
@@ -176,20 +176,7 @@ export function ProviderInstanceIcon(props: {
       <View style={{ opacity: 0.6 }}>
         <ProviderIcon iconUrl={props.iconUrl} provider={props.provider} size={props.size} />
       </View>
-      {/* Fork add-on: a colored badge is a dot; initials stay for uncolored instances. */}
-      {props.showBadge && props.accentColor ? (
-        <View
-          style={{
-            position: "absolute",
-            right: -1,
-            bottom: -1,
-            height: 4,
-            width: 4,
-            borderRadius: 999,
-            backgroundColor: props.accentColor,
-          }}
-        />
-      ) : props.showBadge ? (
+      {props.showBadge ? (
         <View
           className={props.accentColor ? undefined : "bg-card"}
           style={{

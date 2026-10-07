@@ -1,5 +1,4 @@
 import Constants from "expo-constants";
-import { PRODUCT_NAME } from "@t3tools/shared/branding";
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { Platform, View } from "react-native";
 
@@ -33,7 +32,7 @@ export function CompactBrandTitle(
   return (
     <View
       aria-level={1}
-      accessibilityLabel={`${PRODUCT_NAME}, Threads`}
+      accessibilityLabel="T3 Code, Threads"
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"

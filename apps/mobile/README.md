@@ -1,10 +1,7 @@
-# ndev.t3code Mobile
-
-ndev.t3code Mobile is Travis J. Neuman's fork of [T3 Code](https://github.com/pingdotgg/t3code).
-Source and releases are maintained at [github.com/travisjneuman/t3code](https://github.com/travisjneuman/t3code).
+# T3 Code Mobile
 
 > [!WARNING]
-> ndev.t3code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -13,9 +10,9 @@ Source and releases are maintained at [github.com/travisjneuman/t3code](https://
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `ndev.t3code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `ndev.t3code Preview`
-- `production`: store/release build as `ndev.t3code`
+- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
+- `production`: store/release build as `T3 Code`
 
 Run commands from `apps/mobile`.
 

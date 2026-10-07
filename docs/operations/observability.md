@@ -1,8 +1,8 @@
 # Observability
 
-> For maintainers. Using ndev.t3code? See [docs/user](../user/).
+> For maintainers. Using T3 Code? See [docs/user](../user/).
 
-ndev.t3code has one server-side observability model:
+T3 Code has one server-side observability model:
 
 - pretty logs go to stdout for humans
 - completed spans go to a local NDJSON trace file
@@ -216,7 +216,7 @@ macOS app bundle example:
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
 T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
-"/Applications/ndev.t3code.app/Contents/MacOS/ndev.t3code"
+"/Applications/T3 Code.app/Contents/MacOS/T3 Code"
 ```
 
 Direct binary example:
@@ -668,7 +668,7 @@ pid="$(jq .pid "${T3CODE_HOME:-$HOME/.t3}/userdata/server-runtime.json")"
 ps -p "$pid" -o command=
 ```
 
-If `ps` shows the ndev.t3code server, send the signal:
+If `ps` shows the T3 Code server, send the signal:
 
 ```bash
 kill -USR2 "$pid"
