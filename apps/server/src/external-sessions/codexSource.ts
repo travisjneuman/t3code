@@ -26,6 +26,7 @@ import {
   parseJsonObject,
   readLines,
   readPrefix,
+  scanLinesBackward,
   sessionDetails,
   statMtimeMs,
   toolLine,
@@ -36,6 +37,15 @@ const ROLLOUT_FILE =
 // session_meta carries the full base instructions, so the first line runs to tens of KB.
 const HEAD_BYTES = 512 * 1024;
 const TAIL_BYTES = 256 * 1024;
+// A burst of writes larger than this re-reads the tail instead of every byte.
+const APPEND_BYTES = 4 * 1024 * 1024;
+// How far back past the tail to look for the open turn's start and settings.
+// One long turn can write megabytes of tool output after its start.
+const SEARCH_BYTES = 64 * 1024 * 1024;
+// The records the list needs. Each names its type near the line's start, ahead
+// of any large payload, so other lines are skipped without parsing.
+const STATE_RECORD = /"type":"(?:turn_context|token_count|task_started|task_complete|turn_aborted)"/;
+const STATE_RECORD_HEAD = 160;
 const INDEX_BYTES = 256 * 1024;
 // session_meta names its source within its first KB, ahead of the instructions.
 const META_PREFIX_BYTES = 4 * 1024;
@@ -79,6 +89,48 @@ const readTurnContext = (payload: Record<string, unknown> | null, into: TurnSett
   into.effort = asString(payload?.effort) ?? into.effort;
   into.approval = asString(payload?.approval_policy) ?? into.approval;
   into.sandbox = asString(asRecord(payload?.sandbox_policy)?.type) ?? into.sandbox;
+};
+
+/** What a rollout's records say so far, kept so a write reads only what it appended. */
+interface CodexTail {
+  /** Byte offset read up to; always a line start. */
+  end: number;
+  mtimeMs: number;
+  /** Whether a turn is open; null until a turn start or end is seen. */
+  busy: boolean | null;
+  /** The latest turn_context; unset fields fall back to the session's first turn. */
+  readonly turn: TurnSettings;
+  tokens: Record<string, unknown> | null;
+}
+
+const stateRecord = (line: string) =>
+  STATE_RECORD.test(line.slice(0, STATE_RECORD_HEAD)) ? parseJsonObject(line) : null;
+
+const turnBoundary = (payload: Record<string, unknown> | null): boolean | null =>
+  payload?.type === "task_started"
+    ? true
+    : payload?.type === "task_complete" || payload?.type === "turn_aborted"
+      ? false
+      : null;
+
+/** Applies a record newer than everything read so far. */
+const applyNewer = (tail: CodexTail, line: string) => {
+  const record = stateRecord(line);
+  const payload = asRecord(record?.payload);
+  if (record?.type === "turn_context") readTurnContext(payload, tail.turn);
+  if (payload?.type === "token_count") tail.tokens = asRecord(payload.info) ?? tail.tokens;
+  tail.busy = turnBoundary(payload) ?? tail.busy;
+};
+
+/** Applies an older record to what newer ones left unknown; true once nothing is. */
+const applyOlder = (tail: CodexTail, line: string): boolean => {
+  const record = stateRecord(line);
+  const payload = asRecord(record?.payload);
+  if (record?.type === "turn_context" && tail.turn.model === null) {
+    readTurnContext(payload, tail.turn);
+  }
+  if (tail.busy === null) tail.busy = turnBoundary(payload);
+  return tail.busy !== null && tail.turn.model !== null;
 };
 
 interface CodexHead {
@@ -159,8 +211,47 @@ export const makeCodexSource = (): ExternalSessionSource => {
       return head;
     });
 
+  const tails = new Map<string, CodexTail>();
+  const readTail = (path: string) =>
+    Effect.gen(function* () {
+      const cached = tails.get(path);
+      if (cached !== undefined) {
+        const appended = yield* readLines(path, { from: cached.end, maxBytes: APPEND_BYTES });
+        // Shrunk means rewritten; a larger burst is cheaper to read from the tail.
+        if (
+          appended !== null &&
+          appended.size >= cached.end &&
+          appended.size <= cached.end + APPEND_BYTES
+        ) {
+          for (const line of appended.lines) applyNewer(cached, line);
+          cached.end = appended.end;
+          cached.mtimeMs = appended.mtimeMs;
+          return cached;
+        }
+        tails.delete(path);
+      }
+      const slice = yield* readLines(path, { fromEnd: true, maxBytes: TAIL_BYTES });
+      if (slice === null) return null;
+      const tail: CodexTail = {
+        end: slice.end,
+        mtimeMs: slice.mtimeMs,
+        busy: null,
+        turn: { model: null, effort: null, approval: null, sandbox: null },
+        tokens: null,
+      };
+      for (const line of slice.lines) applyNewer(tail, line);
+      if (tail.busy === null || tail.turn.model === null) {
+        yield* scanLinesBackward(path, slice.start, SEARCH_BYTES, (line) => applyOlder(tail, line));
+      }
+      if (tails.size > 1_000) tails.clear();
+      tails.set(path, tail);
+      return tail;
+    });
+
   return {
     driver: "codex",
+    // Codex moves an archived rollout out of `sessions`, so what is here is unarchived.
+    listsUntilArchived: true,
     roots: [{ path: sessions, recursive: true }],
     sessionPathsFor: (changed) =>
       Effect.succeed(ROLLOUT_FILE.test(NodePath.basename(changed)) ? [changed] : []),
@@ -188,19 +279,15 @@ export const makeCodexSource = (): ExternalSessionSource => {
       Effect.gen(function* () {
         const head = yield* readHead(path);
         if (head === null || head === "hidden") return head ?? [];
-        const tail = yield* readLines(path, { fromEnd: true, maxBytes: TAIL_BYTES });
+        const tail = yield* readTail(path);
         if (tail === null) return [];
-        const turn: TurnSettings = { ...head.turn };
-        let tokens: Record<string, unknown> | null = null;
-        let busy = false;
-        for (const line of tail.lines) {
-          const record = parseJsonObject(line);
-          const payload = asRecord(record?.payload);
-          if (record?.type === "turn_context") readTurnContext(payload, turn);
-          if (payload?.type === "token_count") tokens = asRecord(payload.info) ?? tokens;
-          if (payload?.type === "task_started") busy = true;
-          if (payload?.type === "task_complete" || payload?.type === "turn_aborted") busy = false;
-        }
+        const turn: TurnSettings = {
+          model: tail.turn.model ?? head.turn.model,
+          effort: tail.turn.effort ?? head.turn.effort,
+          approval: tail.turn.approval ?? head.turn.approval,
+          sandbox: tail.turn.sandbox ?? head.turn.sandbox,
+        };
+        const tokens = tail.tokens;
         return [
           {
             id: head.id,
@@ -211,7 +298,7 @@ export const makeCodexSource = (): ExternalSessionSource => {
             model: turn.model,
             origin: head.origin,
             updatedAtMs: tail.mtimeMs,
-            busy,
+            busy: tail.busy === true,
             details: sessionDetails(head.id, {
               effort: turn.effort,
               gitBranches: head.gitBranch === null ? null : [head.gitBranch],

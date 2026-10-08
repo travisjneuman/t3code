@@ -80,6 +80,7 @@ const IDLE_MS = 60 * 60 * 1000;
 // Batches a burst of writes (a streamed reply) into one re-read.
 const FLUSH_DELAY = "600 millis";
 const LIVENESS_INTERVAL = "15 seconds";
+const WATCH_RESTART_DELAY = "30 seconds";
 const OWNED_REFRESH_MS = 30 * 1000;
 const SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const SNAPSHOT_MESSAGES = 200;
@@ -309,8 +310,11 @@ const make = Effect.gen(function* () {
       cwd: entry.info.cwd,
       model: entry.info.model,
       updatedAt: new Date(entry.info.updatedAtMs).toISOString(),
+      // A turn whose end was never written (the app quit mid-turn) stops
+      // counting as running once the session has been quiet for an hour.
       liveness:
-        entry.info.busy || now - entry.info.updatedAtMs < RUNNING_MS
+        (entry.info.busy && now - entry.info.updatedAtMs < IDLE_MS) ||
+        now - entry.info.updatedAtMs < RUNNING_MS
           ? "running"
           : now - entry.info.updatedAtMs < IDLE_MS
             ? "idle"
@@ -318,7 +322,8 @@ const make = Effect.gen(function* () {
     });
 
     const isListed = (entry: Entry, now: number) =>
-      now - entry.info.updatedAtMs < LIST_WINDOW_MS &&
+      (entry.source.listsUntilArchived === true ||
+        now - entry.info.updatedAtMs < LIST_WINDOW_MS) &&
       !owned.has(entry.info.id) &&
       !owned.has(entry.path) &&
       !(entry.info.cwd !== null && excludedRoots.some((root) => isUnder(entry.info.cwd!, root)));
@@ -406,11 +411,12 @@ const make = Effect.gen(function* () {
 
     // Initial discovery, before the first subscriber sees the list.
     yield* refreshOwnedIds;
-    const since = Date.now() - LIST_WINDOW_MS;
+    const discover = (source: ExternalSessionSource) =>
+      provide(source.discover(source.listsUntilArchived ? 0 : Date.now() - LIST_WINDOW_MS));
     yield* Effect.forEach(
       sources,
       (source) =>
-        provide(source.discover(since)).pipe(
+        discover(source).pipe(
           Effect.flatMap((paths) =>
             Effect.forEach(paths, (path) => summarizePath(source, path), { discard: true }),
           ),
@@ -439,6 +445,17 @@ const make = Effect.gen(function* () {
         ),
         // A missing store just means that agent is not installed here.
         Effect.ignore,
+        // A watcher can also stop when the OS drops it. Start it again after a
+        // pause, then re-read the source so a change made meanwhile still lands.
+        Effect.andThen(Effect.sleep(WATCH_RESTART_DELAY)),
+        Effect.andThen(
+          Effect.gen(function* () {
+            const paths = yield* discover(source);
+            for (const path of paths) pending.set(path, source);
+            if (paths.length > 0) yield* Queue.offer(wake, undefined);
+          }),
+        ),
+        Effect.forever,
       );
     yield* Effect.forEach(
       sources.flatMap((source) => source.roots.map((root) => watchRoot(source, root))),

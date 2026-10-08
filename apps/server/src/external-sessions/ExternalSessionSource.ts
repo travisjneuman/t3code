@@ -95,6 +95,11 @@ export interface ExternalSessionSource {
   /** File whose appended lines carry the session's messages; null when there is none. */
   readonly transcriptPath: (sessionPath: string) => string | null;
   readonly createParser: () => TranscriptParser;
+  /**
+   * Sessions stay listed until the provider archives them, however old.
+   * Without it they age out of the list after two weeks.
+   */
+  readonly listsUntilArchived?: true;
 }
 
 // Tool output and pasted files can be huge; a summary line is enough here.
@@ -178,6 +183,21 @@ export interface FileSlice {
 
 const decoder = new TextDecoder();
 const NEWLINE = 0x0a;
+const SCAN_CHUNK_BYTES = 1024 * 1024;
+
+/** `length` bytes from `start`, fewer at the end of the file. */
+const readRange = (file: FileSystem.File, start: number, length: number) =>
+  Effect.gen(function* () {
+    yield* file.seek(BigInt(start), "start");
+    const buffer = new Uint8Array(length);
+    let filled = 0;
+    while (filled < length) {
+      const read = yield* file.read(buffer.subarray(filled));
+      if (read === 0) break;
+      filled += read;
+    }
+    return buffer.subarray(0, filled);
+  });
 
 /**
  * Reads complete lines from `[from, min(size, from + maxBytes))`. When
@@ -199,15 +219,7 @@ export const readLines = (
         : Math.min(size, options.from ?? 0);
       const length = Math.min(options.maxBytes, size - start);
       if (length <= 0) return { size, mtimeMs, start, lines: [], end: start };
-      yield* file.seek(BigInt(start), "start");
-      const buffer = new Uint8Array(length);
-      let filled = 0;
-      while (filled < length) {
-        const read = yield* file.read(buffer.subarray(filled));
-        if (read === 0) break;
-        filled += read;
-      }
-      const bytes = buffer.subarray(0, filled);
+      const bytes = yield* readRange(file, start, length);
       let first = 0;
       if (start > 0 && options.fromEnd) {
         const newline = bytes.indexOf(NEWLINE);
@@ -223,6 +235,49 @@ export const readLines = (
       return { size, mtimeMs, start: start + first, lines, end: start + last + 1 };
     }),
   ).pipe(Effect.orElseSucceed(() => null));
+
+/**
+ * Visits the complete lines before byte `before` (a line start), newest first,
+ * a chunk at a time, until `visit` returns true or `maxBytes` have been read.
+ * A line longer than a chunk is skipped.
+ */
+export const scanLinesBackward = (
+  path: string,
+  before: number,
+  maxBytes: number,
+  visit: (line: string) => boolean,
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const file = yield* fs.open(path, { flag: "r" });
+      let end = before;
+      // Set when `end` falls inside a skipped line, whose start is no line to visit.
+      let insideLine = false;
+      while (end > 0 && before - end < maxBytes) {
+        const start = Math.max(0, end - SCAN_CHUNK_BYTES);
+        const bytes = yield* readRange(file, start, end - start);
+        // The line cut at `start` is read whole with the next chunk.
+        const from = start === 0 ? 0 : bytes.indexOf(NEWLINE) + 1;
+        const to = insideLine ? bytes.lastIndexOf(NEWLINE) + 1 : bytes.length;
+        if ((start === 0 || from > 0) && to > from) {
+          const lines = decoder.decode(bytes.subarray(from, to)).split("\n");
+          for (let index = lines.length - 1; index >= 0; index--) {
+            const line = lines[index]!;
+            if (line.length > 0 && visit(line)) return;
+          }
+        }
+        if (start === 0) return;
+        if (from > 0 && start + from < end) {
+          end = start + from;
+          insideLine = false;
+        } else {
+          end = start;
+          insideLine = true;
+        }
+      }
+    }),
+  ).pipe(Effect.orElseSucceed(() => undefined));
 
 /** The first `maxBytes` of a file as text, whether or not a line ends there. */
 export const readPrefix = (

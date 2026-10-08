@@ -95,8 +95,10 @@ in T3, which binds an ordinary thread to that same session.
     threads through `RunningElsewhereBanner.tsx`. Sending stays allowed. Only `import:` threads
     open the stream.
 - **Watch the list only while someone looks.** The registry is an `RcRef`. The first list or session
-  subscriber starts the file watchers and the initial discovery, which covers the last 14 days. The
-  watchers stop 30 seconds after the last subscriber leaves. Bursts of writes, such as a streamed
+  subscriber starts the file watchers and the initial discovery, which covers the last 14 days, or
+  every Codex thread still in `~/.codex/sessions` (Codex moves archived rollouts out of it, so the
+  list matches Codex's own). A watcher the OS drops is started again 30 seconds later and its store
+  re-read. The watchers stop 30 seconds after the last subscriber leaves. Bursts of writes, such as a streamed
   reply, are batched into one re-read about every 600 ms.
 - **Older sessions open on demand.** A session subscribe for a key the registry lacks, such as an
   older [session search](./session-search.md) result, walks that one store once over search's
@@ -175,7 +177,10 @@ in T3, which binds an ordinary thread to that same session.
     records.
   - They never read the `.key` files in the Claude registry or Codex `auth.json`.
 - "Running" means the agent reports a turn in progress (Claude's session registry, Codex
-  `task_started` without a matching completion) or the transcript changed in the last minute. A
+  `task_started` without a matching completion) or the transcript changed in the last minute. One
+  Codex turn can write megabytes of tool output after its `task_started`, so a rollout's first
+  read looks back up to 64 MB past its 256 KB tail for it, and later writes read only the appended
+  bytes. A turn whose end was never written stops counting after an hour of quiet. A
   session left open but quiet in another app reads as idle, so continue can't refuse it. The
   composer block asks the user to stop it there first.
 - Continue reads the whole transcript up to 64 MB. A larger one is read as its first 1 MB and
