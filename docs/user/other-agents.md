@@ -2,7 +2,8 @@
 
 **Other Agents**, below your threads in the sidebar, lists sessions you started outside T3 and
 used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop app, or an IDE.
-Open one to follow it live. Older sessions are still found by search. Sessions running right now
+Codex threads stay listed until you archive them in Codex. Open one to follow it live. Older
+sessions are still found by search. Sessions running right now
 come first and stay in view even when you collapse the list; the header counts them as active.
 Each session takes one line; hover it for its folder, model and machine. Below the running ones
 are the sessions active in the last 24 hours, then **Earlier**, which starts collapsed. Runs that
