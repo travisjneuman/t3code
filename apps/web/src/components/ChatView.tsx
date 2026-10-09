@@ -2260,7 +2260,7 @@ export default function ChatView(props: ChatViewProps) {
   const browserAvailable = isPreviewSupportedInRuntime() || activeEnvironmentServerBrowser;
   const previewPanelInlineSize = usePreviewPanelInlineSize(undefined, {
     containerWidth: workspaceLayoutWidth ?? undefined,
-    widthStorageKey: `t3code:preview-panel-width:${activeThreadKey}`,
+    // Fork add-on: one width for every thread and Other Agents session, not one per thread.
   });
   const activeThreadShell = useThreadShell(isServerThread ? activeThreadRef : null);
   const timelineThreadError =

@@ -5,7 +5,9 @@ need a separate branch and working directory.
 
 ## Start a thread
 
-On web and desktop, a new thread keeps the current project and carries your model
+On web and desktop, the sidebar's new thread button and `mod+n` start a thread
+without a project; pick a project in its heading, or Shift+click the button
+(`mod+shift+n`) to start in the current project. A new thread carries your model
 and mode selections, unless the destination project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
@@ -15,8 +17,8 @@ if that project exists there. Otherwise it selects an environment that has it.
 
 ### Start without a project
 
-A thread does not need a project. To start one without a project, click **or
-start without a project** under a new thread's heading, pick **No project** from
+A thread does not need a project. To start one without a project, click the
+sidebar's new thread button, click **or start without a project** under a new thread's heading, pick **No project** from
 the project menu in that heading or from **New thread in...** in the command
 palette, or press `mod+alt+n`. On mobile, pick **No project** from the project
 list. It starts on your current machine; before sending, pick another machine

@@ -127,6 +127,16 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.new") {
         event.preventDefault();
         event.stopPropagation();
+        // Fork add-on: like the sidebar's New thread button, start in No project.
+        const scratchTarget = legacySidebarEnabled
+          ? null
+          : scratchEnvironmentId(
+              activeThread?.environmentId ?? activeDraftThread?.environmentId ?? primaryEnvironmentId,
+            );
+        if (scratchTarget !== null) {
+          void startScratchThread(scratchTarget);
+          return;
+        }
         // The default sidebar routes creation through the command palette
         // whenever there is a real choice to make; the legacy sidebar (and
         // single-project setups) keep the immediate contextual create.
