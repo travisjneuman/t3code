@@ -150,10 +150,11 @@ terminals so native undo keeps working there.
 `navigation.back` (`mod+[` by default) and `navigation.forward` (`mod+]`) move
 through the pages you have visited, like a browser's back and forward buttons.
 
-`chat.new` may ask you to choose a project when there is more than one.
-`chat.newLocal` skips that chooser. Both use your
-[new-thread defaults](./thread-sidebar.md#start-a-thread). `chat.newWithoutProject`
-(`mod+alt+n`) starts a thread [without a project](./thread-sidebar.md#start-without-a-project).
+`chat.new` starts a thread [without a project](./thread-sidebar.md#start-without-a-project),
+like the sidebar's new thread button; where your machine offers no project-free
+folder, it may ask you to choose a project instead. `chat.newLocal` starts in the
+current project with your [new-thread defaults](./thread-sidebar.md#start-a-thread).
+`chat.newWithoutProject` (`mod+alt+n`) always starts without a project.
 
 ## Reserved shortcuts
 

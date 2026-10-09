@@ -1901,7 +1901,7 @@ function OpenCommandPaletteDialog(props: {
           </>
         ),
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-        shortcutCommand: "chat.new",
+        shortcutCommand: "chat.newLocal", // Fork add-on: chat.new starts in No project
         run: async () => {
           await startNewThreadFromContext({
             activeDraftThread,
