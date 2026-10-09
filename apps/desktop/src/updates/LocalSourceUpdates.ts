@@ -23,6 +23,8 @@ const SOURCE_UPDATE_BUILDS_DIR = "source-updates";
 const LOCKFILE_PATH = "pnpm-lock.yaml";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\u001b\[[0-9;]*m/gu;
 // Overrides the checkout path the build recorded in the packaged package.json.
 const SOURCE_REPOSITORY_PATH_ENV = "T3CODE_SOURCE_REPOSITORY_PATH";
 const UPSTREAM_REPOSITORY = "pingdotgg/t3code";
@@ -186,8 +188,10 @@ function tailOutput(value: string, limit = COMMAND_OUTPUT_LIMIT): string {
   return value.length <= limit ? value : value.slice(-limit);
 }
 
+// Stderr goes last so a build's error survives the tail instead of being pushed
+// out by the long asset list on stdout; color codes would only eat the budget.
 function trimOutput(result: CommandResult): string {
-  return tailOutput(`${result.stderr}\n${result.stdout}`.trim());
+  return tailOutput(`${result.stdout}\n${result.stderr}`.replace(ANSI_PATTERN, "").trim());
 }
 
 function parseCountPair(output: string): readonly [number, number] | null {
