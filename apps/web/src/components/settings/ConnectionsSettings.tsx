@@ -1385,6 +1385,10 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
           ) : null}
         </div>
       </div>
+      {/* Fork add-on: says what Tailscale HTTPS still needs. */}
+      {needsTailscaleSetup && endpoint.description ? (
+        <p className="mt-1 text-xs text-muted-foreground">{endpoint.description}</p>
+      ) : null}
     </div>
   );
 });

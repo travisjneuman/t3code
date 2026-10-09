@@ -123,6 +123,8 @@ Mobile keeps its manual environment selection.
 
 Join both devices to the same tailnet. In the desktop app, enable **Tailscale
 HTTPS** in **Settings → Connections**. Turn it off there to remove that route.
+Tailscale HTTPS needs **HTTPS Certificates** turned on for your tailnet, on the
+DNS page of the Tailscale admin console; until then the route says so.
 
 To start a command-line server with Tailscale HTTPS:
 
