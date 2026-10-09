@@ -15,10 +15,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { ChildProcessSpawner } from "effect/process";
 
-import { expandHomePath } from "../pathExpansion.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { withCodexAppServerClient } from "../provider/CodexProvider.ts";
 import { resolveCodexLaunchArgs } from "../provider/codexLaunchArgs.ts";
-import { mergeProviderInstanceEnvironment } from "../provider/ProviderInstanceEnvironment.ts";
+import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as ServerSettings from "../serverSettings.ts";
 import { codexInstanceHome, enabledInstancesOf } from "./continueExternalSession.ts";
 

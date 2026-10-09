@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { REMOTE_APP_SITE_INFO, REMOTE_APP_SITES, type EnvironmentId } from "@t3tools/contracts";
 
-import { DRIVER_OPTIONS } from "~/components/settings/providerDriverMeta";
+import { providerClients } from "~/components/settings/providerDriverMeta";
 import { SettingsRow, SettingsSection } from "~/components/settings/settingsLayout";
 import {
   Select,
@@ -27,7 +27,8 @@ import {
 } from "./useRemoteAppSites";
 
 const providerLabel = (driver: string): string =>
-  DRIVER_OPTIONS.find((option) => option.value === driver)?.label ?? driver;
+  providerClients.definitions.find((definition) => definition.driverKind === driver)?.label ??
+  driver;
 
 const siteDescription = (
   label: string,
