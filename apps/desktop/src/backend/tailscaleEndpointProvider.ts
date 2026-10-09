@@ -64,6 +64,7 @@ const resolveTailscaleMagicDnsAdvertisedEndpoint = Effect.fn(
   readonly dnsName: string | null;
   readonly serveEnabled: boolean;
   readonly servePort?: number;
+  readonly httpsCertificatesEnabled?: boolean | null; // Fork add-on
   readonly probe?: (baseUrl: string) => Effect.Effect<boolean, never, HttpClient.HttpClient>;
 }): Effect.fn.Return<Option.Option<AdvertisedEndpoint>, never, HttpClient.HttpClient> {
   if (!input.dnsName) {
@@ -91,9 +92,12 @@ const resolveTailscaleMagicDnsAdvertisedEndpoint = Effect.fn(
       reachability: "private-network",
       hostedHttpsCompatibility: isReachable ? "compatible" : "requires-configuration",
       status: isReachable ? "available" : "unavailable",
+      // Fork add-on: without tailnet HTTPS, Setup's `tailscale serve` waits for approval and times out.
       description: isReachable
         ? "HTTPS endpoint served by Tailscale Serve."
-        : "MagicDNS hostname. Configure Tailscale Serve for HTTPS access.",
+        : input.httpsCertificatesEnabled === false
+          ? "Turn on HTTPS Certificates on the DNS page of the Tailscale admin console, then choose Setup."
+          : "MagicDNS hostname. Configure Tailscale Serve for HTTPS access.",
     }),
   );
 });
@@ -110,6 +114,7 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
       never,
       ChildProcessSpawner.ChildProcessSpawner
     >;
+    readonly readHttpsCertificatesEnabled?: Effect.Effect<boolean | null>; // Fork add-on
     readonly probe?: (baseUrl: string) => Effect.Effect<boolean, never, HttpClient.HttpClient>;
   }): Effect.fn.Return<
     readonly AdvertisedEndpoint[],
@@ -135,6 +140,9 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
       dnsName,
       serveEnabled: input.serveEnabled === true,
       ...(input.servePort === undefined ? {} : { servePort: input.servePort }),
+      ...(input.readHttpsCertificatesEnabled === undefined
+        ? {}
+        : { httpsCertificatesEnabled: yield* input.readHttpsCertificatesEnabled }), // Fork add-on
       ...(input.probe === undefined ? {} : { probe: input.probe }),
     });
 

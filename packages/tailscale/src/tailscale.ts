@@ -133,6 +133,7 @@ const TailscaleStatusSelf = Schema.Struct({
 
 const TailscaleStatusJson = Schema.Struct({
   Self: Schema.optional(TailscaleStatusSelf),
+  CertDomains: Schema.optional(Schema.Unknown), // Fork add-on: empty until the tailnet turns on HTTPS.
 });
 
 export type TailscaleStatusJson = typeof TailscaleStatusJson.Type;
@@ -140,6 +141,8 @@ export type TailscaleStatusJson = typeof TailscaleStatusJson.Type;
 export interface TailscaleStatus {
   readonly magicDnsName: string | null;
   readonly tailnetIpv4Addresses: readonly string[];
+  /** Fork add-on: false until the tailnet turns on HTTPS certificates, which Serve needs. */
+  readonly httpsCertificatesEnabled?: boolean;
 }
 
 const collectStdout = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
@@ -210,6 +213,9 @@ export const parseTailscaleStatus = (
       return {
         magicDnsName: normalizeMagicDnsName(parsed),
         tailnetIpv4Addresses,
+        // Fork add-on: Serve needs the tailnet's HTTPS certificates.
+        httpsCertificatesEnabled:
+          Array.isArray(parsed.CertDomains) && parsed.CertDomains.length > 0,
       };
     }),
   );
