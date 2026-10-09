@@ -34,7 +34,7 @@ import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import { expandHomePathWith } from "@t3tools/provider-core/server/pathExpansion";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { exportFileName } from "../thread-export/projectionView.ts";
 
@@ -161,7 +161,7 @@ const make = Effect.gen(function* () {
           message: `Set the ${label} first (${SETTINGS_PATH}).`,
         });
       }
-      const folder = expandHomePathWith(raw, path);
+      const folder = expandHomePath(raw);
       if (!path.isAbsolute(folder)) {
         return yield* new SaveToNotesError({
           message: `The ${label} must be a full path, like ~/notes.`,
