@@ -1,5 +1,6 @@
 import { RouterProvider } from "@tanstack/react-router";
 
+import { BrowserProfileReporter } from "./browser/BrowserProfileReporter";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
@@ -18,6 +19,7 @@ export function AppRoot({ router }: { readonly router: AppRouter }) {
       <RemoteAppSync />
       <RouterProvider router={router} />
       <ElectronBrowserHost />
+      <BrowserProfileReporter />
       <QuitHoldOverlay />
     </AppAtomRegistryProvider>
   );
