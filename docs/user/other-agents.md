@@ -11,6 +11,9 @@ the sidebar's sync button starts to finish an upstream merge are named by when t
 as **t3 100626 143205** for October 6, 2026 at 14:32:05.
 
 A session's view shows its latest 200 messages. **Continue in T3** brings over the whole history.
+In the desktop app, the view has the right panel for [web apps](./desktop-remote-apps.md), one
+panel shared by every session; the browser, terminal, files and diff need a thread, so continue the
+session in T3 for those.
 
 ## Continue a session in T3
 

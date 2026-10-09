@@ -75,6 +75,7 @@ import {
   LIVENESS_LABEL,
   shortModelLabel,
 } from "./atoms";
+import { useExternalSessionPanel } from "./ExternalSessionPanel";
 
 const EMPTY_MESSAGES: ReadonlyArray<ExternalSessionMessage> = [];
 const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
@@ -208,6 +209,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
     observer.observe(overlayElement);
     return () => observer.disconnect();
   }, [overlayElement]);
+  const sidePanel = useExternalSessionPanel(environmentId);
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
@@ -215,7 +217,11 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
           composer land where a thread's do in the same window. */}
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
-          <ExternalSessionHeader environmentId={environmentId} summary={summary} />
+          <ExternalSessionHeader
+            environmentId={environmentId}
+            summary={summary}
+            controls={sidePanel.headerControls}
+          />
           <div className="relative flex min-h-0 min-w-0 flex-1">
             <ChatCanvas composerOverlayElement={overlayElement}>
               <div className="relative flex min-h-0 flex-1 flex-col bg-background">
@@ -314,6 +320,8 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
             </ChatCanvas>
           </div>
         </div>
+        {sidePanel.rootControls}
+        {sidePanel.panel}
       </div>
     </SidebarInset>
   );
@@ -322,11 +330,12 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
 /**
  * The thread header's layout (ChatView's header plus ChatHeader's breadcrumb
  * row): folder / title. Session details live in the composer-shaped block,
- * and the right side stays empty where a thread keeps its panel toggles.
+ * and the right side holds the side panel toggle where a thread keeps its own.
  */
 function ExternalSessionHeader(props: {
   environmentId: EnvironmentId;
   summary: ExternalSessionSummary | null;
+  controls: ReactNode;
 }) {
   const { summary } = props;
   const title = summary === null ? "Session" : externalSessionTitle(summary);
@@ -379,6 +388,7 @@ function ExternalSessionHeader(props: {
           </WorkspaceBreadcrumbItem>
         </WorkspaceBreadcrumb>
       </div>
+      {props.controls}
     </header>
   );
 }
