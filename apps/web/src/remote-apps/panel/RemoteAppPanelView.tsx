@@ -27,8 +27,13 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import type { RightPanelSurface } from "~/rightPanelStore";
 
 import { RemoteAppSiteIcon } from "../RemoteAppSiteIcon";
+import { REMOTE_APP_TEXT_SIZE_CHOICES, remoteAppTextSizeLabel } from "../remoteAppState";
 import { useAvailableRemoteAppSites } from "../useRemoteAppSites";
-import { setRemoteAppSurface } from "../useRemoteAppState";
+import {
+  setRemoteAppSiteTextSize,
+  setRemoteAppSurface,
+  useRemoteAppSiteTextSize,
+} from "../useRemoteAppState";
 import {
   type RemoteAppChatMode,
   type RemoteAppThreadChoice,
@@ -193,6 +198,7 @@ function PanelMenu(props: {
   const hasThreadChat = useRemoteAppPanelMemory(
     (state) => state.threadLinks[threadKey]?.[site] !== undefined,
   );
+  const textSize = useRemoteAppSiteTextSize(site);
 
   const changeChatMode = (mode: RemoteAppChatMode) => {
     // The chat on screen becomes this thread's own, rather than a new one.
@@ -256,6 +262,25 @@ function PanelMenu(props: {
           >
             {"Forget this thread's chat"}
           </MenuItem>
+        </MenuGroup>
+        <MenuSeparator />
+        <MenuGroup>
+          <MenuGroupLabel>Text size</MenuGroupLabel>
+          <MenuRadioGroup
+            value={String(textSize)}
+            onValueChange={(value) => {
+              const choice = REMOTE_APP_TEXT_SIZE_CHOICES.find((size) => String(size) === value);
+              if (choice !== undefined) {
+                void setRemoteAppSiteTextSize(site, choice === 1 ? null : choice);
+              }
+            }}
+          >
+            {REMOTE_APP_TEXT_SIZE_CHOICES.map((size) => (
+              <MenuRadioItem key={size} value={String(size)}>
+                {remoteAppTextSizeLabel(size)}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
         </MenuGroup>
       </MenuPopup>
     </Menu>

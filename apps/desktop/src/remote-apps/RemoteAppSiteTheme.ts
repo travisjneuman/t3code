@@ -349,6 +349,54 @@ ${declarations({
 }
 ${pageBase(palette, colorScheme)}`;
 
+/* Perplexity's tokens are full colors, set on every color-scheme scope. Its
+   translucent overlays derive from its own white or black and stay as shipped. */
+const buildPerplexityCss = (palette: Palette, colorScheme: string): string => {
+  const accent = toHex(palette.accent);
+  const accentHover = toHex(palette.accentHover);
+  const tint = (alpha: number) => `rgb(from ${accent} r g b / ${alpha})`;
+  return `/* ndev.t3code theme for the isolated Perplexity surface. */
+:root,
+[data-color-scheme],
+.dark,
+.light {
+${declarations({
+  "--bg-base": toHex(palette.canvas),
+  "--bg-raised": toHex(palette.surfaceRaised),
+  "--bg-inverse": toHex(palette.text),
+  "--surface-base": toHex(palette.canvas),
+  "--surface-raised": toHex(palette.surfaceRaised),
+  "--surface-underlay": toHex(palette.sidebar),
+  "--surface-inverse": toHex(palette.text),
+  "--fg-primary": toHex(palette.text),
+  "--fg-secondary": toHex(palette.textSecondary),
+  "--fg-tertiary": toHex(palette.textMuted),
+  "--fg-inverse": toHex(palette.canvas),
+  "--border-base": toHex(palette.border),
+  "--border-soft": toHex(palette.border),
+  "--border-inverse": toHex(palette.canvas),
+  "--accent-bg-strong": accent,
+  "--accent-bg-soft": tint(0.09),
+  "--accent-bg-subtle": tint(0.055),
+  "--accent-bg-selection": tint(0.09),
+  "--accent-fg-primary": accent,
+  "--accent-fg-secondary": tint(0.65),
+  "--accent-border-strong": accent,
+  "--accent-border-subtle": tint(0.055),
+  "--accent-border-focus": accent,
+  "--link-accent-fg-idle": accent,
+  "--link-accent-fg-hover": accentHover,
+  "--link-accent-fg-active": accentHover,
+  "--action-bg-on": accent,
+  "--action-solid-accent-bg-idle": accent,
+  "--action-solid-accent-bg-hover": accentHover,
+  "--action-solid-accent-bg-active": accentHover,
+  "--action-solid-accent-fg-idle": accent,
+})}
+}
+${pageBase(palette, colorScheme)}`;
+};
+
 /* Sites ship app-region CSS for their own desktop apps (ChatGPT marks its whole
    52px header draggable). Inside a view that turns their header controls into
    window drag handles; the host titlebar already drags the window. */
@@ -432,6 +480,17 @@ ${PINNED} [style*="--sidebar-width"] {
     sidebarWidthCss: `${PINNED},
 ${PINNED} bard-sidenav {
   --bard-sidenav-open-width: var(--t3code-sidebar-width) !important;
+}`,
+  },
+  perplexity: {
+    css: buildPerplexityCss,
+    // The nav sizes its rows from --sidebar-pinned-width; its wrapper carries
+    // an inline width, 56px while collapsed to the icon rail, which stays.
+    sidebarWidthCss: `${PINNED} [style*="--sidebar-pinned-width"] {
+  --sidebar-pinned-width: var(--t3code-sidebar-width) !important;
+}
+${PINNED} .w-sideBarWidth:has(> nav):not([style*="width: 56px"]) {
+  width: var(--t3code-sidebar-width) !important;
 }`,
   },
 };

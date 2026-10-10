@@ -1,4 +1,6 @@
 import {
+  normalizeRemoteAppTextSize,
+  REMOTE_APP_SITES,
   RemoteAppStateSchema,
   type RemoteAppRecentLocation,
   type RemoteAppState,
@@ -32,16 +34,28 @@ export const DEFAULT_REMOTE_APP_STATE: RemoteAppState = {
   currentTitle: "ChatGPT",
   canGoBack: false,
   canGoForward: false,
-  zoomFactor: 1,
   recents: [],
   error: null,
+};
+
+// Keeps only sites set away from T3's size, rounded and clamped.
+const normalizeTextSizes = (
+  textSizes: RemoteAppState["textSizes"],
+): NonNullable<RemoteAppState["textSizes"]> => {
+  const normalized: Partial<Record<(typeof REMOTE_APP_SITES)[number], number>> = {};
+  for (const site of REMOTE_APP_SITES) {
+    const size = textSizes?.[site];
+    const next = size === undefined ? null : normalizeRemoteAppTextSize(size);
+    if (next !== null) normalized[site] = next;
+  }
+  return normalized;
 };
 
 export const normalizeRemoteAppState = (state: RemoteAppState): RemoteAppState => ({
   ...state,
   currentUrl: state.currentUrl === null ? null : sanitizePersistedUrl(state.currentUrl),
   currentTitle: sanitizeRemoteTitle(state.currentTitle),
-  zoomFactor: Math.min(3, Math.max(0.5, state.zoomFactor)),
+  textSizes: normalizeTextSizes(state.textSizes),
   recents: state.recents
     .map((recent): RemoteAppRecentLocation | null => {
       const url = sanitizePersistedUrl(recent.url);
@@ -122,6 +136,27 @@ const writeState = Effect.fnUntraced(function* (input: {
     );
 });
 
+const TEMPORARY_STATE_FILE = /^remote-app-state\.json\.(\d+)\.tmp$/;
+
+// A write interrupted by a quit or crash leaves its temporary file behind.
+// Only this process writes the state file, so other processes' leftovers are stale.
+const removeStaleTemporaryFiles = Effect.fnUntraced(function* (input: {
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly path: Path.Path;
+  readonly directory: string;
+}) {
+  const entries = yield* input.fileSystem
+    .readDirectory(input.directory)
+    .pipe(Effect.catch(() => Effect.succeed([] as ReadonlyArray<string>)));
+  for (const entry of entries) {
+    const match = TEMPORARY_STATE_FILE.exec(entry);
+    if (match === null || Number(match[1]) === process.pid) continue;
+    yield* input.fileSystem
+      .remove(input.path.join(input.directory, entry))
+      .pipe(Effect.catch(() => Effect.void));
+  }
+});
+
 const readState = Effect.fnUntraced(function* (input: {
   readonly fileSystem: FileSystem.FileSystem;
   readonly statePath: string;
@@ -156,13 +191,13 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const writeLock = yield* Semaphore.make(1);
-  const stateRef = yield* Ref.make(
-    yield* readState({
-      fileSystem,
-      statePath: environment.path.join(environment.stateDir, "remote-app-state.json"),
-    }),
-  );
   const statePath = environment.path.join(environment.stateDir, "remote-app-state.json");
+  yield* removeStaleTemporaryFiles({
+    fileSystem,
+    path: environment.path,
+    directory: environment.stateDir,
+  });
+  const stateRef = yield* Ref.make(yield* readState({ fileSystem, statePath }));
 
   const persist = (state: RemoteAppState) => {
     const normalized = normalizeRemoteAppState(state);

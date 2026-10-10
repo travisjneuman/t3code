@@ -1,4 +1,4 @@
-import type { DesktopRemoteAppBridge, RemoteAppState } from "@t3tools/contracts";
+import type { DesktopRemoteAppBridge, RemoteAppSite, RemoteAppState } from "@t3tools/contracts";
 import { useMemo, useSyncExternalStore } from "react";
 
 import {
@@ -14,9 +14,7 @@ interface RemoteAppContextValue {
   readonly goBack: () => Promise<void>;
   readonly goForward: () => Promise<void>;
   readonly reload: () => Promise<void>;
-  readonly zoomIn: () => Promise<void>;
-  readonly zoomOut: () => Promise<void>;
-  readonly resetZoom: () => Promise<void>;
+  readonly setSiteTextSize: (site: RemoteAppSite, size: number | null) => Promise<void>;
   readonly retry: () => Promise<void>;
   readonly clearData: () => Promise<void>;
 }
@@ -114,15 +112,35 @@ const actions = {
   goBack: () => invoke((current) => current.goBack()),
   goForward: () => invoke((current) => current.goForward()),
   reload: () => invoke((current) => current.reload()),
-  zoomIn: () => invoke((current) => current.zoomIn()),
-  zoomOut: () => invoke((current) => current.zoomOut()),
-  resetZoom: () => invoke((current) => current.resetZoom()),
+  setSiteTextSize: (site: RemoteAppSite, size: number | null) =>
+    invoke((current) => current.setSiteTextSize(site, size)),
   retry: () => invoke((current) => current.retry()),
   clearData: () => invoke((current) => current.clearData()),
 } as const;
 
 /** Switches the desktop window's surface without subscribing to remote-app state. */
 export const setRemoteAppSurface = actions.setActiveSurface;
+
+/** Sets a site's text size relative to T3's chat text; null matches T3. */
+export const setRemoteAppSiteTextSize = actions.setSiteTextSize;
+
+/** Sites set away from T3's text size, with their sizes. */
+export function useRemoteAppTextSizes(): RemoteAppState["textSizes"] {
+  return useSyncExternalStore(
+    subscribe,
+    () => snapshot.textSizes,
+    () => undefined,
+  );
+}
+
+/** A site's text size relative to T3's chat text; 1 matches T3. */
+export function useRemoteAppSiteTextSize(site: RemoteAppSite): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => snapshot.textSizes?.[site] ?? 1,
+    () => 1,
+  );
+}
 
 export function useRemoteAppState(): RemoteAppContextValue {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

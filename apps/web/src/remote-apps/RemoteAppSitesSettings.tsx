@@ -1,5 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { REMOTE_APP_SITE_INFO, REMOTE_APP_SITES, type EnvironmentId } from "@t3tools/contracts";
+import {
+  REMOTE_APP_SITE_INFO,
+  REMOTE_APP_SITES,
+  type EnvironmentId,
+  type RemoteAppSite,
+} from "@t3tools/contracts";
 
 import { providerClients } from "~/components/settings/providerDriverMeta";
 import { SettingsRow, SettingsSection } from "~/components/settings/settingsLayout";
@@ -16,7 +21,13 @@ import { primaryServerProvidersAtom } from "~/state/server";
 
 import { RemoteAppChatImportRow } from "./RemoteAppChatImportRow";
 import { RemoteAppSiteIcon } from "./RemoteAppSiteIcon";
-import { resolveAvailableRemoteAppSites, resolveEnabledRemoteAppSites } from "./remoteAppState";
+import {
+  REMOTE_APP_TEXT_SIZE_CHOICES,
+  remoteAppTextSizeLabel,
+  resolveAvailableRemoteAppSites,
+  resolveEnabledRemoteAppSites,
+} from "./remoteAppState";
+import { setRemoteAppSiteTextSize, useRemoteAppSiteTextSize } from "./useRemoteAppState";
 import {
   REMOTE_APP_IDLE_UNLOAD_CHOICES,
   type RemoteAppIdleUnloadMinutes,
@@ -50,6 +61,36 @@ const idleUnloadValue = (minutes: RemoteAppIdleUnloadMinutes): string =>
 const idleUnloadLabel = (minutes: RemoteAppIdleUnloadMinutes): string =>
   minutes === null ? "Off" : `${minutes / 60}h`;
 
+/** A site's text size; both its full window and side panel follow it. */
+function RemoteAppTextSizeSelect(props: { readonly site: RemoteAppSite; readonly label: string }) {
+  const { site, label } = props;
+  const size = useRemoteAppSiteTextSize(site);
+  return (
+    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      Text
+      <Select
+        value={String(size)}
+        onValueChange={(value) => {
+          const choice = REMOTE_APP_TEXT_SIZE_CHOICES.find((option) => String(option) === value);
+          if (choice !== undefined)
+            void setRemoteAppSiteTextSize(site, choice === 1 ? null : choice);
+        }}
+      >
+        <SelectTrigger size="sm" className="w-28" aria-label={`${label} text size`}>
+          <SelectValue>{remoteAppTextSizeLabel(size)}</SelectValue>
+        </SelectTrigger>
+        <SelectPopup align="end" alignItemWithTrigger={false}>
+          {REMOTE_APP_TEXT_SIZE_CHOICES.map((option) => (
+            <SelectItem hideIndicator key={option} value={String(option)}>
+              {remoteAppTextSizeLabel(option)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </label>
+  );
+}
+
 /**
  * Chooses which web apps the desktop surface menu lists, which of them load
  * in the background, and how long hidden ones keep their pages. Provider
@@ -77,7 +118,8 @@ export function RemoteAppSitesSettings({
     <SettingsSection title="Web apps">
       <p className="px-3 py-3 text-xs leading-normal text-muted-foreground/80 sm:px-4">
         Loading a web app in the background makes it instant to open, but each one uses about
-        150–400 MB of memory.
+        150–400 MB of memory. Web app text follows T3's chat text size; Text adjusts one app from
+        there.
       </p>
       {REMOTE_APP_SITES.map((site) => {
         const { label, providerDriver } = REMOTE_APP_SITE_INFO[site];
@@ -96,6 +138,7 @@ export function RemoteAppSitesSettings({
             description={siteDescription(label, providerDriver, providerEnabled)}
             control={
               <>
+                <RemoteAppTextSizeSelect site={site} label={label} />
                 <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   Background
                   <Switch

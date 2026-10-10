@@ -15,9 +15,17 @@ export const DEFAULT_REMOTE_APP_STATE: RemoteAppState = {
   currentTitle: "ChatGPT",
   canGoBack: false,
   canGoForward: false,
-  zoomFactor: 1,
   recents: [],
   error: null,
+};
+
+/** Text sizes offered in Settings and the side panel menu; 1 matches T3. */
+export const REMOTE_APP_TEXT_SIZE_CHOICES = [0.8, 0.9, 1, 1.1, 1.2] as const;
+
+export const remoteAppTextSizeLabel = (size: number): string => {
+  const percent = Math.round((size - 1) * 100);
+  if (percent === 0) return "Match T3";
+  return percent > 0 ? `+${percent}%` : `−${-percent}%`;
 };
 
 export const isRemoteAppSurface = (value: unknown): value is RemoteAppState["activeSurface"] =>

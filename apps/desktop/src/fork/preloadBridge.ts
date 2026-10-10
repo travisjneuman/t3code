@@ -45,7 +45,6 @@ function isRemoteAppState(value: unknown): value is RemoteAppState {
     typeof state.activeSurface === "string" &&
     REMOTE_APP_SURFACES.has(state.activeSurface) &&
     typeof state.currentTitle === "string" &&
-    typeof state.zoomFactor === "number" &&
     Array.isArray(state.recents)
   );
 }
@@ -91,9 +90,8 @@ export function makeForkDesktopBridge(ipcRenderer: Electron.IpcRenderer): ForkDe
       goBack: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_BACK_CHANNEL),
       goForward: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GO_FORWARD_CHANNEL),
       reload: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RELOAD_CHANNEL),
-      zoomIn: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_ZOOM_IN_CHANNEL),
-      zoomOut: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_ZOOM_OUT_CHANNEL),
-      resetZoom: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RESET_ZOOM_CHANNEL),
+      setSiteTextSize: (site, size) =>
+        ipcRenderer.invoke(IpcChannels.REMOTE_APP_SET_SITE_TEXT_SIZE_CHANNEL, { site, size }),
       retry: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_RETRY_CHANNEL),
       clearData: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_CLEAR_DATA_CHANNEL),
       fillSitePrompt: (request) =>
