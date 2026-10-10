@@ -1,5 +1,7 @@
 import * as Schema from "effect/Schema";
 
+import { MAX_INTERFACE_FONT_SIZE, MIN_INTERFACE_FONT_SIZE } from "./settings.ts";
+
 /** Web apps the desktop shell can host in their own isolated, persistent session. */
 export const RemoteAppSiteSchema = Schema.Literals([
   "chatgpt",
@@ -119,6 +121,23 @@ export const RemoteAppRecentLocationSchema = Schema.Struct({
 });
 export type RemoteAppRecentLocation = typeof RemoteAppRecentLocationSchema.Type;
 
+export const REMOTE_APP_TEXT_SIZE_MIN = 0.8;
+export const REMOTE_APP_TEXT_SIZE_MAX = 1.2;
+export const REMOTE_APP_TEXT_SIZE_STEP = 0.1;
+
+/** A site's text size as a multiple of T3's chat text size; 1 matches T3. */
+export const RemoteAppTextSizeSchema = Schema.Number.check(
+  Schema.isBetween({ minimum: REMOTE_APP_TEXT_SIZE_MIN, maximum: REMOTE_APP_TEXT_SIZE_MAX }),
+);
+
+/** Rounds and clamps a text size; matching T3 (1) comes back as null. */
+export const normalizeRemoteAppTextSize = (size: number): number | null => {
+  if (!Number.isFinite(size)) return null;
+  const rounded = Math.round(size * 100) / 100;
+  const clamped = Math.min(REMOTE_APP_TEXT_SIZE_MAX, Math.max(REMOTE_APP_TEXT_SIZE_MIN, rounded));
+  return clamped === 1 ? null : clamped;
+};
+
 export const RemoteAppStateSchema = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   activeSurface: DesktopSurfaceSchema,
@@ -127,13 +146,16 @@ export const RemoteAppStateSchema = Schema.Struct({
   currentTitle: Schema.String.check(Schema.isMaxLength(512)),
   canGoBack: Schema.Boolean,
   canGoForward: Schema.Boolean,
-  zoomFactor: Schema.Number.check(Schema.isBetween({ minimum: 0.5, maximum: 3 })),
   recents: Schema.Array(RemoteAppRecentLocationSchema).check(Schema.isMaxLength(20)),
   error: Schema.NullOr(RemoteAppErrorSchema),
   // Sites that finished a reply while hidden and haven't been shown since.
   // Optional so state files written before the field existed still decode.
   unreadSites: Schema.optionalKey(
     Schema.Array(RemoteAppSiteSchema).check(Schema.isMaxLength(REMOTE_APP_SITES.length)),
+  ),
+  // Per-site text size relative to T3's chat text; a missing site matches T3.
+  textSizes: Schema.optionalKey(
+    Schema.Record(RemoteAppSiteSchema, Schema.optionalKey(RemoteAppTextSizeSchema)),
   ),
 });
 export type RemoteAppState = typeof RemoteAppStateSchema.Type;
@@ -341,6 +363,13 @@ export const RemoteAppThemeSchema = Schema.Struct({
   ),
   colors: RemoteAppThemeColorsSchema,
   menu: Schema.optionalKey(RemoteAppMenuThemeSchema),
+  // T3's Interface font size in CSS px; site text is scaled to match T3's chat
+  // text at it. Missing means T3's default.
+  interfaceFontSize: Schema.optionalKey(
+    Schema.Number.check(
+      Schema.isBetween({ minimum: MIN_INTERFACE_FONT_SIZE, maximum: MAX_INTERFACE_FONT_SIZE }),
+    ),
+  ),
 });
 export type RemoteAppTheme = typeof RemoteAppThemeSchema.Type;
 
@@ -353,9 +382,9 @@ export interface DesktopRemoteAppBridge {
   goBack: () => Promise<RemoteAppState>;
   goForward: () => Promise<RemoteAppState>;
   reload: () => Promise<RemoteAppState>;
-  zoomIn: () => Promise<RemoteAppState>;
-  zoomOut: () => Promise<RemoteAppState>;
-  resetZoom: () => Promise<RemoteAppState>;
+  // Sets a site's text size (both its full window and side panel); null
+  // matches T3 again.
+  setSiteTextSize: (site: RemoteAppSite, size: number | null) => Promise<RemoteAppState>;
   retry: () => Promise<RemoteAppState>;
   clearData: () => Promise<RemoteAppState>;
   // Switches to the site and types the text into its prompt box without

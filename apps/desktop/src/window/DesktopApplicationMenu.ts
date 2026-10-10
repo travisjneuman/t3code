@@ -11,6 +11,7 @@ import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
+import * as ForkMenu from "../fork/menu.ts"; // Fork add-on: remote apps.
 import * as DesktopWindow from "./DesktopWindow.ts";
 
 export class DesktopApplicationMenuActionError extends Schema.TaggedError<DesktopApplicationMenuActionError>()(
@@ -115,6 +116,7 @@ const handleCheckForUpdatesMenuClick = Effect.gen(function* () {
 export const make = Effect.gen(function* () {
   const electronMenu = yield* ElectronMenu.ElectronMenu;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const forkMenu = yield* ForkMenu.make; // Fork add-on: remote apps.
   const context = yield* Effect.context<DesktopApplicationMenuRuntimeServices>();
   const runPromise = Effect.runPromiseWith(context);
 
@@ -264,6 +266,7 @@ export const make = Effect.gen(function* () {
             click: zoomClick("in"),
           },
           { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: zoomClick("out") },
+          ...forkMenu.viewItems, // Fork add-on: web app text size.
           { type: "separator" },
           { role: "togglefullscreen" },
         ],

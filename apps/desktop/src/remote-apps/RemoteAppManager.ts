@@ -1,7 +1,9 @@
 import {
   isRemoteAppSite,
+  normalizeRemoteAppTextSize,
   REMOTE_APP_SITE_INFO,
   REMOTE_APP_SITES,
+  REMOTE_APP_TEXT_SIZE_STEP,
   REMOTE_APP_TRANSFER_TEXT_MAX_LENGTH,
   type DesktopSurface,
   type RemoteAppAvailability,
@@ -41,6 +43,7 @@ import {
   isTrustedRemoteDownload,
   isTrustedRemoteHost,
   isTrustedRemoteUrl,
+  resolveRemoteAppPageZoom,
   resolveRemoteAppSiteForUrl,
   sanitizePersistedUrl,
   sanitizeRemoteTitle,
@@ -117,8 +120,8 @@ const addRemoteAppViewBelowHostRenderer = (
   window.contentView.addChildView(view, REMOTE_APP_VIEW_LAYER_INDEX);
 };
 
-export const resolveRemoteAppZoomFactor = (current: number, delta: number | null): number =>
-  delta === null ? 1 : Math.min(3, Math.max(0.5, current + delta));
+/** A step of a site's text size; "reset" matches T3 again. */
+export type RemoteAppTextSizeStep = "larger" | "smaller" | "reset";
 
 export const resolveRemoteAppViewZoomFactor = (mainZoomFactor: number): number =>
   Number.isFinite(mainZoomFactor) && mainZoomFactor > 0 ? mainZoomFactor : 1;
@@ -239,9 +242,16 @@ export class RemoteAppManager extends Context.Service<
     readonly goBack: Effect.Effect<RemoteAppState>;
     readonly goForward: Effect.Effect<RemoteAppState>;
     readonly reload: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
-    readonly zoomIn: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
-    readonly zoomOut: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
-    readonly resetZoom: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    // Sets a site's text size relative to T3's chat text; null matches T3.
+    readonly setSiteTextSize: (
+      site: RemoteAppSite,
+      size: number | null,
+    ) => Effect.Effect<RemoteAppState, RemoteAppManagerError>;
+    // Steps the text size of the focused site's page, else the site on screen,
+    // else the only visible side panel. Does nothing when none applies.
+    readonly stepTextSize: (
+      step: RemoteAppTextSizeStep,
+    ) => Effect.Effect<void, RemoteAppManagerError>;
     readonly retry: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
     readonly clearData: Effect.Effect<RemoteAppState, RemoteAppManagerError>;
     readonly fillSitePrompt: (
@@ -511,47 +521,106 @@ export const make = Effect.gen(function* () {
       );
   };
 
-  const positionView = (window: Electron.BrowserWindow, view: Electron.WebContentsView) =>
-    Effect.flatMap(Ref.get(remoteThemeRef), (theme) =>
-      Effect.try({
+  /**
+   * The site's page zoom at T3's window zoom `mainZoom`: its reply text lands
+   * on T3's chat text size, times the user's text size for the site.
+   */
+  const sitePageZoom = (site: RemoteAppSite, mainZoom: number) =>
+    Effect.gen(function* () {
+      const theme = yield* Ref.get(remoteThemeRef);
+      const state = yield* stateStore.get;
+      return resolveRemoteAppPageZoom({
+        site,
+        mainZoom,
+        interfaceFontSize: theme.interfaceFontSize,
+        textSize: state.textSizes?.[site],
+      });
+    });
+
+  const positionView = (
+    site: RemoteAppSite,
+    window: Electron.BrowserWindow,
+    view: Electron.WebContentsView,
+  ) =>
+    Effect.gen(function* () {
+      const theme = yield* Ref.get(remoteThemeRef);
+      const mainZoom = yield* Effect.try({
+        try: () => resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()),
+        catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
+      });
+      const pageZoom = yield* sitePageZoom(site, mainZoom);
+      yield* Effect.try({
         try: () => {
-          const bounds = window.getContentBounds();
-          const zoomFactor = resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor());
-          // The native shell owns application zoom. Keep the live remote page on
-          // that same scale so its sidebar width, typography, and responsive
-          // breakpoints continue to line up with the host at every zoom level.
-          view.webContents.setZoomFactor(zoomFactor);
-          // The host footer lives in the sidebar; a collapsed sidebar reports no width.
+          // The native shell owns application zoom. The page follows it, scaled
+          // so the site's text matches T3's chat text at every zoom level.
+          view.webContents.setZoomFactor(pageZoom);
+          // Bounds are T3's own layout, so they stay on T3's scale. The host
+          // footer lives in the sidebar; a collapsed sidebar reports no width.
           view.setBounds(
-            resolveRemoteAppViewBounds(bounds, zoomFactor, theme.sidebarWidth !== null),
+            resolveRemoteAppViewBounds(
+              window.getContentBounds(),
+              mainZoom,
+              theme.sidebarWidth !== null,
+            ),
           );
         },
         catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
-      }),
-    );
+      });
+    });
 
   /**
-   * Keeps a side-panel page on the app's scale, as positionView does for the
-   * full view, so its CSS pixels line up with T3's beside it.
+   * Gives a side-panel page the same zoom positionView gives the site's full
+   * view. Chromium keys zoom by host within a partition, so the two must agree.
    */
-  const matchPanelZoom = (window: Electron.BrowserWindow, contents: Electron.WebContents) => {
-    if (window.isDestroyed() || contents.isDestroyed()) return;
-    contents.setZoomFactor(resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()));
-  };
+  const matchPanelZoom = (
+    site: RemoteAppSite,
+    window: Electron.BrowserWindow,
+    contents: Electron.WebContents,
+  ) =>
+    Effect.gen(function* () {
+      if (window.isDestroyed() || contents.isDestroyed()) return;
+      const pageZoom = yield* sitePageZoom(
+        site,
+        resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()),
+      );
+      if (!contents.isDestroyed()) contents.setZoomFactor(pageZoom);
+    });
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
   /**
    * Pins the page's sidebar to T3's current width. The inserted site CSS reads
-   * the width from a custom property, so width changes never reinsert it.
+   * the width from a custom property, so width changes never reinsert it. The
+   * page's CSS pixels are scaled by its text match against T3's, so the width
+   * is divided by that scale to land on T3's sidebar edge.
    */
-  const applySidebarWidth = (contents: Electron.WebContents) =>
-    Effect.flatMap(Ref.get(remoteThemeRef), (theme) =>
-      Effect.tryPromise({
-        try: () => contents.executeJavaScript(buildRemoteAppSidebarWidthScript(theme.sidebarWidth)),
+  const applySidebarWidth = (site: RemoteAppSite, contents: Electron.WebContents) =>
+    Effect.gen(function* () {
+      const theme = yield* Ref.get(remoteThemeRef);
+      const scale = yield* sitePageZoom(site, 1);
+      const width = theme.sidebarWidth === null ? null : theme.sidebarWidth / scale;
+      yield* Effect.tryPromise({
+        try: () => contents.executeJavaScript(buildRemoteAppSidebarWidthScript(width)),
         catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
-      }).pipe(Effect.catch(() => Effect.void)),
-    );
+      }).pipe(Effect.catch(() => Effect.void));
+    });
+
+  /** Re-applies a site's page zoom and sidebar pin to its full view and side panel. */
+  const applySiteZoom = (site: RemoteAppSite) =>
+    Effect.gen(function* () {
+      const window = yield* getLiveWindow;
+      if (Option.isNone(window)) return;
+      const view = yield* getLiveView(site);
+      if (Option.isSome(view)) {
+        yield* positionView(site, window.value, view.value);
+        const contents = view.value.webContents;
+        if (isThemeableRemoteAppSite(site) && isThemeableSiteUrl(site, contents.getURL())) {
+          yield* applySidebarWidth(site, contents);
+        }
+      }
+      const panel = getLivePanel(site);
+      if (panel !== undefined) yield* matchPanelZoom(site, window.value, panel);
+    });
 
   const isThemeableSiteUrl = (site: RemoteAppSite, url: string): boolean => {
     if (site === "chatgpt") return isChatGptRemoteAppUrl(url);
@@ -600,7 +669,7 @@ export const make = Effect.gen(function* () {
           }).pipe(Effect.catch(() => Effect.void));
         }
         if (!themeable || !isThemeableRemoteAppSite(site)) return;
-        if (view !== undefined) yield* applySidebarWidth(contents);
+        if (view !== undefined) yield* applySidebarWidth(site, contents);
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
           try: () => contents.executeJavaScript(buildRemoteAppInteractionScript()),
@@ -718,6 +787,24 @@ export const make = Effect.gen(function* () {
         { role: "copy", enabled: params.editFlags.canCopy },
         { role: "paste", enabled: params.editFlags.canPaste },
         { role: "selectAll", enabled: params.editFlags.canSelectAll },
+        { type: "separator" },
+        {
+          label: "Text Size",
+          submenu: [
+            {
+              label: "Larger",
+              click: () => runSafely(stepSiteTextSize(site, "larger")),
+            },
+            {
+              label: "Smaller",
+              click: () => runSafely(stepSiteTextSize(site, "smaller")),
+            },
+            {
+              label: "Match T3",
+              click: () => runSafely(stepSiteTextSize(site, "reset")),
+            },
+          ],
+        },
       );
       Electron.Menu.buildFromTemplate(template).popup({
         window,
@@ -777,7 +864,7 @@ export const make = Effect.gen(function* () {
     // Chromium keys zoom by host, so a cross-document navigation (including
     // the first load from about:blank) drops the app scale positionView set.
     contents.on("did-navigate", () =>
-      runSafely(positionView(window, view).pipe(Effect.andThen(syncNavigation(site, view)))),
+      runSafely(positionView(site, window, view).pipe(Effect.andThen(syncNavigation(site, view)))),
     );
     for (const event of REMOTE_APP_THEME_NAVIGATION_EVENTS) {
       contents.on(event, () =>
@@ -881,7 +968,7 @@ export const make = Effect.gen(function* () {
     contents.on("did-finish-load", () => armActivityWatch(site, contents));
     // Chromium keys zoom by host; see the full view's did-navigate.
     contents.on("did-navigate", () => {
-      matchPanelZoom(window, contents);
+      runSafely(matchPanelZoom(site, window, contents));
       reportPanelNavigation(site, contents);
     });
     contents.on("did-navigate-in-page", (_event, _url, isMainFrame) => {
@@ -990,7 +1077,7 @@ export const make = Effect.gen(function* () {
     view.setBackgroundColor(theme.colors.canvas);
     configureView(site, window, view);
     configureSession(site, session, window);
-    yield* positionView(window, view);
+    yield* positionView(site, window, view);
     view.setVisible(false);
     views.set(site, view);
     hiddenSince.set(site, Date.now());
@@ -1017,7 +1104,7 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const existing = yield* getLiveView(site);
         if (Option.isSome(existing)) {
-          yield* positionView(window, existing.value);
+          yield* positionView(site, window, existing.value);
           return existing.value;
         }
         return yield* createView(site, window);
@@ -1160,7 +1247,7 @@ export const make = Effect.gen(function* () {
       // above the remote page.
       window.value.contentView.removeChildView(view.value);
       addRemoteAppViewBelowHostRenderer(window.value, view.value);
-      yield* positionView(window.value, view.value);
+      yield* positionView(surface, window.value, view.value);
       view.value.setVisible(true);
       if (unseenViews.delete(view.value)) view.value.webContents.invalidate();
       // Surface switches can happen while the renderer is still reconciling
@@ -1174,7 +1261,7 @@ export const make = Effect.gen(function* () {
     // Side panels follow the app zoom too; the renderer owns their bounds.
     const window = yield* getLiveWindow;
     if (Option.isSome(window)) {
-      for (const contents of panels.values()) matchPanelZoom(window.value, contents);
+      for (const [site, contents] of panels) yield* matchPanelZoom(site, window.value, contents);
     }
     const state = yield* stateStore.get;
     const site = activeSiteOf(state);
@@ -1200,7 +1287,7 @@ export const make = Effect.gen(function* () {
           const site = activeSiteOf(yield* stateStore.get);
           if (site === undefined) return;
           const view = yield* getLiveView(site);
-          if (Option.isSome(view)) yield* positionView(window, view.value);
+          if (Option.isSome(view)) yield* positionView(site, window, view.value);
         }),
       );
     };
@@ -1234,10 +1321,12 @@ export const make = Effect.gen(function* () {
       const previous = yield* Ref.getAndSet(remoteThemeRef, theme);
       // Dragging T3's sidebar sends a stream of width-only updates; those just
       // move every site's pin. The menu colors are read when the menu opens.
+      // A new Interface font size only rescales pages; the CSS stays.
       const presentationOf = (value: RemoteAppTheme) =>
-        JSON.stringify({ ...value, sidebarWidth: null, menu: null });
+        JSON.stringify({ ...value, sidebarWidth: null, menu: null, interfaceFontSize: null });
       const presentationChanged = presentationOf(previous) !== presentationOf(theme);
       const widthChanged = previous.sidebarWidth !== theme.sidebarWidth;
+      const textScaleChanged = previous.interfaceFontSize !== theme.interfaceFontSize;
       for (const site of presentationChanged || widthChanged ? [...views.keys()] : []) {
         const view = yield* getLiveView(site);
         if (Option.isNone(view)) continue;
@@ -1245,7 +1334,12 @@ export const make = Effect.gen(function* () {
         if (presentationChanged) {
           yield* applyRemoteTheme(site, view.value.webContents, view.value);
         } else if (isThemeableRemoteAppSite(site)) {
-          yield* applySidebarWidth(view.value.webContents);
+          yield* applySidebarWidth(site, view.value.webContents);
+        }
+      }
+      if (textScaleChanged) {
+        for (const site of new Set([...views.keys(), ...panels.keys()])) {
+          yield* applySiteZoom(site);
         }
       }
       // Side panels pin no sidebar, so only a palette change reaches them.
@@ -1257,8 +1351,8 @@ export const make = Effect.gen(function* () {
         const window = yield* getLiveWindow;
         const site = activeSiteOf(yield* stateStore.get);
         const view = site === undefined ? Option.none() : yield* getLiveView(site);
-        if (Option.isSome(window) && Option.isSome(view)) {
-          yield* positionView(window.value, view.value);
+        if (site !== undefined && Option.isSome(window) && Option.isSome(view)) {
+          yield* positionView(site, window.value, view.value);
         }
       }
     }).pipe(
@@ -1526,16 +1620,45 @@ export const make = Effect.gen(function* () {
     return yield* stateStore.get;
   });
 
-  const zoom = (delta: number | null) =>
+  const setSiteTextSize = (site: RemoteAppSite, size: number | null) =>
     Effect.gen(function* () {
-      const state = yield* stateStore.get;
-      const site = activeSiteOf(state);
-      if (site === undefined) return state;
-      const view = yield* getLiveView(site);
-      if (Option.isNone(view)) return state;
-      const nextZoom = resolveRemoteAppZoomFactor(state.zoomFactor, delta);
-      view.value.webContents.setZoomFactor(nextZoom);
-      return yield* updateState((current) => ({ ...current, zoomFactor: nextZoom }));
+      const next = size === null ? null : normalizeRemoteAppTextSize(size);
+      const state = yield* updateState((current) => {
+        const textSizes: Partial<Record<RemoteAppSite, number>> = {};
+        for (const other of REMOTE_APP_SITES) {
+          const size = other === site ? next : current.textSizes?.[other];
+          if (size !== null && size !== undefined) textSizes[other] = size;
+        }
+        return { ...current, textSizes };
+      });
+      yield* applySiteZoom(site);
+      return state;
+    });
+
+  const stepSiteTextSize = (site: RemoteAppSite, step: RemoteAppTextSizeStep) =>
+    Effect.gen(function* () {
+      if (step === "reset") return yield* setSiteTextSize(site, null);
+      const current = (yield* stateStore.get).textSizes?.[site] ?? 1;
+      const delta = step === "larger" ? REMOTE_APP_TEXT_SIZE_STEP : -REMOTE_APP_TEXT_SIZE_STEP;
+      return yield* setSiteTextSize(site, current + delta);
+    });
+
+  /** The site whose page has focus, else the site on screen, else the only visible side panel. */
+  const resolveTextSizeTarget = Effect.gen(function* () {
+    const focused = Electron.webContents.getFocusedWebContents();
+    const focusedSite =
+      focused === null ? undefined : REMOTE_APP_SITES.find((site) => isSitePage(site, focused));
+    if (focusedSite !== undefined) return focusedSite;
+    const activeSite = activeSiteOf(yield* stateStore.get);
+    if (activeSite !== undefined) return activeSite;
+    const visible = REMOTE_APP_SITES.filter(isPanelVisible);
+    return visible.length === 1 ? visible[0] : undefined;
+  });
+
+  const stepTextSize = (step: RemoteAppTextSizeStep) =>
+    Effect.gen(function* () {
+      const site = yield* resolveTextSizeTarget;
+      if (site !== undefined) yield* stepSiteTextSize(site, step);
     });
 
   /** Signs the active site out by wiping only its own partition. */
@@ -1876,7 +1999,7 @@ export const make = Effect.gen(function* () {
       configuredPanels.add(contents);
       configurePanel(site, window.value, contents);
     }
-    matchPanelZoom(window.value, contents);
+    yield* matchPanelZoom(site, window.value, contents);
   });
 
   /** A visible side panel shows the site's replies, so its badge goes and stays off. */
@@ -1926,9 +2049,8 @@ export const make = Effect.gen(function* () {
       (_site, view) => view.webContents.canGoForward() && view.webContents.goForward(),
     ),
     reload,
-    zoomIn: zoom(0.1),
-    zoomOut: zoom(-0.1),
-    resetZoom: zoom(null),
+    setSiteTextSize,
+    stepTextSize,
     retry,
     clearData,
     fillSitePrompt,

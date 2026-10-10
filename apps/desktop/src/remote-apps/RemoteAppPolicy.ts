@@ -17,6 +17,11 @@ export interface RemoteAppSiteDefinition {
   /** Sign-in hosts this site uses beyond the shared identity providers. */
   readonly authHosts: ReadonlyArray<string>;
   /**
+   * CSS px of the site's chat reply text at 100% zoom. The shell zooms the site
+   * so this lands on T3's chat text size (see resolveRemoteAppPageZoom).
+   */
+  readonly readingTextPx: number;
+  /**
    * Hooks into the site's own markup. A site without them never shows the
    * finished-reply badge, and "Send to <site>" copies to the clipboard instead.
    */
@@ -44,6 +49,8 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     partition: REMOTE_APP_PARTITIONS.chatgpt,
     hosts: ["chatgpt.com", "openai.com"],
     authHosts: [],
+    // Measured 2026-10-10 on a shared chat: assistant markdown paragraphs are 16px.
+    readingTextPx: 16,
     page: {
       generating: ['button[data-testid="stop-button"]'],
       // Checked 2026-10-04: a ProseMirror div labelled "Ask ChatGPT"; #prompt-textarea is gone.
@@ -59,6 +66,8 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     partition: REMOTE_APP_PARTITIONS.claude,
     hosts: ["claude.ai", "claude.com", "anthropic.com"],
     authHosts: [],
+    // Measured 2026-10-10 on a shared chat: reply paragraphs (.font-claude-response) are 16px.
+    readingTextPx: 16,
     page: {
       generating: ['button[aria-label="Stop response"]', 'button[aria-label="Stop"]'],
       promptInput: ['div.ProseMirror[contenteditable="true"]', 'div[contenteditable="true"]'],
@@ -77,6 +86,8 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
       "auth.grokusercontent.com",
       "auth.cursor.com",
     ],
+    // Measured 2026-10-10 on a shared chat: response markdown paragraphs are 15px.
+    readingTextPx: 15,
     page: {
       generating: ['button[aria-label="Stop model response"]', 'button[aria-label="Stop"]'],
       // Checked 2026-10-04: a tiptap ProseMirror div; a hidden sizing textarea sits beside it.
@@ -89,6 +100,8 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     hosts: ["gemini.google.com"],
     // Google's sign-in hops through accounts.youtube.com to set its cookies.
     authHosts: ["accounts.youtube.com"],
+    // Measured 2026-10-10 on a shared chat: model-response paragraphs are 17px.
+    readingTextPx: 17,
     page: {
       generating: ['button[aria-label="Stop response"]', "button.stop"],
       promptInput: ["rich-textarea .ql-editor", 'div[contenteditable="true"]'],
@@ -100,6 +113,8 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
     partition: REMOTE_APP_PARTITIONS.perplexity,
     hosts: ["perplexity.ai"],
     authHosts: [],
+    // Measured 2026-10-10 on a shared thread: answer prose paragraphs are 16px.
+    readingTextPx: 16,
     page: {
       generating: [
         'button[data-testid="stop-generating-response-button"]',
@@ -108,6 +123,28 @@ export const REMOTE_APP_SITE_DEFINITIONS: Record<RemoteAppSite, RemoteAppSiteDef
       promptInput: ["#ask-input", "textarea", 'div[contenteditable="true"]'],
     },
   },
+};
+
+/** T3's chat text (`text-sm`) as a fraction of its Interface font size. */
+const T3_CHAT_TEXT_RATIO = 0.875;
+const T3_DEFAULT_INTERFACE_FONT_SIZE = 16;
+
+/**
+ * The page zoom that puts a site's reply text at T3's chat text size, times
+ * the user's per-site text size. `mainZoom` is T3's own window zoom, so the
+ * two stay matched through Zoom In and Zoom Out.
+ */
+export const resolveRemoteAppPageZoom = (input: {
+  readonly site: RemoteAppSite;
+  readonly mainZoom: number;
+  readonly interfaceFontSize: number | undefined;
+  readonly textSize: number | undefined;
+}): number => {
+  const mainZoom = Number.isFinite(input.mainZoom) && input.mainZoom > 0 ? input.mainZoom : 1;
+  const chatTextPx =
+    (input.interfaceFontSize ?? T3_DEFAULT_INTERFACE_FONT_SIZE) * T3_CHAT_TEXT_RATIO;
+  const ratio = chatTextPx / REMOTE_APP_SITE_DEFINITIONS[input.site].readingTextPx;
+  return mainZoom * ratio * (input.textSize ?? 1);
 };
 
 const SHARED_AUTH_PROVIDER_HOSTS = [

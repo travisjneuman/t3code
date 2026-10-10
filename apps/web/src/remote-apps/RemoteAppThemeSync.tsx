@@ -1,4 +1,9 @@
-import type { RemoteAppMenuTheme, RemoteAppThemeColors } from "@t3tools/contracts";
+import {
+  MAX_INTERFACE_FONT_SIZE,
+  MIN_INTERFACE_FONT_SIZE,
+  type RemoteAppMenuTheme,
+  type RemoteAppThemeColors,
+} from "@t3tools/contracts";
 
 import { useEffect, useRef } from "react";
 
@@ -224,6 +229,18 @@ function readRemoteSidebarWidth(): number | null {
   return Number.isFinite(width) && width >= 160 && width <= 512 ? Math.round(width) : null;
 }
 
+/**
+ * T3's rendered Interface font size (the root font size), so the shell can
+ * scale each site's text to T3's chat text. Changes repaint the root `style`,
+ * which the theme observer below already watches.
+ */
+function readRemoteInterfaceFontSize(): number | undefined {
+  const size = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(size) && size >= MIN_INTERFACE_FONT_SIZE && size <= MAX_INTERFACE_FONT_SIZE
+    ? size
+    : undefined;
+}
+
 /** Keeps the isolated native remote surfaces visually aligned with T3's live palette. */
 export function RemoteAppThemeSync() {
   const { bridge, state } = useRemoteAppState();
@@ -275,6 +292,7 @@ export function RemoteAppThemeSync() {
               ? "dark"
               : "light";
             const menu = readRemoteMenuTheme();
+            const interfaceFontSize = readRemoteInterfaceFontSize();
             const payload = {
               appearance: renderedAppearance,
               stageArt: latestTheme.stageArt,
@@ -285,6 +303,7 @@ export function RemoteAppThemeSync() {
                 latestTheme.themeHalves,
               ),
               ...(menu === undefined ? {} : { menu }),
+              ...(interfaceFontSize === undefined ? {} : { interfaceFontSize }),
             } as const;
             await bridge.setTheme(payload);
           } catch (cause: unknown) {

@@ -9,6 +9,7 @@ import {
   RemoteAppPanelNavigatedSchema,
   RemoteAppSiteSchema,
   RemoteAppSurfaceMenuAnchorSchema,
+  RemoteAppTextSizeSchema,
   RemoteAppStateSchema,
   RemoteAppThemeSchema,
   type RemoteAppState,
@@ -213,20 +214,19 @@ export const reload = makeAction(
   IpcChannels.REMOTE_APP_RELOAD_CHANNEL,
   (manager) => manager.reload,
 );
-export const zoomIn = makeAction(
-  "zoomIn",
-  IpcChannels.REMOTE_APP_ZOOM_IN_CHANNEL,
-  (manager) => manager.zoomIn,
-);
-export const zoomOut = makeAction(
-  "zoomOut",
-  IpcChannels.REMOTE_APP_ZOOM_OUT_CHANNEL,
-  (manager) => manager.zoomOut,
-);
-export const resetZoom = makeAction(
-  "resetZoom",
-  IpcChannels.REMOTE_APP_RESET_ZOOM_CHANNEL,
-  (manager) => manager.resetZoom,
+export const setSiteTextSize = authorized(
+  DesktopIpc.makeIpcMethod({
+    channel: IpcChannels.REMOTE_APP_SET_SITE_TEXT_SIZE_CHANNEL,
+    payload: Schema.Struct({
+      site: RemoteAppSiteSchema,
+      size: Schema.NullOr(RemoteAppTextSizeSchema),
+    }),
+    result: RemoteAppStateSchema,
+    handler: Effect.fn("desktop.ipc.remoteApp.setSiteTextSize")(function* ({ site, size }) {
+      const manager = yield* RemoteAppManager.RemoteAppManager;
+      return yield* manager.setSiteTextSize(site, size);
+    }),
+  }),
 );
 export const retry = makeAction(
   "retry",
@@ -248,9 +248,7 @@ export const methods = [
   goBack,
   goForward,
   reload,
-  zoomIn,
-  zoomOut,
-  resetZoom,
+  setSiteTextSize,
   retry,
   clearData,
   fillSitePrompt,
