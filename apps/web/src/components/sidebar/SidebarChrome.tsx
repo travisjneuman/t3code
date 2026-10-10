@@ -29,6 +29,7 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { observeResize } from "~/lib/observeResize";
 // Fork add-on: compare agents, remote apps, local source updates, compact sidebar.
 import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem";
 import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate";
@@ -90,11 +91,9 @@ export function SidebarBrandWidthProbe({
 }) {
   const observeWidth = useCallback(
     (probe: HTMLDivElement) => {
-      const observer = new ResizeObserver(([entry]) => {
+      return observeResize(probe, ([entry]) => {
         if (entry) onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? probe.offsetWidth);
       });
-      observer.observe(probe);
-      return () => observer.disconnect();
     },
     [onWidthChange],
   );
