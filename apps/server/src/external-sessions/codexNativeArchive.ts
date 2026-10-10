@@ -8,7 +8,7 @@
  */
 import * as NodeOS from "node:os";
 
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -31,7 +31,7 @@ export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
-  const hostEnvironment = yield* HostProcessEnvironment;
+  const hostEnvironment = yield* HostProcess.Environment;
 
   const realPath = (target: string) =>
     fileSystem.realPath(target).pipe(Effect.orElseSucceed(() => path.resolve(target)));
