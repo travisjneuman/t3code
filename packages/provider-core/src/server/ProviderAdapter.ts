@@ -390,6 +390,8 @@ export interface ProviderAdapterV2OpenSessionInput {
   readonly initialNativeThreadId?: string;
   /** Preserves provider item identity across eager activation of a persisted thread. */
   readonly initialProviderItemIdentityVersion?: 2;
+  /** The app thread's project, for instructions fixed at process start. */ // Fork add-on: agent instructions.
+  readonly projectId?: string; // Fork add-on: agent instructions.
 }
 
 export interface ProviderAdapterV2EnsureThreadInput {
