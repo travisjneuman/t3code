@@ -581,10 +581,18 @@ export const make = Effect.gen(function* () {
         repo,
       );
     }
-    // --tags brings upstream's nightly tags along with main. Tags fetched
-    // through --tags are not subject to --prune, so fork-local tags survive,
-    // and a tag that would move is refused rather than clobbered.
-    yield* gitChecked("fetch", ["fetch", "--prune", "--tags", "upstream", "main"]);
+    // Only main and the version tags. Upstream force-moves rolling tags such as
+    // android-nightly and desktop-preview, and fetching every tag fails the
+    // whole fetch on them ("would clobber existing tag"). Version tags never
+    // move, so one that would is still refused rather than clobbered. No
+    // --prune: with a tag refspec it would delete fork-local v* tags.
+    yield* gitChecked("fetch", [
+      "fetch",
+      "--no-tags",
+      "upstream",
+      "+refs/heads/main:refs/remotes/upstream/main",
+      "refs/tags/v*:refs/tags/v*",
+    ]);
     // Nightly tags encode version, date, and run number, so version order is
     // release order. Creator date is not: lightweight tags report the commit
     // date, and a re-tagged run can sort out of order. --merged keeps tags

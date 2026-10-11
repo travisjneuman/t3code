@@ -17,9 +17,11 @@ the branch tip. A nightly tag is a commit upstream already built and released, s
 the fork never lands on an arbitrary in-between commit, and the tag doubles as the
 version label and `--build-version` (tag without the leading `v`).
 
-- Fetch is `git fetch --prune --tags upstream main`. Tags fetched through `--tags`
-  are exempt from `--prune`, so fork-local tags survive; a tag that moved upstream is
-  refused rather than clobbered.
+- Fetch takes only `main` and `refs/tags/v*`, with `--no-tags`. Upstream force-moves
+  rolling tags (`android-nightly`, `desktop-preview`), and `--tags` fails the whole
+  fetch on them. Version tags never move, so one that did is still refused rather
+  than clobbered. There is no `--prune`: with a tag refspec it would delete
+  fork-local `v*` tags.
 - Selection sorts by `v:refname`, not `creatordate`. The tag name encodes version,
   date, and run number, while a lightweight tag's creator date is its commit date.
   The list is ascending and the last line wins, so tail-truncated command output
