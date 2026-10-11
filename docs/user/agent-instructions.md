@@ -6,24 +6,47 @@ conflict with these settings, agents are told to follow the settings.
 
 ## Set them
 
-Open **Settings → General** and find **Agents**.
+Open **Settings → General** and find **Agents**. **Preview** on the **What agents receive** row
+shows the exact text these settings produce for the scope you picked.
 
-- **Delegation**: **Off** adds no delegation rules. **When useful** has the thread's agent hand
-  independent pieces of work to workers through the `delegate_task` tool and do small or sequential
-  work itself. **Always** keeps the thread's agent to planning, review, and integration, and hands
-  the rest to workers.
+- **Delegation**: **Off** adds no delegation rules and T3 enforces nothing. **When useful** has the
+  thread's agent hand independent pieces of work to workers through the `delegate_task` tool and do
+  small or sequential work itself. **Always** keeps the thread's agent to planning, review, and
+  integration, and hands the rest to workers.
+
+These rows show while Delegation is on:
+
 - **Worker model**: the provider and model workers run on, including options such as reasoning
-  effort. Leave it off to run workers on the thread's own model. To use GPT-6.1 Sol through Pi,
-  pick the Pi instance, the `openai-codex/gpt-6.1-sol` model, and High thinking.
-- **Parallel workers**: the most workers one agent runs at once.
+  effort. When an agent calls `delegate_task` without a target, T3 runs the worker on this model.
+  Leave it off to run workers on the thread's own model. To use GPT-6.1 Sol through Pi, pick the
+  Pi instance, the `openai-codex/gpt-6.1-sol` model, and High thinking.
+- **Review worker model** and **Research worker model**: a different model for workers started
+  with the review or research role. Off uses the worker model.
+- **Parallel workers**: the most workers one agent runs at once. T3 refuses a delegation past the
+  limit and tells the agent to wait for a worker to finish.
+- **Review rounds**: **One round** has a fresh review worker check the finished work once;
+  **Until clean** repeats review rounds until one finds nothing to fix. **Agent decides** adds
+  nothing.
+- **Read-only reviewers**: review and research workers are told not to edit files, commit, or push,
+  in their instructions and at the top of their task. This is an instruction, not a sandbox: the
+  worker still runs with the thread's permissions.
+- **Workers can delegate**: off, T3 refuses `delegate_task` calls from a worker, so only the
+  thread's agent hands out work.
 - **Orchestrator handles git**: the delegating agent commits and publishes; workers never commit or
   push.
+
+These rows always show:
+
+- **Verification**: **Review only** (read the diff, run no tests or builds), **Targeted checks**
+  (the smallest tests and lint that prove the change), or **Full checks** (the project's full
+  test, lint, and typecheck before finishing). **Project rules** adds nothing.
+- **Commit and push**: **Never** leaves changes uncommitted for you; **After each change** commits
+  and pushes each verified change. **Project rules** adds nothing.
 - **Additional instructions**: anything else every agent should follow. They're added after the
   rules above and save when you click outside the box.
 
 The worker rules always tell agents to give each worker a scoped brief with non-overlapping files,
-to start a new worker for each review round, to wait for workers to finish instead of polling,
-and to never delegate from inside a delegated task.
+to start a new worker for each review round, and to wait for workers to finish instead of polling.
 
 ## All projects or one project
 
