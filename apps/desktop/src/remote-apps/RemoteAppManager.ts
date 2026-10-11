@@ -291,7 +291,6 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
-  const attachedRef = yield* Ref.make(false);
   const stateChangeLock = yield* Semaphore.make(1);
   // Serializes get-or-create, so an activation and a background preload never
   // both create a view for the same site.
@@ -320,7 +319,8 @@ export const make = Effect.gen(function* () {
   // Keyed by page, so a site's full view and side panel never remove each
   // other's sheets.
   const insertedThemeKeys = new WeakMap<Electron.WebContents, string>();
-  const sessionsWithDownloadHandler = new WeakSet<Electron.Session>();
+  // The window a session's save dialogs open over; a reopened main window replaces it.
+  const downloadOwners = new WeakMap<Electron.Session, Electron.BrowserWindow>();
   // Saved downloads offered to T3 this session, by capture id, so the renderer
   // can reveal one without naming a path itself. Oldest entries drop first.
   const capturedDownloads = new Map<string, string>();
@@ -1016,8 +1016,9 @@ export const make = Effect.gen(function* () {
         isAllowedPermission(permission, true),
     );
     // Listeners accumulate, so each session gets exactly one download handler.
-    if (sessionsWithDownloadHandler.has(session)) return;
-    sessionsWithDownloadHandler.add(session);
+    const hasDownloadHandler = downloadOwners.has(session);
+    downloadOwners.set(session, owner);
+    if (hasDownloadHandler) return;
     session.on("will-download", (_event, item, initiator) => {
       const initiatorUrl = initiator && !initiator.isDestroyed() ? initiator.getURL() : "";
       if (!isTrustedRemoteDownload(site, item.getURL(), initiatorUrl)) {
@@ -1025,9 +1026,14 @@ export const make = Effect.gen(function* () {
         return;
       }
       const fromPanel = panels.get(site) === initiator;
+      const dialogOwner = downloadOwners.get(session);
+      if (dialogOwner === undefined || dialogOwner.isDestroyed()) {
+        item.cancel();
+        return;
+      }
       item.pause();
       void Electron.dialog
-        .showSaveDialog(owner, { defaultPath: safeFilename(item.getFilename()) })
+        .showSaveDialog(dialogOwner, { defaultPath: safeFilename(item.getFilename()) })
         .then((result) => {
           if (result.canceled || result.filePath === undefined) {
             item.cancel();
@@ -1276,10 +1282,11 @@ export const make = Effect.gen(function* () {
   const attachMainWindow = Effect.fn("remote-app.attachMainWindow")(function* (
     window: Electron.BrowserWindow,
   ): Effect.fn.Return<void, RemoteAppManagerError> {
-    const alreadyAttached = yield* Ref.get(attachedRef);
-    if (alreadyAttached) return;
+    // macOS keeps the app running after its window closes; reopening it makes
+    // a new BrowserWindow, which needs attaching and its own listeners.
+    const attached = yield* Ref.get(mainWindowRef);
+    if (Option.isSome(attached) && attached.value === window) return;
     yield* Ref.set(mainWindowRef, Option.some(window));
-    yield* Ref.set(attachedRef, true);
     const reposition = () => {
       runSafely(
         Effect.gen(function* () {
@@ -1311,7 +1318,11 @@ export const make = Effect.gen(function* () {
       popupWindows.clear();
       visiblePanels.clear();
       for (const site of [...views.keys()]) closeView(site, Option.none());
-      runSafely(Ref.set(mainWindowRef, Option.none()));
+      runSafely(
+        Ref.update(mainWindowRef, (current) =>
+          Option.isSome(current) && current.value === window ? Option.none() : current,
+        ),
+      );
     });
   });
 
