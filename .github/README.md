@@ -28,7 +28,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | [**Web apps**](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app |
 | [**Other Agents**](#other-agents)             | Follow and continue sessions you started in other agent apps            |
 | [**Compare agents**](#compare-agents)         | One prompt, two models, side by side                                    |
-| [**Agent instructions**](#agent-instructions) | Your rules for every agent, ahead of CLAUDE.md and AGENTS.md            |
+| [**Agent instructions**](#agent-instructions) | Delegation and agent rules as settings, globally or per project         |
 | [**Save to notes**](#save-to-notes)           | Files a thread into your notes folder or Obsidian vault                 |
 | [**Export a thread**](#export-a-thread)       | Saves a thread's full record as Markdown or JSON                        |
 | [**Upstream sync**](#upstream-sync)           | Merges new official nightlies and rebuilds the app from source          |
@@ -71,11 +71,12 @@ Send one prompt to two models and read their answers side by side.
 
 ### Agent instructions
 
-Write rules once in **Settings → General → Agents** and every agent T3 Code runs gets them, in every project, including workers started with `delegate_task`.
+Set how agents work in **Settings → General → Agents**, for all projects or one project at a time, without editing `~/.claude` or `~/.codex`.
 
-- Agents follow them over conflicting `CLAUDE.md` or `AGENTS.md` rules, so T3 can behave differently from your terminal setup without editing `~/.claude` or `~/.codex`.
+- **Delegation** turns on orchestrator rules: the thread's agent hands work to workers with `delegate_task` when useful, or always.
+- Pick the **worker model** (for example GPT-6.1 Sol through Pi), cap **parallel workers**, and choose whether the orchestrator **handles git**.
+- **Additional instructions** take any other rules. Agents follow all of it over conflicting `CLAUDE.md` or `AGENTS.md` rules.
 - Works with Claude, Codex, Pi, Grok, Cursor and OpenCode.
-- The guide includes a ready-made set for running one orchestrator with many GPT-6.1 Sol workers through Pi.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/agent-instructions.md)
 

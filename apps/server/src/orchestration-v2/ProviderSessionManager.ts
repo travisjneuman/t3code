@@ -2098,9 +2098,14 @@ export const layerWithOptions = (
               // The previous session's agent scope must not explain this
               // session's failures, even when this provider runs without one.
               yield* agentScope.clear(input.threadId);
+              const forkProjectId = yield* projectionStore.getThread(input.threadId).pipe(
+                Effect.map((thread) => thread.projectId),
+                Effect.orElseSucceed(() => undefined),
+              ); // Fork add-on: agent instructions.
               const runtime = yield* adapter
                 .openSession({
                   threadId: input.threadId,
+                  ...(forkProjectId === undefined ? {} : { projectId: forkProjectId }), // Fork add-on: agent instructions.
                   providerSessionId: input.providerSessionId,
                   modelSelection: input.modelSelection,
                   runtimePolicy: input.runtimePolicy,

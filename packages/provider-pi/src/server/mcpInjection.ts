@@ -259,6 +259,7 @@ export function buildPiRpcLaunch(input: {
   readonly disableExtensions?: boolean;
   readonly disableTools?: boolean;
   readonly runtimeMode?: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
+  readonly projectId?: string | undefined; // Fork add-on: agent instructions.
 }): {
   readonly args: ReadonlyArray<string>;
   readonly env: NodeJS.ProcessEnv;
@@ -303,7 +304,9 @@ export function buildPiRpcLaunch(input: {
       ...(hasT3Extension && input.extensionPath !== undefined
         ? { [T3_PI_MCP_EXTENSION_PATH_ENV]: input.extensionPath }
         : {}),
-      ...(hasT3Extension ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock() } : {}), // Fork add-on: agent instructions.
+      ...(hasT3Extension
+        ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock(input.projectId) }
+        : {}), // Fork add-on: agent instructions.
       ...(hasT3Extension && input.runtimeMode !== undefined
         ? {
             [T3_PI_RUNTIME_MODE_ENV]:

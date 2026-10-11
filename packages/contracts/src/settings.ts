@@ -28,6 +28,7 @@ import {
   ProviderOptionSelections,
 } from "./model.ts";
 import { ModelSelection } from "./modelSelection.ts";
+import { AgentDelegationMode, AgentMaxParallelWorkers } from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -969,6 +970,11 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "sidebarAutoSettleAfterDays",
   "continueThreadsAfterServerUpdate",
   "responseStreamingMode",
+  "agentDelegationMode", // Fork add-on: agent instructions.
+  "agentWorkerModelSelection", // Fork add-on: agent instructions.
+  "agentMaxParallelWorkers", // Fork add-on: agent instructions.
+  "agentOrchestratorOwnsGit", // Fork add-on: agent instructions.
+  "agentInstructions", // Fork add-on: agent instructions.
 ] as const;
 export type ProjectScopedServerSettingKey = (typeof PROJECT_SCOPED_SERVER_SETTING_KEYS)[number];
 
@@ -1016,6 +1022,11 @@ export const ProjectSettingsOverrides = Schema.Struct({
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
+  agentDelegationMode: Schema.optionalKey(AgentDelegationMode), // Fork add-on: agent instructions.
+  agentWorkerModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)), // Fork add-on: agent instructions.
+  agentMaxParallelWorkers: Schema.optionalKey(Schema.NullOr(AgentMaxParallelWorkers)), // Fork add-on: agent instructions.
+  agentOrchestratorOwnsGit: Schema.optionalKey(Schema.Boolean), // Fork add-on: agent instructions.
+  agentInstructions: Schema.optionalKey(TrimmedString), // Fork add-on: agent instructions.
   providerInstances: Schema.optionalKey(
     Schema.Record(ProviderInstanceId, ProjectProviderInstanceOverride),
   ),
@@ -1041,6 +1052,8 @@ const NULLABLE_PROJECT_SETTINGS_OVERRIDES: ReadonlySet<ProjectScopedServerSettin
   "reviewGuideModelSelection",
   "pullRequestMergeMethod",
   "sidebarAutoSettleAfterDays",
+  "agentWorkerModelSelection", // Fork add-on: agent instructions.
+  "agentMaxParallelWorkers", // Fork add-on: agent instructions.
 ]);
 
 export const StorageCleanupReportEntry = Schema.Struct({
@@ -1241,6 +1254,16 @@ export const ServerSettings = Schema.Struct({
   notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   agentInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: agent instructions.
+  agentDelegationMode: AgentDelegationMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed("off" as const)),
+  ), // Fork add-on: agent instructions.
+  agentWorkerModelSelection: Schema.NullOr(ModelSelection).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ), // Fork add-on: agent instructions.
+  agentMaxParallelWorkers: Schema.NullOr(AgentMaxParallelWorkers).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ), // Fork add-on: agent instructions.
+  agentOrchestratorOwnsGit: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))), // Fork add-on: agent instructions.
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1579,6 +1602,10 @@ export const ServerSettingsPatch = Schema.Struct({
   notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   agentInstructions: Schema.optionalKey(TrimmedString), // Fork add-on: agent instructions.
+  agentDelegationMode: Schema.optionalKey(AgentDelegationMode), // Fork add-on: agent instructions.
+  agentWorkerModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)), // Fork add-on: agent instructions.
+  agentMaxParallelWorkers: Schema.optionalKey(Schema.NullOr(AgentMaxParallelWorkers)), // Fork add-on: agent instructions.
+  agentOrchestratorOwnsGit: Schema.optionalKey(Schema.Boolean), // Fork add-on: agent instructions.
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),
