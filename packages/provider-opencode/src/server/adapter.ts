@@ -3258,7 +3258,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 buildRuntimeInstructions({
                   harness: "OpenCode",
                   model: turnInput.modelSelection.model,
-                  projectId: turnInput.appThread.projectId, // Fork add-on: agent instructions.
+                  agentScope: { thread: turnInput.appThread, provider: OPENCODE_PROVIDER }, // Fork add-on: agent instructions.
                 }),
               ]
                 .filter(Boolean)

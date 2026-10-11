@@ -48,6 +48,7 @@ import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { rememberForkAgentThread } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
@@ -2099,6 +2100,7 @@ export const layerWithOptions = (
               // session's failures, even when this provider runs without one.
               yield* agentScope.clear(input.threadId);
               const forkProjectId = yield* projectionStore.getThread(input.threadId).pipe(
+                Effect.tap((thread) => Effect.sync(() => rememberForkAgentThread(thread))),
                 Effect.map((thread) => thread.projectId),
                 Effect.orElseSucceed(() => undefined),
               ); // Fork add-on: agent instructions.

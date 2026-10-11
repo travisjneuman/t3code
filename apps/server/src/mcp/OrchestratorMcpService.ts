@@ -86,7 +86,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { loadDelegationPolicy } from "../agent-instructions/DelegationPolicy.ts"; // Fork add-on: agent instructions.
+import * as DelegationPolicy from "../agent-instructions/DelegationPolicy.ts"; // Fork add-on: agent instructions.
 import {
   clientRuntimeModeCeiling,
   type McpInvocationScope,
@@ -906,6 +906,7 @@ const make = Effect.gen(function* () {
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
   const projects = yield* ProjectService.ProjectService;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const forkPolicy = yield* DelegationPolicy.make; // Fork add-on: agent instructions.
 
   /** A caller-named project, which must exist before anything is recorded against it. */
   const requireProject = (projectId: ProjectId) =>
@@ -1979,7 +1980,7 @@ const make = Effect.gen(function* () {
           operation: "delegate-task",
         });
         const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
-        const policy = yield* loadDelegationPolicy(serverSettings.getSettings, {
+        const policy = yield* forkPolicy.prepare({
           parent,
           request: input,
           isRetry: isRetryOfAcceptedDelegation,
@@ -1999,6 +2000,7 @@ const make = Effect.gen(function* () {
           parent.thread.interactionMode,
           input.interactionMode,
         );
+        const workspace = yield* forkPolicy.provisionWorkspace(policy, parent); // Fork add-on: agent instructions.
         // ThreadManagementService.dispatch is the chokepoint for this command
         // type's own enablement check, using the same command id and its
         // receipt-replay exemption, so no separate assert runs here.
@@ -2011,7 +2013,8 @@ const make = Effect.gen(function* () {
             parentThreadId: scope.thread.threadId,
             parentRunId: parentRun.id,
             parentNodeId: parentRun.rootNodeId,
-            task: taskPrompt({ ...input, task: policy.task }), // Fork add-on: agent instructions.
+            task: taskPrompt({ ...input, task: workspace.task }), // Fork add-on: agent instructions.
+            ...workspace.command, // Fork add-on: agent instructions.
             ...(input.title === undefined ? {} : { title: input.title }),
             modelSelection: target.modelSelection,
             runtimeMode,
@@ -2022,6 +2025,7 @@ const make = Effect.gen(function* () {
             completionWake: input.mode === "wait" ? "settled_only" : "always",
           })
           .pipe(
+            Effect.tapError(() => workspace.discard), // Fork add-on: agent instructions.
             Effect.mapError((error) =>
               error._tag === "ThreadManagementProviderInstanceDisabledError"
                 ? threadManagementFailure(error)
@@ -2042,6 +2046,11 @@ const make = Effect.gen(function* () {
           );
         }
         const taskId = taskEvent.event.payload.id;
+        yield* forkPolicy.startTimeLimit(policy, {
+          parentThreadId: scope.thread.threadId,
+          taskId,
+          commandId,
+        }); // Fork add-on: agent instructions.
 
         if (input.mode !== "wait") {
           return yield* readTask(scope, taskId, false, true);

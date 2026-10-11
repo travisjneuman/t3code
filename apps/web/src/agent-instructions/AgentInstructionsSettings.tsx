@@ -1,16 +1,20 @@
 /**
  * Settings, General, Agents: how agents T3 Code runs delegate work, how they
- * verify and publish, plus free-form additional instructions. The server builds
- * the instructions every provider receives from these rows and enforces the
- * worker target, worker limit and nested delegation on delegate_task; each row
- * takes project overrides through the settings scope picker.
+ * verify, ask and report, plus free-form and per-provider instructions. The
+ * server builds the instructions every provider receives from these rows and
+ * enforces the worker target, worker limit, nested delegation, worker worktrees
+ * and time limits on delegate_task; each row takes project overrides through
+ * the settings scope picker. Presets copy a named set of these values in.
  * Fork add-on: agent instructions.
  */
 import {
+  type AgentAutonomy,
   type AgentDelegationMode,
   type AgentPushPolicy,
+  type AgentReportStyle,
   type AgentReviewRounds,
   type AgentVerification,
+  type AgentWorkerWorkspace,
   MAX_AGENT_PARALLEL_WORKERS,
   MIN_AGENT_PARALLEL_WORKERS,
 } from "@t3tools/contracts";
@@ -39,7 +43,9 @@ import {
 } from "../providerInstances";
 import { EMPTY_SERVER_PROVIDERS } from "../state/server";
 import { AgentInstructionsPreview } from "./AgentInstructionsPreview";
+import { AgentPresetsControl } from "./AgentPresetsControl";
 import { ChoiceSelect } from "./ChoiceSelect";
+import { ProviderInstructionsControl } from "./ProviderInstructionsControl";
 import { WorkerModelControl } from "./WorkerModelControl";
 
 const DELEGATION_OPTIONS: ReadonlyArray<readonly [AgentDelegationMode, string]> = [
@@ -58,6 +64,17 @@ const PARALLEL_WORKER_OPTIONS: ReadonlyArray<readonly [string, string]> = [
       return [value, value] as const;
     },
   ),
+];
+
+const WORKER_WORKSPACE_OPTIONS: ReadonlyArray<readonly [AgentWorkerWorkspace, string]> = [
+  ["shared", "Shared checkout"],
+  ["worktree", "Worktree per worker"],
+];
+
+const WORKER_TIME_LIMIT_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  [NO_LIMIT, "No limit"],
+  ...[5, 10, 15, 30, 45].map((minutes) => [String(minutes), `${minutes} min`] as const),
+  ...[60, 90, 120, 180, 240, 480].map((minutes) => [String(minutes), `${minutes / 60} h`] as const),
 ];
 
 const REVIEW_ROUND_OPTIONS: ReadonlyArray<readonly [AgentReviewRounds, string]> = [
@@ -79,12 +96,31 @@ const PUSH_POLICY_OPTIONS: ReadonlyArray<readonly [AgentPushPolicy, string]> = [
   ["after-change", "After each change"],
 ];
 
+const AUTONOMY_OPTIONS: ReadonlyArray<readonly [AgentAutonomy, string]> = [
+  ["project", "Project rules"],
+  ["autonomous", "Work without asking"],
+  ["ask-risky", "Ask before risky steps"],
+  ["ask-changes", "Ask before any change"],
+];
+
+const REPORT_STYLE_OPTIONS: ReadonlyArray<readonly [AgentReportStyle, string]> = [
+  ["project", "Project rules"],
+  ["terse", "Terse"],
+  ["standard", "Standard"],
+  ["detailed", "Detailed"],
+];
+
 export function AgentInstructionsSettingsSection() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const { environment, targets, target } = useSettingsScope();
   const mixedDelegation = useScopedSettingsMixed(["agentDelegationMode"]);
   const mixedParallel = useScopedSettingsMixed(["agentMaxParallelWorkers"]);
+  const mixedWorkspace = useScopedSettingsMixed(["agentWorkerWorkspace"]);
+  const mixedTimeLimit = useScopedSettingsMixed(["agentWorkerTimeLimitMinutes"]);
+  const mixedBlockNative = useScopedSettingsMixed(["agentBlockNativeSubagents"]);
+  const mixedAutonomy = useScopedSettingsMixed(["agentAutonomy"]);
+  const mixedReportStyle = useScopedSettingsMixed(["agentReportStyle"]);
   const mixedReviewRounds = useScopedSettingsMixed(["agentReviewRounds"]);
   const mixedReadOnly = useScopedSettingsMixed(["agentReadOnlyReviewers"]);
   const mixedNested = useScopedSettingsMixed(["agentWorkersCanDelegate"]);
@@ -113,6 +149,12 @@ export function AgentInstructionsSettingsSection() {
 
   return (
     <SettingsSection id="agents" title="Agents">
+      <SettingsRow
+        {...searchableSetting("agent-presets")}
+        description="Apply a named set of the values below to the scope picked above, or save the current values as one. Pick a preset for one thread from the composer."
+        control={<AgentPresetsControl />}
+      />
+
       <SettingsRow
         serverScoped
         settingKeys={["agentDelegationMode"]}
@@ -207,6 +249,58 @@ export function AgentInstructionsSettingsSection() {
                 onChange={(value) =>
                   updateSettings({
                     agentMaxParallelWorkers: value === NO_LIMIT ? null : Number(value),
+                  })
+                }
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentWorkerWorkspace"]}
+            {...searchableSetting("agent-worker-workspace")}
+            description="Shared checkout runs workers in the agent's own checkout. Worktree per worker gives each its own git worktree and branch from the current commit; the agent merges them."
+            resetAction={
+              settings.agentWorkerWorkspace !== "shared" ? (
+                <SettingResetButton
+                  label="worker workspace"
+                  onClick={() => updateSettings({ agentWorkerWorkspace: "shared" })}
+                />
+              ) : null
+            }
+            control={
+              <ChoiceSelect
+                value={mixedWorkspace ? null : settings.agentWorkerWorkspace}
+                options={WORKER_WORKSPACE_OPTIONS}
+                ariaLabel="Worker workspace"
+                onChange={(value) => updateSettings({ agentWorkerWorkspace: value })}
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentWorkerTimeLimitMinutes"]}
+            {...searchableSetting("agent-worker-time-limit")}
+            description="T3 stops a worker still running after this long. A server restart forgets running limits."
+            resetAction={
+              settings.agentWorkerTimeLimitMinutes !== null ? (
+                <SettingResetButton
+                  label="worker time limit"
+                  onClick={() => updateSettings({ agentWorkerTimeLimitMinutes: null })}
+                />
+              ) : null
+            }
+            control={
+              <ChoiceSelect
+                value={
+                  mixedTimeLimit ? null : String(settings.agentWorkerTimeLimitMinutes ?? NO_LIMIT)
+                }
+                options={WORKER_TIME_LIMIT_OPTIONS}
+                ariaLabel="Worker time limit"
+                onChange={(value) =>
+                  updateSettings({
+                    agentWorkerTimeLimitMinutes: value === NO_LIMIT ? null : Number(value),
                   })
                 }
               />
@@ -361,6 +455,77 @@ export function AgentInstructionsSettingsSection() {
 
       <SettingsRow
         serverScoped
+        settingKeys={["agentBlockNativeSubagents"]}
+        {...searchableSetting("agent-block-native-subagents")}
+        description="Agents use only T3's delegate_task, never their harness's own subagents. T3 turns those tools off for Claude and Codex; other providers get the rule as an instruction."
+        resetAction={
+          settings.agentBlockNativeSubagents ? (
+            <SettingResetButton
+              label="block native subagents"
+              onClick={() => updateSettings({ agentBlockNativeSubagents: false })}
+            />
+          ) : null
+        }
+        control={
+          <Switch
+            mixed={mixedBlockNative}
+            checked={mixedBlockNative ? false : settings.agentBlockNativeSubagents}
+            onCheckedChange={(checked) =>
+              updateSettings({ agentBlockNativeSubagents: Boolean(checked) })
+            }
+            aria-label="Block native subagents"
+          />
+        }
+      />
+
+      <SettingsRow
+        serverScoped
+        settingKeys={["agentAutonomy"]}
+        {...searchableSetting("agent-autonomy")}
+        description="What agents check with you about first. An instruction; use the composer's access mode for hard approvals."
+        resetAction={
+          settings.agentAutonomy !== "project" ? (
+            <SettingResetButton
+              label="autonomy"
+              onClick={() => updateSettings({ agentAutonomy: "project" })}
+            />
+          ) : null
+        }
+        control={
+          <ChoiceSelect
+            value={mixedAutonomy ? null : settings.agentAutonomy}
+            options={AUTONOMY_OPTIONS}
+            ariaLabel="Autonomy"
+            onChange={(value) => updateSettings({ agentAutonomy: value })}
+          />
+        }
+      />
+
+      <SettingsRow
+        serverScoped
+        settingKeys={["agentReportStyle"]}
+        {...searchableSetting("agent-report-style")}
+        description="How much agents write when they finish."
+        resetAction={
+          settings.agentReportStyle !== "project" ? (
+            <SettingResetButton
+              label="report style"
+              onClick={() => updateSettings({ agentReportStyle: "project" })}
+            />
+          ) : null
+        }
+        control={
+          <ChoiceSelect
+            value={mixedReportStyle ? null : settings.agentReportStyle}
+            options={REPORT_STYLE_OPTIONS}
+            ariaLabel="Report style"
+            onChange={(value) => updateSettings({ agentReportStyle: value })}
+          />
+        }
+      />
+
+      <SettingsRow
+        serverScoped
         settingKeys={["agentInstructions"]}
         {...searchableSetting("agent-instructions")}
         description="Anything else every agent should follow, added after the rules above. Running Claude and Pi sessions keep the instructions they started with."
@@ -399,6 +564,29 @@ export function AgentInstructionsSettingsSection() {
             }}
           />
         </div>
+      </SettingsRow>
+
+      <SettingsRow
+        serverScoped
+        settingKeys={["agentProviderInstructions"]}
+        {...searchableSetting("agent-provider-instructions")}
+        description="Text only one provider's agents receive, after the additional instructions. A dot marks providers that have some."
+        resetAction={
+          Object.values(settings.agentProviderInstructions).some((text) => text !== "") ? (
+            <SettingResetButton
+              label="provider instructions"
+              onClick={() =>
+                updateSettings({
+                  agentProviderInstructions: Object.fromEntries(
+                    Object.keys(settings.agentProviderInstructions).map((kind) => [kind, ""]),
+                  ),
+                })
+              }
+            />
+          ) : null
+        }
+      >
+        <ProviderInstructionsControl providers={providers} scopeKey={scopeKey} />
       </SettingsRow>
 
       <SettingsRow

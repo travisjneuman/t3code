@@ -1746,7 +1746,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
                       harness: "Muse Code",
                       model: session.model ?? undefined,
                       reasoningEffort: effort,
-                      projectId: turnInput.appThread.projectId, // Fork add-on: agent instructions.
+                      agentScope: { thread: turnInput.appThread, provider: MUSE_PROVIDER }, // Fork add-on: agent instructions.
                     }),
                   },
                   ...parts,

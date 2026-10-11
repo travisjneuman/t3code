@@ -134,6 +134,10 @@ import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/
 import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import {
+  type ForkAgentScope,
+  forkAgentBlocksNativeSubagents,
+} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+import {
   mcpToolPresentation,
   normalizeMcpText,
 } from "@t3tools/provider-core/server/mcpToolPresentation";
@@ -970,7 +974,7 @@ export function makeClaudeQueryOptions(input: {
   readonly onUserDialog?: ClaudeQueryOptions["onUserDialog"];
   readonly supportedDialogKinds?: ClaudeQueryOptions["supportedDialogKinds"];
   readonly allowDangerouslySkipPermissions?: boolean;
-  readonly projectId?: string; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope; // Fork add-on: agent instructions.
 }): ClaudeAgentSdkQueryOptions {
   const compiledSelection = compileClaudeModelSelection(input.modelSelection);
   const {
@@ -1054,7 +1058,7 @@ export function makeClaudeQueryOptions(input: {
       type: "preset" as const,
       preset: "claude_code" as const,
       append:
-        buildRuntimeInstructions({ harness: "Claude Code", projectId: input.projectId }) + // Fork add-on: agent instructions.
+        buildRuntimeInstructions({ harness: "Claude Code", agentScope: input.agentScope }) + // Fork add-on: agent instructions.
         (input.mcpServers === undefined ? "" : T3_CODE_ORCHESTRATION_INSTRUCTIONS),
     },
     ...(Object.keys(extraArgs).length === 0 ? {} : { extraArgs }),
@@ -8241,7 +8245,13 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const queryOptions = makeClaudeQueryOptions({
             modelSelection: turnInput.modelSelection,
             nativeThreadId,
-            projectId: turnInput.appThread.projectId, // Fork add-on: agent instructions.
+            agentScope: { thread: turnInput.appThread, provider: CLAUDE_PROVIDER }, // Fork add-on: agent instructions.
+            ...(forkAgentBlocksNativeSubagents({
+              thread: turnInput.appThread,
+              provider: CLAUDE_PROVIDER,
+            })
+              ? { disallowedTools: ["Agent", "Task"] }
+              : {}), // Fork add-on: agent instructions.
             resume: shouldResume,
             ...(resumeSessionAt === undefined ? {} : { resumeSessionAt }),
             cwd: turnInput.runtimePolicy.cwd,

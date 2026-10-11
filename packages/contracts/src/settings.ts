@@ -31,8 +31,9 @@ import { ModelSelection } from "./modelSelection.ts";
 import {
   AGENT_NULLABLE_PROJECT_SETTING_KEYS,
   AGENT_PROJECT_SCOPED_SETTING_KEYS,
-  AgentSettingsFields,
+  AgentServerSettingsFields,
   AgentSettingsOptionalFields,
+  AgentSettingsPatchFields,
 } from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
@@ -1249,7 +1250,7 @@ export const ServerSettings = Schema.Struct({
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
-  ...AgentSettingsFields, // Fork add-on: agent instructions.
+  ...AgentServerSettingsFields, // Fork add-on: agent instructions.
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1587,7 +1588,7 @@ export const ServerSettingsPatch = Schema.Struct({
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
-  ...AgentSettingsOptionalFields, // Fork add-on: agent instructions.
+  ...AgentSettingsPatchFields, // Fork add-on: agent instructions.
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),

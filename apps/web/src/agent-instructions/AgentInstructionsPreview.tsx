@@ -1,9 +1,14 @@
 /**
  * The Agents "What agents receive" button: shows the instruction text the
- * server builds from the settings picked in the scope picker.
+ * server builds from the settings picked in the scope picker, then the text
+ * each provider's agents get on top.
  * Fork add-on: agent instructions.
  */
-import { AGENT_PROJECT_SCOPED_SETTING_KEYS, buildAgentInstructionsText } from "@t3tools/contracts";
+import {
+  AGENT_PROJECT_SCOPED_SETTING_KEYS,
+  buildAgentInstructionsText,
+  PROVIDER_DISPLAY_NAMES,
+} from "@t3tools/contracts";
 
 import {
   useScopedSettings,
@@ -24,6 +29,9 @@ export function AgentInstructionsPreview() {
   const settings = useScopedSettings();
   const mixed = useScopedSettingsMixed(AGENT_PROJECT_SCOPED_SETTING_KEYS);
   const text = buildAgentInstructionsText(settings);
+  const providerTexts = Object.entries(settings.agentProviderInstructions).filter(
+    ([, providerText]) => providerText !== "",
+  );
 
   return (
     <Dialog>
@@ -36,19 +44,32 @@ export function AgentInstructionsPreview() {
               ? "The selected targets differ; this is the first one. "
               : "For the scope picked above. "}
             Read-only review and research workers also get a read-only line at the top of their
-            task.
+            task. A thread running under a preset gets that preset's values instead.
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel>
-          {text === "" ? (
+        <DialogPanel className="flex flex-col gap-3">
+          {text === "" && providerTexts.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nothing. With these settings agents get no added instructions.
             </p>
-          ) : (
+          ) : null}
+          {text === "" ? null : (
             <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 font-mono text-xs">
               {text}
             </pre>
           )}
+          {providerTexts.map(([kind, providerText]) => (
+            <div key={kind} className="flex flex-col gap-1.5">
+              <p className="text-sm text-muted-foreground">
+                Then only{" "}
+                {PROVIDER_DISPLAY_NAMES[kind as keyof typeof PROVIDER_DISPLAY_NAMES] ?? kind} agents
+                get:
+              </p>
+              <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 font-mono text-xs">
+                {providerText}
+              </pre>
+            </div>
+          ))}
         </DialogPanel>
       </DialogPopup>
     </Dialog>

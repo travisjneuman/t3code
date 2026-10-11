@@ -22,6 +22,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   }>;
   showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
+  forkMenuContent?: ReactNode; // Fork add-on: agent instructions.
   size?: "sm" | "xs";
   /**
    * The resting strip keeps this menu mounted out of flow while every block
@@ -89,6 +90,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             </MenuRadioItem>
           ))}
         </MenuRadioGroup>
+        {props.forkMenuContent /* Fork add-on: agent instructions. */}
       </MenuPopup>
     </Menu>
   );

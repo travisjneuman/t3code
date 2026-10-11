@@ -128,6 +128,10 @@ import {
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { backgroundWorkNotification } from "@t3tools/provider-core/server/notification";
 import {
+  type ForkAgentScope,
+  forkAgentBlocksNativeSubagents,
+} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+import {
   makeProviderFailure,
   makeProviderFailureTurnItem,
   makeProviderRetryTurnItem,
@@ -714,7 +718,7 @@ export function buildCodexTurnStartParams(input: {
   readonly omitServiceTier?: boolean;
   /** What the thread's MCP Apps want the agent to know (`ui/update-model-context`). */
   readonly appContext?: ProviderAdapter.ProviderAdapterV2TurnInput["appContext"];
-  readonly projectId?: string; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope; // Fork add-on: agent instructions.
 }) {
   return Effect.gen(function* () {
     const runtimeModeDefaults = codexRuntimeModeTurnDefaults(input.runtimePolicy.runtimeMode);
@@ -755,7 +759,7 @@ export function buildCodexTurnStartParams(input: {
             {
               model: input.modelSelection.model,
               reasoningEffort: effort ?? "medium",
-              projectId: input.projectId,
+              agentScope: input.agentScope,
             }, // Fork add-on: agent instructions.
             {
               browser: input.browserToolsAvailable ?? true,
@@ -1320,6 +1324,12 @@ export function codexThreadRuntimeParams(input: {
     ...(input.modelSelection === undefined ? {} : { model: input.modelSelection.model }),
     config: {
       ...CODEX_THREAD_CONFIG,
+      ...(forkAgentBlocksNativeSubagents({
+        threadId: mcpSession?.threadId,
+        provider: CODEX_PROVIDER,
+      })
+        ? { "features.multi_agent": false, "features.multi_agent_v2": false }
+        : {}), // Fork add-on: agent instructions.
       ...(mcpSession === undefined
         ? {}
         : {
@@ -6201,7 +6211,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
               omitServiceTier: adapterOptions.resolveRuntime !== undefined,
               ...(turnInput.appContext === undefined ? {} : { appContext: turnInput.appContext }),
-              projectId: turnInput.appThread.projectId, // Fork add-on: agent instructions.
+              agentScope: { thread: turnInput.appThread, provider: CODEX_PROVIDER }, // Fork add-on: agent instructions.
             });
             yield* Ref.update(pendingRootTurns, (current) => {
               const updated = new Map(current);
