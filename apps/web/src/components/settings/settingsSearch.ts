@@ -8,6 +8,7 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import { SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS } from "../../save-to-notes/saveToNotesSettingsSearch"; // Fork add-on: save to notes.
+import { AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS } from "../../agent-instructions/agentInstructionsSettingsSearch"; // Fork add-on: agent instructions.
 import {
   validateSettingsScopeSearch,
   type ResolvedSettingsScope,
@@ -545,6 +546,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["confirmation desktop app exit direct hold double click press twice"],
     desktopOnly: true,
   },
+  ...AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS, // Fork add-on: agent instructions.
   {
     id: "text-generation-model",
     title: "Text generation model",

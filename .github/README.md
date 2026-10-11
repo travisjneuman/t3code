@@ -23,15 +23,16 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 
 ## What's added
 
-| Add-on                                  | What it does                                                            |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| [**Web apps**](#web-apps)               | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app |
-| [**Other Agents**](#other-agents)       | Follow and continue sessions you started in other agent apps            |
-| [**Compare agents**](#compare-agents)   | One prompt, two models, side by side                                    |
-| [**Save to notes**](#save-to-notes)     | Files a thread into your notes folder or Obsidian vault                 |
-| [**Export a thread**](#export-a-thread) | Saves a thread's full record as Markdown or JSON                        |
-| [**Upstream sync**](#upstream-sync)     | Merges new official nightlies and rebuilds the app from source          |
-| [**Compact cards**](#compact-cards)     | Outlined sidebar cards in smaller text, about 23% shorter               |
+| Add-on                                        | What it does                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| [**Web apps**](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app |
+| [**Other Agents**](#other-agents)             | Follow and continue sessions you started in other agent apps            |
+| [**Compare agents**](#compare-agents)         | One prompt, two models, side by side                                    |
+| [**Agent instructions**](#agent-instructions) | Your rules for every agent, ahead of CLAUDE.md and AGENTS.md            |
+| [**Save to notes**](#save-to-notes)           | Files a thread into your notes folder or Obsidian vault                 |
+| [**Export a thread**](#export-a-thread)       | Saves a thread's full record as Markdown or JSON                        |
+| [**Upstream sync**](#upstream-sync)           | Merges new official nightlies and rebuilds the app from source          |
+| [**Compact cards**](#compact-cards)           | Outlined sidebar cards in smaller text, about 23% shorter               |
 
 ### Web apps
 
@@ -67,6 +68,16 @@ Send one prompt to two models and read their answers side by side.
 - Pin, rename, archive or delete a comparison just like a thread. These actions are in its header, on the start page and in the command palette.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/compare-agents.md)
+
+### Agent instructions
+
+Write rules once in **Settings → General → Agents** and every agent T3 Code runs gets them, in every project, including workers started with `delegate_task`.
+
+- Agents follow them over conflicting `CLAUDE.md` or `AGENTS.md` rules, so T3 can behave differently from your terminal setup without editing `~/.claude` or `~/.codex`.
+- Works with Claude, Codex, Pi, Grok, Cursor and OpenCode.
+- The guide includes a ready-made set for running one orchestrator with many GPT-6.1 Sol workers through Pi.
+
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/agent-instructions.md)
 
 ### Save to notes
 

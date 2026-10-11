@@ -170,6 +170,7 @@ import {
 import { searchableSetting } from "./settingsSearch";
 // Fork add-on: save to notes, local source updates.
 import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings";
+import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on: agent instructions.
 import {
   SOURCE_UPDATE_ACTION_LABELS,
   withSourceUpdateDescription,
@@ -3236,6 +3237,9 @@ export function GeneralSettingsPanel() {
           />
         ) : null}
       </SettingsSection>
+
+      {/* Fork add-on: agent instructions. */}
+      <AgentInstructionsSettingsSection />
 
       <SettingsSection id="text-generation" title="Text generation">
         <SettingsRow

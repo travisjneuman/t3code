@@ -16,6 +16,7 @@ export const T3_MCP_URL_ENV = "T3_MCP_URL";
 export const T3_MCP_BEARER_ENV = "T3_MCP_BEARER_TOKEN";
 export const T3_PI_RUNTIME_MODE_ENV = "T3_PI_RUNTIME_MODE";
 export const T3_PI_MCP_EXTENSION_PATH_ENV = "T3_PI_MCP_EXTENSION_PATH";
+export const T3_AGENT_INSTRUCTIONS_ENV = "T3_AGENT_INSTRUCTIONS"; // Fork add-on: agent instructions.
 
 /**
  * Pi tools whose confirmations the bridge raises as file-change approvals.
@@ -450,7 +451,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
   // Wrapping the first user message instead would stop it from starting
   // with "/" and silently break slash-command expansion.
   pi.on("before_agent_start", (event) => ({
-    systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS,
+    systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV)}] ?? ""), // Fork add-on: agent instructions.
   }));
 }
 `;
