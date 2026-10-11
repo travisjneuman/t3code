@@ -5,7 +5,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { TrimmedString } from "./baseSchemas.ts";
+import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
 
 /**
@@ -38,8 +38,35 @@ export type AgentVerification = typeof AgentVerification.Type;
 export const AgentPushPolicy = Schema.Literals(["project", "never", "after-change"]);
 export type AgentPushPolicy = typeof AgentPushPolicy.Type;
 
+/** Where workers run: the parent's checkout, or a new git worktree and branch each. */
+export const AgentWorkerWorkspace = Schema.Literals(["shared", "worktree"]);
+export type AgentWorkerWorkspace = typeof AgentWorkerWorkspace.Type;
+
+export const MAX_AGENT_WORKER_TIME_LIMIT_MINUTES = 480;
+/** Minutes a worker may run before T3 stops it. */
+export const AgentWorkerTimeLimitMinutes = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: MAX_AGENT_WORKER_TIME_LIMIT_MINUTES }),
+);
+export type AgentWorkerTimeLimitMinutes = typeof AgentWorkerTimeLimitMinutes.Type;
+
+/** What agents check with the user about first. `project` defers to the project's own rules. */
+export const AgentAutonomy = Schema.Literals(["project", "autonomous", "ask-risky", "ask-changes"]);
+export type AgentAutonomy = typeof AgentAutonomy.Type;
+
+/** How much agents write when they finish. `project` defers to the project's own rules. */
+export const AgentReportStyle = Schema.Literals(["project", "terse", "standard", "detailed"]);
+export type AgentReportStyle = typeof AgentReportStyle.Type;
+
+/**
+ * Extra text for one provider driver kind (`claudeAgent`, `codex`, `pi`...).
+ * Records merge on save, so an empty string is how an entry is cleared.
+ */
+export const AgentProviderInstructions = Schema.Record(Schema.String, TrimmedString);
+export type AgentProviderInstructions = typeof AgentProviderInstructions.Type;
+
 const NullableModelSelection = Schema.NullOr(ModelSelection);
 const NullableParallelWorkers = Schema.NullOr(AgentMaxParallelWorkers);
+const NullableWorkerTimeLimit = Schema.NullOr(AgentWorkerTimeLimitMinutes);
 
 /** `ServerSettings` fields with their defaults; every default adds no instructions. */
 export const AgentSettingsFields = {
@@ -70,7 +97,21 @@ export const AgentSettingsFields = {
   agentPushPolicy: AgentPushPolicy.pipe(
     Schema.withDecodingDefault(Effect.succeed("project" as const)),
   ),
+  agentWorkerWorkspace: AgentWorkerWorkspace.pipe(
+    Schema.withDecodingDefault(Effect.succeed("shared" as const)),
+  ),
+  agentWorkerTimeLimitMinutes: NullableWorkerTimeLimit.pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  agentBlockNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  agentAutonomy: AgentAutonomy.pipe(Schema.withDecodingDefault(Effect.succeed("project" as const))),
+  agentReportStyle: AgentReportStyle.pipe(
+    Schema.withDecodingDefault(Effect.succeed("project" as const)),
+  ),
   agentInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  agentProviderInstructions: AgentProviderInstructions.pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
 };
 
 /** `ServerSettingsPatch` and `ProjectSettingsOverrides` fields. */
@@ -86,7 +127,46 @@ export const AgentSettingsOptionalFields = {
   agentOrchestratorOwnsGit: Schema.optionalKey(Schema.Boolean),
   agentVerification: Schema.optionalKey(AgentVerification),
   agentPushPolicy: Schema.optionalKey(AgentPushPolicy),
+  agentWorkerWorkspace: Schema.optionalKey(AgentWorkerWorkspace),
+  agentWorkerTimeLimitMinutes: Schema.optionalKey(NullableWorkerTimeLimit),
+  agentBlockNativeSubagents: Schema.optionalKey(Schema.Boolean),
+  agentAutonomy: Schema.optionalKey(AgentAutonomy),
+  agentReportStyle: Schema.optionalKey(AgentReportStyle),
   agentInstructions: Schema.optionalKey(TrimmedString),
+  agentProviderInstructions: Schema.optionalKey(AgentProviderInstructions),
+};
+
+/** A named set of Agents values. Applying one copies them into the picked scope. */
+export const AgentPreset = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  settings: Schema.Struct(AgentSettingsOptionalFields),
+});
+export type AgentPreset = typeof AgentPreset.Type;
+
+/**
+ * Environment-only Agents settings: saved presets, and the preset each thread
+ * runs under, keyed by thread id. An empty string means the project's
+ * settings (records merge on save, so a key is cleared that way).
+ */
+export const AgentEnvironmentSettingsFields = {
+  agentPresets: Schema.Array(AgentPreset).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  agentThreadPresets: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+};
+
+/** `ServerSettings` fields: the project-scoped ones plus the environment-only ones. */
+export const AgentServerSettingsFields = {
+  ...AgentSettingsFields,
+  ...AgentEnvironmentSettingsFields,
+};
+
+/** `ServerSettingsPatch` fields. */
+export const AgentSettingsPatchFields = {
+  ...AgentSettingsOptionalFields,
+  agentPresets: Schema.optionalKey(Schema.Array(AgentPreset)),
+  agentThreadPresets: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 };
 
 /** Every Agents setting can be overridden per project. */
@@ -102,7 +182,13 @@ export const AGENT_PROJECT_SCOPED_SETTING_KEYS = [
   "agentOrchestratorOwnsGit",
   "agentVerification",
   "agentPushPolicy",
+  "agentWorkerWorkspace",
+  "agentWorkerTimeLimitMinutes",
+  "agentBlockNativeSubagents",
+  "agentAutonomy",
+  "agentReportStyle",
   "agentInstructions",
+  "agentProviderInstructions",
 ] as const satisfies ReadonlyArray<keyof typeof AgentSettingsFields>;
 
 /** Keys whose project override may be `null` (meaning "use the thread's model" or "no limit"). */
@@ -111,10 +197,70 @@ export const AGENT_NULLABLE_PROJECT_SETTING_KEYS = [
   "agentReviewWorkerModelSelection",
   "agentResearchWorkerModelSelection",
   "agentMaxParallelWorkers",
+  "agentWorkerTimeLimitMinutes",
 ] as const satisfies ReadonlyArray<keyof typeof AgentSettingsFields>;
 
 export const AgentSettings = Schema.Struct(AgentSettingsFields);
 export type AgentSettings = typeof AgentSettings.Type;
+
+export const AgentEnvironmentSettings = Schema.Struct(AgentEnvironmentSettingsFields);
+export type AgentEnvironmentSettings = typeof AgentEnvironmentSettings.Type;
+
+/** Presets every environment has. Their ids start with `builtin:`. */
+export const BUILTIN_AGENT_PRESETS: ReadonlyArray<AgentPreset> = [
+  { id: "builtin:solo", name: "Solo", settings: { agentDelegationMode: "off" } },
+  {
+    id: "builtin:orchestrator",
+    name: "Orchestrator",
+    settings: { agentDelegationMode: "always", agentReviewRounds: "once" },
+  },
+  {
+    id: "builtin:review-heavy",
+    name: "Review-heavy",
+    settings: {
+      agentDelegationMode: "auto",
+      agentReviewRounds: "until-clean",
+      agentReadOnlyReviewers: true,
+    },
+  },
+];
+
+export function isBuiltinAgentPreset(id: string): boolean {
+  return id.startsWith("builtin:");
+}
+
+/** The built-in presets, then the user's. */
+export function agentPresetList(
+  settings: Pick<AgentEnvironmentSettings, "agentPresets">,
+): ReadonlyArray<AgentPreset> {
+  return [...BUILTIN_AGENT_PRESETS, ...settings.agentPresets];
+}
+
+/**
+ * The preset a thread runs under: its own choice, else the first ancestor's
+ * (a worker follows its parent's). Pass the thread id first. Undefined means
+ * the project's settings.
+ */
+export function agentPresetForThread(
+  settings: AgentEnvironmentSettings,
+  threadIds: ReadonlyArray<string | undefined>,
+): AgentPreset | undefined {
+  for (const threadId of threadIds) {
+    const presetId = threadId === undefined ? undefined : settings.agentThreadPresets[threadId];
+    if (presetId === undefined || presetId === "") continue;
+    return agentPresetList(settings).find((preset) => preset.id === presetId);
+  }
+  return undefined;
+}
+
+/** Project-resolved settings with the thread's preset applied on top. */
+export function applyAgentThreadPreset<S extends AgentSettings & AgentEnvironmentSettings>(
+  settings: S,
+  threadIds: ReadonlyArray<string | undefined>,
+): S {
+  const preset = agentPresetForThread(settings, threadIds);
+  return preset === undefined ? settings : { ...settings, ...preset.settings };
+}
 
 /** The worker roles that can have their own model. Other roles use the worker model. */
 export type AgentWorkerModelRole = "review" | "research";
@@ -166,6 +312,7 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
   const anyTarget =
     settings.agentWorkerModelSelection !== null || review !== null || research !== null;
   const ownsGit = settings.agentOrchestratorOwnsGit;
+  const worktrees = settings.agentWorkerWorkspace === "worktree";
   return [
     settings.agentDelegationMode === "always"
       ? "- You orchestrate: plan, brief workers, review their results, and integrate. Hand all implementation, research, and review work to workers; do only small fixes yourself."
@@ -193,8 +340,13 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
         ? "- When the work is done, run review rounds with fresh review workers until a round finds nothing to fix."
         : null,
     '- Use mode "async", then end your turn; finished workers wake you. Do not poll.',
-    "- Workers share one checkout: give every brief non-overlapping file ownership.",
-    !ownsGit
+    settings.agentWorkerTimeLimitMinutes === null
+      ? null
+      : `- T3 stops a worker that runs longer than ${settings.agentWorkerTimeLimitMinutes} ${settings.agentWorkerTimeLimitMinutes === 1 ? "minute" : "minutes"}; size each task to finish well inside that.`,
+    worktrees
+      ? "- Each worker gets its own git worktree and branch, made from your current commit. Uncommitted changes are not in it, so commit what workers need first. Workers commit only to their own branch and never push; merge their branches when you review them."
+      : "- Workers share one checkout: give every brief non-overlapping file ownership.",
+    !ownsGit || worktrees
       ? null
       : settings.agentPushPolicy === "never"
         ? "- Workers never commit or push."
@@ -219,11 +371,39 @@ function policyLines(settings: AgentSettings): ReadonlyArray<string | null> {
       : settings.agentPushPolicy === "after-change"
         ? "- Commit and push each completed change once it is verified."
         : null,
+    settings.agentBlockNativeSubagents
+      ? "- Never use your harness's own subagent or task tools; T3 turns them off where it can."
+      : null,
+    settings.agentAutonomy === "autonomous"
+      ? "- Work without stopping to ask. Make reasonable calls yourself and list them in your report."
+      : settings.agentAutonomy === "ask-risky"
+        ? "- Ask the user before you commit, push, delete files, or do anything that reaches outside this machine (deploys, messages, accounts, cloud resources)."
+        : settings.agentAutonomy === "ask-changes"
+          ? "- Ask the user before any change: say what you plan to edit and wait for a yes before editing files, committing, pushing, deleting, or reaching outside this machine."
+          : null,
+    settings.agentReportStyle === "terse"
+      ? "- Finish with a terse report: a line or two on what changed and anything still open."
+      : settings.agentReportStyle === "standard"
+        ? "- Finish with a short report: what changed, how it was verified, and anything still open."
+        : settings.agentReportStyle === "detailed"
+          ? "- Finish with a detailed report: each change and why, the files touched, how it was verified, and any risks or open questions."
+          : null,
   ];
 }
 
-/** The instruction text for one resolved set of Agents settings; empty when nothing is set. */
-export function buildAgentInstructionsText(settings: AgentSettings): string {
+/** The extra text for one provider driver kind, or empty. */
+export function agentProviderInstructionsFor(
+  settings: Pick<AgentSettings, "agentProviderInstructions">,
+  provider: string | undefined,
+): string {
+  return provider === undefined ? "" : (settings.agentProviderInstructions[provider] ?? "");
+}
+
+/**
+ * The instruction text for one resolved set of Agents settings; empty when
+ * nothing is set. `provider` is the driver kind, which adds its own text.
+ */
+export function buildAgentInstructionsText(settings: AgentSettings, provider?: string): string {
   const rules = [
     ...(settings.agentDelegationMode === "off" ? [] : delegationLines(settings)),
     ...policyLines(settings),
@@ -238,5 +418,7 @@ export function buildAgentInstructionsText(settings: AgentSettings): string {
     );
   }
   if (settings.agentInstructions !== "") sections.push(settings.agentInstructions);
+  const providerText = agentProviderInstructionsFor(settings, provider);
+  if (providerText !== "") sections.push(providerText);
   return sections.join("\n\n");
 }

@@ -1,6 +1,7 @@
 import type { ProviderInteractionMode } from "@t3tools/contracts";
 import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app-server/schema";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+import type { ForkAgentScope } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
 
 import {
   T3_CODE_BROWSER_TOOL_INSTRUCTIONS,
@@ -185,7 +186,7 @@ export interface CodexRuntimeInfo {
   readonly model: string;
   readonly modelName?: string | undefined;
   readonly reasoningEffort: string;
-  readonly projectId?: string | undefined; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope | undefined; // Fork add-on: agent instructions.
 }
 
 /** Mode prompt for `turn/start.collaborationMode.settings.developer_instructions`. */

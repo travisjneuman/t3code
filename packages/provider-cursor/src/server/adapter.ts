@@ -2176,7 +2176,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               detail: "Cursor turn requires non-empty text or attachments.",
             });
           }
-          const text = `${userText}\n\n${buildRuntimeInstructions({ harness: "Cursor", model: turnInput.modelSelection.model, projectId: turnInput.appThread.projectId })}`; // Fork add-on: agent instructions.
+          const text = `${userText}\n\n${buildRuntimeInstructions({ harness: "Cursor", model: turnInput.modelSelection.model, agentScope: { thread: turnInput.appThread, provider: CursorAgentSdk.CURSOR_PROVIDER } })}`; // Fork add-on: agent instructions.
           return images.length === 0
             ? text
             : ({

@@ -6647,6 +6647,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
+        ...command.workerWorkspace, // Fork add-on: agent instructions.
       };
       const task: OrchestrationV2Subagent = {
         id: taskNodeId,

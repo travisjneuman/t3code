@@ -269,6 +269,10 @@ import {
 } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import {
+  AgentThreadPresetControl,
+  AgentThreadPresetMenuItems,
+} from "../../agent-instructions/AgentThreadPresetControl"; // Fork add-on: agent instructions.
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
@@ -5489,16 +5493,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     {
       id: "mode",
       content: (
-        <ComposerFooterModeControls
-          showInteractionModeToggle={planModeUiEnabled}
-          interactionMode={interactionMode}
-          runtimeMode={compatibleRuntimeMode}
-          runtimeModeOptions={compatibleRuntimeModeOptions}
-          size={composerControlsCollapsed ? "xs" : "sm"}
-          hidden={composerControlsHidden || restingHiddenBlockCount > 0}
-          onToggleInteractionMode={toggleInteractionMode}
-          onRuntimeModeChange={handleRuntimeModeChange}
-        />
+        <>
+          <ComposerFooterModeControls
+            showInteractionModeToggle={planModeUiEnabled}
+            interactionMode={interactionMode}
+            runtimeMode={compatibleRuntimeMode}
+            runtimeModeOptions={compatibleRuntimeModeOptions}
+            size={composerControlsCollapsed ? "xs" : "sm"}
+            hidden={composerControlsHidden || restingHiddenBlockCount > 0}
+            onToggleInteractionMode={toggleInteractionMode}
+            onRuntimeModeChange={handleRuntimeModeChange}
+          />
+          {/* Fork add-on: agent instructions. */}
+          {activeThreadId ? (
+            <AgentThreadPresetControl
+              environmentId={environmentId}
+              threadId={activeThreadId}
+              size={composerControlsCollapsed ? "xs" : "sm"}
+              hidden={composerControlsHidden || restingHiddenBlockCount > 0}
+            />
+          ) : null}
+        </>
       ),
     },
   ];
@@ -5662,6 +5677,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             showInteractionModeToggle={planModeUiEnabled && hiddenRestingBlockIds.includes("mode")}
             traitsMenuContent={
               hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
+            }
+            forkMenuContent={
+              // Fork add-on: agent instructions.
+              activeThreadId && hiddenRestingBlockIds.includes("mode") ? (
+                <AgentThreadPresetMenuItems
+                  environmentId={environmentId}
+                  threadId={activeThreadId}
+                />
+              ) : undefined
             }
             onToggleInteractionMode={toggleInteractionMode}
             onRuntimeModeChange={handleRuntimeModeChange}

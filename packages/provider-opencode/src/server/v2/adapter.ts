@@ -3416,7 +3416,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
         buildRuntimeInstructions({
           harness: "OpenCode",
           model: turnInput.modelSelection.model,
-          projectId: turnInput.appThread.projectId,
+          agentScope: { thread: turnInput.appThread, provider: OPENCODE_PROVIDER },
         }), // Fork add-on: agent instructions.
         t3OrchestrationSystemPrompt(state.mcp !== undefined),
       ]

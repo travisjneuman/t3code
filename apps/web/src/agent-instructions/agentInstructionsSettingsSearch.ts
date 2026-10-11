@@ -7,6 +7,13 @@ import type { SettingsSearchItem } from "../components/settings/settingsSearch";
 
 export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
   {
+    id: "agent-presets",
+    title: "Presets",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["agents preset profile solo orchestrator review heavy save apply thread"],
+  },
+  {
     id: "agent-delegation",
     title: "Delegation",
     to: "/settings/general",
@@ -40,6 +47,20 @@ export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
     scope: "project-defaults",
     searchTerms: ["max concurrent subagents workers at once limit"],
+  },
+  {
+    id: "agent-worker-workspace",
+    title: "Worker workspace",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["worktree branch checkout isolation workers git"],
+  },
+  {
+    id: "agent-worker-time-limit",
+    title: "Worker time limit",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["timeout budget minutes stop cancel worker runaway"],
   },
   {
     id: "agent-review-rounds",
@@ -84,11 +105,39 @@ export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["git commit push publish never after each change"],
   },
   {
+    id: "agent-block-native-subagents",
+    title: "Block native subagents",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["task tool agent tool multi agent codex claude harness subagents disable"],
+  },
+  {
+    id: "agent-autonomy",
+    title: "Autonomy",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["ask before approval confirm risky changes autonomous permission"],
+  },
+  {
+    id: "agent-report-style",
+    title: "Report style",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["summary report terse detailed verbosity final message"],
+  },
+  {
     id: "agent-instructions",
     title: "Additional instructions",
     to: "/settings/general",
     scope: "project-defaults",
     searchTerms: ["agent instructions system prompt claude.md agents.md override rules custom"],
+  },
+  {
+    id: "agent-provider-instructions",
+    title: "Provider instructions",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["per provider claude codex pi cursor opencode grok instructions model specific"],
   },
   {
     id: "agent-preview",
