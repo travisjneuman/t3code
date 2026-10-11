@@ -1,24 +1,22 @@
 /**
- * Settings, General, Agents: how agents T3 Code runs delegate work, plus
- * free-form additional instructions. The server builds the instructions every
- * provider receives from these rows; each row takes project overrides through
- * the settings scope picker.
+ * Settings, General, Agents: how agents T3 Code runs delegate work, how they
+ * verify and publish, plus free-form additional instructions. The server builds
+ * the instructions every provider receives from these rows and enforces the
+ * worker target, worker limit and nested delegation on delegate_task; each row
+ * takes project overrides through the settings scope picker.
  * Fork add-on: agent instructions.
  */
 import {
   type AgentDelegationMode,
+  type AgentPushPolicy,
+  type AgentReviewRounds,
+  type AgentVerification,
   MAX_AGENT_PARALLEL_WORKERS,
   MIN_AGENT_PARALLEL_WORKERS,
-  type ModelSelection,
 } from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
-import { useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
 
-import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
-import { TraitsPicker } from "../components/chat/TraitsPicker";
 import {
-  SETTINGS_PICKER_TRIGGER_CLASSNAME,
   SettingResetButton,
   SettingsRow,
   SettingsSection,
@@ -31,17 +29,8 @@ import {
   useScopedSettingsMixed,
   useUpdateScopedSettings,
 } from "../components/settings/useScopedSettings";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
 import { Textarea } from "../components/ui/textarea";
-import { toastManager } from "../components/ui/toast";
-import { getCustomModelOptionsByInstance } from "../modelSelection";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -49,32 +38,59 @@ import {
   sortProviderInstanceEntries,
 } from "../providerInstances";
 import { EMPTY_SERVER_PROVIDERS } from "../state/server";
+import { AgentInstructionsPreview } from "./AgentInstructionsPreview";
+import { ChoiceSelect } from "./ChoiceSelect";
+import { WorkerModelControl } from "./WorkerModelControl";
 
-const DELEGATION_LABELS: Record<AgentDelegationMode, string> = {
-  off: "Off",
-  auto: "When useful",
-  always: "Always",
-};
+const DELEGATION_OPTIONS: ReadonlyArray<readonly [AgentDelegationMode, string]> = [
+  ["off", "Off"],
+  ["auto", "When useful"],
+  ["always", "Always"],
+];
 
-const PARALLEL_WORKER_OPTIONS = Array.from(
-  { length: MAX_AGENT_PARALLEL_WORKERS - MIN_AGENT_PARALLEL_WORKERS + 1 },
-  (_, index) => String(MIN_AGENT_PARALLEL_WORKERS + index),
-);
 const NO_LIMIT = "none";
+const PARALLEL_WORKER_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  [NO_LIMIT, "No limit"],
+  ...Array.from(
+    { length: MAX_AGENT_PARALLEL_WORKERS - MIN_AGENT_PARALLEL_WORKERS + 1 },
+    (_, index) => {
+      const value = String(MIN_AGENT_PARALLEL_WORKERS + index);
+      return [value, value] as const;
+    },
+  ),
+];
 
-function isDelegationMode(value: string | null): value is AgentDelegationMode {
-  return value !== null && value in DELEGATION_LABELS;
-}
+const REVIEW_ROUND_OPTIONS: ReadonlyArray<readonly [AgentReviewRounds, string]> = [
+  ["agent", "Agent decides"],
+  ["once", "One round"],
+  ["until-clean", "Until clean"],
+];
+
+const VERIFICATION_OPTIONS: ReadonlyArray<readonly [AgentVerification, string]> = [
+  ["project", "Project rules"],
+  ["review", "Review only"],
+  ["targeted", "Targeted checks"],
+  ["full", "Full checks"],
+];
+
+const PUSH_POLICY_OPTIONS: ReadonlyArray<readonly [AgentPushPolicy, string]> = [
+  ["project", "Project rules"],
+  ["never", "Never"],
+  ["after-change", "After each change"],
+];
 
 export function AgentInstructionsSettingsSection() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
-  const navigate = useNavigate();
-  const { environment, connectedEnvironments, targets, target } = useSettingsScope();
+  const { environment, targets, target } = useSettingsScope();
   const mixedDelegation = useScopedSettingsMixed(["agentDelegationMode"]);
-  const mixedWorkerModel = useScopedSettingsMixed(["agentWorkerModelSelection"]);
   const mixedParallel = useScopedSettingsMixed(["agentMaxParallelWorkers"]);
+  const mixedReviewRounds = useScopedSettingsMixed(["agentReviewRounds"]);
+  const mixedReadOnly = useScopedSettingsMixed(["agentReadOnlyReviewers"]);
+  const mixedNested = useScopedSettingsMixed(["agentWorkersCanDelegate"]);
   const mixedGit = useScopedSettingsMixed(["agentOrchestratorOwnsGit"]);
+  const mixedVerification = useScopedSettingsMixed(["agentVerification"]);
+  const mixedPushPolicy = useScopedSettingsMixed(["agentPushPolicy"]);
   const mixedInstructions = useScopedSettingsMixed(["agentInstructions"]);
   const scopeKey = targets.map((entry) => `${entry.environmentId}:${entry.projectId}`).join(",");
   const instructionsEdited = useRef(false);
@@ -87,29 +103,13 @@ export function AgentInstructionsSettingsSection() {
       target?.projectId ?? null,
     ),
   );
-  const workerSelection = resolveDefaultProviderModelSelection(
-    providers,
-    settings.agentWorkerModelSelection,
-  );
-  const workerEntry = entries.find((entry) => entry.instanceId === workerSelection?.instanceId);
-  const modelOptions = getCustomModelOptionsByInstance(
-    settings,
-    providers,
-    workerSelection?.instanceId,
-    workerSelection?.model,
-  );
   const modelDisabledReason = useScopedModelDisabledReason(settings, entries);
-  const usesWorkerModel = settings.agentWorkerModelSelection !== null;
   const delegating = mixedDelegation || settings.agentDelegationMode !== "off";
-
-  const setWorkerModel = (value: ModelSelection | null) => {
-    const reason = value ? modelDisabledReason(value.instanceId, value.model) : null;
-    if (reason) {
-      toastManager.add({ type: "error", title: "Worker model not saved", description: reason });
-      return;
-    }
-    updateSettings({ agentWorkerModelSelection: value });
-  };
+  const workerSeed = resolveDefaultProviderModelSelection(
+    providers,
+    settings.agentWorkerModelSelection ?? settings.defaultModelSelection,
+  );
+  const modelControl = { providers, entries, modelDisabledReason };
 
   return (
     <SettingsSection id="agents" title="Agents">
@@ -127,27 +127,12 @@ export function AgentInstructionsSettingsSection() {
           ) : null
         }
         control={
-          <Select
+          <ChoiceSelect
             value={mixedDelegation ? null : settings.agentDelegationMode}
-            onValueChange={(value) => {
-              if (isDelegationMode(value)) updateSettings({ agentDelegationMode: value });
-            }}
-          >
-            <SelectTrigger size="sm" aria-label="Delegation">
-              <SelectValue>
-                {(value: string | null) =>
-                  isDelegationMode(value) ? DELEGATION_LABELS[value] : "Mixed"
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup align="end" alignItemWithTrigger={false}>
-              {Object.entries(DELEGATION_LABELS).map(([value, label]) => (
-                <SelectItem hideIndicator key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+            options={DELEGATION_OPTIONS}
+            ariaLabel="Delegation"
+            onChange={(value) => updateSettings({ agentDelegationMode: value })}
+          />
         }
       />
 
@@ -157,81 +142,47 @@ export function AgentInstructionsSettingsSection() {
             serverScoped
             settingKeys={["agentWorkerModelSelection"]}
             {...searchableSetting("agent-worker-model")}
-            description="Provider and model for delegated workers. Off runs workers on the thread's model."
+            description="Provider and model for delegated workers. Off runs workers on the thread's model. T3 uses it whenever the agent leaves out a target."
             control={
-              connectedEnvironments.length === 0 ? (
-                <span className="text-sm text-muted-foreground">
-                  Connect an environment to choose its worker model.
-                </span>
-              ) : (
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-                  {(usesWorkerModel || mixedWorkerModel) && workerSelection && workerEntry ? (
-                    <>
-                      <ProviderModelPicker
-                        environmentId={environment?.environmentId ?? null}
-                        activeInstanceId={workerSelection.instanceId}
-                        model={workerSelection.model}
-                        lockedProvider={null}
-                        instanceEntries={entries}
-                        modelOptionsByInstance={modelOptions}
-                        triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                        triggerAriaLabel="Worker model"
-                        {...(mixedWorkerModel ? { triggerLabel: "Mixed" } : {})}
-                        getModelDisabledReason={modelDisabledReason}
-                        onOpenProviderSetup={(instanceId) => {
-                          if (environment)
-                            void navigate({
-                              to: "/settings/providers",
-                              search: { environmentId: environment.environmentId, instanceId },
-                            });
-                        }}
-                        onInstanceModelChange={(instanceId, model) =>
-                          setWorkerModel(createModelSelection(instanceId, model))
-                        }
-                      />
-                      {!mixedWorkerModel ? (
-                        <TraitsPicker
-                          provider={workerEntry.driverKind}
-                          models={workerEntry.models}
-                          model={workerSelection.model}
-                          prompt=""
-                          onPromptChange={() => {}}
-                          modelOptions={workerSelection.options ?? []}
-                          allowPromptInjectedEffort={false}
-                          planModeEnabled={settings.planModeEnabled}
-                          triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                          onModelOptionsChange={(options) =>
-                            setWorkerModel(
-                              createModelSelection(
-                                workerSelection.instanceId,
-                                workerSelection.model,
-                                options,
-                              ),
-                            )
-                          }
-                        />
-                      ) : null}
-                    </>
-                  ) : null}
-                  <Switch
-                    mixed={mixedWorkerModel}
-                    checked={mixedWorkerModel ? false : usesWorkerModel}
-                    disabled={!usesWorkerModel && workerSelection === null}
-                    onCheckedChange={(checked) => {
-                      if (!checked) {
-                        setWorkerModel(null);
-                        return;
-                      }
-                      const seed = resolveDefaultProviderModelSelection(
-                        providers,
-                        settings.defaultModelSelection,
-                      );
-                      if (seed) setWorkerModel(seed);
-                    }}
-                    aria-label="Use a separate worker model"
-                  />
-                </div>
-              )
+              <WorkerModelControl
+                settingKey="agentWorkerModelSelection"
+                label="Worker model"
+                seed={resolveDefaultProviderModelSelection(
+                  providers,
+                  settings.defaultModelSelection,
+                )}
+                {...modelControl}
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentReviewWorkerModelSelection"]}
+            {...searchableSetting("agent-review-worker-model")}
+            description="Model for review workers. Off uses the worker model."
+            control={
+              <WorkerModelControl
+                settingKey="agentReviewWorkerModelSelection"
+                label="Review worker model"
+                seed={workerSeed}
+                {...modelControl}
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentResearchWorkerModelSelection"]}
+            {...searchableSetting("agent-research-worker-model")}
+            description="Model for research workers. Off uses the worker model."
+            control={
+              <WorkerModelControl
+                settingKey="agentResearchWorkerModelSelection"
+                label="Research worker model"
+                seed={workerSeed}
+                {...modelControl}
+              />
             }
           />
 
@@ -239,7 +190,7 @@ export function AgentInstructionsSettingsSection() {
             serverScoped
             settingKeys={["agentMaxParallelWorkers"]}
             {...searchableSetting("agent-parallel-workers")}
-            description="Most workers one agent runs at once."
+            description="Most workers one agent runs at once. T3 refuses a delegation past the limit."
             resetAction={
               settings.agentMaxParallelWorkers !== null ? (
                 <SettingResetButton
@@ -249,33 +200,89 @@ export function AgentInstructionsSettingsSection() {
               ) : null
             }
             control={
-              <Select
+              <ChoiceSelect
                 value={mixedParallel ? null : String(settings.agentMaxParallelWorkers ?? NO_LIMIT)}
-                onValueChange={(value) => {
-                  if (value === null) return;
+                options={PARALLEL_WORKER_OPTIONS}
+                ariaLabel="Parallel workers"
+                onChange={(value) =>
                   updateSettings({
                     agentMaxParallelWorkers: value === NO_LIMIT ? null : Number(value),
-                  });
-                }}
-              >
-                <SelectTrigger size="sm" aria-label="Parallel workers">
-                  <SelectValue>
-                    {(value: string | null) =>
-                      value === null ? "Mixed" : value === NO_LIMIT ? "No limit" : value
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem hideIndicator value={NO_LIMIT}>
-                    No limit
-                  </SelectItem>
-                  {PARALLEL_WORKER_OPTIONS.map((value) => (
-                    <SelectItem hideIndicator key={value} value={value}>
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
+                  })
+                }
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentReviewRounds"]}
+            {...searchableSetting("agent-review-rounds")}
+            description="Review passes over the finished work, each by a fresh review worker."
+            resetAction={
+              settings.agentReviewRounds !== "agent" ? (
+                <SettingResetButton
+                  label="review rounds"
+                  onClick={() => updateSettings({ agentReviewRounds: "agent" })}
+                />
+              ) : null
+            }
+            control={
+              <ChoiceSelect
+                value={mixedReviewRounds ? null : settings.agentReviewRounds}
+                options={REVIEW_ROUND_OPTIONS}
+                ariaLabel="Review rounds"
+                onChange={(value) => updateSettings({ agentReviewRounds: value })}
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentReadOnlyReviewers"]}
+            {...searchableSetting("agent-read-only-reviewers")}
+            description="Review and research workers are told not to edit files, commit, or push, in their instructions and at the top of their task. An instruction, not a sandbox."
+            resetAction={
+              settings.agentReadOnlyReviewers ? (
+                <SettingResetButton
+                  label="read-only reviewers"
+                  onClick={() => updateSettings({ agentReadOnlyReviewers: false })}
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                mixed={mixedReadOnly}
+                checked={mixedReadOnly ? false : settings.agentReadOnlyReviewers}
+                onCheckedChange={(checked) =>
+                  updateSettings({ agentReadOnlyReviewers: Boolean(checked) })
+                }
+                aria-label="Read-only reviewers"
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentWorkersCanDelegate"]}
+            {...searchableSetting("agent-workers-can-delegate")}
+            description="Let workers hand off parts of their own task. Off, T3 refuses delegate_task from a worker."
+            resetAction={
+              settings.agentWorkersCanDelegate ? (
+                <SettingResetButton
+                  label="workers can delegate"
+                  onClick={() => updateSettings({ agentWorkersCanDelegate: false })}
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                mixed={mixedNested}
+                checked={mixedNested ? false : settings.agentWorkersCanDelegate}
+                onCheckedChange={(checked) =>
+                  updateSettings({ agentWorkersCanDelegate: Boolean(checked) })
+                }
+                aria-label="Workers can delegate"
+              />
             }
           />
 
@@ -305,6 +312,52 @@ export function AgentInstructionsSettingsSection() {
           />
         </>
       ) : null}
+
+      <SettingsRow
+        serverScoped
+        settingKeys={["agentVerification"]}
+        {...searchableSetting("agent-verification")}
+        description="How agents check their work. Project rules adds nothing, so CLAUDE.md or AGENTS.md decides."
+        resetAction={
+          settings.agentVerification !== "project" ? (
+            <SettingResetButton
+              label="verification"
+              onClick={() => updateSettings({ agentVerification: "project" })}
+            />
+          ) : null
+        }
+        control={
+          <ChoiceSelect
+            value={mixedVerification ? null : settings.agentVerification}
+            options={VERIFICATION_OPTIONS}
+            ariaLabel="Verification"
+            onChange={(value) => updateSettings({ agentVerification: value })}
+          />
+        }
+      />
+
+      <SettingsRow
+        serverScoped
+        settingKeys={["agentPushPolicy"]}
+        {...searchableSetting("agent-push-policy")}
+        description="When agents commit and push. Project rules adds nothing, so CLAUDE.md or AGENTS.md decides."
+        resetAction={
+          settings.agentPushPolicy !== "project" ? (
+            <SettingResetButton
+              label="commit and push"
+              onClick={() => updateSettings({ agentPushPolicy: "project" })}
+            />
+          ) : null
+        }
+        control={
+          <ChoiceSelect
+            value={mixedPushPolicy ? null : settings.agentPushPolicy}
+            options={PUSH_POLICY_OPTIONS}
+            ariaLabel="Commit and push"
+            onChange={(value) => updateSettings({ agentPushPolicy: value })}
+          />
+        }
+      />
 
       <SettingsRow
         serverScoped
@@ -347,6 +400,12 @@ export function AgentInstructionsSettingsSection() {
           />
         </div>
       </SettingsRow>
+
+      <SettingsRow
+        {...searchableSetting("agent-preview")}
+        description="The instructions these settings give every agent, for the scope picked above."
+        control={<AgentInstructionsPreview />}
+      />
     </SettingsSection>
   );
 }

@@ -74,7 +74,9 @@ Send one prompt to two models and read their answers side by side.
 Set how agents work in **Settings → General → Agents**, for all projects or one project at a time, without editing `~/.claude` or `~/.codex`.
 
 - **Delegation** turns on orchestrator rules: the thread's agent hands work to workers with `delegate_task` when useful, or always.
-- Pick the **worker model** (for example GPT-6.1 Sol through Pi), cap **parallel workers**, and choose whether the orchestrator **handles git**.
+- Pick the **worker model** (for example GPT-6.1 Sol through Pi) and separate **review** and **research** models; T3 uses them whenever an agent leaves out a target.
+- Cap **parallel workers**, block workers from delegating, and set **review rounds**, **read-only reviewers**, and whether the orchestrator **handles git**. T3 enforces the cap and the delegation block.
+- Choose how agents **verify** (review only, targeted, or full checks) and when they **commit and push**, then **Preview** exactly what agents receive.
 - **Additional instructions** take any other rules. Agents follow all of it over conflicting `CLAUDE.md` or `AGENTS.md` rules.
 - Works with Claude, Codex, Pi, Grok, Cursor and OpenCode.
 

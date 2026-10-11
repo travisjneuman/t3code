@@ -86,6 +86,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { loadDelegationPolicy } from "../agent-instructions/DelegationPolicy.ts"; // Fork add-on: agent instructions.
 import {
   clientRuntimeModeCeiling,
   type McpInvocationScope,
@@ -1978,9 +1979,14 @@ const make = Effect.gen(function* () {
           operation: "delegate-task",
         });
         const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
+        const policy = yield* loadDelegationPolicy(serverSettings.getSettings, {
+          parent,
+          request: input,
+          isRetry: isRetryOfAcceptedDelegation,
+        }); // Fork add-on: agent instructions.
         const target = yield* resolveTargetRechecking({
           parent,
-          target: input.target,
+          target: policy.target, // Fork add-on: agent instructions.
           providers,
           skipProjectEnablementFilter: isRetryOfAcceptedDelegation,
         });
@@ -2005,7 +2011,7 @@ const make = Effect.gen(function* () {
             parentThreadId: scope.thread.threadId,
             parentRunId: parentRun.id,
             parentNodeId: parentRun.rootNodeId,
-            task: taskPrompt(input),
+            task: taskPrompt({ ...input, task: policy.task }), // Fork add-on: agent instructions.
             ...(input.title === undefined ? {} : { title: input.title }),
             modelSelection: target.modelSelection,
             runtimeMode,
