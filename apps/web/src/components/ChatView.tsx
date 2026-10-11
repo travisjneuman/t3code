@@ -11179,8 +11179,11 @@ export default function ChatView(props: ChatViewProps) {
           workspaceMutationId={workspaceMutationId}
         />
       </Suspense>
-    ) : renderRemoteAppPanel(renderedRightPanelSurface, rightPanelOpen, activeThreadRef) // Fork add-on: remote app panel.
-  ) : null;
+    ) : (
+      renderRemoteAppPanel(renderedRightPanelSurface, rightPanelOpen, activeThreadRef)
+    )
+  ) : // Fork add-on: remote app panel.
+  null;
   const threadDetailsPanelProps: ThreadDetailsPanelProps = {
     anchor: threadPanelPopoverAnchorRef,
     handle: threadPanelPopoverHandle,
@@ -11309,7 +11312,6 @@ export default function ChatView(props: ChatViewProps) {
     <div
       ref={setWorkspaceLayoutElement}
       className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
-      data-remote-app-host-workspace // Fork add-on: remote apps.
     >
       <Dialog
         open={
@@ -11341,7 +11343,6 @@ export default function ChatView(props: ChatViewProps) {
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
-        data-remote-app-host-column // Fork add-on: remote apps.
       >
         {/* Top bar */}
         <header
