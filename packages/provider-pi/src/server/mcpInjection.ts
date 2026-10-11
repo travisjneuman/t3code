@@ -2,6 +2,7 @@ import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
+import { forkAgentInstructionsBlock } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
 import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
 import {
   PI_T3_MCP_EXTENSION_FILENAME,
@@ -10,6 +11,7 @@ import {
   T3_MCP_URL_ENV,
   T3_PI_RUNTIME_MODE_ENV,
   T3_PI_MCP_EXTENSION_PATH_ENV,
+  T3_AGENT_INSTRUCTIONS_ENV, // Fork add-on: agent instructions.
 } from "./mcpExtensionSource.ts";
 
 const RESERVED_PI_LAUNCH_ARGUMENTS = new Set([
@@ -301,6 +303,7 @@ export function buildPiRpcLaunch(input: {
       ...(hasT3Extension && input.extensionPath !== undefined
         ? { [T3_PI_MCP_EXTENSION_PATH_ENV]: input.extensionPath }
         : {}),
+      ...(hasT3Extension ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock() } : {}), // Fork add-on: agent instructions.
       ...(hasT3Extension && input.runtimeMode !== undefined
         ? {
             [T3_PI_RUNTIME_MODE_ENV]:

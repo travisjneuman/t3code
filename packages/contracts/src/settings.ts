@@ -1222,6 +1222,7 @@ export const ServerSettings = Schema.Struct({
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
+  agentInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: agent instructions.
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1530,6 +1531,7 @@ export const ServerSettingsPatch = Schema.Struct({
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
+  agentInstructions: Schema.optionalKey(TrimmedString), // Fork add-on: agent instructions.
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),
