@@ -5,6 +5,11 @@ import { useLayoutEffect, useRef } from "react";
 import { acquireBrowserSurface } from "./browserSurfaceStore";
 import { observeResize } from "../lib/observeResize";
 
+// A docked sheet (the right panel in a narrow window) covers the app at
+// --z-sheet (46), so a page placed in one rises just above it. Dialogs (50 and
+// up) and the floating player's webview (48) still cover it.
+const SHEET_SURFACE_Z_INDEX = 47;
+
 export function BrowserSurfaceSlot(props: {
   readonly tabId: string;
   readonly visible: boolean;
@@ -31,9 +36,12 @@ export function BrowserSurfaceSlot(props: {
     const element = elementRef.current;
     if (!element) return;
     let lease = acquireBrowserSurface(tabId, fitSourceContent);
+    const sheet = element.closest('[data-slot="sheet-popup"]');
     const update = () => {
       const rect = element.getBoundingClientRect();
       const presentation = presentationRef.current;
+      const zIndex =
+        sheet === null ? presentation.zIndex : Math.max(presentation.zIndex, SHEET_SURFACE_Z_INDEX);
       const presented = lease.present(
         {
           x: Math.round(rect.x),
@@ -43,7 +51,7 @@ export function BrowserSurfaceSlot(props: {
         },
         presentation.visible && rect.width > 0 && rect.height > 0,
         presentation.cornerRadius,
-        presentation.zIndex,
+        zIndex,
       );
       if (presentation.visible && !presented) {
         lease.release();
@@ -57,7 +65,7 @@ export function BrowserSurfaceSlot(props: {
           },
           rect.width > 0 && rect.height > 0,
           presentation.cornerRadius,
-          presentation.zIndex,
+          zIndex,
         );
       }
     };
@@ -73,10 +81,16 @@ export function BrowserSurfaceSlot(props: {
     // still moves on screen. The gap element carries the sidebar's width.
     observed.push(...document.querySelectorAll('[data-slot="sidebar-gap"]'));
     const stopObserving = observeResize(observed, update);
+    // A sheet slides in by translation, which no resize reports; measure where it settles.
+    const onSheetTransitionEnd = (event: Event) => {
+      if (event.target === sheet) update();
+    };
+    sheet?.addEventListener("transitionend", onSheetTransitionEnd);
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
       stopObserving();
+      sheet?.removeEventListener("transitionend", onSheetTransitionEnd);
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
       if (updateRef.current === update) updateRef.current = null;
