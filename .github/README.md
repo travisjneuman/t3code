@@ -135,6 +135,20 @@ git remote add upstream https://github.com/pingdotgg/t3code.git
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-updating.md)
 
+## Documentation map
+
+Fork-specific docs. Everything else in [`docs/`](https://github.com/travisjneuman/t3code/blob/main/docs/README.md) is upstream T3 Code documentation.
+
+| Need / keywords                                   | Open                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web apps tabs: ChatGPT, Claude, Grok, Gemini      | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/desktop-remote-apps.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/remote-apps.md)                                                                                                       |
+| Other Agents, continue or hand back a session     | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/other-agents.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/external-sessions.md) · [session search](https://github.com/travisjneuman/t3code/blob/main/docs/internals/session-search.md) |
+| Compare agents, review swap                       | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/compare-agents.md)                                                                                                                                                                                                           |
+| Delegation, worker models, presets                | [Agent instructions](https://github.com/travisjneuman/t3code/blob/main/docs/user/agent-instructions.md)                                                                                                                                                                                               |
+| Save to notes, export Markdown or JSON            | [Save and export threads](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md)                                                                                                                                                                                     |
+| Upstream sync, Sync & Build, build from source    | [Fork updating](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-updating.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/local-source-updates.md)                                                                                                 |
+| How the fork stays mergeable, `Fork add-on` hooks | [Fork add-ons](https://github.com/travisjneuman/t3code/blob/main/docs/internals/fork-add-ons.md)                                                                                                                                                                                                      |
+
 ---
 
 <div align="center">
