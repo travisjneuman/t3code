@@ -46,7 +46,14 @@ export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
     title: "Parallel workers",
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["max concurrent subagents workers at once limit"],
+    searchTerms: ["max concurrent subagents workers at once limit total custom memory"],
+  },
+  {
+    id: "agent-delegation-depth",
+    title: "Delegation depth",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["workers can delegate nested delegation subagents spawn depth levels recursive"],
   },
   {
     id: "agent-worker-workspace",
@@ -75,13 +82,6 @@ export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
     scope: "project-defaults",
     searchTerms: ["reviewer researcher no edits read only permissions sandbox"],
-  },
-  {
-    id: "agent-workers-can-delegate",
-    title: "Workers can delegate",
-    to: "/settings/general",
-    scope: "project-defaults",
-    searchTerms: ["nested delegation subagents spawn depth recursive"],
   },
   {
     id: "agent-git-owner",
