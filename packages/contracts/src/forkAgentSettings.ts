@@ -4,6 +4,7 @@
 // Agents setting is added here only. See docs/user/agent-instructions.md.
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
@@ -17,7 +18,9 @@ export const AgentDelegationMode = Schema.Literals(["off", "auto", "always"]);
 export type AgentDelegationMode = typeof AgentDelegationMode.Type;
 
 export const MIN_AGENT_PARALLEL_WORKERS = 1;
-export const MAX_AGENT_PARALLEL_WORKERS = 12;
+export const MAX_AGENT_PARALLEL_WORKERS = 30;
+export const DEFAULT_AGENT_PARALLEL_WORKERS = 12;
+/** Workers running at once under one thread's agent, counting every level. */
 export const AgentMaxParallelWorkers = Schema.Int.check(
   Schema.isBetween({
     minimum: MIN_AGENT_PARALLEL_WORKERS,
@@ -25,6 +28,33 @@ export const AgentMaxParallelWorkers = Schema.Int.check(
   }),
 );
 export type AgentMaxParallelWorkers = typeof AgentMaxParallelWorkers.Type;
+
+// The retired "No limit" was a stored null; it reads as the default so one old
+// value never resets the rest of the settings.
+const PersistedParallelWorkers = Schema.NullOr(AgentMaxParallelWorkers).pipe(
+  Schema.decodeTo(
+    AgentMaxParallelWorkers,
+    SchemaTransformation.transform({
+      decode: (value) => value ?? DEFAULT_AGENT_PARALLEL_WORKERS,
+      encode: (value) => value,
+    }),
+  ),
+);
+
+export const MIN_AGENT_DELEGATION_DEPTH = 1;
+export const MAX_AGENT_DELEGATION_DEPTH = 6;
+export const DEFAULT_AGENT_DELEGATION_DEPTH = 2;
+/**
+ * Levels of workers below the thread's agent. Its workers are level 1; at
+ * depth 1 they cannot delegate, at depth 2 they may start workers that cannot.
+ */
+export const AgentMaxDelegationDepth = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_AGENT_DELEGATION_DEPTH,
+    maximum: MAX_AGENT_DELEGATION_DEPTH,
+  }),
+);
+export type AgentMaxDelegationDepth = typeof AgentMaxDelegationDepth.Type;
 
 /** Review passes over the workers' combined result. `agent` leaves it to the agent. */
 export const AgentReviewRounds = Schema.Literals(["agent", "once", "until-clean"]);
@@ -65,13 +95,15 @@ export const AgentProviderInstructions = Schema.Record(Schema.String, TrimmedStr
 export type AgentProviderInstructions = typeof AgentProviderInstructions.Type;
 
 const NullableModelSelection = Schema.NullOr(ModelSelection);
-const NullableParallelWorkers = Schema.NullOr(AgentMaxParallelWorkers);
 const NullableWorkerTimeLimit = Schema.NullOr(AgentWorkerTimeLimitMinutes);
 
-/** `ServerSettings` fields with their defaults; every default adds no instructions. */
+/**
+ * `ServerSettings` fields with their defaults. Delegation defaults to When
+ * useful; every other default adds no instructions of its own.
+ */
 export const AgentSettingsFields = {
   agentDelegationMode: AgentDelegationMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed("off" as const)),
+    Schema.withDecodingDefault(Effect.succeed("auto" as const)),
   ),
   agentWorkerModelSelection: NullableModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
@@ -82,10 +114,12 @@ export const AgentSettingsFields = {
   agentResearchWorkerModelSelection: NullableModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
-  agentMaxParallelWorkers: NullableParallelWorkers.pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
+  agentMaxParallelWorkers: PersistedParallelWorkers.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_PARALLEL_WORKERS)),
   ),
-  agentWorkersCanDelegate: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  agentMaxDelegationDepth: AgentMaxDelegationDepth.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_DELEGATION_DEPTH)),
+  ),
   agentReadOnlyReviewers: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   agentReviewRounds: AgentReviewRounds.pipe(
     Schema.withDecodingDefault(Effect.succeed("agent" as const)),
@@ -120,8 +154,8 @@ export const AgentSettingsOptionalFields = {
   agentWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
   agentReviewWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
   agentResearchWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
-  agentMaxParallelWorkers: Schema.optionalKey(NullableParallelWorkers),
-  agentWorkersCanDelegate: Schema.optionalKey(Schema.Boolean),
+  agentMaxParallelWorkers: Schema.optionalKey(PersistedParallelWorkers),
+  agentMaxDelegationDepth: Schema.optionalKey(AgentMaxDelegationDepth),
   agentReadOnlyReviewers: Schema.optionalKey(Schema.Boolean),
   agentReviewRounds: Schema.optionalKey(AgentReviewRounds),
   agentOrchestratorOwnsGit: Schema.optionalKey(Schema.Boolean),
@@ -176,7 +210,7 @@ export const AGENT_PROJECT_SCOPED_SETTING_KEYS = [
   "agentReviewWorkerModelSelection",
   "agentResearchWorkerModelSelection",
   "agentMaxParallelWorkers",
-  "agentWorkersCanDelegate",
+  "agentMaxDelegationDepth",
   "agentReadOnlyReviewers",
   "agentReviewRounds",
   "agentOrchestratorOwnsGit",
@@ -196,7 +230,6 @@ export const AGENT_NULLABLE_PROJECT_SETTING_KEYS = [
   "agentWorkerModelSelection",
   "agentReviewWorkerModelSelection",
   "agentResearchWorkerModelSelection",
-  "agentMaxParallelWorkers",
   "agentWorkerTimeLimitMinutes",
 ] as const satisfies ReadonlyArray<keyof typeof AgentSettingsFields>;
 
@@ -326,9 +359,7 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
     anyTarget
       ? "- Set role on every delegate_task. Leave out target and T3 uses the target for that role."
       : null,
-    settings.agentMaxParallelWorkers === null
-      ? null
-      : `- Run at most ${settings.agentMaxParallelWorkers} ${settings.agentMaxParallelWorkers === 1 ? "worker" : "workers"} at once; T3 refuses more.`,
+    `- At most ${settings.agentMaxParallelWorkers} ${settings.agentMaxParallelWorkers === 1 ? "worker runs" : "workers run"} at once under the thread's agent, counting workers that workers start; T3 refuses more.`,
     "- Give each worker one short, scoped task with the files it owns, the files it must not touch, and what done means. Ask for a short report: changed files, what was verified, open questions.",
     settings.agentReadOnlyReviewers
       ? "- Review and research workers only read: they never edit files, commit, or push. Hand their findings to an implementation worker or fix them yourself."
@@ -351,9 +382,9 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
       : settings.agentPushPolicy === "never"
         ? "- Workers never commit or push."
         : "- You handle git and publishing; workers never commit or push.",
-    settings.agentWorkersCanDelegate
-      ? "- If your task came from delegate_task, delegate only pieces that clearly split off, under these same rules."
-      : "- If your task came from delegate_task, do it yourself and never delegate.",
+    settings.agentMaxDelegationDepth === 1
+      ? "- If your task came from delegate_task, do it yourself and never delegate."
+      : `- If your task came from delegate_task, you may delegate pieces that clearly split off, under these same rules, up to ${settings.agentMaxDelegationDepth} levels of workers in all. The top of your task says whether you may.`,
   ];
 }
 

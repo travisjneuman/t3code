@@ -29,7 +29,7 @@ export interface ForkAgentScope {
 
 /** What the resolver gets: the scope with the thread's project and ancestors filled in. */
 export interface ForkAgentResolvedScope {
-  /** The thread, then its parent, then its root, when known. */
+  /** The thread, then each known ancestor nearest first, then its root. */
   readonly threadIds: ReadonlyArray<string>;
   readonly projectId: string | undefined;
   readonly provider: string | undefined;
@@ -42,18 +42,47 @@ export interface ForkAgentResolution {
 
 const EMPTY: ForkAgentResolution = { text: "", blockNativeSubagents: false };
 let resolver: (scope: ForkAgentResolvedScope) => ForkAgentResolution = () => EMPTY;
-const knownThreads = new Map<string, { projectId: string; ancestors: ReadonlyArray<string> }>();
+const knownThreads = new Map<
+  string,
+  { projectId: string; parentThreadId: string | undefined; rootThreadId: string | undefined }
+>();
+// Deeper than any worker level, so a bad record cannot loop forever.
+const MAX_ANCESTOR_WALK = 16;
 
 export function setForkAgentResolver(next: (scope: ForkAgentResolvedScope) => ForkAgentResolution) {
   resolver = next;
 }
 
-/** Records a thread's project and root so later lookups by id alone resolve. */
+function otherThreadId(id: string | null | undefined, self: string): string | undefined {
+  return typeof id === "string" && id !== self ? id : undefined;
+}
+
+/** Records a thread's project, parent, and root so later lookups by id alone resolve. */
 export function rememberForkAgentThread(thread: ForkAgentThread): void {
-  const ancestors = [thread.lineage?.parentThreadId, thread.lineage?.rootThreadId].filter(
-    (id): id is string => typeof id === "string" && id !== thread.id,
-  );
-  knownThreads.set(thread.id, { projectId: thread.projectId, ancestors });
+  knownThreads.set(thread.id, {
+    projectId: thread.projectId,
+    parentThreadId: otherThreadId(thread.lineage?.parentThreadId, thread.id),
+    rootThreadId: otherThreadId(thread.lineage?.rootThreadId, thread.id),
+  });
+}
+
+/** The thread's ancestors, nearest first, through every remembered parent, then its root. */
+function ancestorsOf(threadId: string): ReadonlyArray<string> {
+  const ancestors: string[] = [];
+  const own = knownThreads.get(threadId);
+  let parentId = own?.parentThreadId;
+  while (
+    parentId !== undefined &&
+    parentId !== threadId &&
+    !ancestors.includes(parentId) &&
+    ancestors.length < MAX_ANCESTOR_WALK
+  ) {
+    ancestors.push(parentId);
+    parentId = knownThreads.get(parentId)?.parentThreadId;
+  }
+  const rootId = own?.rootThreadId;
+  if (rootId !== undefined && !ancestors.includes(rootId)) ancestors.push(rootId);
+  return ancestors;
 }
 
 function resolve(scope: ForkAgentScope): ForkAgentResolution {
@@ -61,7 +90,7 @@ function resolve(scope: ForkAgentScope): ForkAgentResolution {
   const threadId = scope.thread?.id ?? scope.threadId;
   const known = threadId === undefined ? undefined : knownThreads.get(threadId);
   return resolver({
-    threadIds: threadId === undefined ? [] : [threadId, ...(known?.ancestors ?? [])],
+    threadIds: threadId === undefined ? [] : [threadId, ...ancestorsOf(threadId)],
     projectId: scope.thread?.projectId ?? scope.projectId ?? known?.projectId,
     provider: scope.provider,
   });

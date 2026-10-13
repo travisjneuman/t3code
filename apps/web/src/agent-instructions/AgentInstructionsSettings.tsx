@@ -2,7 +2,7 @@
  * Settings, General, Agents: how agents T3 Code runs delegate work, how they
  * verify, ask and report, plus free-form and per-provider instructions. The
  * server builds the instructions every provider receives from these rows and
- * enforces the worker target, worker limit, nested delegation, worker worktrees
+ * enforces the worker target, worker limit, delegation depth, worker worktrees
  * and time limits on delegate_task; each row takes project overrides through
  * the settings scope picker. Presets copy a named set of these values in.
  * Fork add-on: agent instructions.
@@ -15,8 +15,10 @@ import {
   type AgentReviewRounds,
   type AgentVerification,
   type AgentWorkerWorkspace,
-  MAX_AGENT_PARALLEL_WORKERS,
-  MIN_AGENT_PARALLEL_WORKERS,
+  DEFAULT_AGENT_DELEGATION_DEPTH,
+  DEFAULT_AGENT_PARALLEL_WORKERS,
+  MAX_AGENT_DELEGATION_DEPTH,
+  MIN_AGENT_DELEGATION_DEPTH,
 } from "@t3tools/contracts";
 import { useRef } from "react";
 
@@ -45,6 +47,7 @@ import { EMPTY_SERVER_PROVIDERS } from "../state/server";
 import { AgentInstructionsPreview } from "./AgentInstructionsPreview";
 import { AgentPresetsControl } from "./AgentPresetsControl";
 import { ChoiceSelect } from "./ChoiceSelect";
+import { ParallelWorkersControl } from "./ParallelWorkersControl";
 import { ProviderInstructionsControl } from "./ProviderInstructionsControl";
 import { WorkerModelControl } from "./WorkerModelControl";
 
@@ -55,16 +58,41 @@ const DELEGATION_OPTIONS: ReadonlyArray<readonly [AgentDelegationMode, string]> 
 ];
 
 const NO_LIMIT = "none";
-const PARALLEL_WORKER_OPTIONS: ReadonlyArray<readonly [string, string]> = [
-  [NO_LIMIT, "No limit"],
-  ...Array.from(
-    { length: MAX_AGENT_PARALLEL_WORKERS - MIN_AGENT_PARALLEL_WORKERS + 1 },
-    (_, index) => {
-      const value = String(MIN_AGENT_PARALLEL_WORKERS + index);
-      return [value, value] as const;
-    },
-  ),
-];
+
+const DELEGATION_DEPTH_OPTIONS: ReadonlyArray<readonly [string, string]> = Array.from(
+  { length: MAX_AGENT_DELEGATION_DEPTH - MIN_AGENT_DELEGATION_DEPTH + 1 },
+  (_, index) => {
+    const depth = MIN_AGENT_DELEGATION_DEPTH + index;
+    return [String(depth), depth === 1 ? "1 level" : `${depth} levels`] as const;
+  },
+);
+
+// Rough per-worker memory: each worker is a full provider CLI process.
+const WORKER_MEMORY_GB = { low: 0.3, high: 0.5 };
+// Past this many workers in one checkout, edits to the same file get likely.
+const SHARED_CHECKOUT_COMFORT = 12;
+
+function formatGb(value: number): string {
+  return value < 10 ? value.toFixed(1).replace(/\.0$/, "") : String(Math.round(value));
+}
+
+/** The Parallel workers row's note: what the count means and what it costs. */
+function parallelWorkersNote(count: number | null, sharedCheckout: boolean): string {
+  const parts = [
+    "Most workers running at once under one thread's agent, counting workers that workers start. T3 refuses a delegation past the limit.",
+  ];
+  if (count !== null) {
+    parts.push(
+      `${count} at once is roughly ${formatGb(count * WORKER_MEMORY_GB.low)}–${formatGb(count * WORKER_MEMORY_GB.high)} GB of memory, since each worker is a full agent process${count > 1 ? `, and can use your plan's limits up to ${count}× as fast as one agent` : ""}.`,
+    );
+    if (sharedCheckout && count > SHARED_CHECKOUT_COMFORT) {
+      parts.push(
+        "Workers share one checkout, so more of them means more chance two edit the same file.",
+      );
+    }
+  }
+  return parts.join(" ");
+}
 
 const WORKER_WORKSPACE_OPTIONS: ReadonlyArray<readonly [AgentWorkerWorkspace, string]> = [
   ["shared", "Shared checkout"],
@@ -123,7 +151,7 @@ export function AgentInstructionsSettingsSection() {
   const mixedReportStyle = useScopedSettingsMixed(["agentReportStyle"]);
   const mixedReviewRounds = useScopedSettingsMixed(["agentReviewRounds"]);
   const mixedReadOnly = useScopedSettingsMixed(["agentReadOnlyReviewers"]);
-  const mixedNested = useScopedSettingsMixed(["agentWorkersCanDelegate"]);
+  const mixedDepth = useScopedSettingsMixed(["agentMaxDelegationDepth"]);
   const mixedGit = useScopedSettingsMixed(["agentOrchestratorOwnsGit"]);
   const mixedVerification = useScopedSettingsMixed(["agentVerification"]);
   const mixedPushPolicy = useScopedSettingsMixed(["agentPushPolicy"]);
@@ -161,10 +189,10 @@ export function AgentInstructionsSettingsSection() {
         {...searchableSetting("agent-delegation")}
         description="How the thread's agent hands work to other agents with delegate_task. These rules win over conflicting CLAUDE.md or AGENTS.md rules."
         resetAction={
-          settings.agentDelegationMode !== "off" ? (
+          settings.agentDelegationMode !== "auto" ? (
             <SettingResetButton
               label="delegation"
-              onClick={() => updateSettings({ agentDelegationMode: "off" })}
+              onClick={() => updateSettings({ agentDelegationMode: "auto" })}
             />
           ) : null
         }
@@ -232,25 +260,49 @@ export function AgentInstructionsSettingsSection() {
             serverScoped
             settingKeys={["agentMaxParallelWorkers"]}
             {...searchableSetting("agent-parallel-workers")}
-            description="Most workers one agent runs at once. T3 refuses a delegation past the limit."
+            description={parallelWorkersNote(
+              mixedParallel ? null : settings.agentMaxParallelWorkers,
+              settings.agentWorkerWorkspace === "shared",
+            )}
             resetAction={
-              settings.agentMaxParallelWorkers !== null ? (
+              settings.agentMaxParallelWorkers !== DEFAULT_AGENT_PARALLEL_WORKERS ? (
                 <SettingResetButton
                   label="parallel workers"
-                  onClick={() => updateSettings({ agentMaxParallelWorkers: null })}
+                  onClick={() =>
+                    updateSettings({ agentMaxParallelWorkers: DEFAULT_AGENT_PARALLEL_WORKERS })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <ParallelWorkersControl
+                value={mixedParallel ? null : settings.agentMaxParallelWorkers}
+                onChange={(value) => updateSettings({ agentMaxParallelWorkers: value })}
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentMaxDelegationDepth"]}
+            {...searchableSetting("agent-delegation-depth")}
+            description="Levels of workers. 1: only the thread's agent starts workers. 2: its workers may start their own, which can't go further. Each step adds a level, and workers decide for themselves whether to delegate. Parallel workers counts every level."
+            resetAction={
+              settings.agentMaxDelegationDepth !== DEFAULT_AGENT_DELEGATION_DEPTH ? (
+                <SettingResetButton
+                  label="delegation depth"
+                  onClick={() =>
+                    updateSettings({ agentMaxDelegationDepth: DEFAULT_AGENT_DELEGATION_DEPTH })
+                  }
                 />
               ) : null
             }
             control={
               <ChoiceSelect
-                value={mixedParallel ? null : String(settings.agentMaxParallelWorkers ?? NO_LIMIT)}
-                options={PARALLEL_WORKER_OPTIONS}
-                ariaLabel="Parallel workers"
-                onChange={(value) =>
-                  updateSettings({
-                    agentMaxParallelWorkers: value === NO_LIMIT ? null : Number(value),
-                  })
-                }
+                value={mixedDepth ? null : String(settings.agentMaxDelegationDepth)}
+                options={DELEGATION_DEPTH_OPTIONS}
+                ariaLabel="Delegation depth"
+                onChange={(value) => updateSettings({ agentMaxDelegationDepth: Number(value) })}
               />
             }
           />
@@ -351,31 +403,6 @@ export function AgentInstructionsSettingsSection() {
                   updateSettings({ agentReadOnlyReviewers: Boolean(checked) })
                 }
                 aria-label="Read-only reviewers"
-              />
-            }
-          />
-
-          <SettingsRow
-            serverScoped
-            settingKeys={["agentWorkersCanDelegate"]}
-            {...searchableSetting("agent-workers-can-delegate")}
-            description="Let workers hand off parts of their own task. Off, T3 refuses delegate_task from a worker."
-            resetAction={
-              settings.agentWorkersCanDelegate ? (
-                <SettingResetButton
-                  label="workers can delegate"
-                  onClick={() => updateSettings({ agentWorkersCanDelegate: false })}
-                />
-              ) : null
-            }
-            control={
-              <Switch
-                mixed={mixedNested}
-                checked={mixedNested ? false : settings.agentWorkersCanDelegate}
-                onCheckedChange={(checked) =>
-                  updateSettings({ agentWorkersCanDelegate: Boolean(checked) })
-                }
-                aria-label="Workers can delegate"
               />
             }
           />
