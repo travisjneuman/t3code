@@ -1,5 +1,9 @@
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
+import {
+  sessionInsightText,
+  sessionMcpServer,
+} from "@t3tools/provider-core/server/sessionInsights";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import {
   mcpToolPresentation,
@@ -68,6 +72,7 @@ import type {
   ProviderInstanceId,
   RuntimeMode,
   RuntimeRequestId,
+  SessionMcpServer,
   ThreadId,
 } from "@t3tools/contracts";
 import * as CodexClient from "effect-codex-app-server/client";
@@ -853,6 +858,46 @@ function getNativeThreadId(providerThread: OrchestrationV2ProviderThread) {
     return nativeThreadId;
   });
 }
+
+type CodexMcpServerStatus = CodexSchema.V2ListMcpServerStatusResponse__McpServerStatus;
+
+function codexMcpServerStatus(server: CodexMcpServerStatus): SessionMcpServer["status"] {
+  switch (server.runtimeStatus) {
+    case "connected":
+      return "connected";
+    case "notStarted":
+    case "starting":
+      return "pending";
+    case "authenticationRequired":
+      return "needs-auth";
+    case "failed":
+    case "cancelled":
+      return "failed";
+    case "disabled":
+      return "disabled";
+    case null:
+    case undefined:
+      // Older app servers report no runtime status; infer it from what the
+      // listing did include.
+      if (server.authStatus === "notLoggedIn") return "needs-auth";
+      if (sessionInsightText(server.toolsError) !== undefined) return "failed";
+      return Object.keys(server.tools).length > 0 ? "connected" : "pending";
+  }
+}
+
+function codexSessionMcpServer(server: CodexMcpServerStatus): SessionMcpServer | undefined {
+  const toolsError = sessionInsightText(server.toolsError);
+  return sessionMcpServer({
+    name: server.name,
+    status: codexMcpServerStatus(server),
+    error: toolsError,
+    version: server.serverInfo?.version,
+    ...(toolsError === undefined ? { toolCount: Object.keys(server.tools).length } : {}),
+  });
+}
+
+/** Pages a session's MCP server listing may span before the rest is dropped. */
+const CODEX_MCP_SERVER_STATUS_MAX_PAGES = 10;
 
 function providerThreadFromCodexThread(input: {
   readonly appThreadId: ThreadId | null;
@@ -6443,6 +6488,29 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return { contents: response.contents };
             }).pipe(Effect.mapError(mcpAppsError("Codex MCP resource read failed."))),
         };
+        const sessionInsights: ProviderAdapter.ProviderAdapterV2SessionInsights = {
+          mcpServers: ({ providerThread }) =>
+            Effect.gen(function* () {
+              const threadId = yield* getNativeThreadId(providerThread);
+              yield* ensureInitialized;
+              const servers: Array<SessionMcpServer> = [];
+              let cursor: string | undefined;
+              for (let page = 0; page < CODEX_MCP_SERVER_STATUS_MAX_PAGES; page++) {
+                const response = yield* client.request("mcpServerStatus/list", {
+                  threadId,
+                  detail: "toolsAndAuthOnly",
+                  ...(cursor === undefined ? {} : { cursor }),
+                });
+                for (const entry of response.data) {
+                  const server = codexSessionMcpServer(entry);
+                  if (server !== undefined) servers.push(server);
+                }
+                cursor = response.nextCursor ?? undefined;
+                if (cursor === undefined) break;
+              }
+              return servers;
+            }).pipe(Effect.mapError(mcpAppsError("Failed to list Codex MCP servers."))),
+        };
 
         const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,
@@ -7195,6 +7263,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               ),
             ),
           mcpApps,
+          sessionInsights,
           readThreadSnapshot: (threadInput) =>
             Effect.gen(function* () {
               const threadId = yield* getNativeThreadId(threadInput.providerThread);

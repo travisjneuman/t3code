@@ -15,6 +15,7 @@ import {
 
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { normalizeClaudeTurnTokenUsage } from "../../provider/ClaudeTurnTokenUsage.ts";
+import { claudeContextBreakdown, claudeMcpServers } from "./claudeSessionInsights.ts";
 import {
   type CanUseTool,
   forkSession as forkClaudeSession,
@@ -22,6 +23,7 @@ import {
   type ForkSessionOptions,
   type ForkSessionResult,
   getSubagentMessages,
+  type McpServerStatus,
   query,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
@@ -33,6 +35,7 @@ import {
   type SpawnedProcess as ClaudeSpawnedProcess,
   type SDKAssistantMessage,
   type SDKAPIRetryMessage,
+  type SDKControlGetContextUsageResponse,
   type SDKMessage,
   type SDKRateLimitInfo,
   type SDKResultMessage,
@@ -429,6 +432,16 @@ export interface ClaudeAgentSdkQuerySession {
     mode: PermissionMode,
   ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly stopTask: (taskId: string) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
+  /** The /context breakdown of the live session. Optional so test fakes can omit it. */
+  readonly getContextUsage?: Effect.Effect<
+    SDKControlGetContextUsageResponse,
+    ClaudeAgentSdkQueryRunnerError
+  >;
+  /** The live session's MCP servers. Optional so test fakes can omit it. */
+  readonly mcpServerStatus?: Effect.Effect<
+    ReadonlyArray<McpServerStatus>,
+    ClaudeAgentSdkQueryRunnerError
+  >;
   readonly interrupt: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly close: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
 }
@@ -590,6 +603,22 @@ export type ClaudeAgentSdkProtocolLogEvent =
       readonly payload: {
         readonly type: "query.stop_task";
         readonly taskId: string;
+      };
+    }
+  | {
+      readonly direction: "outgoing";
+      readonly stage: "decoded";
+      readonly payload: {
+        readonly type: "query.get_context_usage";
+        readonly detail: "summary";
+      };
+    }
+  | {
+      readonly direction: "outgoing";
+      readonly stage: "decoded";
+      readonly payload: {
+        readonly type: "query.mcp_server_status";
+        readonly count: number;
       };
     }
   | {
@@ -925,6 +954,32 @@ export const layerQueryRunner: Layer.Layer<
                 }),
               ),
             ),
+          getContextUsage: Effect.tryPromise({
+            try: () => queryRuntime.getContextUsage({ detail: "summary" }),
+            catch: (cause) => queryRunnerError(cause, "getContextUsage"),
+          }).pipe(
+            Effect.tap(() =>
+              logProtocolEvent({
+                direction: "outgoing",
+                stage: "decoded",
+                payload: { type: "query.get_context_usage", detail: "summary" },
+              }),
+            ),
+          ),
+          // The status rows carry each server's config, headers included, so
+          // only the count is logged.
+          mcpServerStatus: Effect.tryPromise({
+            try: () => queryRuntime.mcpServerStatus(),
+            catch: (cause) => queryRunnerError(cause, "mcpServerStatus"),
+          }).pipe(
+            Effect.tap((servers) =>
+              logProtocolEvent({
+                direction: "outgoing",
+                stage: "decoded",
+                payload: { type: "query.mcp_server_status", count: servers.length },
+              }),
+            ),
+          ),
           interrupt: Effect.tryPromise({
             try: () => queryRuntime.interrupt(),
             catch: (cause) => queryRunnerError(cause, "interrupt"),
@@ -9115,6 +9170,30 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         });
         yield* Effect.addFinalizer(() => closeSession());
 
+        // Session insights read only the query running this provider thread;
+        // a stopped or replaced query has nothing current to report.
+        const liveInsightsQuery = (providerThread: OrchestrationV2ProviderThread) =>
+          Effect.gen(function* () {
+            const liveQuery = yield* Ref.get(queryContext);
+            if (
+              liveQuery === null ||
+              liveQuery.stopping ||
+              liveQuery.nativeThreadId !== providerThread.nativeThreadRef?.nativeId
+            ) {
+              return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                driver: CLAUDE_PROVIDER,
+                detail: "No live Claude query belongs to this provider thread",
+              });
+            }
+            return liveQuery.query;
+          });
+        const insightsRequestError = (detail: string) => (cause: ClaudeAgentSdkQueryRunnerError) =>
+          new ProviderAdapter.ProviderAdapterProtocolError({
+            driver: CLAUDE_PROVIDER,
+            detail,
+            cause,
+          });
+
         const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,
           driver: CLAUDE_PROVIDER,
@@ -9252,6 +9331,33 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ),
               );
             }),
+          sessionInsights: {
+            contextBreakdown: ({ providerThread }) =>
+              Effect.gen(function* () {
+                const liveQuery = yield* liveInsightsQuery(providerThread);
+                if (liveQuery.getContextUsage === undefined) {
+                  return null;
+                }
+                const usage = yield* liveQuery.getContextUsage.pipe(
+                  Effect.mapError(insightsRequestError("Context usage request failed")),
+                );
+                return claudeContextBreakdown(usage);
+              }),
+            mcpServers: ({ providerThread }) =>
+              Effect.gen(function* () {
+                const liveQuery = yield* liveInsightsQuery(providerThread);
+                if (liveQuery.mcpServerStatus === undefined) {
+                  return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                    driver: CLAUDE_PROVIDER,
+                    detail: "Claude query does not report MCP server status",
+                  });
+                }
+                const servers = yield* liveQuery.mcpServerStatus.pipe(
+                  Effect.mapError(insightsRequestError("MCP server status request failed")),
+                );
+                return claudeMcpServers(servers);
+              }),
+          },
           interruptTurn,
           stopSubagent: Effect.fn("ClaudeAdapterV2.stopSubagent")(function* (input) {
             const existing = yield* Ref.get(queryContext);

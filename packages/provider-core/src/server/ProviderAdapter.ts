@@ -1,4 +1,8 @@
-import type { OrchestrationV2HistoricalMessage } from "@t3tools/contracts";
+import type {
+  OrchestrationV2HistoricalMessage,
+  SessionContextBreakdown,
+  SessionMcpServer,
+} from "@t3tools/contracts";
 import {
   ChatAttachment,
   CheckpointId,
@@ -533,6 +537,20 @@ export interface ProviderAdapterV2McpApps {
   }) => Effect.Effect<{ readonly contents: ReadonlyArray<unknown> }, ProviderAdapterV2Error>;
 }
 
+/**
+ * What a live session reports about itself, read on demand. Each method is
+ * optional: a provider implements only what its protocol exposes.
+ */
+export interface ProviderAdapterV2SessionInsights {
+  /** Null when the session cannot report a breakdown right now. */
+  readonly contextBreakdown?: (input: {
+    readonly providerThread: OrchestrationV2ProviderThread;
+  }) => Effect.Effect<SessionContextBreakdown | null, ProviderAdapterV2Error>;
+  readonly mcpServers?: (input: {
+    readonly providerThread: OrchestrationV2ProviderThread;
+  }) => Effect.Effect<ReadonlyArray<SessionMcpServer>, ProviderAdapterV2Error>;
+}
+
 /** A terminal task outcome observed by the provider, not inferred from a stop timeout. */
 export type ProviderAdapterV2SubagentOutcome = {
   readonly status: "completed" | "failed" | "cancelled";
@@ -654,6 +672,11 @@ export interface ProviderAdapterV2SessionRuntime {
    * provider are not interactive and their tool calls stay plain tool rows.
    */
   readonly mcpApps?: ProviderAdapterV2McpApps;
+  /**
+   * The context breakdown and MCP server list a session sidebar shows, read
+   * from the live native session. Absent means the provider reports neither.
+   */
+  readonly sessionInsights?: ProviderAdapterV2SessionInsights;
   readonly rollbackThread: (
     input: ProviderAdapterV2RollbackThreadInput,
   ) => Effect.Effect<ProviderAdapterV2ThreadSnapshot, ProviderAdapterV2Error>;
