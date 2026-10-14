@@ -1,3 +1,6 @@
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import type {
   McpServerStatus,
   SDKControlGetContextUsageResponse,
@@ -63,6 +66,14 @@ const mcpToolName = (name: string, serverName: string): string => {
   return name.startsWith(prefix) && name.length > prefix.length ? name.slice(prefix.length) : name;
 };
 
+/** Memory files under the server's home read as `~/...`, as Claude Desktop shows them. */
+const homeRelativePath = (path: string): string => {
+  const home = NodeOS.homedir();
+  return home.length > 1 && path.startsWith(home + NodePath.sep)
+    ? `~${path.slice(home.length)}`
+    : path;
+};
+
 /**
  * Skill rows name the plugin that ships them at runtime, a field the SDK's
  * types do not declare yet.
@@ -99,7 +110,7 @@ export const claudeContextBreakdown = (
         : contributor(mcpToolName(tool.name, tool.serverName), tool.serverName, tool.tokens),
     ),
     memoryFiles: contributors(usage.memoryFiles, (file) =>
-      contributor(file.path, file.type, file.tokens),
+      contributor(homeRelativePath(file.path), file.type, file.tokens),
     ),
     agents: contributors(usage.agents, (agent) =>
       contributor(agent.agentType, agent.source, agent.tokens),
