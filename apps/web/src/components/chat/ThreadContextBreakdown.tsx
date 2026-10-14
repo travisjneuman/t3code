@@ -172,7 +172,9 @@ function ContextCategoryRows(props: { readonly view: ContextBreakdownView }) {
               <>
                 <ThreadDetailsStatusDot className={row.colorClassName ?? "bg-transparent"} />
                 <span className="truncate">
-                  {row.kind === "deferred" ? `${row.name} (deferred)` : row.name}
+                  {row.kind === "deferred" && !/\(deferred\)/i.test(row.name)
+                    ? `${row.name} (deferred)`
+                    : row.name}
                 </span>
               </>
             }
