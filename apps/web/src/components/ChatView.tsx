@@ -11346,6 +11346,12 @@ export default function ChatView(props: ChatViewProps) {
     onAddProjectScript: saveProjectScript,
     onUpdateProjectScript: updateProjectScript,
     onDeleteProjectScript: deleteProjectScript,
+    // Fork add-on: session details in the full card.
+    contextWindow: activeContextWindow,
+    ...(manualCompactionProviderAvailable
+      ? { onCompactContext: onComposerCompactContext, compactDisabled, compactDisabledReason }
+      : {}),
+    ...(isServerThread ? { onOpenTurnDiff } : {}),
   };
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,

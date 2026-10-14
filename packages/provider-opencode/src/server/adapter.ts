@@ -1,5 +1,6 @@
 import type {
   Event as OpenCodeEvent,
+  McpStatus as OpenCodeMcpStatus,
   Message as OpenCodeMessage,
   Part as OpenCodePart,
   PermissionRequest,
@@ -34,6 +35,7 @@ import {
   type ProviderRequestKind,
   type ProviderSessionId,
   type RuntimeRequestId,
+  type SessionMcpServer,
   type ThreadId,
 } from "@t3tools/contracts";
 import { OpenCodeSettings } from "../settings.ts";
@@ -56,6 +58,7 @@ import * as Stream from "effect/Stream";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { mcpToolPresentation } from "@t3tools/provider-core/server/mcpToolPresentation";
+import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import {
@@ -924,6 +927,22 @@ function isOpenCodeNotFound(cause: unknown): boolean {
     }
   }
   return false;
+}
+
+function openCodeMcpServers(statuses: {
+  readonly [name: string]: OpenCodeMcpStatus;
+}): ReadonlyArray<SessionMcpServer> {
+  return Object.entries(statuses).flatMap(([name, status]) => {
+    const server = sessionMcpServer({
+      name,
+      status:
+        status.status === "needs_auth" || status.status === "needs_client_registration"
+          ? "needs-auth"
+          : status.status,
+      error: "error" in status ? status.error : undefined,
+    });
+    return server === undefined ? [] : [server];
+  });
 }
 
 function unwrapData<A>(operation: string, result: { readonly data?: A }): NonNullable<A> {
@@ -3700,6 +3719,25 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   }),
               ),
             ),
+          // The client is bound to the session's directory, so this lists the
+          // servers every thread of the session runs with. Not logged: status
+          // errors can echo a server's configured headers.
+          sessionInsights: {
+            mcpServers: () =>
+              OpenCodeRuntime.runOpenCodeSdk("mcp.status", (signal) =>
+                client.mcp.status(undefined, { signal, throwOnError: true }),
+              ).pipe(
+                Effect.map((response) => openCodeMcpServers(response.data ?? {})),
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapter.ProviderAdapterProtocolError({
+                      driver: OPENCODE_PROVIDER,
+                      detail: "OpenCode MCP status request failed",
+                      cause,
+                    }),
+                ),
+              ),
+          },
         };
 
         return runtimeSession;

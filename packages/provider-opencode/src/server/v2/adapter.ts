@@ -55,6 +55,7 @@ import {
   type ProviderInstanceId,
   type RunId,
   type RuntimeRequestId,
+  type SessionMcpServer,
 } from "@t3tools/contracts";
 import type * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -98,6 +99,7 @@ import {
 } from "@t3tools/provider-core/server/subagentProjection";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
+import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights";
 import { OPENCODE_PROVIDER, openCodePermissionRequestKind } from "../adapter.ts";
 import { openCodeToolTurnItem } from "../toolItems.ts";
 
@@ -640,6 +642,17 @@ const sessionIdOf = (providerThread: OrchestrationV2ProviderThread) => {
       )
     : Effect.succeed(nativeId);
 };
+
+const sessionMcpServers = (servers: ReadonlyArray<Mcp.Server>): ReadonlyArray<SessionMcpServer> =>
+  servers.flatMap((server) => {
+    const status = server.status;
+    const mapped = sessionMcpServer({
+      name: server.name,
+      status: status.status === "needs_auth" ? "needs-auth" : status.status,
+      error: "error" in status ? status.error : undefined,
+    });
+    return mapped === undefined ? [] : [mapped];
+  });
 
 const textOf = (content: ReadonlyArray<{ readonly type: string; readonly text?: string }>) =>
   content.flatMap((part) => (part.type === "text" && part.text ? [part.text] : [])).join("\n");
@@ -3779,6 +3792,34 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           const state = nativeId == null ? undefined : threads.get(nativeId);
           return state !== undefined && hasBackground(state);
         }),
+      // MCP servers are configured per location, so a thread lists those of
+      // the directory its session runs in.
+      sessionInsights: {
+        mcpServers: ({ providerThread }) =>
+          Effect.gen(function* () {
+            const sessionId = yield* sessionIdOf(providerThread);
+            const state = threads.get(sessionId);
+            if (state === undefined) {
+              return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                driver: OPENCODE_PROVIDER,
+                detail: `OpenCode session ${sessionId} is not open in this provider session`,
+              });
+            }
+            const response = yield* client.mcp
+              .list({ location: { directory: state.directory } })
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapter.ProviderAdapterProtocolError({
+                      driver: OPENCODE_PROVIDER,
+                      detail: "OpenCode MCP server list failed",
+                      cause,
+                    }),
+                ),
+              );
+            return sessionMcpServers(response.data);
+          }),
+      },
       // A caller that names no directory gets the one this session opened in.
       getModelContextWindow: (selection, cwd) =>
         selection.instanceId === instanceId

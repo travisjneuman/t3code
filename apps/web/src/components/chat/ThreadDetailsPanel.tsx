@@ -3,11 +3,13 @@ import type {
   EnvironmentId,
   ProjectScript,
   ResolvedKeybindingsConfig,
+  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 
 import type { DraftId } from "../../composerDraftStore";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
+import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
 import BaseGitActionsControl from "../GitActionsControl";
@@ -21,6 +23,7 @@ import { OpenInPicker } from "./OpenInPicker";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
+import { ThreadSessionDetails } from "./ThreadSessionInsightsSection";
 
 const GitActionsControl = memo(BaseGitActionsControl);
 
@@ -62,6 +65,13 @@ export interface ThreadDetailsPanelProps extends Pick<
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  // Fork add-on: session details.
+  contextWindow?: ContextWindowSnapshot | null;
+  /** Present when the provider can compact on request; the button follows the composer's. */
+  onCompactContext?: () => void;
+  compactDisabled?: boolean;
+  compactDisabledReason?: string | null;
+  onOpenTurnDiff?: (runId: RunId, filePath?: string) => void;
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -174,6 +184,19 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
           {density === "full" && !props.draftId ? (
             <ThreadAutomationsPanel environmentId={props.environmentId} threadId={props.threadId} />
+          ) : null}
+
+          {density === "full" && !props.draftId ? (
+            <ThreadSessionDetails
+              environmentId={props.environmentId}
+              threadId={props.threadId}
+              workspaceRoot={props.gitCwd ?? undefined}
+              contextWindow={props.contextWindow ?? null}
+              onCompactContext={props.onCompactContext}
+              compactDisabled={props.compactDisabled ?? true}
+              compactDisabledReason={props.compactDisabledReason ?? null}
+              onOpenTurnDiff={props.onOpenTurnDiff}
+            />
           ) : null}
 
           {density === "full" && !props.draftId ? (
