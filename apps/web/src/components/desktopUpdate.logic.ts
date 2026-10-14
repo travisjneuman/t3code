@@ -74,6 +74,13 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
   const sourceTooltip = SourceUpdate.getSourceUpdateButtonTooltip(state); // Fork add-on: local source updates.
   if (sourceTooltip !== null) return sourceTooltip; // Fork add-on: local source updates.
+  if (
+    state.notAppliedVersion !== undefined &&
+    (state.status === "available" || state.status === "downloaded") &&
+    getDesktopUpdateDownloadedVersion(state) === state.notAppliedVersion
+  ) {
+    return `Update ${state.notAppliedVersion} did not apply. Click to retry.`;
+  }
   if (state.status === "available") {
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
