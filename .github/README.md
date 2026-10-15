@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/travisjneuman/t3code/main/assets/nightly/nightly-web-apple-touch-180.png" width="96" alt="ndev.t3code app icon" />
+<img src="https://raw.githubusercontent.com/travisjneuman/t3code/main/assets/ndev/apple-touch-icon.png" width="96" alt="ndev.t3code app icon" />
 
 # ndev.t3code
 
