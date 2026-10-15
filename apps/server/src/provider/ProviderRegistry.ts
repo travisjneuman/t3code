@@ -208,8 +208,14 @@ export function upsertProviderWorkspaceSnapshot(
   };
 }
 
+// Fork add-on: provider and model brand names. Hermes and Pi report their full catalog when signed in, so a stale row must not outlive it.
+const GATEWAY_INVENTORY_DRIVERS: ReadonlySet<string> = new Set(["hermes", "pi"]); // Fork add-on: provider and model brand names
+
 const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean => {
-  if (provider.driver === ProviderDriverKind.make("acpRegistry")) {
+  if (
+    provider.driver === ProviderDriverKind.make("acpRegistry") ||
+    GATEWAY_INVENTORY_DRIVERS.has(provider.driver) // Fork add-on: provider and model brand names
+  ) {
     // ACP Registry discovery probes return the agent's complete inventory, so
     // a completed probe (ready and authenticated) replaces the model list —
     // otherwise agents that rename or collapse models leave stale entries
