@@ -1343,6 +1343,7 @@ export function ProviderInstanceCard({
         <HermesSettingsSection
           environmentId={environmentId}
           instanceId={instanceId}
+          config={instance.config}
           models={modelsForDisplay}
           hiddenProviders={hiddenHermesProviders}
           onHiddenProvidersChange={updateHiddenHermesProviders}

@@ -67,6 +67,11 @@ export const hermesDashboard = createEnvironmentRpcCommand(connectionAtomRuntime
   tag: HERMES_SESSIONS_WS_METHODS.dashboard,
 });
 
+export const hermesT3Tools = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:hermes-sessions:t3Tools",
+  tag: HERMES_SESSIONS_WS_METHODS.t3Tools,
+});
+
 /** Runs a Hermes command; the value, or null after an error toast titled `failureTitle`. */
 export const runHermes = async <Input, A, E>(
   cmd: AtomCommand<{ readonly environmentId: EnvironmentId; readonly input: Input }, A, E>,

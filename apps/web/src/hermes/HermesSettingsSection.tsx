@@ -1,10 +1,12 @@
 /**
  * Settings › Providers › Hermes Agent: which Hermes providers and models T3
- * offers, plus Hermes's own config, keys and custom endpoints, reached through
- * the server's dashboard proxy. Hermes config is global: Discord, cron and the
- * CLI see every change made here. Fork add-on: Hermes provider.
+ * offers, the T3 tools switch, plus Hermes's own config, keys and custom
+ * endpoints, reached through the server's dashboard proxy. Hermes config is
+ * global: Discord, cron and the CLI see every change made here. Fork add-on:
+ * Hermes provider.
  */
 import type {
+  AdvertisedEndpoint,
   EnvironmentId,
   HermesDashboardInput,
   ProviderInstanceId,
@@ -26,8 +28,11 @@ import {
 import { Switch } from "../components/ui/switch";
 import { toastManager } from "../components/ui/toast";
 import { ensureLocalApi } from "../localApi";
+import { desktopNetworkAccessStateAtom } from "../state/desktopNetworkAccess";
+import { usePrimaryEnvironmentId } from "../state/environments";
+import { useEnvironmentQuery } from "../state/query";
 import { HermesModelsSection } from "./HermesModelsSection";
-import { hermesDashboard, runHermes } from "./hermesSessions";
+import { hermesDashboard, hermesT3Tools, runHermes } from "./hermesSessions";
 
 type Target = { readonly environmentId: EnvironmentId; readonly instanceId: ProviderInstanceId };
 
@@ -54,6 +59,8 @@ const dashboard = async (
 export function HermesSettingsSection(props: {
   readonly environmentId: EnvironmentId;
   readonly instanceId: ProviderInstanceId;
+  /** The instance's stored config, for the T3 tools switch. */
+  readonly config: unknown;
   readonly models: ReadonlyArray<ServerProviderModel>;
   readonly hiddenProviders: ReadonlyArray<string>;
   readonly onHiddenProvidersChange: (next: ReadonlyArray<string>) => void;
@@ -70,6 +77,11 @@ export function HermesSettingsSection(props: {
     [props.environmentId, props.instanceId],
   );
   const id = `provider-instance-${props.instanceId}-hermes`;
+  const t3Tools = isRecord(props.config) && props.config.t3Tools === true;
+  const t3ToolsUrl =
+    isRecord(props.config) && typeof props.config.t3ToolsUrl === "string"
+      ? props.config.t3ToolsUrl
+      : "";
   return (
     <>
       <HermesModelsSection {...props} target={target} />
@@ -78,6 +90,13 @@ export function HermesSettingsSection(props: {
         aria-disabled={props.readOnly || undefined}
         className={props.readOnly ? "grid gap-6 opacity-50 select-none" : "grid gap-6"}
       >
+        <FoldedSettingsSection
+          id={`${id}-t3-tools`}
+          title="T3 tools"
+          summary={t3Tools ? "On · API server only" : "Off"}
+        >
+          <HermesT3Tools target={target} enabled={t3Tools} url={t3ToolsUrl} />
+        </FoldedSettingsSection>
         <FoldedSettingsSection
           id={`${id}-config`}
           title="Hermes config"
@@ -97,6 +116,100 @@ export function HermesSettingsSection(props: {
         </FoldedSettingsSection>
       </div>
     </>
+  );
+}
+
+const isLoopbackHost = (hostname: string) =>
+  hostname === "localhost" || hostname === "[::1]" || hostname.startsWith("127.");
+
+/** The T3 `/mcp` address Hermes is likely to reach: this Mac's Tailscale address first. */
+const suggestedMcpUrl = (
+  endpoints: ReadonlyArray<AdvertisedEndpoint>,
+  isPrimary: boolean,
+): string => {
+  const available = (prefix: string) =>
+    endpoints.find((endpoint) => endpoint.id.startsWith(prefix) && endpoint.status === "available");
+  const endpoint = available("tailscale-magicdns:") ?? available("tailscale-ip:");
+  if (endpoint !== undefined) return new URL("/mcp", endpoint.httpBaseUrl).href;
+  const { protocol, hostname, origin } = window.location;
+  return isPrimary && protocol.startsWith("http") && !isLoopbackHost(hostname)
+    ? `${origin}/mcp`
+    : "";
+};
+
+const isHttpUrl = (text: string) => {
+  try {
+    return ["http:", "https:"].includes(new URL(text).protocol);
+  } catch {
+    return false;
+  }
+};
+
+/** Gives Hermes's API server T3's thread tools at the T3 address Hermes can reach. */
+function HermesT3Tools(props: {
+  readonly target: Target;
+  readonly enabled: boolean;
+  readonly url: string;
+}) {
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const isPrimary = props.target.environmentId === primaryEnvironmentId;
+  const network = useEnvironmentQuery(
+    window.desktopBridge && isPrimary ? desktopNetworkAccessStateAtom : null,
+  );
+  const suggested = suggestedMcpUrl(network.data?.advertisedEndpoints ?? [], isPrimary);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const url = (props.enabled ? props.url : (draft ?? (props.url || suggested))).trim();
+
+  const toggle = async (enabled: boolean) => {
+    const confirmed = await ensureLocalApi().dialogs.confirm(
+      enabled
+        ? "Give Hermes T3 tools?\nT3 adds a t3-code MCP server to Hermes for its API server only, pins Discord, cron, the CLI and every other platform to no MCP servers, and restarts the Hermes gateway, so Discord drops for a moment."
+        : "Take T3 tools away from Hermes?\nT3 removes the t3-code server and its key, puts back each platform's toolsets, and restarts the Hermes gateway, so Discord drops for a moment.",
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    const result = await runHermes(
+      hermesT3Tools,
+      props.target.environmentId,
+      { instanceId: props.target.instanceId, enabled, ...(enabled ? { url } : {}) },
+      enabled ? "Could not turn on T3 tools" : "Could not turn off T3 tools",
+    );
+    setBusy(false);
+    if (result === null) return;
+    setDraft(null);
+    toastManager.add({
+      type: "success",
+      title: enabled ? "T3 tools are on" : "T3 tools are off",
+      description: "The Hermes gateway is restarting.",
+    });
+  };
+
+  return (
+    <SettingsRow
+      title="T3 tools"
+      description="Lets Hermes start and steer T3 coworker threads while one of its T3 threads runs a turn. Only Hermes's API server gets them."
+      control={
+        <div className="flex items-center gap-2">
+          <Input
+            size="sm"
+            className="w-64"
+            placeholder="https://<mac>.ts.net/mcp"
+            aria-label="T3 address Hermes uses"
+            spellCheck={false}
+            disabled={props.enabled || busy}
+            value={url}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <Switch
+            aria-label="T3 tools"
+            checked={props.enabled}
+            disabled={busy || (!props.enabled && !isHttpUrl(url))}
+            onCheckedChange={(checked) => void toggle(checked)}
+          />
+        </div>
+      }
+    />
   );
 }
 

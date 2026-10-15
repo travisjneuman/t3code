@@ -13,6 +13,7 @@ import {
   type HermesSessionsListInput,
   type HermesSessionsUnarchiveInput,
   type HermesSessionsUpdateInput,
+  type HermesT3ToolsInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
@@ -34,5 +35,6 @@ export const makeHandlers = Effect.gen(function* () {
       hermes.unarchive(input),
     [HERMES_SESSIONS_WS_METHODS.dashboard]: (input: HermesDashboardInput) =>
       hermes.dashboard(input),
+    [HERMES_SESSIONS_WS_METHODS.t3Tools]: (input: HermesT3ToolsInput) => hermes.t3Tools(input),
   };
 });

@@ -143,6 +143,9 @@ const HermesProviderCapabilitiesV2 = {
   },
 } satisfies OrchestrationV2ProviderCapabilities;
 
+// Fork add-on: Hermes T3 tools. Added to each run while the T3 tools switch is on.
+const T3_TOOLS_INSTRUCTIONS = `<t3_code_coworkers>You can start T3 Code coworker threads (Codex, Claude, Grok and other agents) through the t3-code MCP tools. Find the project with t3_project_list, pick a model with orchestrator_capabilities, start each coworker with t3_thread_launch giving projectId and modelSelection, then follow it with t3_thread_wait and t3_thread_read, or steer it with t3_thread_send. Coworkers appear in T3 under this thread.</t3_code_coworkers>`;
+
 export interface HermesAdapterV2Options {
   readonly instanceId: ProviderInstanceId;
   readonly settings: HermesSettings;
@@ -226,6 +229,13 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const providerHost = yield* ProviderHost.ProviderHost;
   const connection = HermesApi.connectionOf(options.settings);
+  // Fork add-on: Hermes T3 tools.
+  const capabilities: OrchestrationV2ProviderCapabilities = options.settings.t3Tools
+    ? {
+        ...HermesProviderCapabilitiesV2,
+        tools: { ...HermesProviderCapabilitiesV2.tools, supportsMcpTools: true },
+      }
+    : HermesProviderCapabilitiesV2;
 
   const protocolError = (detail: string, payload?: unknown) =>
     new ProviderAdapter.ProviderAdapterProtocolError({
@@ -239,7 +249,7 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
   return ProviderAdapter.ProviderAdapterV2.of({
     instanceId: options.instanceId,
     driver: HERMES_PROVIDER,
-    getCapabilities: () => Effect.succeed(HermesProviderCapabilitiesV2),
+    getCapabilities: () => Effect.succeed(capabilities),
     planSelectionTransition: () => Effect.succeed(turnScopedSelectionTransition()),
     openSession: Effect.fn("HermesAdapterV2.openSession")(function* (
       input: ProviderAdapter.ProviderAdapterV2OpenSessionInput,
@@ -258,7 +268,7 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
         status: "ready",
         cwd: input.runtimePolicy.cwd ?? providerHost.paths.cwd,
         model: input.modelSelection.model,
-        capabilities: HermesProviderCapabilitiesV2,
+        capabilities,
         createdAt: now,
         updatedAt: now,
         lastError: null,
@@ -1027,6 +1037,7 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
             agentScope: { thread: turnInput.appThread, provider: HERMES_PROVIDER }, // Fork add-on: agent instructions.
           }),
           ...(turnInput.runtimePolicy.interactionMode === "plan" ? [PLAN_MODE_INSTRUCTIONS] : []),
+          ...(options.settings.t3Tools ? [T3_TOOLS_INSTRUCTIONS] : []), // Fork add-on: Hermes T3 tools.
         ].join("\n\n");
         yield* Effect.gen(function* () {
           const runId = yield* api(

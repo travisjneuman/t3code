@@ -48,6 +48,7 @@ import {
 import * as WorktreeHandlers from "./toolkits/worktree/handlers.ts";
 import { WorktreeToolkit } from "./toolkits/worktree/tools.ts";
 import * as WorktreeMcpService from "./WorktreeMcpService.ts";
+import * as HermesMcpBridge from "../hermes/HermesMcpBridge.ts"; // Fork add-on: Hermes T3 tools.
 import * as PullRequestsHandlers from "./toolkits/pullRequests/handlers.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
 import * as DeviceHandlers from "./toolkits/device/handlers.ts";
@@ -148,6 +149,7 @@ const looksLikeProviderToken = (token: string) => token.length > 0 && !token.inc
 const makeMcpAuthMiddleware = Effect.gen(function* () {
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
   const clients = yield* Effect.serviceOption(McpClientAuthenticator);
+  const hermesBridge = yield* Effect.serviceOption(HermesMcpBridge.HermesMcpBridge); // Fork add-on: Hermes T3 tools.
   return Effect.fn("McpHttpServer.authenticateRequest")(function* (httpEffect) {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const authorization = request.headers.authorization;
@@ -160,6 +162,22 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       (Option.isSome(clients) && token.length > 0
         ? yield* clients.value.authenticate(request)
         : undefined);
+    // Fork add-on: Hermes T3 tools. A Hermes instance's bridge key acts as its running thread.
+    const bridged =
+      !invocation && Option.isSome(hermesBridge) && looksLikeProviderToken(token)
+        ? yield* hermesBridge.value.resolve(token)
+        : undefined;
+    if (bridged !== undefined) {
+      const refused =
+        bridged.refusal === undefined
+          ? undefined
+          : yield* HermesMcpBridge.refuseUnboundRequest(request, bridged.refusal);
+      if (refused !== undefined) return refused;
+      return yield* httpEffect.pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, bridged.scope),
+        Effect.map(normalizeMcpHttpResponse),
+      );
+    }
     if (!invocation) {
       // Without this the only symptom of a dead credential is the agent
       // quietly losing the whole `t3-code` toolkit for the rest of its
