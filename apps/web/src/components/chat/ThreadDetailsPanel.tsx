@@ -72,9 +72,16 @@ export interface ThreadDetailsPanelProps extends Pick<
   compactDisabled?: boolean;
   compactDisabledReason?: string | null;
   onOpenTurnDiff?: (runId: RunId, filePath?: string) => void;
+  /**
+   * Set for a Hermes thread: the machine Hermes works on. Hermes never uses
+   * the project's folder, so the workspace and version control controls give
+   * way to that machine's name. Fork add-on: Hermes provider.
+   */
+  hermesMachine?: string;
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
+  const localWorkspace = props.hermesMachine === undefined; // Fork add-on: Hermes provider.
   const fileScripts = useT3ProjectFileScripts(
     props.environmentId,
     props.activeProjectScripts ? props.gitCwd : null,
@@ -119,7 +126,13 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             showHeading={false}
           >
             <div className="flex flex-col">
-              {density === "full" ? (
+              {/* Fork add-on: Hermes provider. */}
+              {props.hermesMachine !== undefined ? (
+                <p className="px-1.5 py-1 text-muted-foreground text-sm">
+                  Runs on {props.hermesMachine}, in Hermes's own workspace
+                </p>
+              ) : null}
+              {density === "full" && localWorkspace ? (
                 <BranchToolbar
                   layout="panel"
                   panelSection="workspace"
@@ -131,7 +144,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {density !== "essential" && props.showOpenInPicker ? (
+              {density !== "essential" && props.showOpenInPicker && localWorkspace ? (
                 <OpenInPicker
                   keybindings={props.keybindings}
                   environmentId={props.environmentId}
@@ -141,7 +154,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {props.activeProjectScripts ? (
+              {props.activeProjectScripts && localWorkspace ? (
                 <ProjectScriptsControl
                   environmentId={props.environmentId}
                   displayMode="panel"
@@ -157,7 +170,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             </div>
           </ThreadDetailsSection>
 
-          {props.gitCwd ? (
+          {props.gitCwd && localWorkspace ? (
             <ThreadDetailsSection
               headingId="thread-details-version-control-heading"
               title="Version Control"
