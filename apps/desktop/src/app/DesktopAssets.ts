@@ -62,6 +62,7 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
   return Option.none<string>();
 });
 
+// Fork add-on: ndev app icon for every brand, as repository-relative paths.
 const sourceTreeIconPaths = {
   ico: FORK_BRAND_ASSET_PATHS.windowsIconIco,
   macPng: FORK_BRAND_ASSET_PATHS.macIconPng,
@@ -73,6 +74,7 @@ function resolveSourceTreeIconPath(
   ext: keyof DesktopIconPaths,
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
+  // Fork add-on: ndev app icon; no per-brand directory.
   const fileName =
     ext === "ico"
       ? sourceTreeIconPaths.ico

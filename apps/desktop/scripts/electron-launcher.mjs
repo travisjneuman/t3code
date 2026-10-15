@@ -21,8 +21,8 @@ const APP_BUNDLE_ID = isDevelopment
   ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
   : "com.t3tools.t3code";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
-const LAUNCHER_VERSION = 21;
-const macIconPngPath = NodePath.join(repoRoot, FORK_BRAND_ASSET_PATHS.macIconPng);
+const LAUNCHER_VERSION = 21; // Fork add-on: ndev app icon (regenerates the launcher).
+const macIconPngPath = NodePath.join(repoRoot, FORK_BRAND_ASSET_PATHS.macIconPng); // Fork add-on: ndev app icon.
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
@@ -200,7 +200,7 @@ function registerMacLauncherBundle(appBundlePath) {
 // Bundle-internal paths are macOS paths whatever host builds them.
 export function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopment) {
   return {
-    sourceIconPath: macIconPngPath,
+    sourceIconPath: macIconPngPath, // Fork add-on: ndev app icon.
     generatedIconPath: NodePath.posix.join(
       runtimeDir,
       development ? "icon-dev.icns" : "icon-prod.icns",

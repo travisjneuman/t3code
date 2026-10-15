@@ -31,6 +31,11 @@ the Electron profile directory, the `t3code-tjn` link scheme, and the Dock and w
 Server state is not part of the identity: it stays in `~/.t3` like upstream, so threads and
 settings carry over from the official app.
 
+The fork's artwork is in [`assets/ndev/`](../../assets/ndev/README.md), which explains its source,
+formats and `vp run icons:export:ndev`. Desktop builds, source launches and web icons read it
+through [`fork-brand-assets.mjs`](../../scripts/lib/fork-brand-assets.mjs). The upstream
+`assets/` artwork and its Icon Composer export stay as upstream ships them.
+
 Upstream tests that assert upstream identity, such as the product name, app id, or protocol, are
 expected to mismatch on the fork. Leave them as upstream wrote them; editing them only adds merge
 surface.

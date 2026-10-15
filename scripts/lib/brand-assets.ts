@@ -1,4 +1,4 @@
-import { FORK_BRAND_ASSET_PATHS } from "./fork-brand-assets.mjs";
+import { FORK_BRAND_ASSET_PATHS } from "./fork-brand-assets.mjs"; // Fork add-on: ndev web icons.
 
 export const BRAND_ASSET_PATHS = {
   developmentIconComposerProject: "assets/dev/app-icon.icon",
@@ -59,6 +59,7 @@ const WEB_ICON_TARGET_FILENAMES = {
   appleTouchIconPng: "apple-touch-icon.png",
 } as const;
 
+// Fork add-on: every brand serves the fork's web icons.
 const FORK_WEB_ICON_SOURCE_PATHS = {
   faviconIco: FORK_BRAND_ASSET_PATHS.faviconIco,
   favicon16Png: FORK_BRAND_ASSET_PATHS.favicon16Png,
@@ -67,11 +68,12 @@ const FORK_WEB_ICON_SOURCE_PATHS = {
 } as const;
 
 const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
-  development: FORK_WEB_ICON_SOURCE_PATHS,
-  nightly: FORK_WEB_ICON_SOURCE_PATHS,
-  production: FORK_WEB_ICON_SOURCE_PATHS,
+  development: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on
+  nightly: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on
+  production: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 
+// Fork add-on: Icon Composer's export still refreshes upstream's development icons.
 const UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS = {
   faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
   favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
@@ -79,6 +81,7 @@ const UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS = {
   appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
 } as const;
 
+// Fork add-on: shared by the fork and upstream source maps.
 function resolveIconOverridesFromSources(
   sourcePaths: Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>,
   targetDirectory: string,
@@ -108,14 +111,15 @@ export function resolveWebIconOverrides(
   targetDirectory: string,
 ): ReadonlyArray<IconOverride> {
   const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
-  return resolveIconOverridesFromSources(sourcePaths, targetDirectory);
+  return resolveIconOverridesFromSources(sourcePaths, targetDirectory); // Fork add-on
 }
 
 export const DEVELOPMENT_ICON_OVERRIDES = resolveWebIconOverrides("development", "dist/client");
 
-// Keep Icon Composer's upstream development exports intact. The fork's own
+// Fork add-on: keep Icon Composer's upstream development exports intact. The fork's own
 // artwork is wired by resolveWebIconOverrides and supplied in assets/ndev.
 export const DEVELOPMENT_PUBLIC_ICON_OVERRIDES = resolveIconOverridesFromSources(
+  // Fork add-on
   UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS,
   "apps/web/public",
 );

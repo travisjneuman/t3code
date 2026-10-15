@@ -1,11 +1,5 @@
 # Brand icons
 
-For the ndev.t3code fork's Dock, app, web and social artwork, see
-[`ndev/README.md`](ndev/README.md) and run `vp run icons:export:ndev`.
-The original upstream assets and exporter below are preserved separately.
-
-## Upstream artwork
-
 The three Icon Composer projects are the source of truth for full application icons:
 
 - `dev/app-icon.icon`

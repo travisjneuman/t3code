@@ -25,8 +25,8 @@ import gnomeCaptureBundle from "../apps/desktop/gnome-extension/bundle.json" wit
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
-import { resolveWebAssetBrandForChannel, type WebAssetBrand } from "./lib/brand-assets.ts";
-import { FORK_BRAND_ASSET_PATHS } from "./lib/fork-brand-assets.mjs";
+import { resolveWebAssetBrandForChannel, type WebAssetBrand } from "./lib/brand-assets.ts"; // Fork add-on: ndev app icon.
+import { FORK_BRAND_ASSET_PATHS } from "./lib/fork-brand-assets.mjs"; // Fork add-on: ndev app icon.
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
