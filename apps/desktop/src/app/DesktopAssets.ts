@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import { FORK_BRAND_ASSET_PATHS } from "../../../../scripts/lib/fork-brand-assets.mjs"; // Fork add-on: ndev app icon.
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 export interface DesktopIconPaths {
@@ -61,17 +62,10 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
   return Option.none<string>();
 });
 
-const sourceTreeIconFileNames = {
-  dev: {
-    ico: "blueprint-windows.ico",
-    macPng: "blueprint-macos-1024.png",
-    universalPng: "blueprint-universal-1024.png",
-  },
-  prod: {
-    ico: "t3-black-windows.ico",
-    macPng: "black-macos-1024.png",
-    universalPng: "black-universal-1024.png",
-  },
+const sourceTreeIconPaths = {
+  ico: FORK_BRAND_ASSET_PATHS.windowsIconIco,
+  macPng: FORK_BRAND_ASSET_PATHS.macIconPng,
+  universalPng: FORK_BRAND_ASSET_PATHS.universalIconPng,
 } as const;
 
 function resolveSourceTreeIconPath(
@@ -79,15 +73,13 @@ function resolveSourceTreeIconPath(
   ext: keyof DesktopIconPaths,
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
-  const brand = environment.isDevelopment ? "dev" : "prod";
-  const fileNames = sourceTreeIconFileNames[brand];
   const fileName =
     ext === "ico"
-      ? fileNames.ico
+      ? sourceTreeIconPaths.ico
       : environment.platform === "darwin"
-        ? fileNames.macPng
-        : fileNames.universalPng;
-  return environment.path.join(environment.rootDir, "assets", brand, fileName);
+        ? sourceTreeIconPaths.macPng
+        : sourceTreeIconPaths.universalPng;
+  return environment.path.join(environment.rootDir, fileName);
 }
 
 const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (

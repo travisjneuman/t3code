@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <title>ndev.t3code</title>
+  <defs>
+    <linearGradient id="tile" x1="20" y1="4" x2="100" y2="124" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#112c4b"/><stop offset=".55" stop-color="#061528"/><stop offset="1" stop-color="#091a30"/>
+    </linearGradient>
+    <linearGradient id="leg" x1="29" y1="42" x2="43" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#241b90"/><stop offset=".45" stop-color="#7452e8"/><stop offset="1" stop-color="#d1bfff"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="41" y1="45" x2="92" y2="97" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#292598"/><stop offset=".55" stop-color="#4956d5"/><stop offset="1" stop-color="#92dcff"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="46" y1="28" x2="92" y2="99" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#83edfa"/><stop offset=".25" stop-color="#3dc8fc"/><stop offset=".65" stop-color="#1197e8"/><stop offset="1" stop-color="#61edfa"/>
+    </linearGradient>
+  </defs>
+  <path d="M26 48C26 39 32 34 40 38L48 46V91C48 105 26 105 26 91Z" fill="url(#leg)" stroke="#c3ceff" stroke-opacity=".65" stroke-width=".8"/>
+  <path d="M34 39C44 33 51 42 58 50L98 88C104 96 98 104 89 101C84 99 80 95 75 89L43 54C39 47 35 43 30 44Z" fill="url(#fold)"/>
+  <path d="M26 48C29 30 44 25 57 31C69 36 79 52 89 63C99 74 103 79 103 90C103 99 98 103 91 101C98 100 99 92 93 85L48 43C39 35 31 37 26 48Z" fill="url(#ribbon)" stroke="#b5f5ff" stroke-opacity=".85" stroke-width=".8"/>
+</svg>

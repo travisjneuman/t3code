@@ -1,3 +1,5 @@
+import { FORK_BRAND_ASSET_PATHS } from "./fork-brand-assets.mjs";
+
 export const BRAND_ASSET_PATHS = {
   developmentIconComposerProject: "assets/dev/app-icon.icon",
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
@@ -57,32 +59,30 @@ const WEB_ICON_TARGET_FILENAMES = {
   appleTouchIconPng: "apple-touch-icon.png",
 } as const;
 
+const FORK_WEB_ICON_SOURCE_PATHS = {
+  faviconIco: FORK_BRAND_ASSET_PATHS.faviconIco,
+  favicon16Png: FORK_BRAND_ASSET_PATHS.favicon16Png,
+  favicon32Png: FORK_BRAND_ASSET_PATHS.favicon32Png,
+  appleTouchIconPng: FORK_BRAND_ASSET_PATHS.appleTouchIconPng,
+} as const;
+
 const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
-  development: {
-    faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
-  },
-  nightly: {
-    faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
-  },
-  production: {
-    faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
-  },
+  development: FORK_WEB_ICON_SOURCE_PATHS,
+  nightly: FORK_WEB_ICON_SOURCE_PATHS,
+  production: FORK_WEB_ICON_SOURCE_PATHS,
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 
-export function resolveWebIconOverrides(
-  brand: WebAssetBrand,
+const UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS = {
+  faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
+  favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
+  favicon32Png: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
+  appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
+} as const;
+
+function resolveIconOverridesFromSources(
+  sourcePaths: Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>,
   targetDirectory: string,
 ): ReadonlyArray<IconOverride> {
-  const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
   return [
     {
       sourceRelativePath: sourcePaths.faviconIco,
@@ -103,9 +103,19 @@ export function resolveWebIconOverrides(
   ];
 }
 
+export function resolveWebIconOverrides(
+  brand: WebAssetBrand,
+  targetDirectory: string,
+): ReadonlyArray<IconOverride> {
+  const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
+  return resolveIconOverridesFromSources(sourcePaths, targetDirectory);
+}
+
 export const DEVELOPMENT_ICON_OVERRIDES = resolveWebIconOverrides("development", "dist/client");
 
-export const DEVELOPMENT_PUBLIC_ICON_OVERRIDES = resolveWebIconOverrides(
-  "development",
+// Keep Icon Composer's upstream development exports intact. The fork's own
+// artwork is wired by resolveWebIconOverrides and supplied in assets/ndev.
+export const DEVELOPMENT_PUBLIC_ICON_OVERRIDES = resolveIconOverridesFromSources(
+  UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS,
   "apps/web/public",
 );
