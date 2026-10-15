@@ -15,7 +15,7 @@ import {
 
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { normalizeClaudeTurnTokenUsage } from "../../provider/ClaudeTurnTokenUsage.ts";
-import { claudeContextBreakdown, claudeMcpServers } from "./claudeSessionInsights.ts";
+import { claudeContextBreakdown, claudeMcpServers } from "./claudeSessionInsights.ts"; // Fork add-on: session details.
 import {
   type CanUseTool,
   forkSession as forkClaudeSession,
@@ -23,7 +23,7 @@ import {
   type ForkSessionOptions,
   type ForkSessionResult,
   getSubagentMessages,
-  type McpServerStatus,
+  type McpServerStatus, // Fork add-on: session details.
   query,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
@@ -35,7 +35,7 @@ import {
   type SpawnedProcess as ClaudeSpawnedProcess,
   type SDKAssistantMessage,
   type SDKAPIRetryMessage,
-  type SDKControlGetContextUsageResponse,
+  type SDKControlGetContextUsageResponse, // Fork add-on: session details.
   type SDKMessage,
   type SDKRateLimitInfo,
   type SDKResultMessage,
@@ -432,6 +432,7 @@ export interface ClaudeAgentSdkQuerySession {
     mode: PermissionMode,
   ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly stopTask: (taskId: string) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
+  // Fork add-on: session details.
   /** The /context breakdown of the live session. Optional so test fakes can omit it. */
   readonly getContextUsage?: Effect.Effect<
     SDKControlGetContextUsageResponse,
@@ -605,6 +606,7 @@ export type ClaudeAgentSdkProtocolLogEvent =
         readonly taskId: string;
       };
     }
+  // Fork add-on: session details.
   | {
       readonly direction: "outgoing";
       readonly stage: "decoded";
@@ -954,6 +956,7 @@ export const layerQueryRunner: Layer.Layer<
                 }),
               ),
             ),
+          // Fork add-on: session details.
           getContextUsage: Effect.tryPromise({
             try: () => queryRuntime.getContextUsage({ detail: "summary" }),
             catch: (cause) => queryRunnerError(cause, "getContextUsage"),
@@ -9170,6 +9173,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         });
         yield* Effect.addFinalizer(() => closeSession());
 
+        // Fork add-on: session details.
         // Session insights read only the query running this provider thread;
         // a stopped or replaced query has nothing current to report.
         const liveInsightsQuery = (providerThread: OrchestrationV2ProviderThread) =>
@@ -9331,6 +9335,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ),
               );
             }),
+          // Fork add-on: session details.
           sessionInsights: {
             contextBreakdown: ({ providerThread }) =>
               Effect.gen(function* () {

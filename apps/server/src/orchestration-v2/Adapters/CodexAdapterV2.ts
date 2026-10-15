@@ -1,5 +1,6 @@
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
+// Fork add-on: session details.
 import {
   sessionInsightText,
   sessionMcpServer,
@@ -72,7 +73,7 @@ import type {
   ProviderInstanceId,
   RuntimeMode,
   RuntimeRequestId,
-  SessionMcpServer,
+  SessionMcpServer, // Fork add-on: session details.
   ThreadId,
 } from "@t3tools/contracts";
 import * as CodexClient from "effect-codex-app-server/client";
@@ -859,6 +860,7 @@ function getNativeThreadId(providerThread: OrchestrationV2ProviderThread) {
   });
 }
 
+// Fork add-on: session details.
 type CodexMcpServerStatus = CodexSchema.V2ListMcpServerStatusResponse__McpServerStatus;
 
 function codexMcpServerStatus(server: CodexMcpServerStatus): SessionMcpServer["status"] {
@@ -6565,6 +6567,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return { contents: response.contents };
             }).pipe(Effect.mapError(mcpAppsError("Codex MCP resource read failed."))),
         };
+        // Fork add-on: session details.
         const sessionInsights: ProviderAdapter.ProviderAdapterV2SessionInsights = {
           mcpServers: ({ providerThread }) =>
             Effect.gen(function* () {
@@ -7341,7 +7344,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               ),
             ),
           mcpApps,
-          sessionInsights,
+          sessionInsights, // Fork add-on: session details.
           readThreadSnapshot: (threadInput) =>
             Effect.gen(function* () {
               const threadId = yield* getNativeThreadId(threadInput.providerThread);

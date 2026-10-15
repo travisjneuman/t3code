@@ -5,7 +5,7 @@ import * as OrchestrationCommandReceipts from "../persistence/OrchestrationComma
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as McpAppRequests from "../mcpApps/McpAppRequests.ts";
-import * as SessionInsights from "../sessionInsights/SessionInsights.ts";
+import * as SessionInsights from "../sessionInsights/SessionInsights.ts"; // Fork add-on: session details.
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
@@ -338,6 +338,7 @@ const layerMcpAppRequestsProvided = McpAppRequests.layer.pipe(
   ),
 );
 
+// Fork add-on: session details.
 const layerSessionInsightsProvided = SessionInsights.layer.pipe(
   Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerProviderSessionManagerProvided)),
 );
@@ -345,7 +346,7 @@ const layerSessionInsightsProvided = SessionInsights.layer.pipe(
 export const layer = Layer.mergeAll(
   layerOrchestratorProvided,
   layerMcpAppRequestsProvided,
-  layerSessionInsightsProvided,
+  layerSessionInsightsProvided, // Fork add-on: session details.
   layerThreadManagementProvided,
   layerEffectWorkerProvided,
   layerProviderSessionManagerProvided,

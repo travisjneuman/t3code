@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef } from "react";
 import { acquireBrowserSurface } from "./browserSurfaceStore";
 import { observeResize } from "../lib/observeResize";
 
+// Fork add-on: web pages in the narrow-window panel sheet.
 // A docked sheet (the right panel in a narrow window) covers the app at
 // --z-sheet (46), so a page placed in one rises just above it. Dialogs (50 and
 // up) and the floating player's webview (48) still cover it.
@@ -36,10 +37,11 @@ export function BrowserSurfaceSlot(props: {
     const element = elementRef.current;
     if (!element) return;
     let lease = acquireBrowserSurface(tabId, fitSourceContent);
-    const sheet = element.closest('[data-slot="sheet-popup"]');
+    const sheet = element.closest('[data-slot="sheet-popup"]'); // Fork add-on: web pages in the narrow-window panel sheet.
     const update = () => {
       const rect = element.getBoundingClientRect();
       const presentation = presentationRef.current;
+      // Fork add-on: web pages in the narrow-window panel sheet.
       const zIndex =
         sheet === null ? presentation.zIndex : Math.max(presentation.zIndex, SHEET_SURFACE_Z_INDEX);
       const presented = lease.present(
@@ -51,7 +53,7 @@ export function BrowserSurfaceSlot(props: {
         },
         presentation.visible && rect.width > 0 && rect.height > 0,
         presentation.cornerRadius,
-        zIndex,
+        zIndex, // Fork add-on: web pages in the narrow-window panel sheet.
       );
       if (presentation.visible && !presented) {
         lease.release();
@@ -65,7 +67,7 @@ export function BrowserSurfaceSlot(props: {
           },
           rect.width > 0 && rect.height > 0,
           presentation.cornerRadius,
-          zIndex,
+          zIndex, // Fork add-on: web pages in the narrow-window panel sheet.
         );
       }
     };
@@ -81,6 +83,7 @@ export function BrowserSurfaceSlot(props: {
     // still moves on screen. The gap element carries the sidebar's width.
     observed.push(...document.querySelectorAll('[data-slot="sidebar-gap"]'));
     const stopObserving = observeResize(observed, update);
+    // Fork add-on: web pages in the narrow-window panel sheet.
     // A sheet slides in by translation, which no resize reports; measure where it settles.
     const onSheetTransitionEnd = (event: Event) => {
       if (event.target === sheet) update();
@@ -90,7 +93,7 @@ export function BrowserSurfaceSlot(props: {
     window.addEventListener("scroll", update, true);
     return () => {
       stopObserving();
-      sheet?.removeEventListener("transitionend", onSheetTransitionEnd);
+      sheet?.removeEventListener("transitionend", onSheetTransitionEnd); // Fork add-on: web pages in the narrow-window panel sheet.
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
       if (updateRef.current === update) updateRef.current = null;
