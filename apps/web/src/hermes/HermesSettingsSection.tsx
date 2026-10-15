@@ -1,5 +1,5 @@
 /**
- * Settings › Providers › Hermes Agent: which Hermes providers the model picker
+ * Settings › Providers › Hermes Agent: which Hermes providers and models T3
  * offers, plus Hermes's own config, keys and custom endpoints, reached through
  * the server's dashboard proxy. Hermes config is global: Discord, cron and the
  * CLI see every change made here. Fork add-on: Hermes provider.
@@ -7,13 +7,13 @@
 import type {
   EnvironmentId,
   HermesDashboardInput,
-  HermesProviderSummary,
   ProviderInstanceId,
+  ServerProviderModel,
 } from "@t3tools/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FoldedSettingsSection } from "../components/settings/FoldedSettingsSection";
-import { SettingsRow, SettingsSection } from "../components/settings/settingsLayout";
+import { SettingsRow } from "../components/settings/settingsLayout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -26,7 +26,8 @@ import {
 import { Switch } from "../components/ui/switch";
 import { toastManager } from "../components/ui/toast";
 import { ensureLocalApi } from "../localApi";
-import { hermesDashboard, hermesSessionsProviders, runHermes } from "./hermesSessions";
+import { HermesModelsSection } from "./HermesModelsSection";
+import { hermesDashboard, runHermes } from "./hermesSessions";
 
 type Target = { readonly environmentId: EnvironmentId; readonly instanceId: ProviderInstanceId };
 
@@ -53,9 +54,16 @@ const dashboard = async (
 export function HermesSettingsSection(props: {
   readonly environmentId: EnvironmentId;
   readonly instanceId: ProviderInstanceId;
+  readonly models: ReadonlyArray<ServerProviderModel>;
   readonly hiddenProviders: ReadonlyArray<string>;
   readonly onHiddenProvidersChange: (next: ReadonlyArray<string>) => void;
+  readonly hiddenModels: ReadonlyArray<string>;
+  readonly onHiddenModelsChange: (
+    next: ReadonlyArray<string>,
+    affectedModels?: ReadonlyArray<string>,
+  ) => void;
   readonly readOnly: boolean;
+  readonly canWritePreferences: boolean;
 }) {
   const target = useMemo(
     () => ({ environmentId: props.environmentId, instanceId: props.instanceId }),
@@ -64,7 +72,7 @@ export function HermesSettingsSection(props: {
   const id = `provider-instance-${props.instanceId}-hermes`;
   return (
     <>
-      <HermesProvidersSection {...props} target={target} />
+      <HermesModelsSection {...props} target={target} />
       <div
         inert={props.readOnly}
         aria-disabled={props.readOnly || undefined}
@@ -89,98 +97,6 @@ export function HermesSettingsSection(props: {
         </FoldedSettingsSection>
       </div>
     </>
-  );
-}
-
-/** The providers Hermes is signed in to, each switchable in the model picker. */
-function HermesProvidersSection(props: {
-  readonly target: Target;
-  readonly hiddenProviders: ReadonlyArray<string>;
-  readonly onHiddenProvidersChange: (next: ReadonlyArray<string>) => void;
-  readonly readOnly: boolean;
-}) {
-  const [providers, setProviders] = useState<ReadonlyArray<HermesProviderSummary> | null>(null);
-  const [loading, setLoading] = useState(false);
-  const { target } = props;
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const result = await runHermes(
-      hermesSessionsProviders,
-      target.environmentId,
-      { instanceId: target.instanceId },
-      "Could not list Hermes providers",
-    );
-    setLoading(false);
-    if (result !== null) setProviders(result.providers);
-  }, [target]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const hidden = new Set(props.hiddenProviders);
-  const toggle = (slug: string, shown: boolean) => {
-    const next = new Set(hidden);
-    if (shown) next.delete(slug);
-    else next.add(slug);
-    props.onHiddenProvidersChange([...next].toSorted());
-  };
-  const sorted = (providers ?? []).toSorted(
-    (left, right) =>
-      Number(right.authenticated && right.offerable) -
-        Number(left.authenticated && left.offerable) || left.name.localeCompare(right.name),
-  );
-
-  return (
-    <SettingsSection
-      title="Hermes providers"
-      headerAction={
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost-muted"
-          disabled={loading}
-          onClick={() => void load()}
-        >
-          {loading ? "Loading" : "Refresh"}
-        </Button>
-      }
-    >
-      {providers === null ? (
-        <SettingsRow
-          title={loading ? "Loading providers" : "Providers unavailable"}
-          description="Set the API URL and key above, then refresh."
-        />
-      ) : sorted.length === 0 ? (
-        <SettingsRow title="No providers" description="Hermes reported no model providers." />
-      ) : (
-        sorted.map((provider) => {
-          const usable = provider.authenticated && provider.offerable;
-          return (
-            <SettingsRow
-              key={provider.slug}
-              title={provider.name}
-              description={
-                !provider.offerable
-                  ? "Never offered through Hermes: its terms do not allow use from another app."
-                  : !provider.authenticated
-                    ? "Not signed in on Hermes."
-                    : `${provider.modelCount} model${provider.modelCount === 1 ? "" : "s"}`
-              }
-              control={
-                <Switch
-                  aria-label={`Show ${provider.name} models`}
-                  checked={usable && !hidden.has(provider.slug)}
-                  disabled={!usable || props.readOnly}
-                  onCheckedChange={(checked) => toggle(provider.slug, checked)}
-                />
-              }
-            />
-          );
-        })
-      )}
-    </SettingsSection>
   );
 }
 

@@ -1343,13 +1343,19 @@ export function ProviderInstanceCard({
         <HermesSettingsSection
           environmentId={environmentId}
           instanceId={instanceId}
+          models={modelsForDisplay}
           hiddenProviders={hiddenHermesProviders}
           onHiddenProvidersChange={updateHiddenHermesProviders}
+          hiddenModels={hiddenModels}
+          onHiddenModelsChange={onHiddenModelsChange}
           readOnly={readOnly}
+          canWritePreferences={canWriteSettings}
         />
       ) : null}
 
-      {driverOption !== undefined ? (
+      {/* Fork add-on: Hermes provider. Hermes lists its models in its own section above. */}
+      {driverOption !== undefined &&
+      (instance.driver !== "hermes" || environmentId === undefined) ? (
         <SettingsSection title="Models">
           <div className="px-3 py-3 sm:px-4">
             <p className="mb-3 text-xs text-muted-foreground">
