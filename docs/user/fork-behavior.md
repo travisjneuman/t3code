@@ -17,3 +17,9 @@ without a project.
 [Tailscale HTTPS](remote-access.md#tailscale-https) needs **HTTPS Certificates** turned on for your
 tailnet, on the DNS page of the Tailscale admin console. Until then, the route in **Settings →
 Connections** says so.
+
+## Thread details sections collapse
+
+In the thread details card, choose a section's title, such as **Automations** or **Lineage**, to
+collapse it to its heading, and again to expand it. Each section remembers its state across
+threads and restarts. See [Session details](session-details.md#open-them).

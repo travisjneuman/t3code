@@ -120,6 +120,7 @@ The thread details card (`mod+shift+b`) shows what the agent's session is doing,
 - **Session**: provider, model, live status, permission mode, turns, and cost when reported.
 - **Context**: how full the window is. Claude threads break it down by category, with the MCP tools, memory files, skills and custom agents in context, and a Compact context button.
 - **Connectors**: the MCP servers Claude, Codex or OpenCode loaded, with status and tool counts.
+- Every titled section collapses from its heading and stays that way across threads.
 - **Outputs**: files the thread changed; each opens its diff.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/session-details.md)
