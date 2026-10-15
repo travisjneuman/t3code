@@ -8,6 +8,7 @@
 import {
   type AtomCommand,
   createEnvironmentRpcCommand,
+  createEnvironmentRpcQueryAtomFamily,
   isAtomCommandInterrupted,
   runAtomCommand,
   squashAtomCommandFailure,
@@ -20,10 +21,12 @@ import {
   type ServerConfig,
   type ServerSettings,
 } from "@t3tools/contracts";
+import { useMemo } from "react";
 
 import { toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { useEnvironmentQuery } from "../state/query";
 
 export const HERMES_DRIVER = ProviderDriverKind.make("hermes");
 
@@ -71,6 +74,28 @@ export const hermesT3Tools = createEnvironmentRpcCommand(connectionAtomRuntime, 
   label: "environment-data:hermes-sessions:t3Tools",
   tag: HERMES_SESSIONS_WS_METHODS.t3Tools,
 });
+
+/**
+ * Session, context, and connectors of a Hermes session T3 has not opened as a
+ * thread, for its details card. Read only while the card is open.
+ */
+const hermesSessionInsights = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:hermes-sessions:insights",
+  tag: HERMES_SESSIONS_WS_METHODS.insights,
+  idleTtlMs: 0,
+});
+
+export function useHermesSessionInsights(
+  environmentId: EnvironmentId,
+  instanceId: ProviderInstanceId,
+  sessionId: string,
+) {
+  const atom = useMemo(
+    () => hermesSessionInsights({ environmentId, input: { instanceId, sessionId } }),
+    [environmentId, instanceId, sessionId],
+  );
+  return useEnvironmentQuery(atom);
+}
 
 /** Runs a Hermes command; the value, or null after an error toast titled `failureTitle`. */
 export const runHermes = async <Input, A, E>(

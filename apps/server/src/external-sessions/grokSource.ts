@@ -28,6 +28,7 @@ import {
   timestampMs,
   toolLine,
 } from "./ExternalSessionSource.ts";
+import { grokContextUsage, makeGrokInsights } from "./grokInsights.ts";
 
 const SESSION_FILES = new Set(["summary.json", "events.jsonl", "updates.jsonl"]);
 const EVENTS_TAIL_BYTES = 64 * 1024;
@@ -96,6 +97,9 @@ export const makeGrokSource = (): ExternalSessionSource => {
         const usage = asRecord(
           parseJsonObject((yield* readText(NodePath.join(path, "usage.json"))) ?? "")?.session,
         );
+        const signals = parseJsonObject(
+          (yield* readText(NodePath.join(path, "signals.json"))) ?? "",
+        );
         return [
           {
             id,
@@ -121,11 +125,13 @@ export const makeGrokSource = (): ExternalSessionSource => {
               createdAt: asString(summary?.created_at),
               messageCount: asCount(summary?.num_chat_messages),
               totalTokens: asCount(usage?.totalTokens),
+              ...grokContextUsage(signals),
             }),
           },
         ];
       }),
     transcriptPath: (path) => NodePath.join(path, "updates.jsonl"),
+    readInsights: makeGrokInsights(),
     createParser: () => {
       let counter = 0;
       // Chunks of one reply arrive as separate lines; they grow one message.

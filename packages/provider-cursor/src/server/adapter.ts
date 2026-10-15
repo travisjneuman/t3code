@@ -63,6 +63,7 @@ import {
   providerMessageTextWithAttachmentPaths,
 } from "@t3tools/provider-core/server/attachmentPrompt";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { sessionConfiguredMcpServers } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
 import {
   ProviderAdapterDriverCreateError,
   type ProviderAdapterDriver,
@@ -2437,6 +2438,16 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               ),
           ),
           startTurn,
+          sessionInsights: {
+            mcpServers: ({ providerThread }) =>
+              mcpSessions
+                .read(providerThread.appThreadId ?? input.threadId)
+                .pipe(
+                  Effect.map((mcp) =>
+                    sessionConfiguredMcpServers(Object.keys(cursorMcpServers(mcp) ?? {})),
+                  ),
+                ),
+          }, // Fork add-on: session details.
           compactThread: (turnInput) =>
             startTurn({
               ...turnInput,

@@ -76,6 +76,7 @@ import {
 } from "@t3tools/provider-core/server/attachmentPrompt";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { sessionUsageBreakdown } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
 import {
   backgroundWorkNotification,
   type BackgroundWorkReport,
@@ -2119,6 +2120,16 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
         hasPendingBackgroundWork: Effect.sync(
           () => observedChildren.size > 0 || wake !== undefined,
         ),
+        sessionInsights: {
+          contextBreakdown: ({ providerThread }) =>
+            Effect.sync(() =>
+              sessionUsageBreakdown(
+                thread?.id === providerThread.id
+                  ? thread.contextUsage
+                  : providerThread.contextUsage,
+              ),
+            ),
+        }, // Fork add-on: session details.
         ensureThread: (args) =>
           register(args).pipe(
             commands.withPermits(1),

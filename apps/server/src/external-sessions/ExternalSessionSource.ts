@@ -12,7 +12,9 @@ import type {
   SessionContextBreakdown,
   SessionMcpServer,
   SessionRecord,
+  UsageTokenTotals,
 } from "@t3tools/contracts";
+import type { UsageSpeed } from "@t3tools/provider-core/server/usage";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -27,6 +29,11 @@ export interface ExternalSessionInfo {
   readonly updatedAtMs: number;
   /** The provider says a turn is in progress right now. */
   readonly busy: boolean;
+  /**
+   * The provider's process for the session, from its own registry. While it
+   * runs, liveness follows the process rather than file writes.
+   */
+  readonly process?: { readonly pid: number };
   /** Sent only on the session's own stream, never in the list. */
   readonly details: ExternalSessionDetails;
 }
@@ -86,6 +93,19 @@ export interface ExternalSessionSourceInsights {
   readonly session?: SessionRecord;
   readonly context?: SessionContextBreakdown | null;
   readonly mcpServers?: ReadonlyArray<SessionMcpServer> | null;
+  /**
+   * Token totals per model and speed, for a store that records no cost. When
+   * `session.costUsd` is absent, ExternalSessions prices these against the
+   * usage page's rate table and sets `costUsd` with `costEstimated: true`.
+   */
+  readonly modelUsage?: ReadonlyArray<ExternalSessionModelUsage>;
+}
+
+/** One model's tokens over a session, priced by ExternalSessions. */
+export interface ExternalSessionModelUsage {
+  readonly model: string;
+  readonly speed: UsageSpeed;
+  readonly totals: UsageTokenTotals;
 }
 
 /**
@@ -346,6 +366,18 @@ export const statMtimeMs = (
     const info = yield* fs.stat(path);
     return Option.match(info.mtime, { onNone: () => 0, onSome: (date) => date.getTime() });
   }).pipe(Effect.orElseSucceed(() => null));
+
+/** Whether a process with this pid exists; signal 0 checks without sending anything. */
+export const isProcessAlive = (pid: unknown): boolean => {
+  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: it exists but belongs to another user.
+    return (error as { readonly code?: unknown }).code === "EPERM";
+  }
+};
 
 export const listDirectory = (
   path: string,

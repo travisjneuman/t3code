@@ -147,6 +147,16 @@ export const SessionRecord = Schema.Struct({
 });
 export type SessionRecord = typeof SessionRecord.Type;
 
+/** One file a session changed, read from the agent's own record of its edits. */
+export const SessionOutputFile = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+  /** False when the record names the file but not the lines changed. */
+  hasStats: Schema.Boolean,
+});
+export type SessionOutputFile = typeof SessionOutputFile.Type;
+
 export const SessionInsights = Schema.Struct({
   providerThreadId: ProviderThreadId,
   instanceId: ProviderInstanceId,
@@ -163,6 +173,8 @@ export const SessionInsights = Schema.Struct({
   host: Schema.optional(TrimmedNonEmptyString),
   /** Present when the agent keeps its own session store and reported it. */
   session: Schema.optional(SessionRecord),
+  /** The files the agent's store says it changed, for agents whose edits T3 has no turn diff of. */
+  outputs: Schema.optional(Schema.NullOr(Schema.Array(SessionOutputFile))),
 });
 export type SessionInsights = typeof SessionInsights.Type;
 

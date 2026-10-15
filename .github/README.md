@@ -32,7 +32,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | [**Agent instructions**](#agent-instructions) | Delegation and agent rules as settings, globally or per project         |
 | [**Save to notes**](#save-to-notes)           | Files a thread into your notes folder or Obsidian vault                 |
 | [**Export a thread**](#export-a-thread)       | Saves a thread's full record as Markdown or JSON                        |
-| [**Session details**](#session-details)       | Model, context breakdown, MCP servers and changed files of a session    |
+| [**Session details**](#session-details)       | Model, context breakdown, MCP servers and changed files of any session  |
 | [**Upstream sync**](#upstream-sync)           | Merges new official nightlies and rebuilds the app from source          |
 | [**Compact cards**](#compact-cards)           | Outlined sidebar cards in smaller text, about 23% shorter               |
 
@@ -117,11 +117,13 @@ Choose **Export…** in a thread's menu to save everything the server stores for
 
 The thread details card (`mod+shift+b`) shows what the agent's session is doing, like Claude Desktop's session sidebar.
 
-- **Session**: provider, model, live status, permission mode, turns, and cost when reported.
-- **Context**: how full the window is. Claude threads break it down by category, with the MCP tools, memory files, skills and custom agents in context, and a Compact context button.
-- **Connectors**: the MCP servers Claude, Codex or OpenCode loaded, with status and tool counts.
-- Every titled section collapses from its heading and stays that way across threads.
-- **Outputs**: files the thread changed; each opens its diff.
+It works the same for T3 threads, Hermes sessions (opened or not) and Other Agents sessions.
+
+- **Session**: provider, model, status, permission and sandbox modes, Remote control, version, turns, messages, tool uses, tokens, cost, and usage limits, whatever the agent records.
+- **Context**: how full the window is and how far from auto-compact. Claude threads break it down by category, with the MCP tools, memory files, skills and custom agents in context, and a Compact context button; Claude sessions from Claude Desktop or the CLI get an estimated breakdown against the same window Desktop shows.
+- **Connectors**: the MCP servers the agent loaded or is configured with, with status and tool counts.
+- Every titled section collapses from its heading and stays that way across threads, and a stopped thread keeps its last report across restarts.
+- **Outputs**: files the session changed; in a thread each opens its diff, elsewhere it opens in your editor.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/session-details.md)
 

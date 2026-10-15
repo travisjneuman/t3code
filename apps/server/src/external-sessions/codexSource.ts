@@ -31,6 +31,12 @@ import {
   statMtimeMs,
   toolLine,
 } from "./ExternalSessionSource.ts";
+import {
+  INJECTED_USER_TEXT,
+  makeCodexInsights,
+  readTurnContext,
+  type TurnSettings,
+} from "./codexInsights.ts";
 
 const ROLLOUT_FILE =
   /^rollout-.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i;
@@ -44,16 +50,13 @@ const APPEND_BYTES = 4 * 1024 * 1024;
 const SEARCH_BYTES = 64 * 1024 * 1024;
 // The records the list needs. Each names its type near the line's start, ahead
 // of any large payload, so other lines are skipped without parsing.
-const STATE_RECORD = /"type":"(?:turn_context|token_count|task_started|task_complete|turn_aborted)"/;
+const STATE_RECORD =
+  /"type":"(?:turn_context|token_count|task_started|task_complete|turn_aborted)"/;
 const STATE_RECORD_HEAD = 160;
 const INDEX_BYTES = 256 * 1024;
 // session_meta names its source within its first KB, ahead of the instructions.
 const META_PREFIX_BYTES = 4 * 1024;
 const SUBAGENT_SOURCE = /"source":\{"subagent":/;
-
-// Context Codex injects as user messages.
-const INJECTED_USER_TEXT =
-  /^\s*(<environment_context>|<user_instructions>|<turn_aborted>|# AGENTS\.md instructions)/;
 
 const originFor = (originator: string | null, source: unknown): string | null => {
   if (originator === "Codex Desktop") return "Desktop";
@@ -75,21 +78,6 @@ const toolDetail = (name: string, payload: Record<string, unknown>): string | nu
 
 const patchFiles = (patch: string): string =>
   [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map((m) => m[1]).join(", ");
-
-/** Per-turn settings from `turn_context`; each read keeps the latest. */
-interface TurnSettings {
-  model: string | null;
-  effort: string | null;
-  approval: string | null;
-  sandbox: string | null;
-}
-
-const readTurnContext = (payload: Record<string, unknown> | null, into: TurnSettings) => {
-  into.model = asString(payload?.model) ?? into.model;
-  into.effort = asString(payload?.effort) ?? into.effort;
-  into.approval = asString(payload?.approval_policy) ?? into.approval;
-  into.sandbox = asString(asRecord(payload?.sandbox_policy)?.type) ?? into.sandbox;
-};
 
 /** What a rollout's records say so far, kept so a write reads only what it appended. */
 interface CodexTail {
@@ -315,6 +303,7 @@ export const makeCodexSource = (): ExternalSessionSource => {
         ];
       }),
     transcriptPath: (path) => path,
+    readInsights: makeCodexInsights(),
     createParser: () => {
       let counter = 0;
       return {

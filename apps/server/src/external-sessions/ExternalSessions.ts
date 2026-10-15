@@ -44,6 +44,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as RcRef from "effect/RcRef";
@@ -55,8 +56,10 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as ServerConfig from "../config.ts";
 import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
+import { parseRateTable, priceUsage, type RateTable } from "../usage/usagePricing.ts";
 import { makeAntigravitySource } from "./antigravitySource.ts";
 import * as ClaudeDesktopArchive from "./claudeDesktopArchive.ts";
+import { claudeSubagentDir, isClaudeSubagentTranscript } from "./claudeSessionIndex.ts";
 import * as HandBack from "./handBack.ts";
 import * as OpenInOrigin from "./openInOrigin.ts";
 import { makeClaudeSource } from "./claudeSource.ts";
@@ -66,14 +69,21 @@ import * as ContinueExternalSession from "./continueExternalSession.ts";
 import * as ExternalSessionArchive from "./externalSessionArchive.ts";
 import * as ExternalSessionSync from "./externalSessionSync.ts";
 import {
+  asRecord,
   type ExternalSessionInfo,
+  type ExternalSessionModelUsage,
   type ExternalSessionSource,
+  type ExternalSessionSourceInsights,
+  isProcessAlive,
+  listDirectory,
   readLines,
+  readText,
+  statMtimeMs,
 } from "./ExternalSessionSource.ts";
 import { makeGrokSource } from "./grokSource.ts";
 import { makePiSource } from "./piSource.ts";
 import { findSessionPaths } from "./sessionHistory.ts";
-import { readsSessionOutputs, sessionOutputs } from "./sessionOutputs.ts";
+import { makeSessionOutputsReader, readsSessionOutputs } from "./sessionOutputs.ts";
 
 const LIST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_LISTED = 60;
@@ -87,6 +97,8 @@ const OWNED_REFRESH_MS = 30 * 1000;
 const SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const SNAPSHOT_MESSAGES = 200;
 const FOLLOW_BYTES = 8 * 1024 * 1024;
+// A first read of a long transcript can take longer; its progress is kept for the next.
+const INSIGHTS_TIMEOUT = "8 seconds";
 
 export class ExternalSessions extends Context.Service<
   ExternalSessions,
@@ -158,8 +170,12 @@ export class ExternalSessions extends Context.Service<
       key: string,
     ) => Effect.Effect<ExternalSessionOpenInOriginResult, ExternalSessionError>;
     /**
-     * The machine and the files changed, for the session details card: one
-     * read of the transcript tail, the snapshot's limit (sessionOutputs.ts).
+     * The session details card: the machine, the files changed over the whole
+     * session (sessionOutputs.ts), and what the source's `readInsights`
+     * reports (record, context, MCP servers). Each read is bounded by a
+     * timeout and keeps its progress, and a store without a cost is priced
+     * from the usage page's cached rate table (`costEstimated`). Reads only;
+     * it never starts or resumes a session.
      */
     readonly insights: (
       key: string,
@@ -210,6 +226,43 @@ const collectStrings = (value: unknown, into: Set<string>, depth = 0): void => {
   }
 };
 
+/**
+ * While the provider's process for a session runs, the session is open:
+ * running while its registry says busy (or it was just written), else idle.
+ * Otherwise it goes by file writes. A turn whose end was never written (the
+ * app quit mid-turn) stops counting as running once the session has been
+ * quiet for an hour.
+ */
+const liveness = (info: ExternalSessionInfo, now: number) => {
+  const age = now - info.updatedAtMs;
+  if (info.process !== undefined && isProcessAlive(info.process.pid)) {
+    return info.busy || age < RUNNING_MS ? "running" : "idle";
+  }
+  // A busy flag from a process that has exited is stale.
+  const busy = info.busy && info.process === undefined;
+  return (busy && age < IDLE_MS) || age < RUNNING_MS
+    ? "running"
+    : age < IDLE_MS
+      ? "idle"
+      : "recent";
+};
+
+/** The tokens' cost at list rates, or null when no model's rate is known. */
+const priceModelUsage = (
+  table: RateTable,
+  usage: ReadonlyArray<ExternalSessionModelUsage>,
+): number | null => {
+  let costUsd = 0;
+  let priced = false;
+  for (const { model, speed, totals } of usage) {
+    const price = priceUsage(table, { model, totals, speed, reportedCostUsd: null });
+    if (price.costSource === "unpriced") continue;
+    costUsd += price.costUsd;
+    priced = true;
+  }
+  return priced ? costUsd : null;
+};
+
 const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const config = yield* ServerConfig.ServerConfig;
@@ -222,7 +275,7 @@ const make = Effect.gen(function* () {
   const { handBack, release: releaseThread } = yield* HandBack.make;
   const origins = yield* OpenInOrigin.make(claudeDesktopArchive);
   const sources: ReadonlyArray<ExternalSessionSource> = [
-    makeClaudeSource(),
+    makeClaudeSource(claudeDesktopArchive),
     makeCodexSource(),
     makeGrokSource(),
     makePiSource(),
@@ -240,6 +293,27 @@ const make = Effect.gen(function* () {
     NodePath.join(NodeOS.homedir(), ".t3"),
   ];
   const provide = Effect.provideService(FileSystem.FileSystem, fileSystem);
+  const outputsReader = makeSessionOutputsReader();
+
+  // The usage page's rate table as UsageService last saved it, re-read when it
+  // changes. Null until the usage page has fetched rates once.
+  const ratesPath = NodePath.join(config.stateDir, "usage-model-rates.json");
+  let rates: { readonly mtimeMs: number; readonly table: RateTable } | null = null;
+  const readRates = Effect.gen(function* () {
+    const mtimeMs = yield* statMtimeMs(ratesPath);
+    if (mtimeMs === null) return null;
+    if (rates?.mtimeMs === mtimeMs) return rates.table;
+    const text = yield* readText(ratesPath);
+    let document: unknown = null;
+    try {
+      document = asRecord(JSON.parse(text ?? ""))?.document ?? null;
+    } catch {
+      document = null;
+    }
+    const table = parseRateTable(document);
+    rates = { mtimeMs, table };
+    return table;
+  });
 
   // Sessions T3 threads own. Runtime rows cover imported Claude and Codex
   // sessions, including ones whose thread later fell back to a fresh native
@@ -319,15 +393,7 @@ const make = Effect.gen(function* () {
       cwd: entry.info.cwd,
       model: entry.info.model,
       updatedAt: new Date(entry.info.updatedAtMs).toISOString(),
-      // A turn whose end was never written (the app quit mid-turn) stops
-      // counting as running once the session has been quiet for an hour.
-      liveness:
-        (entry.info.busy && now - entry.info.updatedAtMs < IDLE_MS) ||
-        now - entry.info.updatedAtMs < RUNNING_MS
-          ? "running"
-          : now - entry.info.updatedAtMs < IDLE_MS
-            ? "idle"
-            : "recent",
+      liveness: liveness(entry.info, now),
     });
 
     const isListed = (entry: Entry, now: number) =>
@@ -760,18 +826,62 @@ const make = Effect.gen(function* () {
           return yield* new ExternalSessionError({ message: "This session is no longer listed." });
         }
         const host = NodeOS.hostname();
+        const { driver } = summary;
         const transcript = entry.source.transcriptPath(entry.path);
-        if (transcript === null || !readsSessionOutputs(summary.driver)) {
-          return { host, outputs: null, truncated: false };
+        const outputPaths: Array<string> = [];
+        if (transcript !== null && readsSessionOutputs(driver)) {
+          outputPaths.push(transcript);
+          if (driver === "claudeAgent") {
+            const subagents = claudeSubagentDir(transcript);
+            for (const name of yield* provide(listDirectory(subagents))) {
+              if (!isClaudeSubagentTranscript(name)) continue;
+              outputPaths.push(NodePath.join(subagents, name));
+            }
+          }
         }
-        const slice = yield* provide(
-          readLines(transcript, { fromEnd: true, maxBytes: SNAPSHOT_BYTES }),
-        );
-        if (slice === null) return { host, outputs: [], truncated: false };
+        const partialOutputs = () => outputsReader.partial(driver, outputPaths);
+        const readOutputs =
+          outputPaths.length === 0
+            ? Effect.succeed(null)
+            : provide(outputsReader.read(driver, outputPaths)).pipe(
+                Effect.timeoutOption(INSIGHTS_TIMEOUT),
+                Effect.map(Option.getOrElse(partialOutputs)),
+                Effect.catchCause(() => Effect.succeed(partialOutputs())),
+              );
+        const empty: ExternalSessionSourceInsights = {};
+        const readInsights = entry.source.readInsights;
+        const readSource =
+          readInsights === undefined
+            ? Effect.succeed(empty)
+            : provide(readInsights(summary, transcript)).pipe(
+                Effect.timeoutOption(INSIGHTS_TIMEOUT),
+                Effect.map(Option.getOrElse(() => empty)),
+                Effect.catchCause(() => Effect.succeed(empty)),
+              );
+        const [outputs, found] = yield* Effect.all([readOutputs, readSource], {
+          concurrency: 2,
+        });
+        // A store without a cost is priced from its tokens; `modelUsage` stays server-side.
+        let session = found.session;
+        if (
+          session?.costUsd === undefined &&
+          found.modelUsage !== undefined &&
+          found.modelUsage.length > 0
+        ) {
+          const modelUsage = found.modelUsage;
+          const costUsd = yield* provide(readRates).pipe(
+            Effect.map((table) => (table === null ? null : priceModelUsage(table, modelUsage))),
+            Effect.catchCause(() => Effect.succeed(null)),
+          );
+          if (costUsd !== null) session = { ...session, costUsd, costEstimated: true };
+        }
         return {
           host,
-          outputs: sessionOutputs(summary.driver, slice.lines),
-          truncated: slice.start > 0,
+          outputs: outputs?.outputs ?? null,
+          truncated: outputs?.truncated ?? false,
+          ...(session === undefined ? {} : { session }),
+          ...(found.context === undefined ? {} : { context: found.context }),
+          ...(found.mcpServers === undefined ? {} : { mcpServers: found.mcpServers }),
         };
       }),
     );

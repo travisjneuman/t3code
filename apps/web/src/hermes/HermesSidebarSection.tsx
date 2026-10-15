@@ -45,6 +45,10 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
+  HermesSessionDetailsCard,
+  type HermesSessionDetailsTarget,
+} from "./HermesSessionDetailsCard";
+import {
   HERMES_DRIVER,
   hermesAgentName,
   hermesInstanceIds,
@@ -62,6 +66,7 @@ const MORE_BUTTON_CLASS =
 
 type MenuAction =
   | "continue"
+  | "details"
   | "pin"
   | "unpin"
   | "archive"
@@ -170,6 +175,9 @@ export function HermesSidebarSection() {
   // once; the state shows the row as busy until the thread opens.
   const openingRef = useRef(new Set<string>());
   const [opening, setOpening] = useState<ReadonlySet<string>>(new Set());
+  // The session whose details card is open, for a row T3 has not opened.
+  const [detailsTarget, setDetailsTarget] = useState<HermesSessionDetailsTarget | null>(null);
+  const closeDetails = useCallback(() => setDetailsTarget(null), []);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -489,7 +497,7 @@ export function HermesSidebarSection() {
     await navigate({ to: "/settings/archived" });
   };
 
-  const showRowMenu = async (row: HermesRow, position: MenuPosition) => {
+  const showRowMenu = async (row: HermesRow, position: MenuPosition, anchor: Element) => {
     const api = readLocalApi();
     if (api === undefined) return;
     const subject = selected.has(row.key)
@@ -507,6 +515,10 @@ export function HermesSidebarSection() {
         label: count === 1 && row.thread !== null ? "Open" : `Continue in T3${suffix}`,
         icon: "message-square-plus",
       });
+    }
+    // An unopened session's details, without importing it.
+    if (count === 1 && row.thread === null && row.session !== null) {
+      items.push({ id: "details", label: "Details" });
     }
     if (withSession.length > 0) {
       const allPinned = withSession.every((candidate) => candidate.pinned);
@@ -538,6 +550,20 @@ export function HermesSidebarSection() {
         if (count === 1) await continueRow(row);
         else for (const candidate of unopened) await continueRow(candidate);
         break;
+      case "details":
+        if (row.session !== null) {
+          setDetailsTarget({
+            environmentId: row.environmentId,
+            instanceId: row.instanceId,
+            session: row.session,
+            agentName: hermesAgentName(
+              serverConfigs.get(row.environmentId)?.settings,
+              row.instanceId,
+            ),
+            anchor,
+          });
+        }
+        return;
       case "pin":
       case "unpin":
         await updateSessions(withSession, { pinned: clicked === "pin" }, clicked);
@@ -563,9 +589,12 @@ export function HermesSidebarSection() {
   // Rows are memoized, so they get stable callbacks that run the latest handlers.
   const handlers = useRef({ showRowMenu, continueRow, syncRow });
   handlers.current = { showRowMenu, continueRow, syncRow };
-  const handleContextMenu = useCallback((row: HermesRow, position: MenuPosition) => {
-    void handlers.current.showRowMenu(row, position);
-  }, []);
+  const handleContextMenu = useCallback(
+    (row: HermesRow, position: MenuPosition, anchor: Element) => {
+      void handlers.current.showRowMenu(row, position, anchor);
+    },
+    [],
+  );
   const handleClick = useCallback(
     (row: HermesRow, event: MouseEvent) => {
       if (event.metaKey || event.ctrlKey) {
@@ -695,6 +724,9 @@ export function HermesSidebarSection() {
           ) : null}
         </ul>
       ) : null}
+      {detailsTarget !== null ? (
+        <HermesSessionDetailsCard target={detailsTarget} onClose={closeDetails} />
+      ) : null}
     </section>
   );
 }
@@ -719,7 +751,7 @@ const HermesLine = memo(function HermesLine(props: {
   isOpening: boolean;
   nowMinute: string;
   onClick: (row: HermesRow, event: MouseEvent) => void;
-  onContextMenu: (row: HermesRow, position: MenuPosition) => void;
+  onContextMenu: (row: HermesRow, position: MenuPosition, anchor: Element) => void;
 }) {
   const { row } = props;
   const source = row.session?.source;
@@ -760,7 +792,7 @@ const HermesLine = memo(function HermesLine(props: {
     onClick: (event: MouseEvent) => props.onClick(row, event),
     onContextMenu: (event: MouseEvent) => {
       event.preventDefault();
-      props.onContextMenu(row, { x: event.clientX, y: event.clientY });
+      props.onContextMenu(row, { x: event.clientX, y: event.clientY }, event.currentTarget);
     },
     className,
   };

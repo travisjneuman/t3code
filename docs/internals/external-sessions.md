@@ -176,7 +176,8 @@ in T3, which binds an ordinary thread to that same session.
   - They never send reasoning, system prompts, or account fields such as Claude's bridge-session
     records.
   - They never read the `.key` files in the Claude registry or Codex `auth.json`.
-- "Running" means the agent reports a turn in progress (Claude's session registry, Codex
+- "Running" means the agent reports a turn in progress (Claude's session registry, whose live
+  `~/.claude/sessions/<pid>.json` entry decides it when `kill(pid, 0)` finds the process, Codex
   `task_started` without a matching completion) or the transcript changed in the last minute. One
   Codex turn can write megabytes of tool output after its `task_started`, so a rollout's first
   read looks back up to 64 MB past its 256 KB tail for it, and later writes read only the appended
