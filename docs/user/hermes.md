@@ -25,7 +25,9 @@ with the sessions Hermes holds from anywhere else, newest first, from the last t
 to keep it at the top whatever its age.
 
 - Click **+** on the section header to start a new session, or pick **Hermes Agent** in any new
-  thread's model picker. Either way the thread moves into the Hermes section.
+  thread's model picker. Either way the thread moves into the Hermes section. Hermes works in its
+  own workspace on its own machine, never in a T3 project's folder, so with Hermes picked the new
+  thread asks what the agent should work on and names that machine instead of offering a project.
 - Click a session Hermes started elsewhere to continue it in T3 with its history. Its next turn
   goes on in the same Hermes session.
 - Cmd/Ctrl-click or Shift-click selects several. Right-click for **Continue**, **Pin**,

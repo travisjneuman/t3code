@@ -622,6 +622,7 @@ import { useAssetUrls } from "../assets/assetUrls";
 import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
 import { recallableComposerPrompt } from "./chat/composerPromptHistory";
 import { observeResize } from "~/lib/observeResize";
+import { HERMES_DRIVER, hermesAgentName, hermesMachineName } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
 
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
@@ -3374,6 +3375,20 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
+  // Fork add-on: Hermes provider. Hermes works on its own machine, so a Hermes
+  // thread names that machine instead of offering a project or a local workspace.
+  const hermesAgent = useMemo(
+    () =>
+      selectedProvider === HERMES_DRIVER &&
+      activeProviderInstanceId !== null &&
+      multipleModelSelections === null
+        ? {
+            name: hermesAgentName(settings, activeProviderInstanceId),
+            machine: hermesMachineName(settings, activeProviderInstanceId),
+          }
+        : null,
+    [activeProviderInstanceId, multipleModelSelections, selectedProvider, settings],
+  );
   const { enabled: interactionModeEnabled, interactionMode } = resolveComposerInteractionMode({
     planModeEnabled: settings.planModeEnabled,
     provider: activeProviderStatus,
@@ -11052,6 +11067,8 @@ export default function ChatView(props: ChatViewProps) {
       ? { onCompactContext: onComposerCompactContextStable, compactDisabled, compactDisabledReason }
       : {}),
     ...(isServerThread ? { onOpenTurnDiff: onOpenTurnDiffStable } : {}),
+    // Fork add-on: Hermes provider.
+    ...(hermesAgent ? { hermesMachine: hermesAgent.machine } : {}),
   };
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,
@@ -11451,6 +11468,7 @@ export default function ChatView(props: ChatViewProps) {
                           draftId={draftId}
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
+                          hermesAgent={hermesAgent} // Fork add-on: Hermes provider.
                         />
                       </div>
                     </div>

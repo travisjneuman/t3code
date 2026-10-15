@@ -129,6 +129,33 @@ export function hermesAgentName(
   return typeof name === "string" && name.trim() !== "" ? name.trim() : "Hermes";
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+
+/**
+ * The machine the instance's Hermes runs on, from its API URL: the host's
+ * first label ("agent-host" for `http://agent-host.example.ts.net:8642`), an IP
+ * as is, or "the T3 host" for a loopback URL.
+ */
+export function hermesMachineName(
+  settings: Pick<ServerSettings, "providerInstances"> | null | undefined,
+  instanceId: ProviderInstanceId,
+): string {
+  const instanceConfig = settings?.providerInstances[instanceId]?.config;
+  const apiUrl =
+    typeof instanceConfig === "object" && instanceConfig !== null && "apiUrl" in instanceConfig
+      ? instanceConfig.apiUrl
+      : undefined;
+  let host = "";
+  try {
+    host = typeof apiUrl === "string" ? new URL(apiUrl).hostname : "";
+  } catch {
+    host = "";
+  }
+  if (!host) return "its Hermes server";
+  if (LOOPBACK_HOSTS.has(host)) return "the T3 host";
+  return /^[\d.]+$/.test(host) || host.includes(":") ? host : (host.split(".")[0] ?? host);
+}
+
 /** The provider part of a Hermes model slug (`provider::model`), or null for "Hermes default". */
 export function hermesModelProvider(model: string): string | null {
   const separator = model.indexOf("::");
