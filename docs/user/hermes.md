@@ -71,6 +71,11 @@ Codex provider, because it lists everything your ChatGPT account can use, includ
 keeps out of the Codex picker. To see those in the Codex provider too, see
 [hidden Codex models](fork-behavior.md#codex-can-show-hidden-models).
 
+Hermes lists some account-only models, such as **GPT-6-Astra**, only while its own Codex sign-in
+is fresh. When T3's Codex provider is signed in to the same ChatGPT account, the Hermes **Codex**
+group also lists every model T3's Codex sees, so those models stay offered and the list follows
+your account as it changes.
+
 **Settings › Providers › Hermes Agent › Models** groups the models by Hermes provider. Expand a
 provider to hide single models, or turn off its switch to hide the whole provider. Hiding only
 changes what T3 offers; Hermes, its chat platforms and its other clients still see every
