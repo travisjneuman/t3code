@@ -17,3 +17,18 @@
   height: auto;
   aspect-ratio: 1;
 }
+
+/*
+ * The "update everything" capsule grows into the space the icons leave. With
+ * the fork's extra footer buttons that space can be under 20px, which crushed
+ * the capsule to a sliver and pushed its status icon past the sidebar edge.
+ * While a run is shown, the capsule wraps onto its own full-width row below
+ * the icons instead, so its label and Later/Retry/Dismiss action always fit.
+ */
+[data-sidebar="footer"] [data-sidebar="menu"]:has(> [data-update-capsule]) {
+  flex-wrap: wrap;
+}
+
+[data-sidebar="footer"] [data-update-capsule] {
+  flex-basis: 100%;
+}
