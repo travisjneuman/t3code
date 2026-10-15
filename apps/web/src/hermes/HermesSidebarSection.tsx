@@ -53,6 +53,7 @@ import {
   hermesSessionsList,
   hermesSessionsUpdate,
   runHermes,
+  runHermesQuietly,
 } from "./hermesSessions";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:hermes-expanded";
@@ -332,9 +333,26 @@ export function HermesSidebarSection() {
     await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(threadRef) });
   };
 
+  /**
+   * Brings an opened session's thread up to date with what Hermes added since,
+   * such as a cron run's tool calls and report. A text-only thread opened
+   * before those were imported comes back replaced, so follow it.
+   */
+  const syncRow = async (row: HermesRow) => {
+    if (row.thread === null || row.session === null) return;
+    const result = await runHermesQuietly(hermesSessionsContinue, row.environmentId, {
+      instanceId: row.instanceId,
+      sessionId: row.session.id,
+    });
+    if (result !== null && result.threadId !== row.thread.id) {
+      await openThread(row.environmentId, result.threadId);
+    }
+  };
+
   const continueRow = async (row: HermesRow) => {
     if (row.thread !== null) {
       await openThread(row.environmentId, row.thread.id);
+      void syncRow(row);
       return;
     }
     if (row.session === null) return;
@@ -532,8 +550,8 @@ export function HermesSidebarSection() {
   };
 
   // Rows are memoized, so they get stable callbacks that run the latest handlers.
-  const handlers = useRef({ showRowMenu, continueRow });
-  handlers.current = { showRowMenu, continueRow };
+  const handlers = useRef({ showRowMenu, continueRow, syncRow });
+  handlers.current = { showRowMenu, continueRow, syncRow };
   const handleContextMenu = useCallback((row: HermesRow, position: MenuPosition) => {
     void handlers.current.showRowMenu(row, position);
   }, []);
@@ -566,6 +584,7 @@ export function HermesSidebarSection() {
         void handlers.current.continueRow(row);
       } else {
         closeMobileSidebar();
+        void handlers.current.syncRow(row);
       }
     },
     [closeMobileSidebar],

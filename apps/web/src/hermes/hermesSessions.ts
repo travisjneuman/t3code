@@ -92,6 +92,21 @@ export const runHermes = async <Input, A, E>(
   return null;
 };
 
+/** Runs a Hermes command in the background; the value, or null on any failure. */
+export const runHermesQuietly = async <Input, A, E>(
+  cmd: AtomCommand<{ readonly environmentId: EnvironmentId; readonly input: Input }, A, E>,
+  environmentId: EnvironmentId,
+  input: Input,
+): Promise<A | null> => {
+  const result = await runAtomCommand(
+    appAtomRegistry,
+    cmd,
+    { environmentId, input },
+    { reportFailure: false },
+  );
+  return result._tag === "Success" ? result.value : null;
+};
+
 /** The enabled Hermes provider instances an environment offers. */
 export function hermesInstanceIds(
   config: Pick<ServerConfig, "providers"> | null | undefined,

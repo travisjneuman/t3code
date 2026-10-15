@@ -6,18 +6,20 @@ import {
   type RunId,
   type ScopedThreadRef,
   SessionInsightsError,
+  type SessionRecord,
   type ThreadId,
 } from "@t3tools/contracts";
 import { getModelSelectionBooleanOptionValue } from "@t3tools/shared/model";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
-import { memo, useMemo } from "react";
+import { memo, type ReactNode, useMemo } from "react";
 
-import type { ContextWindowSnapshot } from "../../lib/contextWindow";
+import { type ContextWindowSnapshot, formatContextWindowTokens } from "../../lib/contextWindow";
 import { getProviderInstanceEntry } from "../../providerInstances";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import { useServerConfigs } from "../../state/entities";
 import { useSessionInsights, useThreadSessionSummary } from "../../state/sessionInsights";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
+import { StartTruncatedPath } from "../StartTruncatedPath";
 import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { runtimeModeConfig } from "./runtimeModeConfig";
@@ -29,9 +31,10 @@ import { ThreadDetailsStatRow, ThreadDetailsStatusDot } from "./ThreadDetailsSta
 import { ThreadOutputsSection } from "./ThreadOutputsSection";
 
 /**
- * Session, Context, Connectors, and Outputs for a server thread in the full
- * thread details card. Mount it only while the card is open at full density:
- * mounting is what fetches the provider's session details. Fork add-on.
+ * Session, Environment, Context, Connectors, and Outputs for a server thread
+ * in the full thread details card. Mount it only while the card is open at
+ * full density: mounting is what fetches the provider's session details.
+ * Fork add-on.
  */
 export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
   readonly environmentId: EnvironmentId;
@@ -57,7 +60,18 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
 
   return (
     <div data-thread-session-details>
-      <ThreadSessionSummarySection threadRef={threadRef} contextWindow={props.contextWindow} />
+      <ThreadSessionSummarySection
+        threadRef={threadRef}
+        contextWindow={props.contextWindow}
+        record={insights?.session ?? null}
+      />
+      <ThreadEnvironmentSection
+        threadRef={threadRef}
+        host={insights?.host ?? null}
+        // An agent with its own session store (Hermes) works in its own folders,
+        // not the T3 project's.
+        workspaceRoot={insights?.session === undefined ? props.workspaceRoot : undefined}
+      />
       <ThreadContextBreakdown
         insights={insights}
         error={notStarted ? null : insightsQuery.error}
@@ -76,10 +90,30 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
   );
 });
 
+/** Machine, folder, and branch the thread runs in. */
+function ThreadEnvironmentSection(props: {
+  readonly threadRef: ScopedThreadRef;
+  readonly host: string | null;
+  readonly workspaceRoot: string | undefined;
+}) {
+  const summary = useThreadSessionSummary(props.threadRef);
+  if (summary === null) return null;
+  return (
+    <SessionEnvironmentSection
+      host={props.host}
+      folder={props.workspaceRoot ?? summary.worktreePath}
+      branch={summary.branch}
+    />
+  );
+}
+
 function ThreadSessionSummarySection(props: {
   readonly threadRef: ScopedThreadRef;
   readonly contextWindow: ContextWindowSnapshot | null;
+  /** The agent's own record of the session, for agents that keep one (Hermes). */
+  readonly record: SessionRecord | null;
 }) {
+  const { record } = props;
   const summary = useThreadSessionSummary(props.threadRef);
   const providers = useServerConfigs().get(props.threadRef.environmentId)?.providers;
   if (summary === null) return null;
@@ -107,13 +141,23 @@ function ThreadSessionSummarySection(props: {
       ? "Fast"
       : null,
   ].filter((trait) => trait !== null);
-  const status = SESSION_STATUS_PRESENTATION[summary.sessionStatus ?? "none"];
+  // With no T3 session running, the agent's own record says whether it is active.
+  const status =
+    record?.status !== undefined &&
+    (summary.sessionStatus === null || summary.sessionStatus === "stopped")
+      ? RECORD_STATUS_PRESENTATION[record.status]
+      : SESSION_STATUS_PRESENTATION[summary.sessionStatus ?? "none"];
   const runtimeMode = runtimeModeConfig[summary.runtimeMode];
   const RuntimeModeIcon = runtimeMode.icon;
   // Provider-reported totals for the whole session, when the provider sends them.
-  const toolUses = props.contextWindow?.toolUses ?? null;
+  const toolUses = record?.toolCallCount ?? props.contextWindow?.toolUses ?? null;
   const durationMs = props.contextWindow?.durationMs ?? null;
-  const cost = props.contextWindow?.cost ?? null;
+  const cost =
+    record?.costUsd !== undefined
+      ? `${record.costEstimated ? "~" : ""}${formatContextWindowCost({ amount: record.costUsd, currency: "USD" })}`
+      : props.contextWindow?.cost
+        ? formatContextWindowCost(props.contextWindow.cost)
+        : null;
 
   return (
     <ThreadDetailsSection
@@ -121,30 +165,24 @@ function ThreadSessionSummarySection(props: {
       title="Session"
       data-thread-session-summary
     >
-      <div className="flex min-w-0 items-center gap-2.5 px-2.5 py-1.5">
-        {driverKind === null ? null : (
-          <ProviderInstanceIcon
-            driverKind={driverKind}
-            displayName={providerName}
-            accentColor={entry?.accentColor}
-            acpRegistryAgentId={entry?.acpRegistryAgentId}
-            acpRegistryIconUrl={entry?.acpRegistryIconUrl}
-            iconClassName="size-4"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground/80">
-            {providerName}
-          </span>
-          <p className="truncate text-2xs text-muted-foreground">
-            {[modelLabel, ...traits].join(" · ")}
-          </p>
-        </div>
-        <span className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
-          <ThreadDetailsStatusDot className={status.dotClassName} />
-          {status.label}
-        </span>
-      </div>
+      <SessionHeaderRow
+        icon={
+          driverKind === null ? null : (
+            <ProviderInstanceIcon
+              driverKind={driverKind}
+              displayName={providerName}
+              accentColor={entry?.accentColor}
+              acpRegistryAgentId={entry?.acpRegistryAgentId}
+              acpRegistryIconUrl={entry?.acpRegistryIconUrl}
+              iconClassName="size-4"
+            />
+          )
+        }
+        name={providerName}
+        subtitle={[modelLabel, ...traits].join(" · ")}
+        statusLabel={status.label}
+        statusDotClassName={status.dotClassName}
+      />
       <ThreadDetailsStatRow
         label={
           <>
@@ -155,25 +193,131 @@ function ThreadSessionSummarySection(props: {
       >
         {runtimeMode.label}
       </ThreadDetailsStatRow>
+      {record?.source !== undefined ? (
+        <ThreadDetailsStatRow label="Source">{record.source}</ThreadDetailsStatRow>
+      ) : null}
       <ThreadDetailsStatRow label="Started">
-        {formatRelativeTimeLabel(summary.startedAt)}
+        {formatRelativeTimeLabel(record?.startedAt ?? summary.startedAt)}
       </ThreadDetailsStatRow>
-      <ThreadDetailsStatRow label="Updated">
-        {formatRelativeTimeLabel(summary.updatedAt)}
+      <ThreadDetailsStatRow label={record?.lastActiveAt !== undefined ? "Last active" : "Updated"}>
+        {formatRelativeTimeLabel(record?.lastActiveAt ?? summary.updatedAt)}
       </ThreadDetailsStatRow>
+      {record?.endedAt !== undefined ? (
+        <ThreadDetailsStatRow label="Ended">
+          {formatRelativeTimeLabel(record.endedAt)}
+          {record.endReason !== undefined ? ` · ${record.endReason}` : null}
+        </ThreadDetailsStatRow>
+      ) : null}
       <ThreadDetailsStatRow label="Turns">{summary.turnCount}</ThreadDetailsStatRow>
+      {record?.messageCount !== undefined ? (
+        <ThreadDetailsStatRow label="Messages">{record.messageCount}</ThreadDetailsStatRow>
+      ) : null}
       {toolUses !== null ? (
         <ThreadDetailsStatRow label="Tool uses">{toolUses}</ThreadDetailsStatRow>
       ) : null}
       {durationMs !== null ? (
         <ThreadDetailsStatRow label="Duration">{formatDuration(durationMs)}</ThreadDetailsStatRow>
       ) : null}
-      {cost !== null ? (
-        <ThreadDetailsStatRow label="Cost">{formatContextWindowCost(cost)}</ThreadDetailsStatRow>
+      {record?.apiCallCount !== undefined ? (
+        <ThreadDetailsStatRow label="API calls">{record.apiCallCount}</ThreadDetailsStatRow>
       ) : null}
+      {record !== null ? <SessionRecordTokenRows record={record} /> : null}
+      {cost !== null ? <ThreadDetailsStatRow label="Cost">{cost}</ThreadDetailsStatRow> : null}
       {summary.lastError !== null && summary.sessionStatus === "error" ? (
         <p className="px-2.5 pt-1 text-2xs text-pretty text-destructive">{summary.lastError}</p>
       ) : null}
     </ThreadDetailsSection>
   );
 }
+
+const RECORD_STATUS_PRESENTATION: Record<
+  NonNullable<SessionRecord["status"]>,
+  { readonly label: string; readonly dotClassName: string }
+> = {
+  active: { label: "Active", dotClassName: "bg-success" },
+  ended: { label: "Ended", dotClassName: "bg-muted-foreground/45" },
+};
+
+/** Token totals the agent keeps for the whole session, measured by its provider. */
+function SessionRecordTokenRows(props: { readonly record: SessionRecord }) {
+  const { record } = props;
+  const pair = (left: string, a: number | undefined, right: string, b: number | undefined) =>
+    [
+      a === undefined ? null : `${left} ${formatContextWindowTokens(a)}`,
+      b === undefined ? null : `${right} ${formatContextWindowTokens(b)}`,
+    ]
+      .filter((part) => part !== null)
+      .join(" · ");
+  const tokens = pair("in", record.inputTokens, "out", record.outputTokens);
+  const cache =
+    record.cacheReadTokens || record.cacheWriteTokens
+      ? pair("read", record.cacheReadTokens, "write", record.cacheWriteTokens)
+      : "";
+  return (
+    <>
+      {tokens !== "" ? <ThreadDetailsStatRow label="Tokens">{tokens}</ThreadDetailsStatRow> : null}
+      {cache !== "" ? <ThreadDetailsStatRow label="Cache">{cache}</ThreadDetailsStatRow> : null}
+      {record.reasoningTokens ? (
+        <ThreadDetailsStatRow label="Reasoning">
+          {formatContextWindowTokens(record.reasoningTokens)}
+        </ThreadDetailsStatRow>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The Session section's first row: the agent's icon and name, the model and
+ * its traits, and the session's state. Shared with Other Agents sessions.
+ */
+export function SessionHeaderRow(props: {
+  readonly icon: ReactNode;
+  readonly name: string;
+  readonly subtitle: string;
+  readonly statusLabel: string;
+  readonly statusDotClassName: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 px-2.5 py-1.5">
+      {props.icon}
+      <div className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-foreground/80">{props.name}</span>
+        {props.subtitle !== "" ? (
+          <p className="truncate text-2xs text-muted-foreground">{props.subtitle}</p>
+        ) : null}
+      </div>
+      <span className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
+        <ThreadDetailsStatusDot className={props.statusDotClassName} />
+        {props.statusLabel}
+      </span>
+    </div>
+  );
+}
+
+/** Where a session runs: the machine, its folder, and its git branch. */
+export const SessionEnvironmentSection = memo(function SessionEnvironmentSection(props: {
+  readonly host: string | null;
+  readonly folder: string | null;
+  readonly branch: string | null;
+}) {
+  if (props.host === null && props.folder === null && props.branch === null) return null;
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-environment-heading"
+      title="Environment"
+      data-thread-session-environment
+    >
+      {props.host !== null ? (
+        <ThreadDetailsStatRow label="Machine">{props.host}</ThreadDetailsStatRow>
+      ) : null}
+      {props.folder !== null ? (
+        <ThreadDetailsStatRow label="Folder">
+          <StartTruncatedPath path={props.folder} className="block" />
+        </ThreadDetailsStatRow>
+      ) : null}
+      {props.branch !== null ? (
+        <ThreadDetailsStatRow label="Branch">{props.branch}</ThreadDetailsStatRow>
+      ) : null}
+    </ThreadDetailsSection>
+  );
+});

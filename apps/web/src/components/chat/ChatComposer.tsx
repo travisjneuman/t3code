@@ -1164,8 +1164,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { readEnvironmentScope } from "../../state/session";
 import { serverEnvironment } from "../../state/server";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
-import { HermesModelControls } from "../../hermes/HermesComposerControls"; // Fork add-on: Hermes provider.
-import { HERMES_DRIVER, hermesAgentName, hermesModelProvider } from "../../hermes/hermesSessions"; // Fork add-on: Hermes provider.
+import { hermesComposerTriggerLabel } from "../../hermes/hermesModelGroups"; // Fork add-on: Hermes provider.
+import { HERMES_DRIVER, hermesAgentName } from "../../hermes/hermesSessions"; // Fork add-on: Hermes provider.
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
 
@@ -2438,30 +2438,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     return out;
   }, [providerInstanceEntries, selectedInstanceId, selectedModelForPicker, settings]);
-  // Fork add-on: Hermes provider. The chip lists only "Hermes default" and the
-  // current model for Hermes; its own provider and model dropdowns pick the rest.
+  // Fork add-on: Hermes provider. The chip shows the agent name and the picked model.
   const selectedIsHermes =
     selectedProviderEntry?.driverKind === HERMES_DRIVER && multipleModelSelections === null;
-  const pickerModelOptionsByInstance = useMemo(() => {
-    const hermesIds = new Set(
-      providerInstanceEntries.flatMap((entry) =>
-        entry.driverKind === HERMES_DRIVER ? [entry.instanceId] : [],
-      ),
-    );
-    if (hermesIds.size === 0) return modelOptionsByInstance;
-    const out = new Map(modelOptionsByInstance);
-    for (const instanceId of hermesIds) {
-      out.set(
-        instanceId,
-        (modelOptionsByInstance.get(instanceId) ?? []).filter(
-          (option) =>
-            hermesModelProvider(option.slug) === null ||
-            (instanceId === selectedInstanceId && option.slug === selectedModelForPicker),
-        ),
-      );
-    }
-    return out;
-  }, [modelOptionsByInstance, providerInstanceEntries, selectedInstanceId, selectedModelForPicker]);
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
     const currentOptions = modelOptionsByInstance.get(selectedInstanceId) ?? [];
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
@@ -5368,27 +5347,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     hidden: composerControlsHidden || restingHiddenBlockCount > 1,
   });
   const restingBlockDefs = [
-    // Fork add-on: Hermes provider.
-    ...(selectedIsHermes
-      ? [
-          {
-            id: "hermes",
-            content: (
-              <HermesModelControls
-                options={modelOptionsByInstance.get(selectedInstanceId) ?? []}
-                model={selectedModelForPicker}
-                size={composerControlsCollapsed ? "xs" : "sm"}
-                hidden={
-                  composerControlsHidden ||
-                  restingHiddenBlockCount >= (providerTraitsPicker ? 3 : 2)
-                }
-                disabled={providerCatalogPending || isSendBusy}
-                onModelChange={(model) => onProviderModelSelect(selectedInstanceId, model)}
-              />
-            ),
-          },
-        ]
-      : []),
     ...(providerTraitsPicker
       ? [
           {
@@ -5512,9 +5470,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         lockedContinuationGroupKey={lockedContinuationGroupKey}
         instanceEntries={providerInstanceEntries}
         keybindings={keybindings}
-        modelOptionsByInstance={pickerModelOptionsByInstance}
+        modelOptionsByInstance={modelOptionsByInstance}
+        // Fork add-on: Hermes provider.
         {...(selectedIsHermes
-          ? { triggerLabel: hermesAgentName(settings, selectedInstanceId) }
+          ? {
+              triggerLabel: hermesComposerTriggerLabel(
+                hermesAgentName(settings, selectedInstanceId),
+                selectedModelForPicker,
+                modelOptionsByInstance.get(selectedInstanceId) ?? [],
+              ),
+            }
           : {})}
         size={composerControlsCollapsed ? "xs" : "sm"}
         triggerClassName={

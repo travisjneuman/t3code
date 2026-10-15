@@ -144,6 +144,7 @@ export interface HermesSession {
   readonly model: string | null;
   readonly title: string | null;
   readonly startedAt: number | null;
+  readonly endedAt: number | null;
   readonly lastActive: number | null;
   readonly messageCount: number;
   readonly preview: string | null;
@@ -164,6 +165,7 @@ export const decodeSession = (value: unknown): HermesSession | undefined => {
     model: str(value.model),
     title: str(value.title),
     startedAt: num(value.started_at),
+    endedAt: num(value.ended_at),
     lastActive: num(value.last_active) ?? num(value.started_at),
     messageCount: num(value.message_count) ?? 0,
     preview: str(value.preview),
@@ -220,31 +222,79 @@ export const patchSession = (
 export const deleteSession = (connection: HermesConnection, id: string) =>
   apiRequest(connection, "DELETE", sessionPath(id)).pipe(Effect.asVoid);
 
+export interface HermesToolCall {
+  readonly id: string;
+  readonly name: string;
+  /** The call's arguments as Hermes stored them, usually a JSON object string. */
+  readonly arguments: string;
+}
+
 export interface HermesMessage {
   readonly id: string;
   readonly role: string;
   readonly content: string;
   readonly timestamp: number | null;
+  /** The calls an assistant message made; empty otherwise. */
+  readonly toolCalls: ReadonlyArray<HermesToolCall>;
+  /** On a `tool` message, the call it answers. */
+  readonly toolCallId: string | null;
+  readonly toolName: string | null;
+  readonly reasoning: string | null;
 }
 
+const MESSAGES_PAGE = 500;
+// Bounds a very long session's walk; the newest messages past it stay in Hermes.
+const MAX_MESSAGE_PAGES = 20;
+
+const decodeToolCalls = (value: unknown): HermesToolCall[] =>
+  (Array.isArray(value) ? value : []).flatMap((call, index): HermesToolCall[] => {
+    if (!isRecord(call)) return [];
+    const fn = isRecord(call.function) ? call.function : {};
+    const name = str(fn.name) ?? str(call.name);
+    if (name === null) return [];
+    const args = fn.arguments ?? call.arguments;
+    return [
+      {
+        id: str(call.id) ?? str(call.call_id) ?? `call-${index}`,
+        name,
+        arguments: typeof args === "string" ? args : args === undefined ? "" : JSON.stringify(args),
+      },
+    ];
+  });
+
+const decodeMessage = (entry: unknown, index: number): HermesMessage | undefined =>
+  isRecord(entry) && typeof entry.role === "string"
+    ? {
+        id: entry.id === undefined ? `index-${index}` : String(entry.id),
+        role: entry.role,
+        content: typeof entry.content === "string" ? entry.content : "",
+        timestamp: num(entry.timestamp),
+        toolCalls: decodeToolCalls(entry.tool_calls),
+        toolCallId: str(entry.tool_call_id),
+        toolName: str(entry.tool_name),
+        reasoning: str(entry.reasoning) ?? str(entry.reasoning_content),
+      }
+    : undefined;
+
+/** A session's messages, oldest first, page by page. */
 export const listMessages = (connection: HermesConnection, id: string) =>
-  apiRequest(connection, "GET", `${sessionPath(id)}/messages?limit=500&order=oldest`).pipe(
-    Effect.map((body) =>
-      (isRecord(body) && Array.isArray(body.data) ? body.data : []).flatMap(
-        (entry, index): HermesMessage[] =>
-          isRecord(entry) && typeof entry.role === "string"
-            ? [
-                {
-                  id: entry.id === undefined ? `index-${index}` : String(entry.id),
-                  role: entry.role,
-                  content: typeof entry.content === "string" ? entry.content : "",
-                  timestamp: num(entry.timestamp),
-                },
-              ]
-            : [],
-      ),
-    ),
-  );
+  Effect.gen(function* () {
+    const messages: HermesMessage[] = [];
+    for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
+      const body = yield* apiRequest(
+        connection,
+        "GET",
+        `${sessionPath(id)}/messages?limit=${MESSAGES_PAGE}&offset=${page * MESSAGES_PAGE}&order=oldest`,
+      );
+      const data = isRecord(body) && Array.isArray(body.data) ? body.data : [];
+      data.forEach((entry, index) => {
+        const message = decodeMessage(entry, page * MESSAGES_PAGE + index);
+        if (message) messages.push(message);
+      });
+      if (data.length < MESSAGES_PAGE) break;
+    }
+    return messages;
+  });
 
 // ── Models ────────────────────────────────────────────────────────────
 
@@ -479,3 +529,73 @@ export const dashboardRequest = (
     ),
   );
 };
+
+// ── Cron reports ──────────────────────────────────────────────────────
+
+export interface HermesCronJob {
+  readonly id: string;
+  readonly name: string | null;
+  /** Where the job delivers, such as `discord:<chat>:<thread>` or `local`. */
+  readonly deliver: string | null;
+  /** The Hermes home the job's output docs live under. */
+  readonly hermesHome: string | null;
+}
+
+/** One cron job, or undefined when Hermes has no such job. */
+export const getCronJob = (connection: HermesDashboardConnection, jobId: string) =>
+  dashboardRequest(connection, "GET", `/api/cron/jobs/${encodeURIComponent(jobId)}`).pipe(
+    Effect.map((body): HermesCronJob | undefined =>
+      isRecord(body) && typeof body.id === "string"
+        ? {
+            id: body.id,
+            name: str(body.name),
+            deliver: str(body.deliver),
+            hermesHome: str(body.hermes_home),
+          }
+        : undefined,
+    ),
+    Effect.catchIf(
+      (error) => error.status === 404,
+      () => Effect.succeed(undefined),
+    ),
+  );
+
+/** The session ids of a cron job's recent agent runs, newest first. */
+export const listCronRunSessionIds = (
+  connection: HermesDashboardConnection,
+  jobId: string,
+  limit: number,
+) =>
+  dashboardRequest(
+    connection,
+    "GET",
+    `/api/cron/jobs/${encodeURIComponent(jobId)}/runs?limit=${limit}`,
+  ).pipe(
+    Effect.map((body) =>
+      (isRecord(body) && Array.isArray(body.runs) ? body.runs : []).flatMap((run) =>
+        isRecord(run) && typeof run.id === "string" && run.source === "cron" ? [run.id] : [],
+      ),
+    ),
+  );
+
+/** File names in a directory on the Hermes host, read through the dashboard. */
+export const listHostDirectory = (connection: HermesDashboardConnection, path: string) =>
+  dashboardRequest(connection, "GET", `/api/fs/list?path=${encodeURIComponent(path)}`).pipe(
+    Effect.map((body) =>
+      (isRecord(body) && Array.isArray(body.entries) ? body.entries : []).flatMap((entry) =>
+        isRecord(entry) && typeof entry.name === "string" && entry.isDirectory !== true
+          ? [entry.name]
+          : [],
+      ),
+    ),
+  );
+
+/** A text file on the Hermes host, read through the dashboard; undefined for binary. */
+export const readHostTextFile = (connection: HermesDashboardConnection, path: string) =>
+  dashboardRequest(connection, "GET", `/api/fs/read-text?path=${encodeURIComponent(path)}`).pipe(
+    Effect.map((body) =>
+      isRecord(body) && body.binary !== true && typeof body.text === "string"
+        ? body.text
+        : undefined,
+    ),
+  );

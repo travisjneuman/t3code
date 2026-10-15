@@ -15,6 +15,12 @@ In the desktop app, the view has the right panel for [web apps](./desktop-remote
 panel shared by every session; the browser, terminal, files and diff need a thread, so continue the
 session in T3 for those.
 
+**Toggle thread details** (`mod+shift+b`, or the button in the session's header) opens the same
+details card a thread has: the session's model and settings, the machine and folder it runs in,
+how much of its context window it has used, and the files it changed, with lines added and
+removed. Files are read from the end of the session's transcript, so a very long session notes
+that earlier changes were not read.
+
 ## Continue a session in T3
 
 To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then

@@ -1,12 +1,13 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { type ReactNode, useEffect, useEffectEvent, useMemo } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { PanelLayoutControls } from "../components/chat/PanelLayoutControls";
 import { RightPanelSheet } from "../components/RightPanelSheet";
 import { RightPanelTabs } from "../components/RightPanelTabs";
+import { PopoverCreateHandle } from "../components/ui/popover";
 import { isElectron } from "../env";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -16,9 +17,13 @@ import { renderRemoteAppPanel } from "../remote-apps/panel/RemoteAppPanelView";
 import { readRemoteAppPanelBridge } from "../remote-apps/panel/remoteAppPanelRuntime";
 import { useRemoteAppPanelThread } from "../remote-apps/panel/remoteAppPanelThread";
 import { useAvailableRemoteAppSites } from "../remote-apps/useRemoteAppSites";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import {
+  RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY,
+  type ThreadPanelPresentation,
+} from "../rightPanelLayout";
 import {
   type RightPanelSurface,
+  selectThreadPanelOpen,
   selectThreadRightPanelState,
   useRightPanelStore,
 } from "../rightPanelStore";
@@ -28,8 +33,10 @@ import { primaryServerKeybindingsAtom } from "../state/server";
  * One side panel for every Other Agents session, so its web app tabs stay put
  * while you move between sessions. It holds web apps only: the browser,
  * terminal, files, and diff need a T3 thread, which "Continue in T3" makes.
+ * The session details card shares the ref, so it stays open or closed across
+ * sessions too.
  */
-const EXTERNAL_SESSIONS_PANEL_REF = scopeThreadRef(
+export const EXTERNAL_SESSIONS_PANEL_REF = scopeThreadRef(
   EnvironmentId.make("external-sessions-panel"),
   ThreadId.make("external-sessions-panel"),
 );
@@ -53,17 +60,24 @@ function getShortcutContext() {
   };
 }
 
+/** What the view needs to place the session details card. */
+export interface ExternalSessionDetailsCardState {
+  readonly handle: ReturnType<typeof PopoverCreateHandle>;
+  readonly onPresentationChange: (presentation: ThreadPanelPresentation) => void;
+}
+
 /**
- * The thread view's right panel for an Other Agents session: `headerControls`
- * go inside the header while the panel is closed (a no-drag descendant beats
- * the header's drag region), `rootControls` float over the panel while it is
- * shown, and `panel` sits beside the chat column. All null outside the
- * desktop app or with no web apps turned on.
+ * The thread view's panels for an Other Agents session: `headerControls`
+ * go inside the header (a no-drag descendant beats the header's drag region),
+ * `rootControls` float over the right panel while it is shown, and `panel`
+ * sits beside the chat column. The details card toggle is always there; the
+ * right panel and its toggle only in the desktop app with web apps turned on.
  */
 export function useExternalSessionPanel(environmentId: EnvironmentId): {
   headerControls: ReactNode;
   rootControls: ReactNode;
   panel: ReactNode;
+  details: ExternalSessionDetailsCardState;
 } {
   const ref = EXTERNAL_SESSIONS_PANEL_REF;
   const { sites, loaded } = useAvailableRemoteAppSites();
@@ -78,6 +92,22 @@ export function useExternalSessionPanel(environmentId: EnvironmentId): {
     selectThreadRightPanelState(state.byThreadKey, ref),
   );
   const open = available && panelState.isOpen;
+  const [detailsPresentation, setDetailsPresentation] = useState<ThreadPanelPresentation>("inline");
+  const [detailsHandle] = useState(PopoverCreateHandle);
+  const detailsOpen = useRightPanelStore((state) =>
+    selectThreadPanelOpen(state.threadPanelVisibilityByThreadKey, ref, detailsPresentation),
+  );
+  const details = useMemo(
+    () => ({ handle: detailsHandle, onPresentationChange: setDetailsPresentation }),
+    [detailsHandle],
+  );
+  const toggleDetails = () =>
+    useRightPanelStore.getState().toggleThreadPanel(ref, detailsPresentation);
+  const toggleDetailsFromShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.repeat) toggleDetails();
+  });
   const presenceValue = useMemo(
     () => ({
       activeSurface:
@@ -117,40 +147,53 @@ export function useExternalSessionPanel(environmentId: EnvironmentId): {
       });
       if (command === "rightPanel.toggle") toggleFromShortcut(event);
       if (command === "rightPanel.close") closeActiveFromShortcut(event);
+      if (command === "threadPanel.toggle") toggleDetailsFromShortcut(event);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [keybindings]);
 
-  if (!available) return { headerControls: null, rootControls: null, panel: null };
-
-  const toggleControl = (
+  const layoutControls = (options: { details: boolean; rightPanel: boolean }) => (
     <PanelLayoutControls
       showTerminalControl={false}
-      showThreadPanelControl={false}
+      showThreadPanelControl={options.details}
+      showRightPanelControl={options.rightPanel}
       terminalAvailable={false}
       terminalOpen={false}
       terminalShortcutLabel={null}
-      threadPanelOpen={false}
-      threadPanelPresentation="inline"
-      threadPanelShortcutLabel={null}
-      onToggleThreadPanel={ignore}
-      rightPanelAvailable
+      threadPanelOpen={detailsOpen}
+      threadPanelPresentation={detailsPresentation}
+      threadPanelPopoverHandle={detailsHandle}
+      threadPanelShortcutLabel={shortcutLabelForCommand(keybindings, "threadPanel.toggle")}
+      onToggleThreadPanel={toggleDetails}
+      rightPanelAvailable={available}
       rightPanelOpen={open}
       rightPanelShortcutLabel={shortcutLabelForCommand(keybindings, "rightPanel.toggle")}
       onToggleTerminal={ignore}
       onToggleRightPanel={toggle}
     />
   );
-  const controls = (
+  const anchored = (children: ReactNode) => (
     <div
       // The anchor the thread view's controls use, one shared inset from the edge.
       className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
       data-workspace-titlebar-controls
     >
-      {toggleControl}
+      {children}
     </div>
   );
+
+  if (!available) {
+    return {
+      headerControls: anchored(layoutControls({ details: true, rightPanel: false })),
+      rootControls: null,
+      panel: null,
+      details,
+    };
+  }
+
+  const toggleControl = layoutControls({ details: false, rightPanel: true });
+  const controls = anchored(layoutControls({ details: true, rightPanel: true }));
   const store = useRightPanelStore.getState;
   const tabs = (mode: "inline" | "sheet") => (
     <RightPanelTabs
@@ -199,6 +242,7 @@ export function useExternalSessionPanel(environmentId: EnvironmentId): {
 
   if (useSheet) {
     return {
+      details,
       headerControls: controls,
       rootControls: null,
       panel: presence.present ? (
@@ -213,8 +257,20 @@ export function useExternalSessionPanel(environmentId: EnvironmentId): {
     };
   }
   return {
-    headerControls: presence.present ? null : controls,
-    rootControls: presence.present ? controls : null,
+    details,
+    // With the panel shown, its toggle floats over it and the details toggle
+    // stays at the chat header's edge, as a thread's does.
+    headerControls: presence.present ? (
+      <div
+        className="absolute top-[var(--workspace-controls-top)] right-[calc(env(safe-area-inset-right)+0.75rem)] z-50 flex h-[var(--workspace-topbar-height)] items-center [-webkit-app-region:no-drag]"
+        data-workspace-titlebar-controls
+      >
+        {layoutControls({ details: true, rightPanel: false })}
+      </div>
+    ) : (
+      controls
+    ),
+    rootControls: presence.present ? anchored(toggleControl) : null,
     panel: presence.present ? tabs("inline") : null,
   };
 }

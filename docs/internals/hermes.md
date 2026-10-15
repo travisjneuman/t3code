@@ -33,3 +33,34 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
   model goes through the instance's usual hidden models. Hermes itself is never changed.
 - **Text generation is refused.** Every prompt becomes a Hermes session, so titles and commit
   messages would clutter the agent's history.
+- **A session from elsewhere is imported in full, then only appended to.**
+  [`HermesSessions.ts`](../../apps/server/src/hermes/HermesSessions.ts) maps the session's stored
+  messages through
+  [`hermesSessionEntries.ts`](../../apps/server/src/hermes/hermesSessionEntries.ts): text,
+  reasoning, and each tool call paired with its `tool` result by call id, split into commands and
+  dynamic tools the same way the live adapter splits them. Every entry has a stable key, so its
+  turn item id never changes and a later click writes only the entries that are new. Positions
+  can't be inserted between existing items, so new entries go after the latest run that started
+  before them. Entries that fall inside a T3 run's window (with 30 s of clock slack each side) are
+  skipped, because that run already streamed them live.
+- **Threads from the first import are replaced, not patched.** The v1 import
+  (`hermes-session-import:v1` ids) kept only user and assistant text under different ids. A v1 thread with no T3
+  runs is rebuilt under `hermes:<instance>:<session>` with the full history, the provider binding
+  moves to it, and the old thread is deleted. A v1 thread that has runs is kept and only gets
+  entries newer than its last imported item.
+- **Cron reports come from the output doc, not the session.** A cron run's delivered text (what
+  Discord shows) is written to `{hermes_home}/cron/output/<job>/<local stamp>.md`, not to the
+  session. For a `cron_<job>_<date>_<time>` session the import reads the job through the
+  dashboard, picks the first doc stamped at or after the session and before the job's next run,
+  and adds what follows its last `## Response` as an assistant message after a delivery notice.
+  The report is dropped when the session's last assistant message already says the same. Stamps
+  are the Hermes host's local time, so only their difference is used, added to the session's
+  start. Any failure here only skips the report.
+- **Session details come from Hermes, not the run stream.** `SessionInsights.get` calls
+  [`insights.ts`](../../packages/provider-hermes/src/server/insights.ts), which reads
+  `/api/sessions/{id}`, the paged messages, and the dashboard's `/api/model/info` and
+  `/api/mcp/servers` in parallel. Each part can fail alone, and the whole read times out after
+  30 s. Hermes sends no token usage for the context window, so the breakdown is a labelled
+  four-characters-a-token estimate, and the window size is used only when the dashboard's model
+  is the session's. MCP rows read only name, enabled flag and tool count. The report's host is
+  the API URL's host, since the agent runs there.

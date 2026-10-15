@@ -65,8 +65,9 @@ Claude Code, Codex, Grok, Pi and Antigravity sessions that you started outside T
 Talk to a [Hermes Agent](https://github.com/NousResearch/hermes-agent) from T3 over its API, whether it runs here or on another computer. Its chat platforms, cron jobs and CLI keep working.
 
 - Sessions have their own **Hermes Agent** section above Other Agents: your T3 threads and Hermes's own sessions, newest first. Pin the ones you want on top.
+- A session started elsewhere opens in full, tool calls and reasoning included, and a cron job's session ends with the report it delivered to Discord or wherever it went.
 - Start one from the section's **+**, or pick Hermes Agent in any new thread's model picker.
-- Pick any model Hermes can use, per turn. Providers whose terms rule out use from another app are never offered.
+- Pick any model Hermes can use, per turn, from collapsible provider groups in the usual model picker. Providers whose terms rule out use from another app are never offered.
 - Archive, unarchive and delete reach Hermes too. Hermes's config, keys and custom endpoints are editable in Settings.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/hermes.md)

@@ -37,6 +37,9 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
   );
   if (context === null && contextWindow === null && props.error === null) return null;
 
+  // Counted by the app from stored text rather than reported by the provider.
+  const estimated = context?.estimated === true;
+  const approx = estimated ? "~" : "";
   const usedTokens = context?.totalTokens ?? contextWindow?.usedTokens ?? null;
   const maxTokens = context ? context.maxTokens || null : (contextWindow?.maxTokens ?? null);
   const usedPercent = view ? view.usedPercent : (contextWindow?.usedPercentage ?? null);
@@ -57,15 +60,24 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
     <ThreadDetailsSection
       headingId="thread-details-context-heading"
       title="Context"
+      actions={
+        estimated ? (
+          <span className="text-2xs text-muted-foreground" title={context?.note}>
+            Estimated
+          </span>
+        ) : undefined
+      }
       data-thread-context-breakdown
     >
       {usedTokens !== null ? (
         <div className="flex flex-col gap-1.5 px-2.5 pb-1">
           <div className="flex items-baseline justify-between gap-3 text-2xs tabular-nums">
             <span className="font-medium text-foreground/80">
+              {approx}
               {formatContextPercent(usedPercent) ?? "–"} used
             </span>
             <span className="text-muted-foreground">
+              {approx}
               {formatContextWindowTokens(usedTokens)}
               {maxTokens !== null ? ` / ${formatContextWindowTokens(maxTokens)}` : null}
             </span>
@@ -78,7 +90,7 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
         </div>
       ) : null}
       {view && context ? (
-        <ContextCategoryRows view={view} />
+        <ContextCategoryRows view={view} estimated={estimated} />
       ) : contextWindow ? (
         <ContextUsageTotals usage={contextWindow} />
       ) : null}
@@ -88,6 +100,9 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
         </p>
       ) : null}
       {context ? <ContextContributorLists context={context} /> : null}
+      {context?.note ? (
+        <p className="px-2.5 pt-1 text-2xs text-pretty text-muted-foreground">{context.note}</p>
+      ) : null}
       {props.onCompactContext ? (
         <div className="grid gap-1 px-2.5 pt-2">
           <Button
@@ -159,7 +174,10 @@ function ContextAggregateBar(props: { readonly usedPercent: number | null }) {
   );
 }
 
-function ContextCategoryRows(props: { readonly view: ContextBreakdownView }) {
+function ContextCategoryRows(props: {
+  readonly view: ContextBreakdownView;
+  readonly estimated: boolean;
+}) {
   return (
     <div className="flex flex-col">
       {props.view.rows.map((row, index) => {
@@ -179,6 +197,7 @@ function ContextCategoryRows(props: { readonly view: ContextBreakdownView }) {
               </>
             }
           >
+            {props.estimated ? "~" : null}
             {formatContextWindowTokens(row.tokens)}
             {percent !== null ? (
               <span className="ms-1.5 font-normal text-muted-foreground">{percent}</span>

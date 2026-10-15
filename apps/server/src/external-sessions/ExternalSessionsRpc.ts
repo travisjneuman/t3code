@@ -9,6 +9,7 @@ import {
   type ExternalSessionArchiveInput,
   type ExternalSessionContinueInput,
   type ExternalSessionHandBackInput,
+  type ExternalSessionInsightsInput,
   type ExternalSessionReleaseInput,
   type ExternalSessionOpenInOriginInput,
   type ExternalSessionUnarchiveInput,
@@ -41,5 +42,7 @@ export const makeHandlers = Effect.gen(function* () {
       externalSessions.release(input.threadId),
     [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: (input: ExternalSessionOpenInOriginInput) =>
       externalSessions.openInOrigin(input.key),
+    [EXTERNAL_SESSIONS_WS_METHODS.insights]: (input: ExternalSessionInsightsInput) =>
+      externalSessions.insights(input.key),
   };
 });

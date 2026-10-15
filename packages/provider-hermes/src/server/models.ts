@@ -132,6 +132,24 @@ export const HERMES_DEFAULT_MODEL_ENTRY: ServerProviderModel = {
   capabilities: null,
 };
 
+/**
+ * The capabilities of the model Hermes is configured with. The payload names it
+ * beside `providers` as `model` and `provider` (config `model.default`); its
+ * capabilities are that provider's entry for the model. Null when either is
+ * missing, so "Hermes default" then shows no traits rather than guessed ones.
+ */
+const hermesDefaultCapabilities = (
+  body: unknown,
+  providers: ReadonlyArray<HermesProviderOption>,
+) => {
+  if (!isRecord(body) || typeof body.model !== "string" || !body.model) return null;
+  const providerSlug = typeof body.provider === "string" ? body.provider.toLowerCase() : "";
+  const current =
+    providers.find((provider) => provider.slug.toLowerCase() === providerSlug) ??
+    providers.find((provider) => provider.isCurrent);
+  return modelCapabilities(current?.capabilities[body.model]);
+};
+
 /** Every model of every signed-in provider T3 may offer, minus the ones the user hid. */
 export function hermesModelsFromOptions(
   body: unknown,
@@ -139,8 +157,11 @@ export function hermesModelsFromOptions(
 ): ReadonlyArray<ServerProviderModel> {
   const hidden = new Set(hiddenProviders.map((slug) => slug.toLowerCase()));
   const seen = new Set<string>([HERMES_DEFAULT_MODEL]);
-  const models: Array<ServerProviderModel> = [HERMES_DEFAULT_MODEL_ENTRY];
-  for (const provider of decodeHermesProviders(body)) {
+  const providers = decodeHermesProviders(body);
+  const models: Array<ServerProviderModel> = [
+    { ...HERMES_DEFAULT_MODEL_ENTRY, capabilities: hermesDefaultCapabilities(body, providers) },
+  ];
+  for (const provider of providers) {
     if (!provider.authenticated && !isKilo(provider.slug, provider.name)) continue;
     if (!isOfferableHermesProvider(provider) || hidden.has(provider.slug.toLowerCase())) continue;
     const kilo = isKilo(provider.slug, provider.name);

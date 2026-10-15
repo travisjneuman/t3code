@@ -392,6 +392,7 @@ export const layerProduction = Layer.mergeAll(
         layerEventSinkProvided,
         layerManagedProjectFoldersProvided,
         IdAllocator.layer,
+        TurnItemPositionStore.layer,
       ),
     ),
   ),

@@ -36,12 +36,34 @@ Archived**, where **Unarchive** brings them back. **Delete** removes the session
 its T3 thread after one confirmation. A session that is still running can't be archived or
 deleted until it stops.
 
+A session from elsewhere shows in full: its messages, reasoning, and every tool call with its
+result, as a turn run from T3 would. Clicking it again brings in whatever Hermes added since, such
+as a later run or a reply sent from a chat platform. For a cron job's session, the report the job
+delivered (to Discord, for example) also appears at the end, marked with where it went. Nothing is
+sent anywhere by this; the chat platform keeps showing exactly what it did.
+
+## Session details
+
+The thread details card (`mod+shift+b`) reads a Hermes thread's details from Hermes, whether or
+not the thread is running: where the session came from, its message, tool and API call counts,
+token totals, cost, and when it was last active or ended. **Machine** is the computer Hermes runs
+on. Context is estimated from the stored messages and marked **Estimated**; it leaves out
+Hermes's system prompt and tool definitions, so the real use is higher. The window size is shown
+only when the session uses the model Hermes is configured with. **Connectors** lists the MCP
+servers in Hermes's config as Configured or Disabled; Hermes doesn't report whether they
+connected.
+
 ## Models
 
-With Hermes selected, the composer shows the agent's chip, then a Hermes provider dropdown, then
-a model dropdown for that provider. **Hermes default** in the provider dropdown uses whatever
-model Hermes is configured with. The model you pick is sent with every turn, so you can change it
-at any time, and it never changes Hermes's own default.
+With Hermes selected, the composer shows the usual model chip, labelled with the agent's name and
+the picked model. Open it and choose the Hermes tab: **Hermes default** sits at the top and uses
+whatever model Hermes itself is configured with, and below it every signed-in Hermes provider has
+its own group. Click a provider (or press Enter on it) to expand or collapse it; the group holding
+the current model opens on its own. Searching looks through every provider at once, and starred
+models stay at the top of their group. Reasoning and fast-mode traits appear for the picked model,
+and for Hermes default when Hermes reports what its configured model supports. The model you pick
+is sent with every turn, so you can change it at any time, and it never changes Hermes's own
+default.
 
 **Settings › Providers › Hermes Agent › Models** groups the models by Hermes provider. Expand a
 provider to hide single models, or turn off its switch to hide the whole provider. Hiding only

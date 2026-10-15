@@ -89,6 +89,9 @@ export interface ThreadSessionSummary {
   readonly startedAt: string;
   readonly updatedAt: string;
   readonly turnCount: number;
+  /** The thread's checked-out branch and worktree, for the Environment rows. */
+  readonly branch: string | null;
+  readonly worktreePath: string | null;
 }
 
 export function deriveThreadSessionSummary(
@@ -107,6 +110,8 @@ export function deriveThreadSessionSummary(
     startedAt: DateTime.formatIso(session?.createdAt ?? thread.createdAt),
     updatedAt: DateTime.formatIso(session?.updatedAt ?? thread.updatedAt),
     turnCount: projection.runs.filter((run) => run.startedAt !== null).length,
+    branch: thread.branch,
+    worktreePath: thread.worktreePath,
   };
 }
 
@@ -142,6 +147,7 @@ export const MCP_SERVER_STATUS_PRESENTATION: Record<
   "needs-auth": { label: "Needs auth", dotClassName: "bg-warning" },
   failed: { label: "Failed", dotClassName: "bg-destructive" },
   disabled: { label: "Disabled", dotClassName: "bg-muted-foreground/45" },
+  configured: { label: "Configured", dotClassName: "bg-muted-foreground/45" },
 };
 
 // Theme palette tokens with dark-mode steps, so adjacent categories stay
@@ -255,14 +261,33 @@ export function formatContextPercent(value: number | null): string | null {
   return `${Math.round(value)}%`;
 }
 
-export interface ThreadOutputFile {
+export interface OutputFile {
   readonly path: string;
-  /** The newest run that changed the file, for opening its diff. */
-  readonly runId: RunId | null;
   readonly additions: number;
   readonly deletions: number;
   /** False when no change to the file reported its own line counts. */
   readonly hasStats: boolean;
+}
+
+export interface ThreadOutputFile extends OutputFile {
+  /** The newest run that changed the file, for opening its diff. */
+  readonly runId: RunId | null;
+}
+
+/** Lines added and removed across the files that reported counts; null when none did. */
+export function sumOutputChanges(
+  outputs: ReadonlyArray<OutputFile>,
+): { readonly additions: number; readonly deletions: number } | null {
+  let additions = 0;
+  let deletions = 0;
+  let counted = false;
+  for (const output of outputs) {
+    if (!output.hasStats) continue;
+    counted = true;
+    additions += output.additions;
+    deletions += output.deletions;
+  }
+  return counted ? { additions, deletions } : null;
 }
 
 // Not applied yet, or never applied.

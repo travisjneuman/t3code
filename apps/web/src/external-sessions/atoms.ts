@@ -8,9 +8,9 @@
  * and Settings › Archived read these atoms.
  */
 import {
+  EnvironmentId,
   EXTERNAL_SESSIONS_WS_METHODS,
   PROVIDER_DISPLAY_NAMES,
-  type EnvironmentId,
   type ExternalSessionDetails,
   type ExternalSessionEvent,
   type ExternalSessionMessage,
@@ -18,16 +18,19 @@ import {
 } from "@t3tools/contracts";
 import {
   createEnvironmentRpcCommand,
+  createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
 } from "@t3tools/client-runtime/state/runtime";
 import { formatModelSlugName } from "@t3tools/shared/model";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { AsyncResult, Atom } from "effect/reactivity";
+import { useMemo } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { environmentSummaries } from "../state/presentation";
+import { useEnvironmentQuery } from "../state/query";
 
 /** Transcripts keep at most this many messages client-side; older ones drop off the top. */
 const MAX_TRANSCRIPT_MESSAGES = 500;
@@ -97,6 +100,41 @@ export const externalSessionsRunningElsewhere = createEnvironmentRpcSubscription
     tag: EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere,
   },
 );
+
+// Moves when a turn settles (the session stops running) or an idle session
+// changes, so a running session's streaming never refetches its insights.
+const insightsRefreshKeyFamily = Atom.family((target: string) => {
+  const [environmentId, key] = JSON.parse(target) as [string, string];
+  const transcript = externalSessionTranscript({
+    environmentId: EnvironmentId.make(environmentId),
+    input: { key },
+  });
+  return Atom.make((get) => {
+    const summary = Option.getOrNull(AsyncResult.value(get(transcript)))?.summary ?? null;
+    if (summary === null) return "";
+    return summary.liveness === "running" ? "running" : `${summary.liveness}|${summary.updatedAt}`;
+  }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`external-sessions:insights-refresh:${target}`));
+});
+
+/**
+ * What the session details card shows beyond the summary: the machine and the
+ * files the session's tools changed. Read only while the card is open.
+ */
+const externalSessionInsights = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:insights",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.insights,
+  idleTtlMs: 0,
+  refreshTrigger: ({ environmentId, input }) =>
+    insightsRefreshKeyFamily(JSON.stringify([environmentId, input.key])),
+});
+
+export function useExternalSessionInsights(environmentId: EnvironmentId, key: string) {
+  const atom = useMemo(
+    () => externalSessionInsights({ environmentId, input: { key } }),
+    [environmentId, key],
+  );
+  return useEnvironmentQuery(atom);
+}
 
 /**
  * Imports an idle session as a T3 thread, or returns the thread it already
