@@ -17,6 +17,7 @@ import type { PiSettings } from "../settings.ts";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { compareSemverVersions } from "@t3tools/shared/semver";
+import { brandPiModelName, brandProviderName } from "@t3tools/shared/modelBrandNames"; // Fork add-on: provider and model brand names.
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
@@ -118,8 +119,8 @@ function parseDiscoveredModels(data: unknown, state: unknown): ReadonlyArray<Ser
     seen.add(slug);
     parsed.push({
       slug,
-      name: recordString(model, "name") ?? slug,
-      subProvider: provider,
+      name: brandPiModelName(provider, id, recordString(model, "name")), // Fork add-on: provider and model brand names.
+      subProvider: brandProviderName(provider), // Fork add-on: provider and model brand names.
       isCustom: false,
       capabilities: thinkingCapabilitiesForPiModel(
         model,

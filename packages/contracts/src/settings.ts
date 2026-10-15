@@ -35,6 +35,7 @@ import {
   AgentSettingsOptionalFields,
   AgentSettingsPatchFields,
 } from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
+import { CodexHiddenModelsSettingFields } from "./forkCodexSettings.ts"; // Fork add-on: Codex hidden models.
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -672,6 +673,7 @@ export const CodexSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    ...CodexHiddenModelsSettingFields, // Fork add-on: Codex hidden models.
   },
   {
     order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs"],

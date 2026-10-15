@@ -20,7 +20,7 @@ function stripLeadingQualifier(value: string, qualifier: string | null | undefin
     return value;
   }
 
-  const pattern = new RegExp(`^${escapeRegExp(trimmedQualifier)}(?:\\s*[.:/-]\\s*|\\s+)`, "iu");
+  const pattern = new RegExp(`^${escapeRegExp(trimmedQualifier)}\\s*[.:/-]\\s*`, "iu"); // Fork add-on: provider and model brand names. A bare space keeps "Grok 4.6" under "Grok".
   return value.replace(pattern, "").trim() || value;
 }
 

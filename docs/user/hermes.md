@@ -65,6 +65,12 @@ and for Hermes default when Hermes reports what its configured model supports. T
 is sent with every turn, so you can change it at any time, and it never changes Hermes's own
 default.
 
+Groups and models carry the names their vendors use: **Codex** with **GPT-6.1-Sol**, **Grok**
+with **Grok 4.20 Reasoning**, **OpenRouter**, **Kilo**. Hermes can list more models than T3's own
+Codex provider, because it lists everything your ChatGPT account can use, including models OpenAI
+keeps out of the Codex picker. To see those in the Codex provider too, see
+[hidden Codex models](fork-behavior.md#codex-can-show-hidden-models).
+
 **Settings › Providers › Hermes Agent › Models** groups the models by Hermes provider. Expand a
 provider to hide single models, or turn off its switch to hide the whole provider. Hiding only
 changes what T3 offers; Hermes, its chat platforms and its other clients still see every

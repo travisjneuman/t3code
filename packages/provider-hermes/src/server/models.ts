@@ -2,9 +2,11 @@
  * Turns Hermes's `/api/model/options` into T3 models: one entry per
  * `provider::model`, grouped by provider in the picker, plus "Hermes
  * default", which sends no model so Hermes uses its own configured one.
+ * Hermes reports ids only, so names come from `@t3tools/shared/modelBrandNames`.
  */
 import { HERMES_DEFAULT_MODEL, type ServerProviderModel } from "@t3tools/contracts";
 import { createModelCapabilities } from "@t3tools/shared/model";
+import { brandModelName, brandProviderName } from "@t3tools/shared/modelBrandNames";
 
 const REASONING_EFFORT_LABELS = {
   none: "None",
@@ -52,7 +54,7 @@ export interface HermesProviderOption {
   >;
 }
 
-/** The providers Hermes reports, before T3's filters. */
+/** The providers Hermes reports, before T3's filters, named by their brand ("Codex", "Grok"). */
 export const decodeHermesProviders = (body: unknown): ReadonlyArray<HermesProviderOption> =>
   (isRecord(body) && Array.isArray(body.providers) ? body.providers : []).flatMap(
     (entry): HermesProviderOption[] => {
@@ -61,7 +63,10 @@ export const decodeHermesProviders = (body: unknown): ReadonlyArray<HermesProvid
       return [
         {
           slug: entry.slug,
-          name: typeof entry.name === "string" && entry.name ? entry.name : entry.slug,
+          name: brandProviderName(
+            entry.slug,
+            typeof entry.name === "string" ? entry.name : undefined,
+          ),
           authenticated: entry.authenticated === true,
           authType: typeof entry.auth_type === "string" ? entry.auth_type : "",
           isCurrent: entry.is_current === true,
@@ -172,7 +177,7 @@ export function hermesModelsFromOptions(
       seen.add(slug);
       models.push({
         slug,
-        name: model,
+        name: brandModelName(provider.slug, model),
         subProvider: provider.name,
         isCustom: false,
         capabilities: modelCapabilities(provider.capabilities[model]),
