@@ -47,6 +47,10 @@
       "types": "./src/model.ts",
       "import": "./src/model.ts"
     },
+    "./modelBrandNames": {
+      "types": "./src/modelBrandNames.ts",
+      "import": "./src/modelBrandNames.ts"
+    },
     "./advertisedEndpoint": {
       "types": "./src/advertisedEndpoint.ts",
       "import": "./src/advertisedEndpoint.ts"

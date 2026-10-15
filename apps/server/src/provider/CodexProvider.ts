@@ -319,6 +319,7 @@ function parseCodexSkillsListResponse(
 
 const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   client: CodexClient.CodexAppServerClient["Service"],
+  includeHidden = false, // Fork add-on: Codex hidden models.
 ) {
   const models: ServerProviderModel[] = [];
   let cursor: string | null | undefined = undefined;
@@ -326,7 +327,7 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   do {
     const response: CodexSchema.V2ModelListResponse = yield* client.request(
       "model/list",
-      cursor ? { cursor } : {},
+      { ...(cursor ? { cursor } : {}), ...(includeHidden ? { includeHidden } : {}) }, // Fork add-on: Codex hidden models.
     );
     models.push(...parseCodexModelListResponse(response));
     cursor = response.nextCursor;
@@ -370,8 +371,9 @@ const requestCodexChatGptModels = Effect.fn("requestCodexChatGptModels")(functio
   readonly client: CodexClient.CodexAppServerClient["Service"];
   readonly codexHome: string;
   readonly spawnedAtMs: number;
+  readonly includeHidden?: boolean; // Fork add-on: Codex hidden models.
 }) {
-  const models = yield* requestAllCodexModels(input.client);
+  const models = yield* requestAllCodexModels(input.client, input.includeHidden); // Fork add-on: Codex hidden models.
   const refreshed = yield* readCodexModelsCacheFetchedAt(input.codexHome).pipe(
     Effect.repeat({
       schedule: Schedule.spaced(CODEX_CATALOG_REFRESH_POLL),
@@ -385,7 +387,7 @@ const requestCodexChatGptModels = Effect.fn("requestCodexChatGptModels")(functio
     );
     return models;
   }
-  return yield* requestAllCodexModels(input.client);
+  return yield* requestAllCodexModels(input.client, input.includeHidden); // Fork add-on: Codex hidden models.
 });
 
 /**
@@ -484,6 +486,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   readonly customModels?: ReadonlyArray<CustomModelSetting>;
   readonly environment?: NodeJS.ProcessEnv;
   readonly skipNativeUsage?: boolean;
+  readonly includeHiddenModels?: boolean; // Fork add-on: Codex hidden models.
 }) {
   const spawnedAtMs = DateTime.toEpochMillis(yield* DateTime.now);
   const { client, initialize } = yield* withCodexAppServerClient(input);
@@ -508,8 +511,13 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
         cwds: [input.cwd],
       }),
       accountResponse.account?.type === "chatgpt"
-        ? requestCodexChatGptModels({ client, codexHome: initialize.codexHome, spawnedAtMs })
-        : requestAllCodexModels(client),
+        ? requestCodexChatGptModels({
+            client,
+            codexHome: initialize.codexHome,
+            spawnedAtMs,
+            includeHidden: input.includeHiddenModels === true,
+          }) // Fork add-on: Codex hidden models.
+        : requestAllCodexModels(client, input.includeHiddenModels), // Fork add-on: Codex hidden models.
       // Usage is an enrichment: a failure or a slow answer degrades to "no
       // usage this probe" rather than costing the account and models.
       input.skipNativeUsage
@@ -647,6 +655,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     readonly customModels: ReadonlyArray<CustomModelSetting>;
     readonly environment?: NodeJS.ProcessEnv;
     readonly skipNativeUsage?: boolean;
+    readonly includeHiddenModels?: boolean; // Fork add-on: Codex hidden models.
   }) => Effect.Effect<
     CodexAppServerProviderSnapshot,
     CodexErrors.CodexAppServerError,
@@ -688,6 +697,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     customModels: codexSettings.customModels,
     environment: resolvedEnvironment,
     ...(managedAuth ? { skipNativeUsage: true } : {}),
+    ...(codexSettings.showHiddenModels ? { includeHiddenModels: true } : {}), // Fork add-on: Codex hidden models.
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),

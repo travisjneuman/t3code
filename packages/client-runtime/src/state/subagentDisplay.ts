@@ -86,7 +86,7 @@ export function resolveSubagentMetadata(input: {
     ? reportedLabel
         .replace(
           new RegExp(
-            `^${qualifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s*[.:/-]\\s*|\\s+)`,
+            `^${qualifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[.:/-]\\s*`, // Fork add-on: provider and model brand names.
             "iu",
           ),
           "",
