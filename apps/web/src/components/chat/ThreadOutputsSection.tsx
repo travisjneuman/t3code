@@ -1,13 +1,13 @@
 import type { RunId, ScopedThreadRef } from "@t3tools/contracts";
 import { FileDiffIcon, MinusIcon, PlusIcon } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { cn } from "../../lib/utils";
 import { useThreadOutputs } from "../../state/sessionInsights";
 import { StartTruncatedPath } from "../StartTruncatedPath";
 import { DiffStatLabel } from "./DiffStatLabel";
-import type { ThreadOutputFile } from "./sessionInsights.logic";
+import { type OutputFile, sumOutputChanges } from "./sessionInsights.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -28,7 +28,32 @@ export const ThreadOutputsSection = memo(function ThreadOutputsSection(props: {
   readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
 }) {
   const outputs = useThreadOutputs(props.threadRef);
+  return (
+    <ThreadOutputsList
+      outputs={outputs}
+      workspaceRoot={props.workspaceRoot}
+      onOpenTurnDiff={props.onOpenTurnDiff}
+      note={null}
+    />
+  );
+});
+
+type OutputsListFile = OutputFile & { readonly runId?: RunId | null };
+
+/**
+ * The Outputs section for any list of changed files, with the summed line
+ * changes in its header. Rows with a run open that run's diff.
+ */
+export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
+  readonly outputs: ReadonlyArray<OutputsListFile>;
+  readonly workspaceRoot: string | undefined;
+  readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
+  /** A caveat under the list, such as an older part of the session not being read. */
+  readonly note: string | null;
+}) {
+  const { outputs } = props;
   const [showAll, setShowAll] = useState(false);
+  const changes = useMemo(() => sumOutputChanges(outputs), [outputs]);
   if (outputs.length === 0) return null;
 
   const capped = outputs.length > OUTPUTS_INITIAL_COUNT;
@@ -37,6 +62,17 @@ export const ThreadOutputsSection = memo(function ThreadOutputsSection(props: {
     <ThreadDetailsSection
       headingId="thread-details-outputs-heading"
       title={`Outputs · ${outputs.length}`}
+      actions={
+        changes === null ? undefined : (
+          <span className="text-2xs" title="Changes">
+            <DiffStatLabel
+              additions={changes.additions}
+              deletions={changes.deletions}
+              layout="inline"
+            />
+          </span>
+        )
+      }
       data-thread-outputs-panel
     >
       <ul className="m-0 max-h-[17rem] list-none overflow-y-auto overscroll-contain p-0">
@@ -65,12 +101,15 @@ export const ThreadOutputsSection = memo(function ThreadOutputsSection(props: {
           {showAll ? "Show fewer" : `Show all ${outputs.length}`}
         </button>
       ) : null}
+      {props.note === null ? null : (
+        <p className="px-2.5 pt-1 text-2xs text-pretty text-muted-foreground">{props.note}</p>
+      )}
     </ThreadDetailsSection>
   );
 });
 
 function OutputRow(props: {
-  readonly output: ThreadOutputFile;
+  readonly output: OutputsListFile;
   readonly workspaceRoot: string | undefined;
   readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
 }) {
@@ -93,7 +132,7 @@ function OutputRow(props: {
       ) : null}
     </>
   );
-  const runId = output.runId;
+  const runId = output.runId ?? null;
   if (runId === null || onOpenTurnDiff === undefined) {
     return <div className={OUTPUT_ROW_CLASS}>{content}</div>;
   }

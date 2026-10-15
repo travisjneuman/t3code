@@ -1,8 +1,9 @@
 /**
  * The Hermes Agent section's server side. `list` merges the sessions a Hermes
  * server holds with the T3 threads already bound to them; `continue` opens a
- * session as a thread in the Scratch project, its history imported and its
- * next turn resuming the same Hermes session; `update` pins, unpins or
+ * session as a thread in the Scratch project, its messages, reasoning, tool
+ * calls and any cron report imported and its next turn resuming the same
+ * Hermes session, and syncs what Hermes added since; `update` pins, unpins or
  * archives, `delete` deletes the session in Hermes and its T3 thread. The
  * dashboard proxy serves Settings › Providers › Hermes Agent and never
  * returns a secret's value. Fork add-on; see docs/user/hermes.md.
@@ -32,14 +33,12 @@ import {
   type HermesSessionsProvidersResult,
   type HermesSessionsUnarchiveInput,
   type HermesSessionsUpdateInput,
-  MessageId,
   type OrchestrationV2AppThread,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
   ProviderDriverKind,
   type ProviderInstanceId,
   ThreadId,
-  TurnItemId,
 } from "@t3tools/contracts";
 import {
   HermesApi,
@@ -57,13 +56,24 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import { importedMessageEvents } from "../external-sessions/continueExternalSession.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
-import type { AgentSessionThreadMessage } from "../project/AgentSessionScanner.ts";
+import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as HermesSessionArchive from "./hermesSessionArchive.ts";
+import {
+  type HermesSessionEntry,
+  cronDeliveryNotice,
+  cronOutputStamp,
+  cronReportText,
+  cronSessionOf,
+  entryEvents,
+  entryItemId,
+  sessionEntries,
+  stampDeltaMs,
+  toMs,
+} from "./hermesSessionEntries.ts";
 
 export class HermesSessions extends Context.Service<
   HermesSessions,
@@ -94,12 +104,27 @@ export class HermesSessions extends Context.Service<
 >()("t3/hermes/HermesSessions") {}
 
 const HERMES_DRIVER = ProviderDriverKind.make("hermes");
-const IMPORT_EVENT_PREFIX = "hermes-session-import:v1";
+const IMPORT_EVENT_PREFIX = "hermes-session-import:v2";
+/** Threads opened before tool calls were imported: text only, under `import:` ids. */
+const LEGACY_IMPORT_PREFIX = "hermes-session-import:v1";
 const LIST_PAGE_SIZE = 200;
 // Enough for a long "Load more" history without walking an unbounded store.
 const MAX_LIST_PAGES = 25;
-// Same retention as External Sessions: the first prompt plus the newest messages.
-const MAX_HISTORY_MESSAGES = 200;
+const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
+  "preparing",
+  "queued",
+  "starting",
+  "running",
+  "waiting",
+]);
+// A T3 turn's own messages land in the Hermes session too; anything Hermes
+// stored inside a T3 run's window is that run's, already on screen. Hermes
+// usually runs on another machine, so the margins allow for clock skew.
+const WINDOW_LEAD_MS = 30_000;
+const WINDOW_TRAIL_MS = 30_000;
+// Enough cron history to find the run after this one.
+const CRON_RUNS_LOOKUP = 50;
+const NO_ENTRIES: ReadonlyArray<HermesSessionEntry> = [];
 const REDACTED = "••••••";
 const SECRET_KEY = /(?:api_?key|secret|token|password)$/i;
 /** Hermes's own partial reveals (`api_key_preview`, `redacted_value`), dropped outright. */
@@ -123,9 +148,6 @@ const fromApi = (error: HermesApi.HermesApiError) =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** Hermes stores times as epoch seconds; T3 speaks milliseconds. */
-const toMs = (value: number | null) => (value === null ? 0 : value < 1e12 ? value * 1000 : value);
 
 /** Replaces each non-empty secret-named string with a placeholder, at any depth. */
 const redactSecrets = (value: unknown): unknown => {
@@ -185,27 +207,6 @@ const envStatusOnly = (body: unknown): unknown =>
       )
     : {};
 
-function historyOf(messages: ReadonlyArray<HermesApi.HermesMessage>, fallback: string) {
-  const all: AgentSessionThreadMessage[] = messages.flatMap((message) =>
-    (message.role === "user" || message.role === "assistant") && message.content.trim()
-      ? [
-          {
-            role: message.role,
-            text: message.content,
-            createdAt: new Date(
-              message.timestamp === null ? fallback : toMs(message.timestamp),
-            ).toISOString(),
-          },
-        ]
-      : [],
-  );
-  if (all.length <= MAX_HISTORY_MESSAGES) return all;
-  const firstUser = all.find((message) => message.role === "user");
-  return firstUser === undefined || all.indexOf(firstUser) >= all.length - MAX_HISTORY_MESSAGES
-    ? all.slice(-MAX_HISTORY_MESSAGES)
-    : [firstUser, ...all.slice(-(MAX_HISTORY_MESSAGES - 1))];
-}
-
 const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -214,6 +215,7 @@ const make = Effect.gen(function* () {
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
+  const positions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
   const archive = yield* HermesSessionArchive.make;
 
   const commandId = (kind: string) =>
@@ -349,24 +351,64 @@ const make = Effect.gen(function* () {
         .pipe(Effect.mapError(failed("Could not unarchive the thread.")));
     });
 
-  const continueSession: HermesSessions["Service"]["continueSession"] = Effect.fn(
-    "HermesSessions.continueSession",
-  )(function* (input) {
-    const { instanceId, sessionId } = input;
-    const bound = (yield* boundThreads(instanceId)).get(sessionId);
-    const threadId = bound?.threadId ?? ThreadId.make(`import:${instanceId}:${sessionId}`);
-    const existing = yield* Effect.option(orchestrator.getThreadRecords(threadId, []));
-    if (Option.isSome(existing)) {
-      if (existing.value.thread.deletedAt !== null) {
-        return yield* new HermesSessionsError({
-          message: "This session was opened in T3 before, and that thread was deleted.",
-        });
-      }
-      yield* unarchiveThread(threadId);
-      return { threadId, projectId: existing.value.thread.projectId };
-    }
+  /**
+   * A cron run's delivered report, as Hermes saved it beside the job: the
+   * earliest output doc from this run, before the job's next run. Best effort;
+   * a session that is not a cron run, or a dashboard T3 cannot read, has none.
+   */
+  const cronReportOf = (settings: HermesSettings, session: HermesApi.HermesSession) =>
+    Effect.gen(function* () {
+      const cron = session.source === "cron" ? cronSessionOf(session.id) : undefined;
+      if (cron === undefined || !settings.dashboardUrl) return NO_ENTRIES;
+      const dashboard = HermesApi.dashboardConnectionOf(settings);
+      const job = yield* HermesApi.getCronJob(dashboard, cron.jobId);
+      if (job === undefined || job.hermesHome === null) return NO_ENTRIES;
+      const separator = job.hermesHome.includes("\\") ? "\\" : "/";
+      const folder = [job.hermesHome.replace(/[\\/]+$/, ""), "cron", "output", cron.jobId].join(
+        separator,
+      );
+      const next = (yield* HermesApi.listCronRunSessionIds(dashboard, cron.jobId, CRON_RUNS_LOOKUP))
+        .map((id) => cronSessionOf(id)?.stamp)
+        .filter((stamp): stamp is string => stamp !== undefined && stamp > cron.stamp)
+        .sort()[0];
+      const doc = (yield* HermesApi.listHostDirectory(dashboard, folder))
+        .map((name) => ({ name, stamp: cronOutputStamp(name) }))
+        .filter(
+          (file): file is { name: string; stamp: string } =>
+            file.stamp !== undefined &&
+            file.stamp >= cron.stamp &&
+            (next === undefined || file.stamp < next),
+        )
+        .sort((left, right) => left.stamp.localeCompare(right.stamp))[0];
+      if (doc === undefined) return NO_ENTRIES;
+      const text = yield* HermesApi.readHostTextFile(dashboard, `${folder}${separator}${doc.name}`);
+      const report = text === undefined ? "" : cronReportText(text);
+      if (!report) return NO_ENTRIES;
+      const atMs = toMs(session.startedAt) + stampDeltaMs(cron.stamp, doc.stamp);
+      const stem = doc.name.replace(/\.md$/, "");
+      const entries: ReadonlyArray<HermesSessionEntry> = [
+        {
+          kind: "notice",
+          key: `cron-delivery:${stem}`,
+          atMs,
+          text: cronDeliveryNotice(job.deliver),
+        },
+        { kind: "message", key: `cron-report:${stem}`, atMs, role: "assistant", text: report },
+      ];
+      return entries;
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning("Hermes cron report unavailable", error).pipe(Effect.as(NO_ENTRIES)),
+      ),
+    );
 
-    const connection = yield* connectionOf(instanceId);
+  /** Everything the session holds, oldest first. */
+  const entriesOf = Effect.fn("HermesSessions.entriesOf")(function* (
+    instanceId: ProviderInstanceId,
+    sessionId: string,
+  ) {
+    const settings = yield* settingsOf(instanceId);
+    const connection = HermesApi.connectionOf(settings);
     const session = yield* HermesApi.getSession(connection, sessionId).pipe(
       Effect.mapError(fromApi),
     );
@@ -376,54 +418,138 @@ const make = Effect.gen(function* () {
     const messages = yield* HermesApi.listMessages(connection, sessionId).pipe(
       Effect.mapError(fromApi),
     );
-    const { projectId } = yield* managedFolders.ensureScratchProject.pipe(
-      Effect.mapError(failed("The Scratch project is unavailable.")),
+    const entries = sessionEntries(messages, {
+      ended: session.endedAt !== null,
+      fallbackMs: toMs(session.startedAt),
+    });
+    const report = yield* cronReportOf(settings, session);
+    const lastText = entries.findLast(
+      (entry) => entry.kind === "message" && entry.role === "assistant",
     );
+    // The report is the run's final answer; skip it when the session already ends on it.
+    const reportEntries = report.filter(
+      (entry) =>
+        entry.kind !== "message" ||
+        lastText?.kind !== "message" ||
+        lastText.text.trim() !== entry.text.trim(),
+    );
+    return { session, entries: [...entries, ...reportEntries] };
+  });
+
+  /** One write for a batch of new entries, each placed after the T3 run before it. */
+  const appendEntries = Effect.fn("HermesSessions.appendEntries")(function* (
+    threadId: ThreadId,
+    entries: ReadonlyArray<HermesSessionEntry>,
+    runs: ReadonlyArray<{ readonly ordinal: number; readonly startedAtMs: number }>,
+  ) {
+    if (entries.length === 0) return;
+    const batch = yield* crypto.randomUUIDv4.pipe(
+      Effect.mapError(failed("Could not sync this session.")),
+    );
+    const now = yield* DateTime.now;
+    const events: OrchestrationV2DomainEvent[] = [];
+    for (const entry of entries) {
+      let band: number | undefined;
+      for (const run of runs) {
+        if (run.startedAtMs <= entry.atMs && (band === undefined || run.ordinal > band)) {
+          band = run.ordinal;
+        }
+      }
+      // Placed now, in the run's band; the sink's own allocation keeps it.
+      const ordinal = yield* positions
+        .allocate({
+          threadId,
+          turnItemId: entryItemId(IMPORT_EVENT_PREFIX, threadId, entry.key),
+          runId: null,
+          ...(band === undefined ? {} : { runOrdinal: band }),
+        })
+        .pipe(Effect.mapError(failed("Could not sync this session.")));
+      events.push(
+        ...entryEvents({
+          threadId,
+          prefix: IMPORT_EVENT_PREFIX,
+          entry,
+          ordinal,
+          batch,
+          occurredAt: now,
+        }),
+      );
+    }
+    yield* eventSink
+      .write({ events })
+      .pipe(Effect.mapError(failed("Could not sync this session.")));
+  });
+
+  /** A new thread holding the whole session, bound to it. */
+  const createThread = Effect.fn("HermesSessions.createThread")(function* (input: {
+    readonly instanceId: ProviderInstanceId;
+    readonly threadId: ThreadId;
+    readonly session: HermesApi.HermesSession;
+    readonly entries: ReadonlyArray<HermesSessionEntry>;
+    /** The thread this one replaces, whose title, pin and other state it keeps. */
+    readonly replacing?: OrchestrationV2AppThread;
+  }) {
+    const { instanceId, threadId, session, entries, replacing } = input;
+    const projectId =
+      replacing?.projectId ??
+      (yield* managedFolders.ensureScratchProject.pipe(
+        Effect.mapError(failed("The Scratch project is unavailable.")),
+      )).projectId;
     const now = yield* DateTime.now;
     const startedAt =
       session.startedAt === null ? now : DateTime.makeUnsafe(toMs(session.startedAt));
     const updatedAt =
       session.lastActive === null ? now : DateTime.makeUnsafe(toMs(session.lastActive));
-    const history = historyOf(messages, DateTime.formatIso(startedAt));
     const providerThreadId = idAllocator.derive.providerThread({
       driver: HERMES_DRIVER,
       providerInstanceId: instanceId,
-      nativeThreadId: sessionId,
+      nativeThreadId: session.id,
     });
-    const appThread: OrchestrationV2AppThread = {
-      createdBy: "system",
-      creationSource: "server",
-      id: threadId,
-      projectId,
-      title: session.title ?? session.preview ?? "Hermes session",
-      providerInstanceId: instanceId,
-      // Every turn sends the picked model; "Hermes default" until one is picked.
-      modelSelection: { instanceId, model: HERMES_DEFAULT_MODEL },
-      runtimeMode: DEFAULT_RUNTIME_MODE,
-      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-      branch: null,
-      worktreePath: null,
-      linkedPullRequest: null,
-      branchPullRequest: null,
-      activeProviderThreadId: providerThreadId,
-      // Hermes resumes its own session, which already holds this history.
-      historyOrigin: "native",
-      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
-      forkedFrom: null,
-      createdAt: startedAt,
-      updatedAt,
-      archivedAt: null,
-      settledOverride: null,
-      settledAt: null,
-      unsettledAt: null,
-      snoozedUntil: null,
-      snoozedAt: null,
-      pinnedAt: null,
-      pinOrderKey: null,
-      activeOrderKey: null,
-      lastVisitedAt: null,
-      deletedAt: null,
-    };
+    const appThread: OrchestrationV2AppThread =
+      replacing === undefined
+        ? {
+            createdBy: "system",
+            creationSource: "server",
+            id: threadId,
+            projectId,
+            title: session.title ?? session.preview ?? "Hermes session",
+            providerInstanceId: instanceId,
+            // Every turn sends the picked model; "Hermes default" until one is picked.
+            modelSelection: { instanceId, model: HERMES_DEFAULT_MODEL },
+            runtimeMode: DEFAULT_RUNTIME_MODE,
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            branch: null,
+            worktreePath: null,
+            linkedPullRequest: null,
+            branchPullRequest: null,
+            activeProviderThreadId: providerThreadId,
+            // Hermes resumes its own session, which already holds this history.
+            historyOrigin: "native",
+            lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+            forkedFrom: null,
+            createdAt: startedAt,
+            updatedAt,
+            archivedAt: null,
+            settledOverride: null,
+            settledAt: null,
+            unsettledAt: null,
+            snoozedUntil: null,
+            snoozedAt: null,
+            pinnedAt: null,
+            pinOrderKey: null,
+            activeOrderKey: null,
+            lastVisitedAt: null,
+            deletedAt: null,
+          }
+        : {
+            ...replacing,
+            id: threadId,
+            activeProviderThreadId: providerThreadId,
+            lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+            archivedAt: null,
+            deletedAt: null,
+            updatedAt: now,
+          };
     const providerThread: OrchestrationV2ProviderThread = {
       id: providerThreadId,
       driver: HERMES_DRIVER,
@@ -431,7 +557,7 @@ const make = Effect.gen(function* () {
       providerSessionId: null,
       appThreadId: threadId,
       ownerNodeId: null,
-      nativeThreadRef: { driver: HERMES_DRIVER, nativeId: sessionId, strength: "strong" },
+      nativeThreadRef: { driver: HERMES_DRIVER, nativeId: session.id, strength: "strong" },
       nativeConversationHeadRef: null,
       status: "idle",
       firstRunOrdinal: null,
@@ -448,22 +574,22 @@ const make = Effect.gen(function* () {
         type: "thread.created",
         threadId,
         providerInstanceId: instanceId,
-        occurredAt: startedAt,
+        occurredAt: appThread.createdAt,
         payload: appThread,
       },
-      ...history.flatMap((message, index) => {
-        const suffix = String(index).padStart(6, "0");
-        return importedMessageEvents({
+      ...entries.flatMap((entry, index) =>
+        entryEvents({
           threadId,
-          messageId: MessageId.make(`${threadId}:${suffix}`),
-          turnItemId: TurnItemId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${threadId}:${suffix}`),
-          eventId: (kind) => EventId.make(`${IMPORT_EVENT_PREFIX}:${kind}:${threadId}:${suffix}`),
+          prefix: IMPORT_EVENT_PREFIX,
+          entry,
           ordinal: index + 1,
-          message,
-        });
-      }),
+          batch: "created",
+          occurredAt: DateTime.makeUnsafe(entry.atMs),
+        }),
+      ),
       {
-        id: EventId.make(`${IMPORT_EVENT_PREFIX}:provider-thread:${providerThreadId}`),
+        // Moves the binding here when it replaces an older thread.
+        id: EventId.make(`${IMPORT_EVENT_PREFIX}:provider-thread:${providerThreadId}:${threadId}`),
         type: "provider-thread.updated",
         threadId,
         driver: HERMES_DRIVER,
@@ -476,6 +602,93 @@ const make = Effect.gen(function* () {
       .write({ events })
       .pipe(Effect.mapError(failed("Could not open this session in T3.")));
     return { threadId, projectId };
+  });
+
+  const continueSession: HermesSessions["Service"]["continueSession"] = Effect.fn(
+    "HermesSessions.continueSession",
+  )(function* (input) {
+    const { instanceId, sessionId } = input;
+    const bound = (yield* boundThreads(instanceId)).get(sessionId);
+    const freshId = ThreadId.make(`hermes:${instanceId}:${sessionId}`);
+    const threadId = bound?.threadId ?? freshId;
+    const existing = yield* Effect.option(
+      orchestrator.getThreadRecords(threadId, ["runs", "turnItems"]),
+    );
+    if (Option.isNone(existing)) {
+      const { session, entries } = yield* entriesOf(instanceId, sessionId);
+      return yield* createThread({ instanceId, threadId, session, entries });
+    }
+    const records = existing.value;
+    if (records.thread.deletedAt !== null) {
+      return yield* new HermesSessionsError({
+        message: "This session was opened in T3 before, and that thread was deleted.",
+      });
+    }
+    yield* unarchiveThread(threadId);
+    const opened = { threadId, projectId: records.thread.projectId };
+    // A turn in flight writes its own items; the next open syncs the rest.
+    if (records.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) return opened;
+
+    const { session, entries } = yield* entriesOf(instanceId, sessionId);
+    const legacy = records.turnItems.filter((item) => item.id.startsWith(LEGACY_IMPORT_PREFIX));
+    if (legacy.length > 0 && records.runs.length === 0 && threadId !== freshId) {
+      // Opened before tool calls were imported, and never continued here:
+      // replace it with the whole session, keeping its title, pin and state.
+      const replaced = yield* createThread({
+        instanceId,
+        threadId: freshId,
+        session,
+        entries,
+        replacing: { ...records.thread, archivedAt: null },
+      });
+      yield* orchestrator
+        .dispatch({ type: "thread.delete", commandId: yield* commandId("replace"), threadId })
+        .pipe(
+          Effect.mapError(failed("Opened the full session, but the old thread is still there.")),
+        );
+      return replaced;
+    }
+
+    const written = new Set(records.turnItems.map((item) => item.id));
+    const shownText = new Set(
+      records.turnItems.flatMap((item) =>
+        item.type === "user_message" || item.type === "assistant_message" ? [item.text.trim()] : [],
+      ),
+    );
+    // An older thread already shows the text up to its import; only add after it.
+    const importedUntil = Math.max(
+      0,
+      ...legacy.map((item) => DateTime.toEpochMillis(item.completedAt ?? item.updatedAt)),
+    );
+    const windows = records.runs.flatMap((run) => {
+      if (run.startedAt === null) return [];
+      const requested = DateTime.toEpochMillis(run.requestedAt);
+      const started = DateTime.toEpochMillis(run.startedAt);
+      const completed =
+        run.completedAt === null ? started : DateTime.toEpochMillis(run.completedAt);
+      return [
+        {
+          start: Math.min(requested, started) - WINDOW_LEAD_MS,
+          end: Math.max(completed, started) + WINDOW_TRAIL_MS,
+        },
+      ];
+    });
+    const added = entries.filter(
+      (entry) =>
+        !written.has(entryItemId(IMPORT_EVENT_PREFIX, threadId, entry.key)) &&
+        !(entry.kind === "message" && shownText.has(entry.text.trim())) &&
+        entry.atMs > importedUntil &&
+        !windows.some((window) => entry.atMs >= window.start && entry.atMs <= window.end),
+    );
+    yield* appendEntries(
+      threadId,
+      added,
+      records.runs.map((run) => ({
+        ordinal: run.ordinal,
+        startedAtMs: DateTime.toEpochMillis(run.startedAt ?? run.requestedAt),
+      })),
+    );
+    return opened;
   });
 
   /** Runs `each` per session; a failure refuses that session and the rest go on. */

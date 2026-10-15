@@ -25,7 +25,15 @@ import {
   GitBranchIcon,
   PlayIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
@@ -75,6 +83,7 @@ import {
   LIVENESS_LABEL,
   shortModelLabel,
 } from "./atoms";
+import { ExternalSessionDetailsCard } from "./ExternalSessionDetails";
 import { useExternalSessionPanel } from "./ExternalSessionPanel";
 
 const EMPTY_MESSAGES: ReadonlyArray<ExternalSessionMessage> = [];
@@ -164,8 +173,9 @@ function toTimelineEntries(
 
 /**
  * An agent session running outside T3, shown the way a T3 thread is: the same
- * layout, header, timeline and composer-shaped block. The block stands in for
- * the composer; an idle session can be continued as a T3 thread from there.
+ * layout, header, timeline, details card and composer-shaped block. The block
+ * stands in for the composer; an idle session can be continued as a T3 thread
+ * from there.
  * Key it by environment and session so switching sessions starts fresh.
  */
 export function ExternalSessionView(props: { environmentId: EnvironmentId; sessionKey: string }) {
@@ -210,6 +220,8 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
     return () => observer.disconnect();
   }, [overlayElement]);
   const sidePanel = useExternalSessionPanel(environmentId);
+  // The details card opens as a popover under the header when the canvas is too narrow.
+  const headerRef = useRef<HTMLElement | null>(null);
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
@@ -218,6 +230,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
           <ExternalSessionHeader
+            headerRef={headerRef}
             environmentId={environmentId}
             summary={summary}
             controls={sidePanel.headerControls}
@@ -317,6 +330,15 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
                   </div>
                 </div>
               </div>
+              {summary !== null ? (
+                <ExternalSessionDetailsCard
+                  environmentId={environmentId}
+                  sessionKey={sessionKey}
+                  summary={summary}
+                  anchor={headerRef}
+                  card={sidePanel.details}
+                />
+              ) : null}
             </ChatCanvas>
           </div>
         </div>
@@ -329,10 +351,11 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
 
 /**
  * The thread header's layout (ChatView's header plus ChatHeader's breadcrumb
- * row): folder / title. Session details live in the composer-shaped block,
- * and the right side holds the side panel toggle where a thread keeps its own.
+ * row): folder / title. The right side holds the details card and side panel
+ * toggles where a thread keeps its own; the card is anchored to this header.
  */
 function ExternalSessionHeader(props: {
+  headerRef: RefObject<HTMLElement | null>;
   environmentId: EnvironmentId;
   summary: ExternalSessionSummary | null;
   controls: ReactNode;
@@ -347,6 +370,7 @@ function ExternalSessionHeader(props: {
 
   return (
     <header
+      ref={props.headerRef}
       data-chat-header
       className={cn(
         "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",

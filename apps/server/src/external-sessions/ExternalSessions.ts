@@ -24,6 +24,7 @@ import {
   type ExternalSessionArchivedResult,
   type ExternalSessionArchivedSession,
   type ExternalSessionHandBackResult,
+  type ExternalSessionInsightsResult,
   type ExternalSessionOpenInOriginResult,
   type ExternalSessionReleaseResult,
   ExternalSessionBusyError,
@@ -72,6 +73,7 @@ import {
 import { makeGrokSource } from "./grokSource.ts";
 import { makePiSource } from "./piSource.ts";
 import { findSessionPaths } from "./sessionHistory.ts";
+import { readsSessionOutputs, sessionOutputs } from "./sessionOutputs.ts";
 
 const LIST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_LISTED = 60;
@@ -155,6 +157,13 @@ export class ExternalSessions extends Context.Service<
     readonly openInOrigin: (
       key: string,
     ) => Effect.Effect<ExternalSessionOpenInOriginResult, ExternalSessionError>;
+    /**
+     * The machine and the files changed, for the session details card: one
+     * read of the transcript tail, the snapshot's limit (sessionOutputs.ts).
+     */
+    readonly insights: (
+      key: string,
+    ) => Effect.Effect<ExternalSessionInsightsResult, ExternalSessionError>;
   }
 >()("t3/external-sessions/ExternalSessions") {}
 
@@ -322,8 +331,7 @@ const make = Effect.gen(function* () {
     });
 
     const isListed = (entry: Entry, now: number) =>
-      (entry.source.listsUntilArchived === true ||
-        now - entry.info.updatedAtMs < LIST_WINDOW_MS) &&
+      (entry.source.listsUntilArchived === true || now - entry.info.updatedAtMs < LIST_WINDOW_MS) &&
       !owned.has(entry.info.id) &&
       !owned.has(entry.path) &&
       !(entry.info.cwd !== null && excludedRoots.some((root) => isUnder(entry.info.cwd!, root)));
@@ -742,6 +750,32 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const insights: ExternalSessions["Service"]["insights"] = (key) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* RcRef.get(registryRef);
+        const entry = yield* registry.resolve(key);
+        const summary = registry.summaryFor(key);
+        if (entry === undefined || summary === null) {
+          return yield* new ExternalSessionError({ message: "This session is no longer listed." });
+        }
+        const host = NodeOS.hostname();
+        const transcript = entry.source.transcriptPath(entry.path);
+        if (transcript === null || !readsSessionOutputs(summary.driver)) {
+          return { host, outputs: null, truncated: false };
+        }
+        const slice = yield* provide(
+          readLines(transcript, { fromEnd: true, maxBytes: SNAPSHOT_BYTES }),
+        );
+        if (slice === null) return { host, outputs: [], truncated: false };
+        return {
+          host,
+          outputs: sessionOutputs(summary.driver, slice.lines),
+          truncated: slice.start > 0,
+        };
+      }),
+    );
+
   return ExternalSessions.of({
     subscribeList,
     subscribeSession,
@@ -754,6 +788,7 @@ const make = Effect.gen(function* () {
     handBack,
     release,
     openInOrigin,
+    insights,
   });
 });
 

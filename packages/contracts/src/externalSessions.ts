@@ -12,7 +12,7 @@ import {
   AuthOrchestrationReadScope,
   EnvironmentAuthorizationError,
 } from "./auth.ts";
-import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 export const EXTERNAL_SESSIONS_WS_METHODS = {
@@ -26,6 +26,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   handBack: "externalSessions.handBack",
   release: "externalSessions.release",
   openInOrigin: "externalSessions.openInOrigin",
+  insights: "externalSessions.insights",
 } as const;
 
 /** The streaming methods, for the client's subscription tag union. */
@@ -440,6 +441,42 @@ export const ExternalSessionsOpenInOriginRpc = Rpc.make(EXTERNAL_SESSIONS_WS_MET
   error: ExternalSessionRpcError,
 });
 
+/**
+ * What the session details card shows beyond the summary's details: where the
+ * session runs and the files its edit tools changed, read once from the
+ * transcript tail when the card opens.
+ */
+export const ExternalSessionInsightsInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+});
+export type ExternalSessionInsightsInput = typeof ExternalSessionInsightsInput.Type;
+
+/** One file the session's edit or write tools changed. */
+export const ExternalSessionOutputFile = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+  /** False when the transcript names the file but not the lines changed. */
+  hasStats: Schema.Boolean,
+});
+export type ExternalSessionOutputFile = typeof ExternalSessionOutputFile.Type;
+
+export const ExternalSessionInsightsResult = Schema.Struct({
+  /** The name of the machine whose session store this is. */
+  host: Schema.String,
+  /** Null when the agent's transcript does not record edits T3 can read. */
+  outputs: Schema.NullOr(Schema.Array(ExternalSessionOutputFile)),
+  /** The transcript is longer than what was read, so older edits may be missing. */
+  truncated: Schema.Boolean,
+});
+export type ExternalSessionInsightsResult = typeof ExternalSessionInsightsResult.Type;
+
+export const ExternalSessionsInsightsRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.insights, {
+  payload: ExternalSessionInsightsInput,
+  success: ExternalSessionInsightsResult,
+  error: ExternalSessionRpcError,
+});
+
 export const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
   {
@@ -462,6 +499,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsHandBackRpc,
   ExternalSessionsReleaseRpc,
   ExternalSessionsOpenInOriginRpc,
+  ExternalSessionsInsightsRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -476,4 +514,5 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.handBack]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.release]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.insights]: AuthOrchestrationReadScope,
 } as const;

@@ -7,6 +7,7 @@
 export { HermesDriver, type HermesDriverEnv } from "./server/driver.ts";
 export { makeHermesAdapterV2, type HermesAdapterV2Options } from "./server/adapter.ts";
 export * as HermesApi from "./server/api.ts";
+export * as HermesInsights from "./server/insights.ts";
 export {
   decodeHermesProviders,
   hermesModelsFromOptions,
