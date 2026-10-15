@@ -56,10 +56,11 @@ connected.
 ## Models
 
 With Hermes selected, the composer shows the usual model chip, labelled with the agent's name and
-the picked model. Open it and choose the Hermes tab: **Hermes default** sits at the top and uses
-whatever model Hermes itself is configured with, and below it every signed-in Hermes provider has
-its own group. Click a provider (or press Enter on it) to expand or collapse it; the group holding
-the current model opens on its own. Searching looks through every provider at once, and starred
+the picked model. Open it and choose the Hermes tab: **Hermes default** sits at the top, named
+after the model Hermes itself is configured with (for example "Hermes default · GPT-6.1-Sol"), and
+below it every signed-in Hermes provider has its own group. Click a provider (or press Enter on it)
+to expand it; opening one closes the others. The group holding the current model opens on its
+own. Searching looks through every provider at once, and starred
 models stay at the top of their group. Reasoning and fast-mode traits appear for the picked model,
 and for Hermes default when Hermes reports what its configured model supports. The model you pick
 is sent with every turn, so you can change it at any time, and it never changes Hermes's own
