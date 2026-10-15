@@ -739,6 +739,21 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       ),
     [visibleModels],
   );
+  // Fork add-on: Hermes provider. Opening a group closes the others, which can
+  // pull rows out from above it, so the toggled header is scrolled to the top.
+  const scrollToHermesGroupRef = useRef<string | null>(null);
+  const toggleHermesGroup = (key: string) => {
+    scrollToHermesGroupRef.current = key;
+    setExpandedHermesGroups((expanded) => HermesGroups.toggleHermesModelGroup(expanded, key));
+  };
+  useEffect(() => {
+    const key = scrollToHermesGroupRef.current;
+    if (key === null) return;
+    scrollToHermesGroupRef.current = null;
+    const index = filteredItemKeys.indexOf(key);
+    if (index >= 0)
+      void modelListRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0 });
+  }, [filteredItemKeys]);
   const [modelListContentSize, setModelListContentSize] = useState(
     () => filteredItemKeys.length * MODEL_LIST_ESTIMATED_ITEM_SIZE,
   );
@@ -938,9 +953,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             }
             // Fork add-on: Hermes provider. A group header expands or collapses its group.
             if (HermesGroups.isHermesModelGroupKey(modelKey)) {
-              setExpandedHermesGroups((expanded) =>
-                HermesGroups.toggleHermesModelGroup(expanded, modelKey),
-              );
+              toggleHermesGroup(modelKey);
               return;
             }
             const model = parseModelPickerModelKey(modelKey);
@@ -1010,9 +1023,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   // Fork add-on: Hermes provider. Enter on a group header toggles it.
                   const hermesGroupKey = highlightedModelKeyRef.current;
                   if (HermesGroups.isHermesModelGroupKey(hermesGroupKey)) {
-                    setExpandedHermesGroups((expanded) =>
-                      HermesGroups.toggleHermesModelGroup(expanded, hermesGroupKey),
-                    );
+                    toggleHermesGroup(hermesGroupKey);
                     return;
                   }
                   const model = parseModelPickerModelKey(highlightedModelKeyRef.current);
