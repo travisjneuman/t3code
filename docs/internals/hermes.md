@@ -28,7 +28,8 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
 - **Provider terms are enforced in the model list, not left to the user.**
   [`models.ts`](../../packages/provider-hermes/src/server/models.ts) drops Anthropic in every
   form and Google providers signed in through a Google client, and offers only free Kilo
-  gateway models. The Settings checklist shows those as locked; the user's own hidden list only
-  narrows further.
+  gateway models. Settings › Models lists those as unavailable. Hiding is T3-only and only
+  narrows further: a hidden provider (`hiddenProviders`) is dropped by the server, and a hidden
+  model goes through the instance's usual hidden models. Hermes itself is never changed.
 - **Text generation is refused.** Every prompt becomes a Hermes session, so titles and commit
   messages would clutter the agent's history.

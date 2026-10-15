@@ -12,16 +12,17 @@ its CLI, keeps working as before.
    (`API_SERVER_KEY`) and the dashboard a username and password.
 2. In T3, open **Settings › Providers**, add **Hermes Agent**, and fill in the API URL and key.
    The dashboard URL, username and password are optional; they unlock the Hermes settings below.
-   **Agent name** changes the sidebar section's label.
+   **Agent name** names the sidebar section and the composer's Hermes chip.
 3. Turn the provider on. The keys and password are stored as secrets on the T3 host and never
    sent back to a client.
 
 ## Start and find sessions
 
-Hermes sessions live in their own **Hermes Agent** section of the sidebar, above **Other
+Hermes sessions live in their own section of the sidebar, named after the agent, above **Other
 Agents**, and never inside a project. It lists the T3 threads you started with Hermes together
 with the sessions Hermes holds from anywhere else, newest first, from the last three days.
-**Load more** goes further back. Pin a session to keep it at the top whatever its age.
+**Load more** goes further back and **Show less** returns to the last three days. Pin a session
+to keep it at the top whatever its age.
 
 - Click **+** on the section header to start a new session, or pick **Hermes Agent** in any new
   thread's model picker. Either way the thread moves into the Hermes section.
@@ -37,19 +38,25 @@ deleted until it stops.
 
 ## Models
 
-The model picker lists **Hermes default**, which uses whatever model Hermes is configured with,
-plus every model of each provider you are signed in to in Hermes. The model you pick is sent with
-every turn, so you can change it at any time, and it never changes Hermes's own default.
+With Hermes selected, the composer shows the agent's chip, then a Hermes provider dropdown, then
+a model dropdown for that provider. **Hermes default** in the provider dropdown uses whatever
+model Hermes is configured with. The model you pick is sent with every turn, so you can change it
+at any time, and it never changes Hermes's own default.
+
+**Settings › Providers › Hermes Agent › Models** groups the models by Hermes provider. Expand a
+provider to hide single models, or turn off its switch to hide the whole provider. Hiding only
+changes what T3 offers; Hermes, its chat platforms and its other clients still see every
+provider.
 
 Some providers are never offered through Hermes because their terms don't allow their models to
 be used from another app: Anthropic always, and Google when signed in through Gemini CLI or
-Antigravity rather than an API key. Kilo's gateway shows only its free models, which need no key.
+Antigravity rather than an API key. They are listed under **Unavailable** in the Models section.
+Kilo's gateway shows only its free models, which need no key.
 
 ## Hermes settings
 
 With the dashboard filled in, the Hermes Agent card in **Settings › Providers** also shows:
 
-- **Hermes providers**: a switch per provider to hide it from the model picker.
 - **Hermes config**: every Hermes setting, by category, with search. This is Hermes's global
   config, so changes also apply to its chat platforms, cron jobs and CLI.
 - **Hermes keys**: set, replace or remove Hermes's environment keys. Values are write-only: T3
