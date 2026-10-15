@@ -102,8 +102,9 @@ With the dashboard filled in, the Hermes Agent card in **Settings › Providers*
 ## T3 tools
 
 With **T3 tools** on, Hermes can start T3 coworker threads (Codex, Claude, Grok and the rest) in
-any of your T3 projects, wait for them, read them and message them. Coworkers appear in T3 under
-the Hermes thread that started them.
+any of your T3 projects, wait for them, read them and message them. Each coworker is its own
+thread in its project, and Hermes links to it in its reply. A coworker that runs on Hermes itself
+lands in the Scratch project, like every Hermes thread.
 
 To turn it on, open **Settings › Providers › Hermes Agent › T3 tools**, check the T3 address
 Hermes will use and flip the switch. The address must end in `/mcp` and be reachable from Hermes's

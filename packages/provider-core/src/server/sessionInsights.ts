@@ -1,4 +1,8 @@
-import type { SessionMcpServer } from "@t3tools/contracts";
+import type {
+  SessionContextBreakdown,
+  SessionContextContributor,
+  SessionMcpServer,
+} from "@t3tools/contracts";
 
 /**
  * Normalizers adapters use when mapping a provider's own session report into
@@ -42,4 +46,53 @@ export const sessionMcpServer = (input: {
     ...(version === undefined ? {} : { version }),
     ...(input.toolCount === undefined ? {} : { toolCount: sessionInsightTokens(input.toolCount) }),
   };
+};
+
+/**
+ * A breakdown for providers that report only totals: what the context holds
+ * and the window it fills. It has no categories but Free space, so the card
+ * shows the totals and never categories made up to fill the bar. Null when the
+ * window is unknown, since a breakdown without one has nothing to measure.
+ */
+export const sessionTotalsBreakdown = (input: {
+  readonly usedTokens: number | null | undefined;
+  readonly maxTokens: number | null | undefined;
+  readonly model?: string | null | undefined;
+  readonly skills?: ReadonlyArray<SessionContextContributor> | undefined;
+  readonly autoCompactThreshold?: number | null | undefined;
+}): SessionContextBreakdown | null => {
+  const maxTokens = sessionInsightTokens(input.maxTokens);
+  if (maxTokens === 0) {
+    return null;
+  }
+  const totalTokens = sessionInsightTokens(input.usedTokens);
+  const free = Math.max(0, maxTokens - totalTokens);
+  const model = sessionInsightText(input.model);
+  const autoCompactThreshold = sessionInsightTokens(input.autoCompactThreshold);
+  return {
+    ...(model === undefined ? {} : { model }),
+    totalTokens,
+    maxTokens,
+    categories: free === 0 ? [] : [{ name: "Free space", tokens: free, kind: "free" }],
+    mcpTools: [],
+    memoryFiles: [],
+    agents: [],
+    skills: input.skills ?? [],
+    ...(autoCompactThreshold === 0 ? {} : { autoCompactThreshold }),
+  };
+};
+
+/** Contributor rows naming each entry without a size, such as a provider's skill list. */
+export const sessionNamedContributors = (
+  names: Iterable<string | null | undefined>,
+): ReadonlyArray<SessionContextContributor> => {
+  const seen = new Set<string>();
+  const rows: Array<SessionContextContributor> = [];
+  for (const raw of names) {
+    const name = sessionInsightText(raw);
+    if (name === undefined || seen.has(name)) continue;
+    seen.add(name);
+    rows.push({ name });
+  }
+  return rows;
 };

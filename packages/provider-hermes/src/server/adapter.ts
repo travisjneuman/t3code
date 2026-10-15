@@ -144,7 +144,7 @@ const HermesProviderCapabilitiesV2 = {
 } satisfies OrchestrationV2ProviderCapabilities;
 
 // Fork add-on: Hermes T3 tools. Added to each run while the T3 tools switch is on.
-const T3_TOOLS_INSTRUCTIONS = `<t3_code_coworkers>You can start T3 Code coworker threads (Codex, Claude, Grok and other agents) through the t3-code MCP tools. Find the project with t3_project_list, pick a model with orchestrator_capabilities, start each coworker with t3_thread_launch giving projectId and modelSelection, then follow it with t3_thread_wait and t3_thread_read, or steer it with t3_thread_send. Coworkers appear in T3 under this thread.</t3_code_coworkers>`;
+const T3_TOOLS_INSTRUCTIONS = `<t3_code_coworkers>You can start T3 Code coworker threads (Codex, Claude, Grok and other agents) through the t3-code MCP tools. Find the project with t3_project_list, pick a model with orchestrator_capabilities, start each coworker with t3_thread_launch giving projectId and a modelSelection for that agent, then follow it with t3_thread_wait and t3_thread_read, or steer it with t3_thread_send. Always pass modelSelection: without it the coworker is another Hermes thread, and Hermes threads always run in T3's Scratch project, whatever projectId you give. Each coworker is its own thread in its project, not nested under this one, so link it for the user as [title](t3-thread://v1/<threadId>).</t3_code_coworkers>`;
 
 export interface HermesAdapterV2Options {
   readonly instanceId: ProviderInstanceId;

@@ -20,13 +20,16 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionManager.ts";
+import * as SessionInsightsReports from "../persistence/SessionInsightsReports.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 
 /**
  * The context breakdown and MCP servers a thread's provider session reports,
  * read on demand from the live session. A stopped session is never started:
- * it answers with the last report read while it ran, if this server kept one.
+ * it answers with the last report read while it ran. Every live report is
+ * stored (SessionInsightsReports), so that survives a server restart; the
+ * memory map is a read-through cache in front of the table.
  * Hermes keeps its own session store, so a Hermes thread is read from Hermes
  * over HTTP instead, running or not (provider-hermes insights.ts).
  */
@@ -39,7 +42,7 @@ export class SessionInsights extends Context.Service<
   }
 >()("t3/sessionInsights/SessionInsights") {}
 
-/** Last reports kept for stopped sessions; the oldest is dropped past this. */
+/** Last reports cached in memory; the oldest is dropped past this, and stays stored. */
 const MAX_REMEMBERED_REPORTS = 200;
 /** A provider that does not answer leaves that part empty rather than the panel loading. */
 const PART_TIMEOUT = "10 seconds";
@@ -63,10 +66,11 @@ const make = Effect.gen(function* () {
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const storedReports = yield* SessionInsightsReports.SessionInsightsReportRepository;
   // Insertion order is recency: a report is re-inserted whenever it is replaced.
   const lastReports = new Map<ProviderThreadId, SessionInsightsResult>();
 
-  const remember = (report: SessionInsightsResult) => {
+  const cache = (report: SessionInsightsResult) => {
     lastReports.delete(report.providerThreadId);
     lastReports.set(report.providerThreadId, report);
     if (lastReports.size > MAX_REMEMBERED_REPORTS) {
@@ -74,6 +78,61 @@ const make = Effect.gen(function* () {
       if (oldest.done !== true) lastReports.delete(oldest.value);
     }
   };
+
+  /** Caches and stores a live report; a failed write leaves it in memory only. */
+  const remember = (threadId: ThreadId, report: SessionInsightsResult) => {
+    cache(report);
+    if (report.capturedAt === null) return Effect.void;
+    return storedReports
+      .put({
+        providerThreadId: report.providerThreadId,
+        threadId,
+        capturedAt: report.capturedAt,
+        context: report.context,
+        mcpServers: report.mcpServers,
+        ...(report.session === undefined ? {} : { session: report.session }),
+      })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("session-insights.store-failed", {
+            providerThreadId: report.providerThreadId,
+            error: error._tag,
+          }),
+        ),
+      );
+  };
+
+  /**
+   * The last report for a provider thread: memory first, then the table. A
+   * stored report is cached as it was read, dated when it was captured.
+   */
+  const recall = Effect.fn("SessionInsights.recall")(function* (
+    providerThread: OrchestrationV2ProviderThread,
+  ) {
+    const remembered = lastReports.get(providerThread.id);
+    if (remembered !== undefined) return remembered;
+    const stored = yield* storedReports.get(providerThread.id).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning("session-insights.recall-failed", {
+          providerThreadId: providerThread.id,
+          error: error._tag,
+        }).pipe(Effect.as(Option.none())),
+      ),
+    );
+    if (Option.isNone(stored)) return undefined;
+    const report: SessionInsightsResult = {
+      providerThreadId: providerThread.id,
+      instanceId: providerThread.providerInstanceId,
+      driver: providerThread.driver,
+      live: false,
+      capturedAt: stored.value.capturedAt,
+      context: stored.value.context,
+      mcpServers: stored.value.mcpServers,
+      ...(stored.value.session === undefined ? {} : { session: stored.value.session }),
+    };
+    cache(report);
+    return report;
+  });
 
   const fail = (threadId: ThreadId, reason: SessionInsightsError["reason"], cause?: unknown) =>
     new SessionInsightsError({ threadId, reason, ...(cause === undefined ? {} : { cause }) });
@@ -159,7 +218,7 @@ const make = Effect.gen(function* () {
     if (providerThread.driver === HERMES_DRIVER) {
       const hermes = yield* readHermes(providerThread);
       if (hermes !== undefined) {
-        remember(hermes);
+        yield* remember(input.threadId, hermes);
         return hermes;
       }
     }
@@ -175,7 +234,7 @@ const make = Effect.gen(function* () {
     const insights: ProviderAdapter.ProviderAdapterV2SessionInsights | undefined =
       runtime?.sessionInsights;
     if (runtime === undefined || insights === undefined) {
-      const remembered = lastReports.get(providerThread.id);
+      const remembered = yield* recall(providerThread);
       return withHost(
         remembered === undefined
           ? {
@@ -208,16 +267,18 @@ const make = Effect.gen(function* () {
       mcpServers,
     };
     if (context !== null || mcpServers !== null) {
-      remember(report);
+      yield* remember(input.threadId, report);
       return withHost(report);
     }
     // A reopened session answers nothing until its first turn (Claude opens its
     // query then), so the last report stands in, still dated when it was read.
-    const remembered = lastReports.get(providerThread.id);
+    const remembered = yield* recall(providerThread);
     return withHost(remembered === undefined ? report : { ...remembered, live: true });
   });
 
   return SessionInsights.of({ get });
 });
 
-export const layer = Layer.effect(SessionInsights, make);
+export const layer = Layer.effect(SessionInsights, make).pipe(
+  Layer.provide(SessionInsightsReports.layer),
+);
