@@ -12,10 +12,12 @@ This page belongs to the ndev.t3code fork and is not part of upstream T3 Code. P
 | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | install, first run, setup flow, update, upgrade, V1 to V2           | [install.md](install.md) · [welcome-wizard.md](welcome-wizard.md) · [updating.md](updating.md) · [thread-migration.md](thread-migration.md)                           | Start here                  |
 | build from source, fork updates, Sync & Build                       | [fork-updating.md](fork-updating.md)                                                                                                                                  | Fork add-on                 |
+| fork differences, new thread without a project                      | [fork-behavior.md](fork-behavior.md)                                                                                                                                  | Fork add-on                 |
 | threads, worktrees, sidebar, pin, archive                           | [thread-sidebar.md](thread-sidebar.md)                                                                                                                                |                             |
 | composer, messages, attach files, mentions, context                 | [composer.md](composer.md) · [question-attachments.md](question-attachments.md)                                                                                       |                             |
 | approvals, permission modes, full access                            | [permission-modes.md](permission-modes.md)                                                                                                                            |                             |
 | tool call summary, charts and pages in replies, prompt links        | [activity-log.md](activity-log.md) · [html-renders.md](html-renders.md) · [prompt-links.md](prompt-links.md)                                                          |                             |
+| session details, context breakdown, MCP servers, connectors         | [session-details.md](session-details.md)                                                                                                                              | Fork add-on                 |
 | export thread, save to notes, Markdown, JSON                        | [save-and-export-threads.md](save-and-export-threads.md)                                                                                                              | Fork add-on                 |
 | switch provider, handoff, portable context                          | [portable-handoffs.md](portable-handoffs.md)                                                                                                                          |                             |
 | Codex, Claude, Cursor, OpenCode, Antigravity, Pi, Muse, ACP         | [providers-codex.md](providers-codex.md) and the other provider pages in [Contents](#providers)                                                                       | One page per provider       |
@@ -52,6 +54,7 @@ graph LR
 - [Updating T3 Code](updating.md): updating the app and the server separately.
 - [Threads from older versions](thread-migration.md): how V1 threads move into V2.
 - [Build and update ndev.t3code](fork-updating.md): fork add-on; build from source and update.
+- [Where ndev.t3code differs](fork-behavior.md): fork add-on; upstream features that behave differently.
 
 ### Threads and messages
 
@@ -61,6 +64,7 @@ graph LR
 - [Permission modes](permission-modes.md): when an agent needs your approval.
 - [Activity log](activity-log.md): expandable summaries of tool calls.
 - [Visual replies](html-renders.md): agents answering with charts, tables and pages.
+- [Session details](session-details.md): fork add-on; a thread's model, context, MCP servers and changed files.
 - [Prompt links](prompt-links.md): links that open T3 Code with a prompt ready.
 - [Context in portable handoffs](portable-handoffs.md): context carried across provider switches.
 - [Save and export threads](save-and-export-threads.md): fork add-on; export or file a thread.

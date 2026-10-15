@@ -3,13 +3,13 @@ import type {
   EnvironmentId,
   ProjectScript,
   ResolvedKeybindingsConfig,
-  RunId,
+  RunId, // Fork add-on: session details.
   ThreadId,
 } from "@t3tools/contracts";
 
 import type { DraftId } from "../../composerDraftStore";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
-import type { ContextWindowSnapshot } from "../../lib/contextWindow";
+import type { ContextWindowSnapshot } from "../../lib/contextWindow"; // Fork add-on: session details.
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
 import BaseGitActionsControl from "../GitActionsControl";
@@ -23,7 +23,7 @@ import { OpenInPicker } from "./OpenInPicker";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
-import { ThreadSessionDetails } from "./ThreadSessionInsightsSection";
+import { ThreadSessionDetails } from "./ThreadSessionInsightsSection"; // Fork add-on: session details.
 
 const GitActionsControl = memo(BaseGitActionsControl);
 
@@ -186,6 +186,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             <ThreadAutomationsPanel environmentId={props.environmentId} threadId={props.threadId} />
           ) : null}
 
+          {/* Fork add-on: session details. */}
           {density === "full" && !props.draftId ? (
             <ThreadSessionDetails
               environmentId={props.environmentId}

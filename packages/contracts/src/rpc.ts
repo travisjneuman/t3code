@@ -14,7 +14,7 @@ import {
   McpAppToolInfoInput,
   McpAppUpdateModelContextInput,
 } from "./mcpApps.ts";
-import { SessionInsights, SessionInsightsError, SessionInsightsInput } from "./sessionInsights.ts";
+import { SessionInsights, SessionInsightsError, SessionInsightsInput } from "./sessionInsights.ts"; // Fork add-on: session details.
 import {
   ChatGptReconnectProfileInput,
   ChatGptReconnectProfile,
@@ -409,7 +409,7 @@ export const WS_METHODS = {
   mcpAppsUpdateModelContext: "mcpApps.updateModelContext",
 
   // Session insights
-  sessionInsightsGet: "sessionInsights.get",
+  sessionInsightsGet: "sessionInsights.get", // Fork add-on: session details.
 
   // Provider methods
   providerUploadFeedback: "provider.uploadFeedback",
@@ -1342,6 +1342,7 @@ const WsMcpAppsUpdateModelContextRpc = Rpc.make(WS_METHODS.mcpAppsUpdateModelCon
   error: Schema.Union([McpAppRequestError, EnvironmentAuthorizationError]),
 });
 
+// Fork add-on: session details.
 const WsSessionInsightsGetRpc = Rpc.make(WS_METHODS.sessionInsightsGet, {
   payload: SessionInsightsInput,
   success: SessionInsights,
@@ -2016,7 +2017,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsMcpAppsToolInfoRpc,
   WsMcpAppsReadResourceRpc,
   WsMcpAppsUpdateModelContextRpc,
-  WsSessionInsightsGetRpc,
+  WsSessionInsightsGetRpc, // Fork add-on: session details.
   WsProviderUploadFeedbackRpc,
   WsSubscribeVcsStatusRpc,
   WsSubscribeWorktreeSetupRpc,

@@ -157,7 +157,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.mcpAppsToolInfo]: "provider",
   [WS_METHODS.mcpAppsUpdateModelContext]: "provider",
   [WS_METHODS.mcpAppsReadResource]: "provider",
-  [WS_METHODS.sessionInsightsGet]: "provider",
+  [WS_METHODS.sessionInsightsGet]: "provider", // Fork add-on: session details.
   [WS_METHODS.subscribeVcsStatus]: "vcs",
   [WS_METHODS.subscribeWorktreeSetup]: "vcs",
   [WS_METHODS.worktreeSetupCancel]: "vcs",

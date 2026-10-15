@@ -1,6 +1,6 @@
 import type {
   Event as OpenCodeEvent,
-  McpStatus as OpenCodeMcpStatus,
+  McpStatus as OpenCodeMcpStatus, // Fork add-on: session details.
   Message as OpenCodeMessage,
   Part as OpenCodePart,
   PermissionRequest,
@@ -35,7 +35,7 @@ import {
   type ProviderRequestKind,
   type ProviderSessionId,
   type RuntimeRequestId,
-  type SessionMcpServer,
+  type SessionMcpServer, // Fork add-on: session details.
   type ThreadId,
 } from "@t3tools/contracts";
 import { OpenCodeSettings } from "../settings.ts";
@@ -58,7 +58,7 @@ import * as Stream from "effect/Stream";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { mcpToolPresentation } from "@t3tools/provider-core/server/mcpToolPresentation";
-import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights";
+import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import {
@@ -929,6 +929,7 @@ function isOpenCodeNotFound(cause: unknown): boolean {
   return false;
 }
 
+// Fork add-on: session details.
 function openCodeMcpServers(statuses: {
   readonly [name: string]: OpenCodeMcpStatus;
 }): ReadonlyArray<SessionMcpServer> {
@@ -3719,6 +3720,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   }),
               ),
             ),
+          // Fork add-on: session details.
           // The client is bound to the session's directory, so this lists the
           // servers every thread of the session runs with. Not logged: status
           // errors can echo a server's configured headers.

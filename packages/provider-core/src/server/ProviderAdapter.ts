@@ -1,7 +1,7 @@
 import type {
   OrchestrationV2HistoricalMessage,
-  SessionContextBreakdown,
-  SessionMcpServer,
+  SessionContextBreakdown, // Fork add-on: session details.
+  SessionMcpServer, // Fork add-on: session details.
 } from "@t3tools/contracts";
 import {
   ChatAttachment,
@@ -537,6 +537,7 @@ export interface ProviderAdapterV2McpApps {
   }) => Effect.Effect<{ readonly contents: ReadonlyArray<unknown> }, ProviderAdapterV2Error>;
 }
 
+// Fork add-on: session details.
 /**
  * What a live session reports about itself, read on demand. Each method is
  * optional: a provider implements only what its protocol exposes.
@@ -672,6 +673,7 @@ export interface ProviderAdapterV2SessionRuntime {
    * provider are not interactive and their tool calls stay plain tool rows.
    */
   readonly mcpApps?: ProviderAdapterV2McpApps;
+  // Fork add-on: session details.
   /**
    * The context breakdown and MCP server list a session sidebar shows, read
    * from the live native session. Absent means the provider reports neither.

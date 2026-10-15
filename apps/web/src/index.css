@@ -110,9 +110,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --command-shell-inset: 0.5rem;
   --command-content-inset: 1rem;
   --floating-content-inset: 0.75rem;
-  /* App layer order: docked sheets, then pages placed in a sheet (47, see
-     BrowserSurfaceSlot.tsx) and the floating preview player (47–49, see
+  /* App layer order: docked sheets, then the floating preview player (47–49, see
      previewMiniPlayerLayout.ts), then dialogs and popovers (50 and up). */
+  /* Fork add-on: web pages placed in a sheet use 47 (BrowserSurfaceSlot.tsx). */
   --z-sheet: 46;
   --glass-blur: 12px;
   --glass-opacity: 80%;

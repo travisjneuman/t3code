@@ -94,11 +94,11 @@ export function ThreadDetailsCard({
     const measure = () => {
       const frame = element.closest<HTMLElement>("[data-thread-details-card]");
       const next = element.offsetHeight + (frame ? frame.offsetHeight - frame.clientHeight : 0);
-      // Lineage scrolls as it expands, and the session details (fork add-on)
-      // are long by nature. Counting either toward density would hide the
-      // section and workspace controls, and the session details themselves,
-      // which only render at full density.
+      // Lineage scrolls as it expands. Counting it toward density would hide
+      // the section and workspace controls when the user asks to see more rows.
       const lineage = element.querySelector<HTMLElement>("[data-thread-relationships-panel]");
+      // Fork add-on: session details. They are long and render only at full density, so
+      // counting them would hide themselves.
       const sessionDetails = element.querySelector<HTMLElement>("[data-thread-session-details]");
       const fittingHeight =
         next - (lineage?.offsetHeight ?? 0) - (sessionDetails?.offsetHeight ?? 0);

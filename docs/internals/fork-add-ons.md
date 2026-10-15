@@ -13,8 +13,13 @@ touches upstream files, so the fork is shaped like a plug-in rather than a patch
 - Every fork line in an upstream file carries the text `Fork add-on`, usually as a trailing
   comment naming the feature. `git grep -n "Fork add-on"` lists the whole fork footprint in
   upstream files, and a fork change to an upstream file without the marker is a bug.
+- Files that cannot hold a comment, such as JSON manifests (a package `exports` entry, the stamped
+  release versions) and images, carry no marker, so the marker check cannot protect them. Keep
+  those edits to what a feature cannot do without.
 - Upstream docs stay identical to `upstream/main`. Fork documentation is in fork-owned pages under
-  `docs/`, and the repository landing page is `.github/README.md`.
+  `docs/`, and the repository landing page is `.github/README.md`. When the fork changes how an
+  upstream feature behaves, say so in [`fork-behavior.md`](../user/fork-behavior.md), not in the
+  upstream guide.
 
 ## Identity
 

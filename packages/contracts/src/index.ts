@@ -51,7 +51,7 @@ export * from "./agentSessions.ts";
 export * from "./assets.ts";
 export * from "./review.ts";
 export * from "./mcpApps.ts";
-export * from "./sessionInsights.ts";
+export * from "./sessionInsights.ts"; // Fork add-on: session details.
 export * from "./browserImport.ts";
 export * from "./browserProfile.ts";
 export * from "./device.ts";

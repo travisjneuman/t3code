@@ -23,6 +23,7 @@ This page belongs to the ndev.t3code fork and is not part of upstream T3 Code. N
 | server updates, launcher, telemetry, analytics, performance, licenses | [server-updates.md](server-updates.md) · [resource-telemetry.md](resource-telemetry.md) · [product-analytics.md](product-analytics.md) · [performance-regressions.md](performance-regressions.md) · [open-source-licenses.md](open-source-licenses.md) |                                  |
 | fork hooks, Fork add-on marker, upstream merges                       | [fork-add-ons.md](fork-add-ons.md) · [local-source-updates.md](local-source-updates.md)                                                                                                                                                                | Fork add-ons                     |
 | Other Agents, external sessions, session search, web app tabs         | [external-sessions.md](external-sessions.md) · [session-search.md](session-search.md) · [remote-apps.md](remote-apps.md)                                                                                                                               | Fork add-ons                     |
+| session details, context breakdown, MCP server status                 | [session-insights.md](session-insights.md)                                                                                                                                                                                                             | Fork add-on                      |
 | orchestration v2 target design                                        | [orchestration-v2/README.md](../orchestration-v2/README.md)                                                                                                                                                                                            | Design set, not current behavior |
 
 ## Map
@@ -104,6 +105,7 @@ graph LR
 - [Local source updates](local-source-updates.md): packaged fork builds updating from their checkout.
 - [External sessions](external-sessions.md): Other Agents sessions from outside T3.
 - [Session search](session-search.md): searching other agents' session messages.
+- [Session insights](session-insights.md): the thread details card's live session report.
 - [Desktop remote apps](remote-apps.md): ChatGPT, Claude and other web app tabs.
 
 ### Maintainer runbooks and design sets

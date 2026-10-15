@@ -55,7 +55,7 @@ import {
   type ProviderInstanceId,
   type RunId,
   type RuntimeRequestId,
-  type SessionMcpServer,
+  type SessionMcpServer, // Fork add-on: session details.
 } from "@t3tools/contracts";
 import type * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -99,7 +99,7 @@ import {
 } from "@t3tools/provider-core/server/subagentProjection";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
-import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights";
+import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
 import { OPENCODE_PROVIDER, openCodePermissionRequestKind } from "../adapter.ts";
 import { openCodeToolTurnItem } from "../toolItems.ts";
 
@@ -643,6 +643,7 @@ const sessionIdOf = (providerThread: OrchestrationV2ProviderThread) => {
     : Effect.succeed(nativeId);
 };
 
+// Fork add-on: session details.
 const sessionMcpServers = (servers: ReadonlyArray<Mcp.Server>): ReadonlyArray<SessionMcpServer> =>
   servers.flatMap((server) => {
     const status = server.status;
@@ -3792,6 +3793,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           const state = nativeId == null ? undefined : threads.get(nativeId);
           return state !== undefined && hasBackground(state);
         }),
+      // Fork add-on: session details.
       // MCP servers are configured per location, so a thread lists those of
       // the directory its session runs in.
       sessionInsights: {

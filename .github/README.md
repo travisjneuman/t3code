@@ -31,6 +31,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | [**Agent instructions**](#agent-instructions) | Delegation and agent rules as settings, globally or per project         |
 | [**Save to notes**](#save-to-notes)           | Files a thread into your notes folder or Obsidian vault                 |
 | [**Export a thread**](#export-a-thread)       | Saves a thread's full record as Markdown or JSON                        |
+| [**Session details**](#session-details)       | Model, context breakdown, MCP servers and changed files of a session    |
 | [**Upstream sync**](#upstream-sync)           | Merges new official nightlies and rebuilds the app from source          |
 | [**Compact cards**](#compact-cards)           | Outlined sidebar cards in smaller text, about 23% shorter               |
 
@@ -99,6 +100,17 @@ Choose **Export…** in a thread's menu to save everything the server stores for
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md#export-a-thread)
 
+### Session details
+
+The thread details card (`mod+shift+b`) shows what the agent's session is doing, like Claude Desktop's session sidebar.
+
+- **Session**: provider, model, live status, permission mode, turns, and cost when reported.
+- **Context**: how full the window is. Claude threads break it down by category, with the MCP tools, memory files, skills and custom agents in context, and a Compact context button.
+- **Connectors**: the MCP servers Claude, Codex or OpenCode loaded, with status and tool counts.
+- **Outputs**: files the thread changed; each opens its diff.
+
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/session-details.md)
+
 ### Upstream sync
 
 A Mac app you build yourself updates from the checkout it was built from instead of a download feed.
@@ -148,8 +160,10 @@ Fork-specific docs, plus the fork's two front doors that list every user guide a
 | Compare agents, review swap                       | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/compare-agents.md)                                                                                                                                                                                                           |
 | Delegation, worker models, presets                | [Agent instructions](https://github.com/travisjneuman/t3code/blob/main/docs/user/agent-instructions.md)                                                                                                                                                                                               |
 | Save to notes, export Markdown or JSON            | [Save and export threads](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md)                                                                                                                                                                                     |
+| Session details, context breakdown, MCP servers   | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/session-details.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/session-insights.md)                                                                                                      |
 | Upstream sync, Sync & Build, build from source    | [Fork updating](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-updating.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/local-source-updates.md)                                                                                                 |
 | How the fork stays mergeable, `Fork add-on` hooks | [Fork add-ons](https://github.com/travisjneuman/t3code/blob/main/docs/internals/fork-add-ons.md)                                                                                                                                                                                                      |
+| Upstream features that behave differently here    | [Fork behavior](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-behavior.md)                                                                                                                                                                                                         |
 
 ```mermaid
 graph LR
