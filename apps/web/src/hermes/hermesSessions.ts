@@ -18,6 +18,7 @@ import {
   ProviderDriverKind,
   type ProviderInstanceId,
   type ServerConfig,
+  type ServerSettings,
 } from "@t3tools/contracts";
 
 import { toastManager } from "../components/ui/toast";
@@ -98,6 +99,25 @@ export function hermesInstanceIds(
   return (config?.providers ?? []).flatMap((provider) =>
     provider.driver === HERMES_DRIVER && provider.enabled ? [provider.instanceId] : [],
   );
+}
+
+/** The instance's "Agent name" setting, or "Hermes" when it is blank. */
+export function hermesAgentName(
+  settings: Pick<ServerSettings, "providerInstances"> | null | undefined,
+  instanceId: ProviderInstanceId,
+): string {
+  const instanceConfig = settings?.providerInstances[instanceId]?.config;
+  const name =
+    typeof instanceConfig === "object" && instanceConfig !== null && "agentName" in instanceConfig
+      ? instanceConfig.agentName
+      : undefined;
+  return typeof name === "string" && name.trim() !== "" ? name.trim() : "Hermes";
+}
+
+/** The provider part of a Hermes model slug (`provider::model`), or null for "Hermes default". */
+export function hermesModelProvider(model: string): string | null {
+  const separator = model.indexOf("::");
+  return separator > 0 ? model.slice(0, separator) : null;
 }
 
 /** True when the thread runs on a Hermes instance of its environment. */

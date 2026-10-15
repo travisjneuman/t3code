@@ -1,8 +1,9 @@
 /**
- * "Hermes Agent" shelf above Other Agents: the T3 threads running on a Hermes
- * instance merged with the sessions that Hermes holds and T3 has not opened
- * (Discord, cron, the CLI). Pinned sessions first, then the last few days;
- * "Load more" reaches further back. Cmd/Ctrl-click and Shift-click select
+ * Hermes shelf above Other Agents, titled with the instance's agent name: the
+ * T3 threads running on a Hermes instance merged with the sessions that Hermes
+ * holds and T3 has not opened (Discord, cron, the CLI). Pinned sessions first,
+ * then the last few days; "Load more" reaches further back and "Show less"
+ * returns to the window. Cmd/Ctrl-click and Shift-click select
  * several rows for the right-click actions. Fork add-on: Hermes provider.
  */
 import { useAtomValue } from "@effect/atom-react";
@@ -22,7 +23,7 @@ import {
 import { createModelSelection } from "@t3tools/shared/model";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, PinIcon, PlusIcon } from "lucide-react";
+import { CircleDashedIcon, MinusIcon, PinIcon, PlusIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -44,6 +45,7 @@ import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
   HERMES_DRIVER,
+  hermesAgentName,
   hermesInstanceIds,
   hermesSessionsContinue,
   hermesSessionsDelete,
@@ -53,6 +55,8 @@ import {
 } from "./hermesSessions";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:hermes-expanded";
+const MORE_BUTTON_CLASS =
+  "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
 
 type MenuAction =
   | "continue"
@@ -205,6 +209,16 @@ export function HermesSidebarSection() {
           }),
     [targetsKey],
   );
+
+  // One agent name, or "Hermes" when instances disagree.
+  const sectionName = useMemo(() => {
+    const names = new Set(
+      targets.map((target) =>
+        hermesAgentName(serverConfigs.get(target.environmentId)?.settings, target.instanceId),
+      ),
+    );
+    return names.size === 1 ? ([...names][0] ?? "Hermes") : "Hermes";
+  }, [serverConfigs, targets]);
 
   const threadsByTarget = useMemo(() => {
     const byTarget = new Map<string, EnvironmentThreadShell[]>();
@@ -562,7 +576,7 @@ export function HermesSidebarSection() {
   const runningCount = rows.filter((row) => row.running).length;
 
   return (
-    <section aria-label="Hermes Agent" className="mt-2">
+    <section aria-label={sectionName} className="mt-2">
       <div
         className="@container/hermes mx-0.5 flex h-8 items-center gap-0.5"
         onContextMenu={(event) => void handleHeaderContextMenu(event)}
@@ -584,13 +598,13 @@ export function HermesSidebarSection() {
               ) : null
             }
           >
-            {`Hermes Agent (${rows.length})`}
+            {`${sectionName} (${rows.length})`}
           </CollapsibleSectionHeader>
         </div>
         <button
           type="button"
-          aria-label="New Hermes session"
-          title="New Hermes session"
+          aria-label={`New ${sectionName} session`}
+          title={`New ${sectionName} session`}
           onMouseDown={preventMouseFocus}
           onClick={() => void startNew()}
           className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
@@ -619,10 +633,18 @@ export function HermesSidebarSection() {
               <button
                 type="button"
                 onClick={() => setExtra((value) => value + 1)}
-                className="flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                className={MORE_BUTTON_CLASS}
               >
                 <PlusIcon aria-hidden className="size-3.5 shrink-0" />
                 Load more
+              </button>
+            </li>
+          ) : null}
+          {extra > 0 ? (
+            <li className="list-none">
+              <button type="button" onClick={() => setExtra(0)} className={MORE_BUTTON_CLASS}>
+                <MinusIcon aria-hidden className="size-3.5 shrink-0" />
+                Show less
               </button>
             </li>
           ) : null}
@@ -666,7 +688,7 @@ const HermesLine = memo(function HermesLine(props: {
     <>
       <ProviderInstanceIcon
         driverKind={HERMES_DRIVER}
-        displayName="Hermes Agent"
+        displayName="Hermes"
         className="size-3.5 shrink-0"
         iconClassName="size-3.5"
       />

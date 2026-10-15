@@ -14,6 +14,7 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
   HERMES_DRIVER,
+  hermesAgentName,
   hermesInstanceIds,
   hermesSessionsListArchived,
   hermesSessionsUnarchive,
@@ -26,7 +27,12 @@ export function ArchivedHermesSessions(props: {
 }) {
   const { environmentId } = props;
   const config = useAtomValue(environmentServerConfigsAtom).get(environmentId);
-  const hasHermes = hermesInstanceIds(config).length > 0;
+  const instanceIds = hermesInstanceIds(config);
+  const hasHermes = instanceIds.length > 0;
+  const names = new Set(
+    instanceIds.map((instanceId) => hermesAgentName(config?.settings, instanceId)),
+  );
+  const agentName = names.size === 1 ? ([...names][0] ?? "Hermes") : "Hermes";
   const [sessions, setSessions] = useState<ReadonlyArray<HermesArchivedSession>>([]);
   const [pending, setPending] = useState<string | null>(null);
 
@@ -61,9 +67,7 @@ export function ArchivedHermesSessions(props: {
   return (
     <SettingsSection
       title={
-        props.environmentLabel === null
-          ? "Hermes Agent"
-          : `Hermes Agent · ${props.environmentLabel}`
+        props.environmentLabel === null ? agentName : `${agentName} · ${props.environmentLabel}`
       }
     >
       {sessions.map((session) => (
@@ -74,7 +78,7 @@ export function ArchivedHermesSessions(props: {
             <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
               <ProviderInstanceIcon
                 driverKind={HERMES_DRIVER}
-                displayName="Hermes Agent"
+                displayName={agentName}
                 className="size-3.5 shrink-0"
                 iconClassName="size-3.5"
               />
