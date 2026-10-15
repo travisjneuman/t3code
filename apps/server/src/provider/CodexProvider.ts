@@ -515,7 +515,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
             client,
             codexHome: initialize.codexHome,
             spawnedAtMs,
-            includeHidden: input.includeHiddenModels === true,
+            includeHidden: input.includeHiddenModels === true, // Fork add-on: Codex hidden models.
           }) // Fork add-on: Codex hidden models.
         : requestAllCodexModels(client, input.includeHiddenModels), // Fork add-on: Codex hidden models.
       // Usage is an enrichment: a failure or a slow answer degrades to "no
