@@ -208,9 +208,9 @@ const make = Effect.gen(function* () {
   ) {
     const folder = yield* folderSetting("notesDirectory", "notes folder");
     const projection = yield* readThread(input.threadId);
-    const id = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(failed("Could not ask for a summary.")),
-    );
+    const id = yield* crypto
+      .randomUUIDv4()
+      .pipe(Effect.mapError(failed("Could not ask for a summary.")));
     const active = projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status));
     const text = [
       "Save a summary of this conversation to my notes.",

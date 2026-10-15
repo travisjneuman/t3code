@@ -89,7 +89,7 @@ export const make = Effect.gen(function* () {
       (thread) => thread.providerInstanceId === origin,
     )?.driver;
     const name = driver === undefined ? origin : (PROVIDER_DISPLAY_NAMES[driver] ?? origin);
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not hand back.")));
+    const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("Could not hand back.")));
     const active = projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status));
     yield* orchestrator
       .dispatch({
@@ -123,7 +123,9 @@ export const make = Effect.gen(function* () {
       });
     }
     if (projection.thread.archivedAt !== null) return {};
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not move it back.")));
+    const id = yield* crypto
+      .randomUUIDv4()
+      .pipe(Effect.mapError(failed("Could not move it back.")));
     yield* orchestrator
       .dispatch({
         type: "thread.archive",

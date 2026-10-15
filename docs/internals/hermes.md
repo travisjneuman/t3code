@@ -47,7 +47,9 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
   (`hermes-session-import:v1` ids) kept only user and assistant text under different ids. A v1 thread with no T3
   runs is rebuilt under `hermes:<instance>:<session>` with the full history, the provider binding
   moves to it, and the old thread is deleted. A v1 thread that has runs is kept and only gets
-  entries newer than its last imported item.
+  entries newer than its last imported item. The provider thread row is keyed by session, so once
+  the binding moves only the `import:` id still names the old thread; opening the new thread
+  deletes any old copy a failed delete left behind.
 - **Cron reports come from the output doc, not the session.** A cron run's delivered text (what
   Discord shows) is written to `{hermes_home}/cron/output/<job>/<local stamp>.md`, not to the
   session. For a `cron_<job>_<date>_<time>` session the import reads the job through the
