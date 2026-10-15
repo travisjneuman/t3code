@@ -12,5 +12,6 @@ export {
   decodeHermesProviders,
   hermesModelsFromOptions,
   isOfferableHermesProvider,
+  withAccountCodexModels,
   type HermesProviderOption,
 } from "./server/models.ts";

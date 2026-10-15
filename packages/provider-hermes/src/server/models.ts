@@ -175,14 +175,87 @@ export function hermesModelsFromOptions(
       const slug = `${provider.slug}::${model}`;
       if (seen.has(slug)) continue;
       seen.add(slug);
-      models.push({
-        slug,
-        name: brandModelName(provider.slug, model),
-        subProvider: provider.name,
-        isCustom: false,
-        capabilities: modelCapabilities(provider.capabilities[model]),
-      });
+      models.push(
+        hermesModelEntry(provider.slug, provider.name, model, provider.capabilities[model]),
+      );
     }
+  }
+  return models;
+}
+
+const hermesModelEntry = (
+  providerSlug: string,
+  providerName: string,
+  model: string,
+  capability: HermesProviderOption["capabilities"][string] | undefined,
+): ServerProviderModel => ({
+  slug: `${providerSlug}::${model}`,
+  name: brandModelName(providerSlug, model),
+  subProvider: providerName,
+  isCustom: false,
+  capabilities: modelCapabilities(capability),
+});
+
+const CODEX_GATEWAY = "openai-codex";
+
+/** The Hermes traits a T3 Codex model implies: an effort select, and the priority tier as fast mode. */
+const codexModelCapability = (model: ServerProviderModel) => {
+  const descriptors = model.capabilities?.optionDescriptors ?? [];
+  const effort = descriptors.find((descriptor) => descriptor.id === "reasoningEffort");
+  const efforts = effort?.type === "select" ? effort.options.map((option) => option.id) : [];
+  return {
+    reasoning: efforts.length > 0,
+    canDisableReasoning: efforts.includes("none"),
+    fast: descriptors.some(
+      (descriptor) =>
+        descriptor.id === "fastMode" ||
+        (descriptor.id === "serviceTier" &&
+          descriptor.type === "select" &&
+          descriptor.options.some((option) => option.id === "priority")),
+    ),
+  };
+};
+
+/**
+ * Hermes lists account-gated Codex models (Astra) only while its own Codex
+ * sign-in is fresh, and its model picker never renews that sign-in. T3's Codex
+ * provider keeps a live list for the same ChatGPT account, so Hermes's Codex
+ * group gains each model that list has and Hermes's lacks, placed after its
+ * neighbour in Codex's order. A Hermes Codex group that is signed out or
+ * hidden stays absent.
+ */
+export function withAccountCodexModels(
+  hermesModels: ReadonlyArray<ServerProviderModel>,
+  codexModels: ReadonlyArray<ServerProviderModel>,
+): ReadonlyArray<ServerProviderModel> {
+  const prefix = `${CODEX_GATEWAY}::`;
+  const group = hermesModels.find((model) => model.slug.startsWith(prefix));
+  if (!group) return hermesModels;
+  const models = [...hermesModels];
+  let previous: string | undefined;
+  for (const codexModel of codexModels) {
+    if (codexModel.isCustom) continue;
+    const slug = `${prefix}${codexModel.slug}`;
+    if (!models.some((model) => model.slug === slug)) {
+      // After the previous Codex model and its variants ("-900k"), else before the group.
+      const anchor = previous;
+      const after = anchor
+        ? models.findLastIndex(
+            (model) => model.slug === anchor || model.slug.startsWith(`${anchor}-`),
+          )
+        : models.findIndex((model) => model.slug.startsWith(prefix)) - 1;
+      models.splice(
+        after + 1,
+        0,
+        hermesModelEntry(
+          CODEX_GATEWAY,
+          group.subProvider ?? CODEX_GATEWAY,
+          codexModel.slug,
+          codexModelCapability(codexModel),
+        ),
+      );
+    }
+    previous = slug;
   }
   return models;
 }

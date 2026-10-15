@@ -71,6 +71,7 @@ import {
   type ProviderMaintenanceCapabilities,
 } from "@t3tools/provider-core/server/maintenanceResolver";
 import type { ProviderSnapshotSource } from "./builtInProviderCatalog.ts";
+import { withHermesAccountCodexModels } from "./hermesAccountCodexModels.ts"; // Fork add-on: Hermes Codex lists the account's live models
 
 export type ProviderMaintenanceActionKind = "update";
 
@@ -623,7 +624,8 @@ export const layer = Layer.effect(
           }
 
           const providers = orderProviderSnapshots(
-            [...mergedProviders.values()].map((provider) =>
+            withHermesAccountCodexModels([...mergedProviders.values()]).map((provider) =>
+              // Fork add-on: Hermes Codex lists the account's live models
               classifyCompatibility(provider, manifest),
             ),
           );
