@@ -35,6 +35,7 @@ import {
   type HermesSessionsUnarchiveInput,
   type HermesSessionsUpdateInput,
   type HermesT3ToolsInput,
+  type HermesT3ToolsResult,
   type OrchestrationV2AppThread,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
@@ -106,7 +107,7 @@ export class HermesSessions extends Context.Service<
     ) => Effect.Effect<HermesDashboardResult, HermesSessionsError>;
     readonly t3Tools: (
       input: HermesT3ToolsInput,
-    ) => Effect.Effect<HermesSessionsEmptyResult, HermesSessionsError>;
+    ) => Effect.Effect<HermesT3ToolsResult, HermesSessionsError>;
   }
 >()("t3/hermes/HermesSessions") {}
 
@@ -974,7 +975,9 @@ const make = Effect.gen(function* () {
    * bridge key, pins every other platform to no MCP servers, adds the `t3-code`
    * server limited to T3's thread tools, and restarts the gateway; off puts
    * back what on changed. The restore snapshot is saved before Hermes is
-   * touched, so a half-finished switch can always be turned off.
+   * touched, so a half-finished switch can always be turned off. The restart
+   * is best effort: Hermes reloads config.yaml and .env on its own, and its
+   * dashboard can't spawn a restart on some Windows hosts.
    */
   const t3Tools: HermesSessions["Service"]["t3Tools"] = Effect.fn("HermesSessions.t3Tools")(
     function* (input) {
@@ -1010,6 +1013,14 @@ const make = Effect.gen(function* () {
           .pipe(Effect.mapError(failed("Could not save the T3 tools settings.")));
       });
       const serverPath = `/api/mcp/servers/${T3_TOOLS_SERVER}`;
+      const restartGateway = call("POST", "/api/gateway/restart").pipe(
+        Effect.as({ restarted: true }),
+        Effect.catch((error) =>
+          Effect.logWarning("Hermes gateway restart refused", error).pipe(
+            Effect.as({ restarted: false }),
+          ),
+        ),
+      );
 
       if (!input.enabled) {
         yield* call("DELETE", serverPath, undefined, true);
@@ -1026,8 +1037,7 @@ const make = Effect.gen(function* () {
           });
         }
         yield* save({ t3Tools: false, t3ToolsKey: "", t3ToolsRestore: "" });
-        yield* call("POST", "/api/gateway/restart");
-        return {};
+        return yield* restartGateway;
       }
 
       const url = httpUrlOf(input.url);
@@ -1094,8 +1104,7 @@ const make = Effect.gen(function* () {
       yield* call("PUT", "/api/config", {
         config: { mcp_servers: { [T3_TOOLS_SERVER]: { tools: { include: T3_TOOLS } } } },
       });
-      yield* call("POST", "/api/gateway/restart");
-      return {};
+      return yield* restartGateway;
     },
   );
 

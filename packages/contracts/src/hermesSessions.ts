@@ -176,6 +176,12 @@ export const HermesT3ToolsInput = Schema.Struct({
 });
 export type HermesT3ToolsInput = typeof HermesT3ToolsInput.Type;
 
+/** `restarted` is false when Hermes refused the gateway restart; it reloads the change itself. */
+export const HermesT3ToolsResult = Schema.Struct({
+  restarted: Schema.Boolean,
+});
+export type HermesT3ToolsResult = typeof HermesT3ToolsResult.Type;
+
 export const HermesSessionsEmptyResult = Schema.Struct({});
 export type HermesSessionsEmptyResult = typeof HermesSessionsEmptyResult.Type;
 
@@ -239,7 +245,7 @@ export const HermesSessionsDashboardRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.da
 
 export const HermesSessionsT3ToolsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.t3Tools, {
   payload: HermesT3ToolsInput,
-  success: HermesSessionsEmptyResult,
+  success: HermesT3ToolsResult,
   error: HermesSessionsRpcError,
 });
 

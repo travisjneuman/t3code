@@ -107,13 +107,18 @@ the Hermes thread that started them.
 
 To turn it on, open **Settings › Providers › Hermes Agent › T3 tools**, check the T3 address
 Hermes will use and flip the switch. The address must end in `/mcp` and be reachable from Hermes's
-machine; the desktop app fills in its Tailscale address when it has one.
+machine; the desktop app fills in its Tailscale address when it has one. That name resolves only
+where Tailscale DNS is on. If Hermes's machine keeps it off, for example behind another VPN, use an
+address it can reach instead, such as this computer's LAN address and T3's port
+(`http://192.168.1.20:3773/mcp`). To change the address, turn the switch off, edit it, and turn it
+back on.
 
 - Only Hermes's API server, which T3 uses, gets the tools. T3 pins every other platform, including
   Discord, cron and the CLI, to no MCP servers while the switch is on, and puts their settings
   back when you turn it off.
 - Turning the switch on or off restarts the Hermes gateway, so chat platforms such as Discord drop
-  for a moment.
+  for a moment. If Hermes refuses the restart, the switch still applies: Hermes picks up the change
+  on its own shortly.
 - The tools work only while a Hermes thread in T3 is running a turn, and only one at a time: with
   two Hermes threads running at once, T3 can't tell which one is calling and refuses.
 - Saving a platform in Hermes's own `hermes tools` picker drops its "no MCP" pin, so that platform

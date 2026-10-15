@@ -181,7 +181,9 @@ function HermesT3Tools(props: {
     toastManager.add({
       type: "success",
       title: enabled ? "T3 tools are on" : "T3 tools are off",
-      description: "The Hermes gateway is restarting.",
+      description: result.restarted
+        ? "The Hermes gateway is restarting."
+        : "Hermes refused to restart its gateway, so it picks up the change on its own shortly.",
     });
   };
 
