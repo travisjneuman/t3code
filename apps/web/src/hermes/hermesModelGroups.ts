@@ -117,12 +117,9 @@ export function buildHermesModelSections<
   return { groups, visibleModels, itemKeys };
 }
 
-/** A set with `key` added or removed. */
+/** Opening a group closes the others, so one is open at a time; clicking the open one closes it. */
 export function toggleHermesModelGroup(expanded: ReadonlySet<string>, key: string) {
-  const next = new Set(expanded);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  return next;
+  return new Set(expanded.has(key) ? [] : [key]);
 }
 
 /** The composer chip: the agent name, plus the model when one is picked over "Hermes default". */
