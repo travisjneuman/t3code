@@ -7,7 +7,8 @@
  * archives, `delete` deletes the session in Hermes and its T3 thread. The
  * dashboard proxy serves Settings › Providers › Hermes Agent and never
  * returns a secret's value; `t3Tools` gives Hermes's API server T3's thread
- * tools, or takes them away. Fork add-on; see docs/user/hermes.md.
+ * tools, or takes them away; `insights` reads any session's details card
+ * without opening it. Fork add-on; see docs/user/hermes.md.
  *
  * @module hermes/HermesSessions
  */
@@ -28,6 +29,7 @@ import {
   type HermesSessionsDeleteInput,
   type HermesSessionsEmptyResult,
   HermesSessionsError,
+  type HermesSessionsInsightsInput,
   type HermesSessionsListArchivedResult,
   type HermesSessionsListInput,
   type HermesSessionsListResult,
@@ -41,10 +43,13 @@ import {
   type OrchestrationV2ProviderThread,
   ProviderDriverKind,
   ProviderInstanceId,
+  ProviderThreadId,
+  type SessionInsights,
   ThreadId,
 } from "@t3tools/contracts";
 import {
   HermesApi,
+  HermesInsights,
   decodeHermesProviders,
   isOfferableHermesProvider,
 } from "@t3tools/provider-hermes/server";
@@ -108,6 +113,9 @@ export class HermesSessions extends Context.Service<
     readonly t3Tools: (
       input: HermesT3ToolsInput,
     ) => Effect.Effect<HermesT3ToolsResult, HermesSessionsError>;
+    readonly insights: (
+      input: HermesSessionsInsightsInput,
+    ) => Effect.Effect<SessionInsights, HermesSessionsError>;
   }
 >()("t3/hermes/HermesSessions") {}
 
@@ -132,6 +140,8 @@ const WINDOW_LEAD_MS = 30_000;
 const WINDOW_TRAIL_MS = 30_000;
 // Enough cron history to find the run after this one.
 const CRON_RUNS_LOOKUP = 50;
+/** Hermes pages a long session's messages, so the details read gets longer than one request. */
+const INSIGHTS_TIMEOUT = "30 seconds";
 const NO_ENTRIES: ReadonlyArray<HermesSessionEntry> = [];
 const REDACTED = "••••••";
 const SECRET_KEY = /(?:api_?key|secret|token|password)$/i;
@@ -199,6 +209,14 @@ const fromApi = (error: HermesApi.HermesApiError) =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const hostOfUrl = (url: string): string | undefined => {
+  try {
+    return new URL(url).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 const httpUrlOf = (text: string | undefined): string | undefined => {
   if (!text) return undefined;
@@ -1108,6 +1126,39 @@ const make = Effect.gen(function* () {
     },
   );
 
+  /**
+   * The details card for any session of this instance, read from Hermes with
+   * read-only GETs, the same read a Hermes thread's `sessionInsights.get` makes.
+   * Nothing is imported or continued, so an unopened session stays unopened.
+   */
+  const insights: HermesSessions["Service"]["insights"] = Effect.fn("HermesSessions.insights")(
+    function* (input) {
+      const settings = yield* settingsOf(input.instanceId);
+      const read = yield* HermesInsights.read({ settings, sessionId: input.sessionId }).pipe(
+        Effect.timeout(INSIGHTS_TIMEOUT),
+        Effect.mapError(failed("Hermes did not answer in time.")),
+      );
+      if (read.session === null && read.context === null) {
+        return yield* new HermesSessionsError({ message: "Hermes did not return that session." });
+      }
+      // The agent runs where Hermes runs, not on this server.
+      const host = hostOfUrl(settings.apiUrl);
+      return {
+        providerThreadId: ProviderThreadId.make(input.sessionId),
+        instanceId: input.instanceId,
+        driver: HERMES_DRIVER,
+        // Hermes answered for the session itself, whether or not T3 runs it now.
+        live: true,
+        capturedAt: DateTime.formatIso(yield* DateTime.now),
+        context: read.context,
+        mcpServers: read.mcpServers,
+        ...(host === undefined ? {} : { host }),
+        ...(read.session === null ? {} : { session: read.session }),
+        outputs: read.outputs,
+      };
+    },
+  );
+
   return HermesSessions.of({
     list,
     providers,
@@ -1118,6 +1169,7 @@ const make = Effect.gen(function* () {
     unarchive,
     dashboard,
     t3Tools,
+    insights,
   });
 });
 

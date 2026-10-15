@@ -1,9 +1,9 @@
 /**
  * Fork add-on: session details. Each provider thread's last live session
  * insights report (context breakdown, MCP servers and, for agents that keep
- * one, the session record), so a stopped thread keeps its details card across
- * a server restart. The table is created by the fork's own migration ledger
- * (ForkMigrations.ts), never upstream's.
+ * their own store, the session record, changed files and host), so a stopped
+ * thread keeps its details card across a server restart. The table is created
+ * by the fork's own migration ledger (ForkMigrations.ts), never upstream's.
  *
  * @module persistence/SessionInsightsReports
  */
@@ -12,8 +12,10 @@ import {
   ProviderThreadId,
   SessionContextBreakdown,
   SessionMcpServer,
+  SessionOutputFile,
   SessionRecord,
   ThreadId,
+  TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -35,6 +37,8 @@ export const StoredSessionInsightsReport = Schema.Struct({
   context: Schema.NullOr(SessionContextBreakdown),
   mcpServers: Schema.NullOr(Schema.Array(SessionMcpServer)),
   session: Schema.optional(SessionRecord),
+  outputs: Schema.optional(Schema.Array(SessionOutputFile)),
+  host: Schema.optional(TrimmedNonEmptyString),
 });
 export type StoredSessionInsightsReport = typeof StoredSessionInsightsReport.Type;
 
@@ -45,6 +49,8 @@ const ReportRow = Schema.Struct({
   context: Schema.NullOr(Schema.fromJsonString(SessionContextBreakdown)),
   mcpServers: Schema.NullOr(Schema.fromJsonString(Schema.Array(SessionMcpServer))),
   session: Schema.NullOr(Schema.fromJsonString(SessionRecord)),
+  outputs: Schema.NullOr(Schema.fromJsonString(Schema.Array(SessionOutputFile))),
+  host: Schema.NullOr(TrimmedNonEmptyString),
 });
 // A row written by another build, or damaged, is ignored rather than failing the card.
 const decodeReportRow = Schema.decodeUnknownOption(ReportRow);
@@ -84,7 +90,9 @@ const make = Effect.gen(function* () {
             captured_at AS "capturedAt",
             context_json AS "context",
             mcp_servers_json AS "mcpServers",
-            session_json AS "session"
+            session_json AS "session",
+            outputs_json AS "outputs",
+            host
           FROM session_insights_reports
           WHERE provider_thread_id = ${providerThreadId}
         `.pipe(
@@ -98,6 +106,8 @@ const make = Effect.gen(function* () {
                 context: row.context,
                 mcpServers: row.mcpServers,
                 ...(row.session === null ? {} : { session: row.session }),
+                ...(row.outputs === null ? {} : { outputs: row.outputs }),
+                ...(row.host === null ? {} : { host: row.host }),
               })),
             ),
           ),
@@ -116,7 +126,9 @@ const make = Effect.gen(function* () {
                   captured_at,
                   context_json,
                   mcp_servers_json,
-                  session_json
+                  session_json,
+                  outputs_json,
+                  host
                 )
                 VALUES (
                   ${report.providerThreadId},
@@ -124,14 +136,18 @@ const make = Effect.gen(function* () {
                   ${report.capturedAt},
                   ${report.context === null ? null : JSON.stringify(report.context)},
                   ${report.mcpServers === null ? null : JSON.stringify(report.mcpServers)},
-                  ${report.session === undefined ? null : JSON.stringify(report.session)}
+                  ${report.session === undefined ? null : JSON.stringify(report.session)},
+                  ${report.outputs === undefined ? null : JSON.stringify(report.outputs)},
+                  ${report.host ?? null}
                 )
                 ON CONFLICT (provider_thread_id) DO UPDATE SET
                   thread_id = excluded.thread_id,
                   captured_at = excluded.captured_at,
                   context_json = excluded.context_json,
                   mcp_servers_json = excluded.mcp_servers_json,
-                  session_json = excluded.session_json
+                  session_json = excluded.session_json,
+                  outputs_json = excluded.outputs_json,
+                  host = excluded.host
               `;
               yield* sql`
                 DELETE FROM session_insights_reports

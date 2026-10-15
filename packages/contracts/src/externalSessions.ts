@@ -14,7 +14,12 @@ import {
 } from "./auth.ts";
 import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
-import { SessionContextBreakdown, SessionMcpServer, SessionRecord } from "./sessionInsights.ts";
+import {
+  SessionContextBreakdown,
+  SessionMcpServer,
+  SessionOutputFile,
+  SessionRecord,
+} from "./sessionInsights.ts";
 
 export const EXTERNAL_SESSIONS_WS_METHODS = {
   subscribeList: "externalSessions.subscribeList",
@@ -454,13 +459,7 @@ export const ExternalSessionInsightsInput = Schema.Struct({
 export type ExternalSessionInsightsInput = typeof ExternalSessionInsightsInput.Type;
 
 /** One file the session's edit or write tools changed. */
-export const ExternalSessionOutputFile = Schema.Struct({
-  path: TrimmedNonEmptyString,
-  additions: NonNegativeInt,
-  deletions: NonNegativeInt,
-  /** False when the transcript names the file but not the lines changed. */
-  hasStats: Schema.Boolean,
-});
+export const ExternalSessionOutputFile = SessionOutputFile;
 export type ExternalSessionOutputFile = typeof ExternalSessionOutputFile.Type;
 
 export const ExternalSessionInsightsResult = Schema.Struct({

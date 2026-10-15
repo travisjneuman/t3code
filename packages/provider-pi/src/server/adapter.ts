@@ -71,6 +71,10 @@ import { parsePiCompactCommand, type PiCompactCommand } from "./commands.ts";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import {
+  sessionTotalsBreakdown,
+  sessionUsageBreakdown,
+} from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import {
   ProviderAdapterDriverCreateError,
@@ -2525,6 +2529,17 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           Effect.sync(
             () => pendingWake !== null && pendingWake.state.providerThread.id === providerThread.id,
           ),
+        sessionInsights: {
+          contextBreakdown: ({ providerThread }) =>
+            DateTime.now.pipe(
+              Effect.flatMap((now) => readTokenUsage(null, now)),
+              Effect.map((usage) =>
+                usage === undefined
+                  ? sessionUsageBreakdown(providerThread.contextUsage)
+                  : sessionTotalsBreakdown(usage),
+              ),
+            ),
+        }, // Fork add-on: session details.
         getModelContextWindow: (selection) => {
           if (selection.instanceId !== options.instanceId) return undefined;
           const slug =

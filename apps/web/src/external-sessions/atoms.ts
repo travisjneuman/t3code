@@ -15,6 +15,7 @@ import {
   type ExternalSessionEvent,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
+  type SessionRecord,
 } from "@t3tools/contracts";
 import {
   createEnvironmentRpcCommand,
@@ -27,6 +28,7 @@ import * as Stream from "effect/Stream";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
+import { sessionRecordFrom } from "../components/chat/sessionInsights.logic";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { environmentSummaries } from "../state/presentation";
@@ -101,24 +103,43 @@ export const externalSessionsRunningElsewhere = createEnvironmentRpcSubscription
   },
 );
 
+/** A running session's insights refetch at most this often. */
+const RUNNING_INSIGHTS_REFRESH_MS = 30_000;
+
 // Moves when a turn settles (the session stops running) or an idle session
-// changes, so a running session's streaming never refetches its insights.
+// changes. While the session runs its summary's updatedAt moves with every
+// streamed event, so the key follows it at most once per interval; the next
+// summary change after the interval moves it, so no timer runs.
 const insightsRefreshKeyFamily = Atom.family((target: string) => {
   const [environmentId, key] = JSON.parse(target) as [string, string];
   const transcript = externalSessionTranscript({
     environmentId: EnvironmentId.make(environmentId),
     input: { key },
   });
+  let runningMark: { readonly updatedAt: string; readonly at: number } | null = null;
   return Atom.make((get) => {
     const summary = Option.getOrNull(AsyncResult.value(get(transcript)))?.summary ?? null;
     if (summary === null) return "";
-    return summary.liveness === "running" ? "running" : `${summary.liveness}|${summary.updatedAt}`;
+    if (summary.liveness !== "running") {
+      runningMark = null;
+      return `${summary.liveness}|${summary.updatedAt}`;
+    }
+    const now = Date.now();
+    if (
+      runningMark === null ||
+      (runningMark.updatedAt !== summary.updatedAt &&
+        now - runningMark.at >= RUNNING_INSIGHTS_REFRESH_MS)
+    ) {
+      runningMark = { updatedAt: summary.updatedAt, at: now };
+    }
+    return `running|${runningMark.updatedAt}`;
   }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`external-sessions:insights-refresh:${target}`));
 });
 
 /**
- * What the session details card shows beyond the summary: the machine and the
- * files the session's tools changed. Read only while the card is open.
+ * What the session details card shows beyond the summary: the machine, the
+ * agent's session record, context, and connectors, and the files the
+ * session's tools changed. Read only while the card is open.
  */
 const externalSessionInsights = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:external-sessions:insights",
@@ -431,4 +452,17 @@ export function externalSessionSettingLabel(value: string): string {
     .trim()
     .toLowerCase();
   return words.length === 0 ? value : `${words[0]!.toUpperCase()}${words.slice(1)}`;
+}
+
+/** The record's mode, sandbox, effort, and speed values, spelled out for display. */
+export function labelSessionRecordSettings(record: SessionRecord): SessionRecord {
+  const label = (value: string | undefined) =>
+    value === undefined ? undefined : externalSessionSettingLabel(value);
+  return sessionRecordFrom({
+    ...record,
+    effort: label(record.effort),
+    permissionMode: label(record.permissionMode),
+    sandbox: label(record.sandbox),
+    serviceTier: label(record.serviceTier),
+  });
 }

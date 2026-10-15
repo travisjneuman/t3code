@@ -1,4 +1,4 @@
-import type { RunId, ScopedThreadRef } from "@t3tools/contracts";
+import type { EnvironmentId, RunId, ScopedThreadRef } from "@t3tools/contracts";
 import { FileDiffIcon, MinusIcon, PlusIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
@@ -13,6 +13,7 @@ import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
 } from "./threadDetailsPanelStyles";
+import { useOpenSessionFile } from "./useOpenSessionFile";
 
 const OUTPUTS_INITIAL_COUNT = 8;
 
@@ -41,8 +42,32 @@ export const ThreadOutputsSection = memo(function ThreadOutputsSection(props: {
 type OutputsListFile = OutputFile & { readonly runId?: RunId | null };
 
 /**
+ * Files an agent reported changing from its own store, which have no T3 turn
+ * diff; each opens in the configured editor.
+ */
+export const SessionOutputsList = memo(function SessionOutputsList(props: {
+  readonly environmentId: EnvironmentId;
+  readonly outputs: ReadonlyArray<OutputFile>;
+  /** The session's folder, for showing and resolving relative paths. */
+  readonly cwd: string | undefined;
+  readonly note: string | null;
+}) {
+  const openFile = useOpenSessionFile(props.environmentId, props.cwd);
+  return (
+    <ThreadOutputsList
+      outputs={props.outputs}
+      workspaceRoot={props.cwd}
+      onOpenTurnDiff={undefined}
+      note={props.note}
+      onOpenFile={openFile}
+    />
+  );
+});
+
+/**
  * The Outputs section for any list of changed files, with the summed line
- * changes in its header. Rows with a run open that run's diff.
+ * changes in its header. Rows with a run open that run's diff; the rest open
+ * the file when `onOpenFile` is given.
  */
 export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
   readonly outputs: ReadonlyArray<OutputsListFile>;
@@ -50,6 +75,7 @@ export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
   readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
   /** A caveat under the list, such as an older part of the session not being read. */
   readonly note: string | null;
+  readonly onOpenFile?: ((path: string) => void) | undefined;
 }) {
   const { outputs } = props;
   const [showAll, setShowAll] = useState(false);
@@ -82,6 +108,7 @@ export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
               output={output}
               workspaceRoot={props.workspaceRoot}
               onOpenTurnDiff={props.onOpenTurnDiff}
+              onOpenFile={props.onOpenFile}
             />
           </li>
         ))}
@@ -112,8 +139,9 @@ function OutputRow(props: {
   readonly output: OutputsListFile;
   readonly workspaceRoot: string | undefined;
   readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
+  readonly onOpenFile: ((path: string) => void) | undefined;
 }) {
-  const { output, onOpenTurnDiff } = props;
+  const { output, onOpenTurnDiff, onOpenFile } = props;
   const content = (
     <>
       <FileDiffIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
@@ -133,7 +161,13 @@ function OutputRow(props: {
     </>
   );
   const runId = output.runId ?? null;
-  if (runId === null || onOpenTurnDiff === undefined) {
+  const open =
+    runId !== null && onOpenTurnDiff !== undefined
+      ? () => onOpenTurnDiff(runId, output.path)
+      : onOpenFile !== undefined
+        ? () => onOpenFile(output.path)
+        : null;
+  if (open === null) {
     return <div className={OUTPUT_ROW_CLASS}>{content}</div>;
   }
   return (
@@ -143,7 +177,7 @@ function OutputRow(props: {
         OUTPUT_ROW_CLASS,
         "cursor-pointer hover:bg-black/[0.055] dark:hover:bg-white/[0.075]",
       )}
-      onClick={() => onOpenTurnDiff(runId, output.path)}
+      onClick={open}
     >
       {content}
     </button>

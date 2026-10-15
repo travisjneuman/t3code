@@ -21,6 +21,7 @@ import {
   sessionDetails,
   timestampMs,
 } from "./ExternalSessionSource.ts";
+import { makeAntigravityUsage } from "./antigravityInsights.ts";
 
 const DATABASE = "conversation_summaries.db";
 const MAX_ROWS = 100;
@@ -82,6 +83,7 @@ const readSummaries = (path: string): ReadonlyArray<ExternalSessionInfo> => {
 export const makeAntigravitySource = (): ExternalSessionSource => {
   const root = NodePath.join(NodeOS.homedir(), ".gemini", "antigravity-cli");
   const database = NodePath.join(root, DATABASE);
+  const usage = makeAntigravityUsage(NodePath.join(root, "conversations"));
 
   return {
     driver: "antigravity",
@@ -89,8 +91,20 @@ export const makeAntigravitySource = (): ExternalSessionSource => {
     sessionPathsFor: (changed) =>
       Effect.succeed(NodePath.basename(changed).startsWith(DATABASE) ? [database] : []),
     discover: () => Effect.succeed([database]),
-    summarize: (path) => Effect.sync(() => readSummaries(path)),
+    summarize: (path) =>
+      Effect.gen(function* () {
+        const infos = readSummaries(path);
+        // The summary database names no model; the conversation's own does.
+        // Only a new idle conversation triggers a decode here, so a running
+        // one is not decoded again on every write.
+        if (infos.some((info) => !info.busy && !usage.attempted(info.id))) yield* usage.refresh;
+        return infos.map((info) => {
+          const model = usage.model(info.id);
+          return model === null ? info : { ...info, model };
+        });
+      }),
     transcriptPath: () => null,
+    readInsights: usage.readInsights,
     createParser: () => ({ push: () => [] }),
   };
 };

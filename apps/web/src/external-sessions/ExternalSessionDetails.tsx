@@ -1,21 +1,25 @@
-import type { EnvironmentId, ExternalSessionSummary } from "@t3tools/contracts";
-import { memo, type RefObject } from "react";
+import type { EnvironmentId, ExternalSessionSummary, SessionRecord } from "@t3tools/contracts";
+import { memo, type RefObject, useMemo } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
-import { ThreadContextBreakdown } from "../components/chat/ThreadContextBreakdown";
-import { ThreadDetailsCard } from "../components/chat/ThreadDetailsCard";
-import { ThreadDetailsSection } from "../components/chat/ThreadDetailsSection";
-import { ThreadDetailsStatRow } from "../components/chat/ThreadDetailsStatRow";
-import { ThreadOutputsList } from "../components/chat/ThreadOutputsSection";
+import {
+  mergeSessionRecord,
+  RECORD_STATUS_PRESENTATION,
+  sessionRecordFrom,
+} from "../components/chat/sessionInsights.logic";
 import {
   SessionEnvironmentSection,
-  SessionHeaderRow,
-} from "../components/chat/ThreadSessionInsightsSection";
+  SessionSummarySection,
+  type SessionSummaryView,
+} from "../components/chat/SessionSummarySection";
+import { ThreadConnectorsSection } from "../components/chat/ThreadConnectorsSection";
+import { ThreadContextBreakdown } from "../components/chat/ThreadContextBreakdown";
+import { ThreadDetailsCard } from "../components/chat/ThreadDetailsCard";
+import { SessionOutputsList } from "../components/chat/ThreadOutputsSection";
 import type { ContextWindowSnapshot } from "../lib/contextWindow";
-import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
   externalSessionOriginLabel,
-  externalSessionSettingLabel,
+  labelSessionRecordSettings,
   LIVENESS_LABEL,
   shortModelLabel,
   useExternalSessionInsights,
@@ -107,28 +111,41 @@ function ExternalSessionDetailsContent(props: {
   const insights = useExternalSessionInsights(props.environmentId, props.sessionKey).data;
   const details = summary.details;
   const cwd = summary.cwd ?? undefined;
+  const record = insights?.session;
+  const sessionView = useMemo(() => externalSessionView(summary, record), [summary, record]);
+  const contextWindow = useMemo(() => contextSnapshot(summary), [summary]);
+  const context = insights?.context ?? null;
+  const contextReading = useMemo(
+    () =>
+      context === null
+        ? null
+        : // Read with the summary, so a running session's breakdown is current.
+          { context, live: summary.liveness === "running", capturedAt: summary.updatedAt },
+    [context, summary.liveness, summary.updatedAt],
+  );
   return (
     // Excluded from the card's density measurement, like a thread's session details.
     <div data-thread-session-details>
-      <ExternalSessionSummarySection summary={summary} />
+      <SessionSummarySection view={sessionView} separated={false} />
       <SessionEnvironmentSection
         host={insights?.host ?? null}
         folder={summary.cwd}
         branch={details?.gitBranches?.[0] ?? null}
       />
       <ThreadContextBreakdown
-        insights={null}
+        insights={contextReading}
         error={null}
-        contextWindow={contextSnapshot(summary)}
+        contextWindow={contextWindow}
         onCompactContext={undefined}
         compactDisabled
         compactDisabledReason={null}
       />
+      {insights?.mcpServers ? <ThreadConnectorsSection servers={insights.mcpServers} /> : null}
       {insights?.outputs ? (
-        <ThreadOutputsList
+        <SessionOutputsList
+          environmentId={props.environmentId}
           outputs={insights.outputs}
-          workspaceRoot={cwd}
-          onOpenTurnDiff={undefined}
+          cwd={cwd}
           note={insights.truncated ? TRUNCATED_OUTPUTS_NOTE : null}
         />
       ) : null}
@@ -136,63 +153,50 @@ function ExternalSessionDetailsContent(props: {
   );
 }
 
-function ExternalSessionSummarySection(props: { readonly summary: ExternalSessionSummary }) {
-  const { summary } = props;
+/** The Session section's view: the agent's record wins, the scan's details fill in. */
+function externalSessionView(
+  summary: ExternalSessionSummary,
+  sessionRecord: SessionRecord | undefined,
+): SessionSummaryView {
   const details = summary.details;
-  const setting = (value: string | undefined) =>
-    value === undefined ? null : externalSessionSettingLabel(value);
-  const effort = setting(details?.effort);
-  const approval = setting(details?.approval);
-  const sandbox = setting(details?.sandbox);
-  const origin = externalSessionOriginLabel(summary);
-  const model = shortModelLabel(summary.model);
-  return (
-    <ThreadDetailsSection
-      headingId="thread-details-session-heading"
-      title="Session"
-      separated={false}
-      data-thread-session-summary
-    >
-      <SessionHeaderRow
-        icon={
-          <ProviderInstanceIcon
-            driverKind={summary.driver}
-            displayName={origin}
-            iconClassName="size-4"
-          />
-        }
-        name={origin}
-        subtitle={[model, effort].filter((part) => part !== null).join(" · ")}
-        statusLabel={LIVENESS_LABEL[summary.liveness]}
-        statusDotClassName={LIVENESS_DOT_CLASS[summary.liveness]}
-      />
-      {approval !== null ? (
-        <ThreadDetailsStatRow label="Permissions">{approval}</ThreadDetailsStatRow>
-      ) : null}
-      {sandbox !== null ? (
-        <ThreadDetailsStatRow label="Sandbox">{sandbox}</ThreadDetailsStatRow>
-      ) : null}
-      {details?.createdAt !== undefined ? (
-        <ThreadDetailsStatRow label="Started">
-          {formatRelativeTimeLabel(details.createdAt)}
-        </ThreadDetailsStatRow>
-      ) : null}
-      <ThreadDetailsStatRow label="Last active">
-        {formatRelativeTimeLabel(summary.updatedAt)}
-      </ThreadDetailsStatRow>
-      {details?.messageCount !== undefined ? (
-        <ThreadDetailsStatRow label="Messages">
-          {details.messageCount.toLocaleString()}
-        </ThreadDetailsStatRow>
-      ) : null}
-      {details?.stepCount !== undefined ? (
-        <ThreadDetailsStatRow label="Steps">
-          {details.stepCount.toLocaleString()}
-        </ThreadDetailsStatRow>
-      ) : null}
-      {details?.version !== undefined ? (
-        <ThreadDetailsStatRow label="Version">{details.version}</ThreadDetailsStatRow>
-      ) : null}
-    </ThreadDetailsSection>
+  const record = labelSessionRecordSettings(
+    mergeSessionRecord(
+      sessionRecord,
+      sessionRecordFrom({
+        model: summary.model,
+        effort: details?.effort,
+        permissionMode: details?.approval,
+        sandbox: details?.sandbox,
+        startedAt: details?.createdAt,
+        lastActiveAt: summary.updatedAt,
+        version: details?.version,
+        messageCount: details?.messageCount,
+        stepCount: details?.stepCount,
+      }),
+    ),
   );
+  // A running session reads as running; otherwise the agent's own status says more.
+  const status =
+    summary.liveness !== "running" && record.status !== undefined
+      ? RECORD_STATUS_PRESENTATION[record.status]
+      : {
+          label: LIVENESS_LABEL[summary.liveness],
+          dotClassName: LIVENESS_DOT_CLASS[summary.liveness],
+        };
+  const origin = externalSessionOriginLabel(summary);
+  return {
+    icon: (
+      <ProviderInstanceIcon
+        driverKind={summary.driver}
+        displayName={origin}
+        iconClassName="size-4"
+      />
+    ),
+    name: origin,
+    model: shortModelLabel(record.model ?? null),
+    traits: record.effort === undefined ? [] : [record.effort],
+    statusLabel: status.label,
+    statusDotClassName: status.dotClassName,
+    record,
+  };
 }

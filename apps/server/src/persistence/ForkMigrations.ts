@@ -17,11 +17,15 @@ import * as Effect from "effect/Effect";
 import * as Migrator from "effect/sql/Migrator";
 
 import ForkMigration0001 from "./ForkMigrations/001_SessionInsightsReports.ts";
+import ForkMigration0002 from "./ForkMigrations/002_SessionInsightsOutputs.ts";
 
 const FORK_MIGRATIONS_TABLE = "fork_sql_migrations";
 
 /** Key format `{id}_{name}`, as upstream's loader; ids are the fork's own sequence. */
-const forkMigrationEntries = [[1, "SessionInsightsReports", ForkMigration0001]] as const;
+const forkMigrationEntries = [
+  [1, "SessionInsightsReports", ForkMigration0001],
+  [2, "SessionInsightsOutputs", ForkMigration0002],
+] as const;
 
 const loader = Migrator.fromRecord(
   Object.fromEntries(

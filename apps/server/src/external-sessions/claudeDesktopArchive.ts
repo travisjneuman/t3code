@@ -1,11 +1,13 @@
 /**
  * Claude desktop's own archive, mirrored read-only. The Claude app (its Code
  * tab) keeps one `local_<id>.json` per session under
- * `<Claude app data>/claude-code-sessions/<uuid>/<uuid>/`. Only `cliSessionId`
- * and `isArchived` are kept from each, plus the file's `local_<id>` name,
- * which Claude's `claude://code/continue` link opens; the rest of the record
- * holds account and bridge identifiers, so it is dropped right after parsing
- * and never logged or sent. T3 never writes these files, so a session
+ * `<Claude app data>/claude-code-sessions/<uuid>/<uuid>/`. Only `cliSessionId`,
+ * `isArchived` and a short allowlist of session settings for the details card
+ * (model, effort, permission mode, times, completed turns, CLI version, and
+ * whether Remote Control was used) are kept from each, plus the file's
+ * `local_<id>` name, which Claude's `claude://code/continue` link opens; the
+ * rest of the record holds account and bridge identifiers, so it is dropped
+ * right after parsing and never logged or sent. T3 never writes these files, so a session
  * archived there is unarchived there. Fork add-on; see
  * docs/internals/external-sessions.md.
  *
@@ -19,7 +21,13 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Semaphore from "effect/Semaphore";
 
-import { asString, listDirectory, parseJsonObject } from "./ExternalSessionSource.ts";
+import {
+  asCount,
+  asRecord,
+  asString,
+  listDirectory,
+  parseJsonObject,
+} from "./ExternalSessionSource.ts";
 
 const SESSION_FILE = /^local_[\w-]+\.json$/;
 // Under the list's 15-second liveness republish, so each of those ticks
@@ -43,16 +51,50 @@ const claudeAppDataDir = (): string => {
   }
 };
 
+/** What Claude desktop records about a session's settings, for the details card. */
+export interface ClaudeDesktopSessionMetadata {
+  readonly model: string | null;
+  readonly effort: string | null;
+  readonly permissionMode: string | null;
+  readonly createdAtMs: number | null;
+  readonly lastActivityAtMs: number | null;
+  readonly completedTurns: number | null;
+  readonly cliVersion: string | null;
+  /** Remote Control was turned on for the session; the bridge ids themselves are dropped. */
+  readonly remoteControl: boolean;
+}
+
 interface SessionRecord {
   readonly cliSessionId: string;
   readonly archived: boolean;
+  readonly metadata: ClaudeDesktopSessionMetadata;
 }
 
-/** The CLI session id a record names and whether it is archived; nothing else leaves here. */
+const epochMs = (value: unknown): number | null => {
+  const ms = asCount(value);
+  return ms === null || ms === 0 ? null : ms;
+};
+
+/** The CLI session id a record names, whether it is archived, and the allowlisted settings. */
 const sessionRecord = (text: string): SessionRecord | null => {
   const record = parseJsonObject(text.trimStart());
   const cliSessionId = asString(record?.cliSessionId);
-  return cliSessionId === null ? null : { cliSessionId, archived: record?.isArchived === true };
+  if (record === null || cliSessionId === null) return null;
+  const turns = asCount(record.completedTurns);
+  return {
+    cliSessionId,
+    archived: record.isArchived === true,
+    metadata: {
+      model: asString(record.model),
+      effort: asString(record.effort),
+      permissionMode: asString(record.permissionMode),
+      createdAtMs: epochMs(record.createdAt),
+      lastActivityAtMs: epochMs(record.lastActivityAt),
+      completedTurns: turns === null ? null : Math.round(turns),
+      cliVersion: asString(asRecord(record.toolSurfaceSnapshot)?.cliVersion),
+      remoteControl: Array.isArray(record.bridgeSessionIds) && record.bridgeSessionIds.length > 0,
+    },
+  };
 };
 
 interface CachedFile {
@@ -64,6 +106,8 @@ interface Scan {
   readonly archived: ReadonlyMap<string, number>;
   /** Claude desktop's `local_<id>` for each listed (unarchived) CLI session id. */
   readonly localIds: ReadonlyMap<string, string>;
+  /** Each CLI session's settings, from its most recently written record. */
+  readonly metadata: ReadonlyMap<string, ClaudeDesktopSessionMetadata>;
 }
 
 export interface ClaudeDesktopArchive {
@@ -83,6 +127,10 @@ export interface ClaudeDesktopArchive {
    * miss rescans at once, so a session just started there is found.
    */
   readonly localSessionId: (cliSessionId: string) => Effect.Effect<string | null>;
+  /** Claude desktop's settings for a CLI session, archived or not, or null without a record. */
+  readonly sessionMetadata: (
+    cliSessionId: string,
+  ) => Effect.Effect<ClaudeDesktopSessionMetadata | null>;
 }
 
 export const make = Effect.gen(function* () {
@@ -90,7 +138,7 @@ export const make = Effect.gen(function* () {
   const root = NodePath.join(claudeAppDataDir(), "claude-code-sessions");
   const lock = yield* Semaphore.make(1);
   const files = new Map<string, CachedFile>();
-  let current: Scan = { archived: new Map(), localIds: new Map() };
+  let current: Scan = { archived: new Map(), localIds: new Map(), metadata: new Map() };
   let scannedAt = Number.NEGATIVE_INFINITY;
 
   const readRecord = (path: string): Effect.Effect<CachedFile | null> =>
@@ -112,6 +160,8 @@ export const make = Effect.gen(function* () {
     const archived = new Map<string, number>();
     const localIds = new Map<string, string>();
     const localMtimes = new Map<string, number>();
+    const metadata = new Map<string, ClaudeDesktopSessionMetadata>();
+    const metadataMtimes = new Map<string, number>();
     // `<account>/<organization>/local_<id>.json`; anything else is skipped.
     for (const account of yield* listDirectory(root)) {
       for (const organization of yield* listDirectory(NodePath.join(root, account))) {
@@ -125,6 +175,10 @@ export const make = Effect.gen(function* () {
           files.set(path, file);
           if (file.record === null) continue;
           const { cliSessionId, archived: isArchived } = file.record;
+          if (file.mtimeMs >= (metadataMtimes.get(cliSessionId) ?? -1)) {
+            metadataMtimes.set(cliSessionId, file.mtimeMs);
+            metadata.set(cliSessionId, file.record.metadata);
+          }
           if (isArchived) {
             archived.set(cliSessionId, Math.max(archived.get(cliSessionId) ?? 0, file.mtimeMs));
           } else if (file.mtimeMs >= (localMtimes.get(cliSessionId) ?? -1)) {
@@ -135,7 +189,7 @@ export const make = Effect.gen(function* () {
       }
     }
     for (const path of files.keys()) if (!seen.has(path)) files.delete(path);
-    current = { archived, localIds };
+    current = { archived, localIds, metadata };
     scannedAt = Date.now();
     return current;
   }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem));
@@ -160,6 +214,8 @@ export const make = Effect.gen(function* () {
               (fresh) => fresh.localIds.get(cliSessionId) ?? null,
             ),
       ),
+    sessionMetadata: (cliSessionId) =>
+      Effect.map(latest, (result) => result.metadata.get(cliSessionId) ?? null),
   };
   return desktopArchive;
 });

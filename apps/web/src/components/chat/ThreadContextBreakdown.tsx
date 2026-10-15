@@ -1,4 +1,4 @@
-import type { SessionContextBreakdown, SessionInsights } from "@t3tools/contracts";
+import type { SessionContextBreakdown } from "@t3tools/contracts";
 import { Minimize2Icon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
@@ -8,6 +8,7 @@ import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { Button } from "../ui/button";
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import {
+  compareByTokensThenName,
   type ContextBreakdownView,
   deriveContextBreakdownView,
   formatContextPercent,
@@ -22,7 +23,13 @@ import { ThreadDetailsStatRow, ThreadDetailsStatusDot } from "./ThreadDetailsSta
  * one, else the token totals from the thread's usage reports. Fork add-on.
  */
 export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props: {
-  readonly insights: SessionInsights | null;
+  /** A thread's session insights, or any reading with the same parts. */
+  readonly insights: {
+    readonly context?: SessionContextBreakdown | null | undefined;
+    /** The numbers are current; otherwise `capturedAt` dates them. */
+    readonly live?: boolean | undefined;
+    readonly capturedAt?: string | null | undefined;
+  } | null;
   readonly error: string | null;
   readonly contextWindow: ContextWindowSnapshot | null;
   readonly onCompactContext: (() => void) | undefined;
@@ -43,10 +50,20 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
   const usedTokens = context?.totalTokens ?? contextWindow?.usedTokens ?? null;
   const maxTokens = context ? context.maxTokens || null : (contextWindow?.maxTokens ?? null);
   const usedPercent = view ? view.usedPercent : (contextWindow?.usedPercentage ?? null);
+  const usedPercentLabel = formatContextPercent(usedPercent);
+  // Live usage reports carry no threshold, so the breakdown's fills in; either
+  // source saying the agent does not compact on its own wins.
+  const autoCompactThreshold =
+    contextWindow?.autoCompactThreshold ?? context?.autoCompactThreshold ?? null;
   const untilAutoCompact =
-    contextWindow?.compactsAutomatically === false
+    contextWindow?.compactsAutomatically === false || context?.autoCompactEnabled === false
       ? null
-      : tokensUntilAutoCompact(contextWindow?.autoCompactThreshold, usedTokens);
+      : tokensUntilAutoCompact(autoCompactThreshold, usedTokens);
+  const autoCompactsSoon =
+    untilAutoCompact !== null &&
+    autoCompactThreshold !== null &&
+    untilAutoCompact < autoCompactThreshold * 0.1;
+  const compactionCount = context?.compactionCount ?? 0;
   // A live session reports the current window; anything else is a snapshot,
   // dated by whichever source the numbers above came from.
   const asOf =
@@ -74,15 +91,18 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
           <div className="flex items-baseline justify-between gap-3 text-2xs tabular-nums">
             <span className="font-medium text-foreground/80">
               {approx}
-              {formatContextPercent(usedPercent) ?? "–"} used
+              {/* With no known window (Hermes), the used tokens stand alone. */}
+              {usedPercentLabel ?? formatContextWindowTokens(usedTokens)} used
             </span>
-            <span className="text-muted-foreground">
-              {approx}
-              {formatContextWindowTokens(usedTokens)}
-              {maxTokens !== null ? ` / ${formatContextWindowTokens(maxTokens)}` : null}
-            </span>
+            {usedPercentLabel !== null ? (
+              <span className="text-muted-foreground">
+                {approx}
+                {formatContextWindowTokens(usedTokens)}
+                {maxTokens !== null ? ` / ${formatContextWindowTokens(maxTokens)}` : null}
+              </span>
+            ) : null}
           </div>
-          {view ? (
+          {usedPercentLabel === null ? null : view ? (
             <ContextSegmentBar view={view} />
           ) : (
             <ContextAggregateBar usedPercent={usedPercent} />
@@ -94,9 +114,21 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
       ) : contextWindow ? (
         <ContextUsageTotals usage={contextWindow} />
       ) : null}
+      {compactionCount > 0 ? (
+        <ThreadDetailsStatRow label="Compactions">
+          {compactionCount.toLocaleString()}
+        </ThreadDetailsStatRow>
+      ) : null}
       {untilAutoCompact !== null ? (
-        <p className="px-2.5 pt-1 text-2xs text-muted-foreground tabular-nums">
-          {formatContextWindowTokens(untilAutoCompact)} until auto-compact
+        <p
+          className={cn(
+            "px-2.5 pt-1 text-2xs tabular-nums",
+            autoCompactsSoon ? "text-warning" : "text-muted-foreground",
+          )}
+        >
+          {autoCompactsSoon
+            ? `Auto-compacts soon (${formatContextWindowTokens(untilAutoCompact)} left)`
+            : `${formatContextWindowTokens(untilAutoCompact)} until auto-compact`}
         </p>
       ) : null}
       {context ? <ContextContributorLists context={context} /> : null}
@@ -236,7 +268,8 @@ interface ContributorListItem {
   readonly key: string;
   readonly label: string;
   readonly detail: string | undefined;
-  readonly tokens: number;
+  /** Absent when the source names the contributor without sizing it. */
+  readonly tokens: number | undefined;
 }
 
 function ContextContributorLists(props: { readonly context: SessionContextBreakdown }) {
@@ -272,7 +305,7 @@ function ContextContributorLists(props: { readonly context: SessionContextBreakd
 function contributorItems(
   contributors: SessionContextBreakdown["memoryFiles"],
 ): ReadonlyArray<ContributorListItem> {
-  return contributors.map((contributor, index) => ({
+  return contributors.toSorted(compareByTokensThenName).map((contributor, index) => ({
     key: `${contributor.source ?? ""}:${contributor.name}:${index}`,
     label: contributor.name,
     detail: contributor.source,
@@ -313,7 +346,7 @@ function ContributorList(props: {
                   </span>
                 }
               >
-                {formatContextWindowTokens(item.tokens)}
+                {item.tokens === undefined ? null : formatContextWindowTokens(item.tokens)}
               </ThreadDetailsStatRow>
             </li>
           ))}

@@ -25,6 +25,7 @@ import {
   statMtimeMs,
   toolLine,
 } from "./ExternalSessionSource.ts";
+import { makePiInsights, piContextWindow } from "./piInsights.ts";
 
 const SESSION_FILE = /^.+_([0-9a-f-]{36})\.jsonl$/i;
 const HEAD_BYTES = 64 * 1024;
@@ -76,6 +77,7 @@ export const makePiSource = (): ExternalSessionSource => {
         let name: string | null = null;
         let firstPrompt: string | null = null;
         let model: string | null = null;
+        let provider: string | null = null;
         let createdAt: string | null = null;
         let thinkingLevel: string | null = null;
         let contextTokens: number | null = null;
@@ -91,12 +93,14 @@ export const makePiSource = (): ExternalSessionSource => {
             name = asString(record.name) ?? name;
           } else if (record.type === "model_change") {
             model = asString(record.modelId) ?? model;
+            provider = asString(record.provider) ?? provider;
           } else if (record.type === "thinking_level_change") {
             thinkingLevel = asString(record.thinkingLevel) ?? thinkingLevel;
           } else if (record.type === "message") {
             const message = asRecord(record.message);
             if (message?.role === "assistant") {
               model = asString(message.model) ?? model;
+              provider = asString(message.provider) ?? provider;
               thinkingLevel = asString(message.thinkingLevel) ?? thinkingLevel;
               // Counted the way the Pi adapter counts context.
               contextTokens = asCount(asRecord(message.usage)?.totalTokens) ?? contextTokens;
@@ -107,6 +111,7 @@ export const makePiSource = (): ExternalSessionSource => {
           }
         }
         if (id === null) return [];
+        const contextWindow = yield* piContextWindow(provider, model);
         return [
           {
             id,
@@ -116,11 +121,17 @@ export const makePiSource = (): ExternalSessionSource => {
             origin: "CLI",
             updatedAtMs: head.mtimeMs,
             busy: false,
-            details: sessionDetails(id, { effort: thinkingLevel, createdAt, contextTokens }),
+            details: sessionDetails(id, {
+              effort: thinkingLevel,
+              createdAt,
+              contextTokens,
+              contextWindow,
+            }),
           },
         ];
       }),
     transcriptPath: (path) => path,
+    readInsights: makePiInsights(),
     createParser: () => ({
       push: (line) => {
         const record = parseJsonObject(line);

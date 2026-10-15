@@ -2,6 +2,7 @@ import type {
   SessionContextBreakdown,
   SessionContextContributor,
   SessionMcpServer,
+  ThreadTokenUsageSnapshot,
 } from "@t3tools/contracts";
 
 /**
@@ -59,6 +60,7 @@ export const sessionTotalsBreakdown = (input: {
   readonly maxTokens: number | null | undefined;
   readonly model?: string | null | undefined;
   readonly skills?: ReadonlyArray<SessionContextContributor> | undefined;
+  readonly autoCompactEnabled?: boolean | undefined;
   readonly autoCompactThreshold?: number | null | undefined;
 }): SessionContextBreakdown | null => {
   const maxTokens = sessionInsightTokens(input.maxTokens);
@@ -78,9 +80,34 @@ export const sessionTotalsBreakdown = (input: {
     memoryFiles: [],
     agents: [],
     skills: input.skills ?? [],
+    ...(input.autoCompactEnabled === undefined
+      ? {}
+      : { autoCompactEnabled: input.autoCompactEnabled }),
     ...(autoCompactThreshold === 0 ? {} : { autoCompactThreshold }),
   };
 };
+
+/**
+ * The totals-only breakdown from the usage snapshot an adapter already keeps
+ * for the thread, or null when it has none or it carries no window.
+ */
+export const sessionUsageBreakdown = (
+  usage: ThreadTokenUsageSnapshot | null | undefined,
+  extra: {
+    readonly model?: string | null | undefined;
+    readonly skills?: ReadonlyArray<SessionContextContributor> | undefined;
+  } = {},
+): SessionContextBreakdown | null =>
+  usage === null || usage === undefined
+    ? null
+    : sessionTotalsBreakdown({
+        usedTokens: usage.usedTokens,
+        maxTokens: usage.maxTokens,
+        model: extra.model,
+        skills: extra.skills,
+        autoCompactEnabled: usage.compactsAutomatically,
+        autoCompactThreshold: usage.autoCompactThreshold,
+      });
 
 /** Contributor rows naming each entry without a size, such as a provider's skill list. */
 export const sessionNamedContributors = (
@@ -96,3 +123,12 @@ export const sessionNamedContributors = (
   }
   return rows;
 };
+
+/** Servers T3 hands the agent's session itself, by name only: no command, URL or environment. */
+export const sessionConfiguredMcpServers = (
+  names: Iterable<string | null | undefined>,
+): ReadonlyArray<SessionMcpServer> =>
+  sessionNamedContributors(names).flatMap((row) => {
+    const server = sessionMcpServer({ name: row.name, status: "configured" });
+    return server === undefined ? [] : [server];
+  });

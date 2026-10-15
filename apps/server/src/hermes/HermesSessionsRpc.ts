@@ -9,6 +9,7 @@ import {
   type HermesDashboardInput,
   type HermesSessionsContinueInput,
   type HermesSessionsDeleteInput,
+  type HermesSessionsInsightsInput,
   type HermesSessionsInstanceInput,
   type HermesSessionsListInput,
   type HermesSessionsUnarchiveInput,
@@ -36,5 +37,7 @@ export const makeHandlers = Effect.gen(function* () {
     [HERMES_SESSIONS_WS_METHODS.dashboard]: (input: HermesDashboardInput) =>
       hermes.dashboard(input),
     [HERMES_SESSIONS_WS_METHODS.t3Tools]: (input: HermesT3ToolsInput) => hermes.t3Tools(input),
+    [HERMES_SESSIONS_WS_METHODS.insights]: (input: HermesSessionsInsightsInput) =>
+      hermes.insights(input),
   };
 });

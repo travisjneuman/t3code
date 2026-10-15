@@ -6,6 +6,7 @@ import {
   sessionMcpServer,
 } from "@t3tools/provider-core/server/sessionInsights";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
+import * as CodexSessionInsights from "./codexSessionInsights.ts"; // Fork add-on: session details.
 import {
   mcpToolPresentation,
   type McpToolPresentation,
@@ -1904,6 +1905,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         );
         const activeTurns = yield* Ref.make(new Map<string, ActiveCodexTurnContext>());
         const turnTokenUsageByThread = new Map<string, CodexTurnTokenUsageState>();
+        const insightsTokenUsage = new Map<string, CodexSessionInsights.CodexTokenUsage>(); // Fork add-on: session details.
         const usageStateForThread = (nativeThreadId: string) => {
           let state = turnTokenUsageByThread.get(nativeThreadId);
           if (!state) {
@@ -4479,6 +4481,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
 
         yield* client.handleServerNotification("thread/tokenUsage/updated", (payload) =>
           Effect.gen(function* () {
+            insightsTokenUsage.set(payload.threadId, payload.tokenUsage); // Fork add-on: session details.
             accumulateCodexTurnTokenUsage(
               usageStateForThread(payload.threadId),
               payload.turnId,
@@ -6574,6 +6577,28 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         };
         // Fork add-on: session details.
         const sessionInsights: ProviderAdapter.ProviderAdapterV2SessionInsights = {
+          // Totals against the model window, with the session folder's skills.
+          contextBreakdown: ({ providerThread }) =>
+            Effect.gen(function* () {
+              const threadId = yield* getNativeThreadId(providerThread);
+              const cwd = input.runtimePolicy.cwd ?? undefined;
+              const skills =
+                cwd === undefined
+                  ? []
+                  : yield* ensureInitialized.pipe(
+                      Effect.andThen(client.request("skills/list", { cwds: [cwd] })),
+                      Effect.map((response) =>
+                        CodexSessionInsights.codexSkillContributors(response, cwd),
+                      ),
+                      // Skills are an enrichment; the totals stand without them.
+                      Effect.orElseSucceed(() => []),
+                    );
+              return CodexSessionInsights.codexContextBreakdown({
+                tokenUsage: insightsTokenUsage.get(threadId),
+                providerThread,
+                skills,
+              });
+            }),
           mcpServers: ({ providerThread }) =>
             Effect.gen(function* () {
               const threadId = yield* getNativeThreadId(providerThread);

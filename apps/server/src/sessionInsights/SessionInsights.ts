@@ -91,6 +91,8 @@ const make = Effect.gen(function* () {
         context: report.context,
         mcpServers: report.mcpServers,
         ...(report.session === undefined ? {} : { session: report.session }),
+        ...(report.outputs == null ? {} : { outputs: report.outputs }),
+        ...(report.host === undefined ? {} : { host: report.host }),
       })
       .pipe(
         Effect.catch((error) =>
@@ -129,6 +131,8 @@ const make = Effect.gen(function* () {
       context: stored.value.context,
       mcpServers: stored.value.mcpServers,
       ...(stored.value.session === undefined ? {} : { session: stored.value.session }),
+      ...(stored.value.outputs === undefined ? {} : { outputs: stored.value.outputs }),
+      ...(stored.value.host === undefined ? {} : { host: stored.value.host }),
     };
     cache(report);
     return report;
@@ -181,7 +185,10 @@ const make = Effect.gen(function* () {
     );
     if (
       read === undefined ||
-      (read.session === null && read.context === null && read.mcpServers === null)
+      (read.session === null &&
+        read.context === null &&
+        read.mcpServers === null &&
+        read.outputs === null)
     ) {
       return undefined;
     }
@@ -198,6 +205,7 @@ const make = Effect.gen(function* () {
       mcpServers: read.mcpServers,
       ...(host === undefined ? {} : { host }),
       ...(read.session === null ? {} : { session: read.session }),
+      outputs: read.outputs,
     };
     return report;
   });

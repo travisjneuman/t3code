@@ -12,6 +12,7 @@ import type {
   SessionContextCategoryKind,
   SessionContextContributor,
   SessionMcpServerStatus,
+  SessionRecord,
 } from "@t3tools/contracts";
 import { deriveReportedModelSelection } from "@t3tools/client-runtime/state/thread-execution";
 import * as DateTime from "effect/DateTime";
@@ -138,6 +139,36 @@ export const SESSION_STATUS_PRESENTATION: Record<
   none: { label: "Not started", dotClassName: "bg-muted-foreground/45" },
 };
 
+/** The status an agent's own session record reports. */
+export const RECORD_STATUS_PRESENTATION: Record<
+  NonNullable<SessionRecord["status"]>,
+  { readonly label: string; readonly dotClassName: string }
+> = {
+  active: { label: "Active", dotClassName: "bg-success" },
+  idle: { label: "Idle", dotClassName: "bg-success" },
+  ended: { label: "Ended", dotClassName: "bg-muted-foreground/45" },
+};
+
+type SessionRecordFields = {
+  readonly [Key in keyof SessionRecord]?: SessionRecord[Key] | null | undefined;
+};
+
+/** A session record from facts that may be missing; null and undefined fields are left out. */
+export function sessionRecordFrom(fields: SessionRecordFields): SessionRecord {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined && value !== null),
+  ) as SessionRecord;
+}
+
+/** The agent's record wins field by field; the fallback fills what it leaves out. */
+export function mergeSessionRecord(
+  record: SessionRecord | null | undefined,
+  fallback: SessionRecord,
+): SessionRecord {
+  // Decoded records omit absent fields rather than holding undefined, so a spread keeps the fallback's.
+  return record ? { ...fallback, ...record } : fallback;
+}
+
 export const MCP_SERVER_STATUS_PRESENTATION: Record<
   SessionMcpServerStatus,
   { readonly label: string; readonly dotClassName: string }
@@ -224,24 +255,38 @@ export function deriveContextBreakdownView(context: SessionContextBreakdown): Co
 export interface ContributorGroup {
   readonly source: string | null;
   readonly count: number;
-  readonly tokens: number;
+  /** Absent when none of the group's contributors was sized. */
+  readonly tokens: number | undefined;
+}
+
+/** Largest first, unsized last, then by name, so lists stay stable between reads. */
+export function compareByTokensThenName(
+  left: { readonly tokens?: number | undefined; readonly name: string },
+  right: { readonly tokens?: number | undefined; readonly name: string },
+): number {
+  return (right.tokens ?? -1) - (left.tokens ?? -1) || left.name.localeCompare(right.name);
 }
 
 /** MCP tools by the server that provides them, largest first. */
 export function groupContributorsBySource(
   contributors: ReadonlyArray<SessionContextContributor>,
 ): ReadonlyArray<ContributorGroup> {
-  const groups = new Map<string | null, { count: number; tokens: number }>();
+  const groups = new Map<string | null, { count: number; tokens: number | undefined }>();
   for (const contributor of contributors) {
     const source = contributor.source ?? null;
-    const group = groups.get(source) ?? { count: 0, tokens: 0 };
+    const group = groups.get(source) ?? { count: 0, tokens: undefined };
     group.count += 1;
-    group.tokens += contributor.tokens;
+    if (contributor.tokens !== undefined) group.tokens = (group.tokens ?? 0) + contributor.tokens;
     groups.set(source, group);
   }
   return [...groups]
     .map(([source, group]) => ({ source, ...group }))
-    .toSorted((left, right) => right.tokens - left.tokens);
+    .toSorted((left, right) =>
+      compareByTokensThenName(
+        { tokens: left.tokens, name: left.source ?? "" },
+        { tokens: right.tokens, name: right.source ?? "" },
+      ),
+    );
 }
 
 /** Tokens left before the provider compacts on its own; null when it does not say. */

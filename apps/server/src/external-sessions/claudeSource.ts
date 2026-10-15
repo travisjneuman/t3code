@@ -1,7 +1,10 @@
 /**
  * Claude Code (CLI, desktop app, IDE extensions, SDK) sessions:
  * `~/.claude/projects/<dashed cwd>/<session id>.jsonl`, plus the live process
- * registry in `~/.claude/sessions/<pid>.json` for names and busy state.
+ * registry in `~/.claude/sessions/<pid>.json` for names, busy state and the
+ * process behind each live session. The details card's record, context and
+ * MCP servers come from claudeSessionIndex.ts, with Claude desktop's own
+ * record of a session's settings winning where it has one.
  *
  * @module external-sessions/claudeSource
  */
@@ -11,6 +14,24 @@ import * as NodePath from "node:path";
 import { type ExternalSessionMessage, UPSTREAM_SYNC_PROMPT_PREFIX } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+import { makeClaudeContextWindow } from "./claudeContextWindow.ts";
+import type { ClaudeDesktopArchive } from "./claudeDesktopArchive.ts";
+import {
+  claudeContextBreakdown,
+  claudeMcpServers,
+  claudeModelUsage,
+  claudeSubagentDir,
+  isClaudeSubagentTranscript,
+  readClaudeSessionIndex,
+  readClaudeSubagentUsage,
+} from "./claudeSessionIndex.ts";
+import {
+  addModelUsage,
+  label,
+  modelUsageList,
+  sessionRecord,
+  wholeCount,
+} from "./codexInsights.ts";
 import {
   asCount,
   asRecord,
@@ -19,9 +40,11 @@ import {
   clipMessage,
   contentText,
   type ExternalSessionInfo,
+  type ExternalSessionModelUsage,
   type ExternalSessionSource,
   firstLine,
   isoTimestamp,
+  isProcessAlive,
   listDirectory,
   parseJsonObject,
   readLines,
@@ -73,15 +96,17 @@ const toolDetail = (input: unknown): string | null => {
   );
 };
 
-/** Context at one request, counted the way the Claude adapter counts it. */
+/**
+ * Context at one request: its whole prompt, cached or not. The reply's own
+ * tokens are left out, as Claude desktop counts it.
+ */
 const contextTokens = (usage: Record<string, unknown> | null): number | null => {
   const input = asCount(usage?.input_tokens);
   if (input === null) return null;
   return (
     input +
     (asCount(usage?.cache_creation_input_tokens) ?? 0) +
-    (asCount(usage?.cache_read_input_tokens) ?? 0) +
-    (asCount(usage?.output_tokens) ?? 0)
+    (asCount(usage?.cache_read_input_tokens) ?? 0)
   );
 };
 
@@ -108,24 +133,37 @@ const upstreamSyncTitle = (createdAt: string | null): string => {
 };
 
 interface RegistryEntry {
+  readonly pid: number;
   readonly busy: boolean;
   readonly name: string | null;
   readonly entrypoint: string | null;
   readonly cwd: string | null;
+  readonly version: string | null;
+  /** The process has a Remote Control bridge open; the bridge id is not kept. */
+  readonly remoteControl: boolean;
 }
 
-const isAlive = (pid: unknown): boolean => {
-  if (typeof pid !== "number") return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+const isoFromMs = (ms: number | null): string | null =>
+  ms === null || !Number.isFinite(ms) ? null : new Date(ms).toISOString();
+
+/** Adds up per-model totals from several transcripts. */
+const mergeModelUsage = (
+  lists: ReadonlyArray<ReadonlyArray<ExternalSessionModelUsage>>,
+): ReadonlyArray<ExternalSessionModelUsage> => {
+  const buckets = new Map<string, ExternalSessionModelUsage>();
+  for (const list of lists) {
+    for (const entry of list) addModelUsage(buckets, entry.model, entry.speed, entry.totals);
   }
+  return modelUsageList(buckets);
 };
 
-export const makeClaudeSource = (): ExternalSessionSource => {
+/**
+ * `desktopArchive` adds Claude desktop's record of a session's settings to
+ * the details card; without it the transcript's alone are shown.
+ */
+export const makeClaudeSource = (desktopArchive?: ClaudeDesktopArchive): ExternalSessionSource => {
   const home = NodePath.join(NodeOS.homedir(), ".claude");
+  const contextWindow = makeClaudeContextWindow();
   const projects = NodePath.join(home, "projects");
   const registry = NodePath.join(home, "sessions");
 
@@ -140,12 +178,17 @@ export const makeClaudeSource = (): ExternalSessionSource => {
       if (!/^\d+\.json$/.test(name)) continue;
       const record = parseJsonObject((yield* readText(NodePath.join(registry, name))) ?? "");
       const sessionId = asString(record?.sessionId);
-      if (record === null || sessionId === null || !isAlive(record.pid)) continue;
+      const pid = record?.pid;
+      if (record === null || sessionId === null || typeof pid !== "number") continue;
+      if (!isProcessAlive(pid)) continue;
       entries.set(sessionId, {
+        pid,
         busy: record.status === "busy",
         name: asString(record.name),
         entrypoint: asString(record.entrypoint),
         cwd: asString(record.cwd),
+        version: asString(record.version),
+        remoteControl: asString(record.bridgeSessionId) !== null,
       });
     }
     return entries;
@@ -262,6 +305,8 @@ export const makeClaudeSource = (): ExternalSessionSource => {
           }
         }
         const live = (yield* readRegistry).get(id);
+        const sessionCwd = cwd ?? live?.cwd ?? null;
+        const window = yield* contextWindow.resolve(model, sessionCwd);
         const fallbackTitle =
           firstPrompt?.startsWith(UPSTREAM_SYNC_PROMPT_PREFIX) === true
             ? upstreamSyncTitle(createdAt)
@@ -269,11 +314,12 @@ export const makeClaudeSource = (): ExternalSessionSource => {
         const info: ExternalSessionInfo = {
           id,
           title: firstLine(customTitle ?? agentName ?? fallbackTitle),
-          cwd: cwd ?? live?.cwd ?? null,
+          cwd: sessionCwd,
           model,
           origin: originFor(entrypoint ?? live?.entrypoint ?? null),
           updatedAtMs: head.mtimeMs,
           busy: live?.busy ?? false,
+          ...(live === undefined ? {} : { process: { pid: live.pid } }),
           details: sessionDetails(id, {
             effort: latest.effort,
             gitBranches: branches.list(),
@@ -281,9 +327,71 @@ export const makeClaudeSource = (): ExternalSessionSource => {
             approval: latest.permissionMode,
             createdAt,
             contextTokens: latest.contextTokens,
+            contextWindow: window?.window ?? null,
           }),
         };
         return [info];
+      }),
+    readInsights: (summary, transcriptPath) =>
+      Effect.gen(function* () {
+        if (transcriptPath === null) return {};
+        const index = yield* readClaudeSessionIndex(transcriptPath);
+        if (index === null) return {};
+        const id = NodePath.basename(transcriptPath, ".jsonl");
+        // Subagents bill tokens too, so the session's totals and cost include theirs.
+        const usage = [claudeModelUsage(index)];
+        const subagents = claudeSubagentDir(transcriptPath);
+        for (const name of yield* listDirectory(subagents)) {
+          if (isClaudeSubagentTranscript(name)) {
+            usage.push(yield* readClaudeSubagentUsage(NodePath.join(subagents, name)));
+          }
+        }
+        const modelUsage = mergeModelUsage(usage);
+        const desktop =
+          desktopArchive === undefined ? null : yield* desktopArchive.sessionMetadata(id);
+        const live = (yield* readRegistry).get(id);
+        const model = desktop?.model ?? index.model;
+        const window = yield* contextWindow.resolve(model, summary.cwd);
+        const totals = modelUsage.map((entry) => entry.totals);
+        const total = (pick: (entry: (typeof totals)[number]) => number) =>
+          totals.reduce((sum, entry) => sum + pick(entry), 0);
+        // Claude desktop's record of the session's settings wins; times span both records.
+        const startedAt = [desktop?.createdAtMs, index.firstAtMs].filter(
+          (ms): ms is number => typeof ms === "number",
+        );
+        const lastActiveAt = [desktop?.lastActivityAtMs, index.lastAtMs].filter(
+          (ms): ms is number => typeof ms === "number",
+        );
+        const session = sessionRecord({
+          source: label(summary.origin),
+          model: label(model),
+          startedAt: isoFromMs(startedAt.length === 0 ? null : Math.min(...startedAt)),
+          lastActiveAt: isoFromMs(lastActiveAt.length === 0 ? null : Math.max(...lastActiveAt)),
+          messageCount: wholeCount(index.messageCount),
+          toolCallCount: wholeCount(index.toolCallCount),
+          apiCallCount: wholeCount(index.apiCallCount),
+          toolFailureCount: wholeCount(index.toolFailureCount),
+          turnCount: wholeCount(desktop?.completedTurns ?? index.turnCount),
+          inputTokens: totals.length === 0 ? null : total((entry) => entry.uncachedInputTokens),
+          outputTokens: totals.length === 0 ? null : total((entry) => entry.outputTokens),
+          cacheReadTokens: totals.length === 0 ? null : total((entry) => entry.cachedInputTokens),
+          cacheWriteTokens:
+            totals.length === 0 ? null : total((entry) => entry.cacheCreationTokens),
+          version: label(desktop?.cliVersion ?? live?.version ?? index.version),
+          effort: label(desktop?.effort ?? index.effort),
+          permissionMode: label(desktop?.permissionMode ?? index.permissionMode),
+          // A running process knows; otherwise any record of a bridge says it was used.
+          remoteControl:
+            live?.remoteControl ??
+            (desktop?.remoteControl === true || index.remoteControlSeen ? true : null),
+          serviceTier: label(index.speed),
+        });
+        return {
+          session,
+          context: claudeContextBreakdown(index, window),
+          mcpServers: claudeMcpServers(index),
+          modelUsage,
+        };
       }),
     transcriptPath: (path) => path,
     createParser: () => ({

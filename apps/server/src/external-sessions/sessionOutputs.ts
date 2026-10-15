@@ -3,16 +3,25 @@
  * its transcript lines for the session details card. Each agent records edits
  * its own way; agents whose transcripts carry no edits T3 can read return
  * null. Line counts come from the patch or the old and new text the agent
- * recorded. Fork add-on; see docs/internals/session-insights.md.
+ * recorded. The whole transcript is read once, then only what was appended,
+ * and a Claude session's subagent transcripts count too. Fork add-on; see
+ * docs/internals/session-insights.md.
  *
  * @module external-sessions/sessionOutputs
  */
 import type { ExternalSessionOutputFile, ProviderDriverKind } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
 
-import { asRecord, asString, parseJsonObject } from "./ExternalSessionSource.ts";
+import { type ForwardScans, scanForward } from "./codexInsights.ts";
+import { asRecord, asString, parseJsonObject, timestampMs } from "./ExternalSessionSource.ts";
 
 /** More files than this is a refactor; the card lists the newest. */
 const MAX_FILES = 500;
+/** Changes kept per transcript; past this the oldest go and the result says it is truncated. */
+const MAX_CHANGES = 20_000;
+/** Transcripts whose scans are kept, least recently read dropped first. */
+const MAX_SCANS = 50;
 
 /** One recorded change to one file; `null` counts when the transcript has none. */
 interface FileChange {
@@ -207,32 +216,62 @@ const READERS: Partial<Record<string, Reader>> = {
 export const readsSessionOutputs = (driver: ProviderDriverKind): boolean =>
   READERS[driver] !== undefined;
 
-/**
- * Unique files changed, newest first, with line counts summed across edits.
- * Null for an agent whose transcript records no edits T3 can read.
- */
-export const sessionOutputs = (
-  driver: ProviderDriverKind,
-  lines: ReadonlyArray<string>,
-): ReadonlyArray<ExternalSessionOutputFile> | null => {
-  const reader = READERS[driver];
-  if (reader === undefined) return null;
-  // Later records of one edit replace earlier ones; Map order stays the first sighting.
-  const changes = new Map<string, FileChange>();
-  for (const line of lines) {
-    if (!line.includes(reader.hint)) continue;
+interface TimedChange extends FileChange {
+  /** When it was recorded, for merging transcripts; the previous record's time when unstamped. */
+  readonly atMs: number;
+}
+
+interface OutputScan {
+  /** By key; Map order is when each was last recorded, oldest first. */
+  readonly changes: Map<string, TimedChange>;
+  lastAtMs: number;
+  /** Older changes were dropped to stay under MAX_CHANGES. */
+  dropped: boolean;
+}
+
+export interface SessionOutputsResult {
+  /** Unique files changed, newest first, with line counts summed across edits. */
+  readonly outputs: ReadonlyArray<ExternalSessionOutputFile>;
+  /** Some of the transcripts are not read to the end, or older changes were dropped. */
+  readonly truncated: boolean;
+}
+
+const visitor =
+  (reader: Reader) =>
+  (scan: OutputScan, line: string): void => {
+    if (!line.includes(reader.hint)) return;
     const record = parseJsonObject(line);
-    if (record === null) continue;
-    for (const change of reader.read(record)) {
-      changes.delete(change.key);
-      changes.set(change.key, change);
+    if (record === null) return;
+    const changes = reader.read(record);
+    if (changes.length === 0) return;
+    scan.lastAtMs = timestampMs(record.timestamp, scan.lastAtMs);
+    for (const change of changes) {
+      // A later record of one edit replaces the earlier one and moves to the end.
+      scan.changes.delete(change.key);
+      scan.changes.set(change.key, {
+        path: change.path,
+        additions: change.additions,
+        deletions: change.deletions,
+        atMs: scan.lastAtMs,
+      });
     }
-  }
+    while (scan.changes.size > MAX_CHANGES) {
+      scan.changes.delete(scan.changes.keys().next().value!);
+      scan.dropped = true;
+    }
+  };
+
+const summarizeChanges = (
+  scans: ReadonlyArray<OutputScan>,
+): ReadonlyArray<ExternalSessionOutputFile> => {
+  // Oldest first across every transcript; the sort is stable, so ties keep file order.
+  const ordered = scans
+    .flatMap((scan) => [...scan.changes.values()])
+    .sort((a, b) => a.atMs - b.atMs);
   const byPath = new Map<
     string,
     { path: string; additions: number; deletions: number; hasStats: boolean }
   >();
-  const ordered = [...changes.values()];
   for (let index = ordered.length - 1; index >= 0; index -= 1) {
     const change = ordered[index]!;
     let entry = byPath.get(change.path);
@@ -248,4 +287,66 @@ export const sessionOutputs = (
     }
   }
   return [...byPath.values()];
+};
+
+/**
+ * Reads the files a session changed from its transcripts, keeping each
+ * transcript's place so the next read parses only what was appended.
+ */
+export const makeSessionOutputsReader = () => {
+  const scans: ForwardScans<OutputScan> = new Map();
+  const initial = (): OutputScan => ({ changes: new Map(), lastAtMs: 0, dropped: false });
+
+  // Marks a transcript as just read, dropping the least recently read past the limit.
+  const touch = (path: string) => {
+    const known = scans.get(path);
+    if (known !== undefined) {
+      scans.delete(path);
+      scans.set(path, known);
+      return;
+    }
+    while (scans.size >= MAX_SCANS) scans.delete(scans.keys().next().value!);
+  };
+
+  return {
+    /**
+     * Every change in `paths` (a session's transcript, plus its subagents'),
+     * read to the end. Null for an agent whose transcript records no edits T3
+     * can read.
+     */
+    read: (
+      driver: ProviderDriverKind,
+      paths: ReadonlyArray<string>,
+    ): Effect.Effect<SessionOutputsResult | null, never, FileSystem.FileSystem> =>
+      Effect.gen(function* () {
+        const reader = READERS[driver];
+        if (reader === undefined) return null;
+        const visit = visitor(reader);
+        const read: Array<OutputScan> = [];
+        for (const path of paths) {
+          touch(path);
+          const scan = yield* scanForward(scans, path, initial, visit);
+          if (scan !== null) read.push(scan);
+        }
+        return {
+          outputs: summarizeChanges(read),
+          truncated: read.some((scan) => scan.dropped),
+        };
+      }),
+    /**
+     * What earlier reads found in `paths`, for when a read runs out of time;
+     * marked truncated, since the transcripts were not read to the end.
+     */
+    partial: (
+      driver: ProviderDriverKind,
+      paths: ReadonlyArray<string>,
+    ): SessionOutputsResult | null => {
+      if (READERS[driver] === undefined) return null;
+      const read = paths.flatMap((path) => {
+        const scan = scans.get(path)?.state;
+        return scan === undefined ? [] : [scan];
+      });
+      return { outputs: summarizeChanges(read), truncated: true };
+    },
+  };
 };
