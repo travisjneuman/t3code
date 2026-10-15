@@ -37,7 +37,7 @@ import {
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
   ProviderDriverKind,
-  type ProviderInstanceId,
+  ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -46,9 +46,11 @@ import {
   isOfferableHermesProvider,
 } from "@t3tools/provider-hermes/server";
 import { HermesSettings } from "@t3tools/provider-hermes/settings";
+import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -409,20 +411,26 @@ const make = Effect.gen(function* () {
   ) {
     const settings = yield* settingsOf(instanceId);
     const connection = HermesApi.connectionOf(settings);
-    const session = yield* HermesApi.getSession(connection, sessionId).pipe(
-      Effect.mapError(fromApi),
-    );
-    if (session === undefined) {
-      return yield* new HermesSessionsError({ message: "Hermes has no such session." });
-    }
-    const messages = yield* HermesApi.listMessages(connection, sessionId).pipe(
-      Effect.mapError(fromApi),
+    // Hermes may be on another machine, so the session (then its cron report)
+    // and its messages are fetched side by side rather than one after another.
+    const [{ session, report }, messages] = yield* Effect.all(
+      [
+        HermesApi.getSession(connection, sessionId).pipe(
+          Effect.mapError(fromApi),
+          Effect.flatMap((session) =>
+            session === undefined
+              ? Effect.fail(new HermesSessionsError({ message: "Hermes has no such session." }))
+              : cronReportOf(settings, session).pipe(Effect.map((report) => ({ session, report }))),
+          ),
+        ),
+        HermesApi.listMessages(connection, sessionId).pipe(Effect.mapError(fromApi)),
+      ],
+      { concurrency: "unbounded" },
     );
     const entries = sessionEntries(messages, {
       ended: session.endedAt !== null,
       fallbackMs: toMs(session.startedAt),
     });
-    const report = yield* cronReportOf(settings, session);
     const lastText = entries.findLast(
       (entry) => entry.kind === "message" && entry.role === "assistant",
     );
@@ -626,7 +634,7 @@ const make = Effect.gen(function* () {
         );
     });
 
-  const continueSession: HermesSessions["Service"]["continueSession"] = Effect.fn(
+  const openSession: HermesSessions["Service"]["continueSession"] = Effect.fn(
     "HermesSessions.continueSession",
   )(function* (input) {
     const { instanceId, sessionId } = input;
@@ -713,6 +721,20 @@ const make = Effect.gen(function* () {
     );
     return opened;
   });
+
+  // Opening takes a few seconds when Hermes is on another machine. Another open
+  // of the same session meanwhile, from a repeat click or another client,
+  // shares the one in flight: run alongside, it would write the same import
+  // events again and fail. Nothing is kept once the open settles.
+  const opening = yield* Cache.makeWith(
+    (key: string) => {
+      const [instanceId = "", sessionId = ""] = key.split("\u0000");
+      return openSession({ instanceId: ProviderInstanceId.make(instanceId), sessionId });
+    },
+    { capacity: 256, timeToLive: () => Duration.zero },
+  );
+  const continueSession: HermesSessions["Service"]["continueSession"] = (input) =>
+    Cache.get(opening, `${input.instanceId}\u0000${input.sessionId}`);
 
   /** Runs `each` per session; a failure refuses that session and the rest go on. */
   const batch = <A>(

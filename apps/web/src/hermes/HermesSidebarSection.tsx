@@ -166,6 +166,10 @@ export function HermesSidebarSection() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const selectionAnchor = useRef<string | null>(null);
+  // Rows whose session is being opened. The ref turns away a repeat click at
+  // once; the state shows the row as busy until the thread opens.
+  const openingRef = useRef(new Set<string>());
+  const [opening, setOpening] = useState<ReadonlySet<string>>(new Set());
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -355,14 +359,21 @@ export function HermesSidebarSection() {
       void syncRow(row);
       return;
     }
-    if (row.session === null) return;
-    const result = await runHermes(
-      hermesSessionsContinue,
-      row.environmentId,
-      { instanceId: row.instanceId, sessionId: row.session.id },
-      "Could not open this Hermes session",
-    );
-    if (result !== null) await openThread(row.environmentId, result.threadId);
+    if (row.session === null || openingRef.current.has(row.key)) return;
+    openingRef.current.add(row.key);
+    setOpening(new Set(openingRef.current));
+    try {
+      const result = await runHermes(
+        hermesSessionsContinue,
+        row.environmentId,
+        { instanceId: row.instanceId, sessionId: row.session.id },
+        "Could not open this Hermes session",
+      );
+      if (result !== null) await openThread(row.environmentId, result.threadId);
+    } finally {
+      openingRef.current.delete(row.key);
+      setOpening(new Set(openingRef.current));
+    }
   };
 
   const startNew = async () => {
@@ -656,6 +667,7 @@ export function HermesSidebarSection() {
                 activeThreadKey === `${row.environmentId}\u0000${row.thread.id}`
               }
               isSelected={selected.has(row.key)}
+              isOpening={opening.has(row.key)}
               nowMinute={nowMinute}
               onClick={handleClick}
               onContextMenu={handleContextMenu}
@@ -703,6 +715,8 @@ const HermesLine = memo(function HermesLine(props: {
   row: HermesRow;
   isActive: boolean;
   isSelected: boolean;
+  /** Its session is being opened in T3. */
+  isOpening: boolean;
   nowMinute: string;
   onClick: (row: HermesRow, event: MouseEvent) => void;
   onContextMenu: (row: HermesRow, position: MenuPosition) => void;
@@ -726,7 +740,7 @@ const HermesLine = memo(function HermesLine(props: {
         iconClassName="size-3.5"
       />
       <span className="min-w-0 flex-1 truncate">{row.title}</span>
-      {row.running ? (
+      {row.running || props.isOpening ? (
         <CircleDashedIcon aria-hidden className="size-3.5 shrink-0 text-info" />
       ) : (
         <>
@@ -742,6 +756,7 @@ const HermesLine = memo(function HermesLine(props: {
     title: source && source !== "api_server" ? `${row.title} · ${source}` : row.title,
     "aria-current": props.isActive ? ("page" as const) : undefined,
     "aria-selected": props.isSelected || undefined,
+    "aria-busy": props.isOpening || undefined,
     onClick: (event: MouseEvent) => props.onClick(row, event),
     onContextMenu: (event: MouseEvent) => {
       event.preventDefault();
