@@ -56,15 +56,15 @@ connected.
 ## Models
 
 With Hermes selected, the composer shows the usual model chip, labelled with the agent's name and
-the picked model. Open it and choose the Hermes tab: **Hermes default** sits at the top, named
-after the model Hermes itself is configured with (for example "Hermes default · GPT-6.1-Sol"), and
-below it every signed-in Hermes provider has its own group. Click a provider (or press Enter on it)
-to expand it; opening one closes the others. The group holding the current model opens on its
-own. Searching looks through every provider at once, and starred
-models stay at the top of their group. Reasoning and fast-mode traits appear for the picked model,
-and for Hermes default when Hermes reports what its configured model supports. The model you pick
-is sent with every turn, so you can change it at any time, and it never changes Hermes's own
-default.
+the picked model, or **Default** while Hermes's own model is used. Open it and choose the Hermes
+tab: **Default** sits at the top, named after the model Hermes itself is configured with (for
+example "Default · GPT-6.1-Sol"), and below it every signed-in Hermes provider has its own group.
+Click a provider (or press Enter on it) to expand it; opening one closes the others. The group
+holding the current model opens on its own. Searching looks through every provider at once, and
+starred models stay at the top of their group. Reasoning and fast-mode traits appear for the picked
+model, and for Default when Hermes reports what its configured model supports. The model you pick is
+sent with every turn, so you can change it at any time. It applies only to that turn: it never
+changes Hermes's config, so its chat platforms, cron jobs and CLI keep using Hermes's default.
 
 Groups and models carry the names their vendors use: **Codex** with **GPT-6.1-Sol**, **Grok**
 with **Grok 4.20 Reasoning**, **OpenRouter**, **Kilo**. Hermes can list more models than T3's own

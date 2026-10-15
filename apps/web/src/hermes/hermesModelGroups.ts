@@ -1,5 +1,5 @@
 /**
- * The model picker's Hermes list: "Hermes default" (and any model without a
+ * The model picker's Hermes list: "Default" (and any model without a
  * provider) on top, then one collapsible group per Hermes provider, named by
  * the models' `subProvider`. Group headers are list items of their own, so the
  * virtualized list and keyboard navigation treat them like rows.
@@ -7,7 +7,11 @@
  *
  * @module hermes/hermesModelGroups
  */
-import type { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  HERMES_DEFAULT_MODEL,
+  type ProviderDriverKind,
+  type ProviderInstanceId,
+} from "@t3tools/contracts";
 
 import { getTriggerDisplayModelLabel, type ModelEsque } from "../components/chat/providerIconUtils";
 import { HERMES_DRIVER, hermesModelProvider } from "./hermesSessions";
@@ -24,7 +28,7 @@ export function isHermesModelGroupKey(key: string | null): key is string {
   return key?.startsWith(GROUP_KEY_PREFIX) === true;
 }
 
-/** The header key of the group holding `model`, or null for "Hermes default". */
+/** The header key of the group holding `model`, or null for Hermes's default. */
 export function hermesModelGroupKeyOf(instanceId: ProviderInstanceId, model: string) {
   const provider = hermesModelProvider(model);
   return provider === null ? null : hermesModelGroupKey(instanceId, provider);
@@ -122,13 +126,15 @@ export function toggleHermesModelGroup(expanded: ReadonlySet<string>, key: strin
   return new Set(expanded.has(key) ? [] : [key]);
 }
 
-/** The composer chip: the agent name, plus the model when one is picked over "Hermes default". */
+/** The composer chip: the agent name, plus the picked model or "Default" for Hermes's own. */
 export function hermesComposerTriggerLabel(
   agentName: string,
   model: string,
   options: ReadonlyArray<ModelEsque>,
 ): string {
-  if (hermesModelProvider(model) === null) return agentName;
+  if (model === HERMES_DEFAULT_MODEL || model === "hermes-agent") {
+    return `${agentName} · Default`;
+  }
   const option = options.find((candidate) => candidate.slug === model);
   return `${agentName} · ${option ? getTriggerDisplayModelLabel(option) : model}`;
 }

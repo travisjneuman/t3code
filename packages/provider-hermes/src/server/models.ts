@@ -1,7 +1,7 @@
 /**
  * Turns Hermes's `/api/model/options` into T3 models: one entry per
- * `provider::model`, grouped by provider in the picker, plus "Hermes
- * default", which sends no model so Hermes uses its own configured one.
+ * `provider::model`, grouped by provider in the picker, plus "Default",
+ * which sends no model so Hermes uses its own configured one.
  * Hermes reports ids only, so names come from `@t3tools/shared/modelBrandNames`.
  */
 import { HERMES_DEFAULT_MODEL, type ServerProviderModel } from "@t3tools/contracts";
@@ -131,14 +131,14 @@ const modelCapabilities = (
 
 export const HERMES_DEFAULT_MODEL_ENTRY: ServerProviderModel = {
   slug: HERMES_DEFAULT_MODEL,
-  name: "Hermes default",
+  name: "Default",
   isCustom: false,
   isDefault: true,
   capabilities: null,
 };
 
 /**
- * "Hermes default" named after the model Hermes is configured with. The payload
+ * "Default" named after the model Hermes is configured with. The payload
  * names it beside `providers` as `model` and `provider` (config `model.default`);
  * its capabilities are that provider's entry for the model. Without a model the
  * entry keeps its bare name and shows no traits rather than guessed ones.

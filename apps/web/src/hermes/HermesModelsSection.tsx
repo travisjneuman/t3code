@@ -175,8 +175,7 @@ export function HermesModelsSection(props: {
       <div className="py-2">
         <div className={ROW_CLASS}>
           <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-            {props.models.find((model) => model.slug === HERMES_DEFAULT_MODEL)?.name ??
-              "Hermes default"}
+            {props.models.find((model) => model.slug === HERMES_DEFAULT_MODEL)?.name ?? "Default"}
           </span>
           <Switch
             size="sm"
