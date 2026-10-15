@@ -65,6 +65,7 @@ export * from "./sessionSearch.ts"; // Fork add-on: cross-agent session search.
 export * from "./threadExport.ts"; // Fork add-on: thread export.
 export * from "./saveToNotes.ts"; // Fork add-on: save to notes.
 export * from "./compareAgents.ts"; // Fork add-on: compare agents.
+export * from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
 export * from "./threadExchanges.ts"; // Fork add-on: save to notes, compare agents.
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";

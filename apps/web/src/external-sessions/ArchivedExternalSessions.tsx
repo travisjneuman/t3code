@@ -29,6 +29,7 @@ import { SettingsRow, SettingsSection } from "../components/settings/settingsLay
 import { Button } from "../components/ui/button";
 import { toastManager } from "../components/ui/toast";
 import { WorkspacePageContainer } from "../components/WorkspacePageContainer";
+import { ArchivedHermesSessions } from "../hermes/ArchivedHermesSessions"; // Fork add-on: Hermes provider.
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { useEnvironmentIdentities } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -67,6 +68,14 @@ function ArchivedExternalSessions() {
       {scope.environmentIds.map((environmentId) => (
         <EnvironmentArchivedSessions
           key={environmentId}
+          environmentId={environmentId}
+          environmentLabel={labelFor(environmentId)}
+        />
+      ))}
+      {/* Fork add-on: Hermes provider. */}
+      {scope.environmentIds.map((environmentId) => (
+        <ArchivedHermesSessions
+          key={`hermes:${environmentId}`}
           environmentId={environmentId}
           environmentLabel={labelFor(environmentId)}
         />

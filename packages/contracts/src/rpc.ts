@@ -374,6 +374,7 @@ import { SessionSearchRpc } from "./sessionSearch.ts"; // Fork add-on: session s
 import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on: thread export.
 import { SaveToNotesRpcs } from "./saveToNotes.ts"; // Fork add-on: save to notes.
 import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on: compare agents.
+import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
 
 export const WS_METHODS = {
   // Project registry methods
@@ -2091,4 +2092,5 @@ export const WsRpcGroup = RpcGroup.make(
   ThreadExportRpc, // Fork add-on: thread export.
   ...SaveToNotesRpcs, // Fork add-on: save to notes.
   ...CompareAgentsRpcs, // Fork add-on: compare agents.
+  ...HermesSessionsRpcs, // Fork add-on: Hermes provider.
 ).middleware(RpcScopeAuthorization);

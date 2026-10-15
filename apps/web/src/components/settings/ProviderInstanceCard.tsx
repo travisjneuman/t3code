@@ -62,6 +62,7 @@ import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayo
 import { AcpSessionManagementSection } from "./AcpSessionManagementSection";
 import { FoldedSettingsSection } from "./FoldedSettingsSection";
 import { readCodexSetupMode } from "./CodexSetupSection.logic";
+import { HermesSettingsSection } from "../../hermes/HermesSettingsSection"; // Fork add-on: Hermes provider.
 import {
   getProviderVersionAdvisoryPresentation,
   PROVIDER_STATUS_STYLES,
@@ -822,6 +823,25 @@ export function ProviderInstanceCard({
     );
   };
 
+  // Fork add-on: Hermes provider. Hermes providers the model picker leaves out.
+  const hiddenHermesProviders = (() => {
+    const config = instance.config;
+    const value =
+      config !== null && typeof config === "object" && "hiddenProviders" in config
+        ? config.hiddenProviders
+        : undefined;
+    return Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  })();
+  const updateHiddenHermesProviders = (next: ReadonlyArray<string>) => {
+    const { config: _omit, ...rest } = instance;
+    onUpdate({
+      ...rest,
+      config: nextConfigBlobWithValue(instance.config, "hiddenProviders", next),
+    } as ProviderInstanceConfig);
+  };
+
   const updateCustomModels = (next: ReadonlyArray<CustomModelDefinition>) => {
     const nextConfig = nextConfigBlobWithValue(
       instance.config,
@@ -1314,6 +1334,17 @@ export function ProviderInstanceCard({
           instanceId={instanceId}
           provider={liveProvider}
           projects={acpProjects}
+          readOnly={readOnly}
+        />
+      ) : null}
+
+      {/* Fork add-on: Hermes provider. */}
+      {environmentId !== undefined && instance.driver === "hermes" ? (
+        <HermesSettingsSection
+          environmentId={environmentId}
+          instanceId={instanceId}
+          hiddenProviders={hiddenHermesProviders}
+          onHiddenProvidersChange={updateHiddenHermesProviders}
           readOnly={readOnly}
         />
       ) : null}

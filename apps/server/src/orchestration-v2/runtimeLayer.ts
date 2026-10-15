@@ -12,6 +12,7 @@ import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as AgentSessionImporter from "../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../project/AgentSessionScanner.ts";
 import * as ExternalSessions from "../external-sessions/ExternalSessions.ts"; // Fork add-on: external sessions.
+import * as HermesSessions from "../hermes/HermesSessions.ts"; // Fork add-on: Hermes provider.
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -380,6 +381,17 @@ export const layerProduction = Layer.mergeAll(
         layerEventStoreProvided,
         IdAllocator.layer,
         ProviderSessionRuntime.layer,
+      ),
+    ),
+  ),
+  // Fork add-on: Hermes provider (whole block).
+  HermesSessions.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        layerOrchestratorProvided,
+        layerEventSinkProvided,
+        layerManagedProjectFoldersProvided,
+        IdAllocator.layer,
       ),
     ),
   ),

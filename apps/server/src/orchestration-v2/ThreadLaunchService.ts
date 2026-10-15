@@ -787,8 +787,26 @@ const make = Effect.gen(function* () {
     );
   });
 
+  // Fork add-on: Hermes provider. Hermes runs on its own machine, so a new
+  // Hermes thread lives in the Scratch project whatever project it began in.
+  const hermesInScratch = Effect.fn("ThreadLaunchService.hermesInScratch")(function* (
+    input: ThreadLaunchInput,
+  ) {
+    if (input.reuseExistingThread === true) return input;
+    const providers = yield* providerRegistry.getProviders;
+    const instance = providers.find(
+      (provider) => provider.instanceId === input.modelSelection.instanceId,
+    );
+    if (instance?.driver !== "hermes") return input;
+    const { projectId } = yield* managedFolders.ensureScratchProject.pipe(
+      Effect.mapError(mapError(input, "resolve-project")),
+    );
+    return { ...input, projectId, workspaceStrategy: { type: "root" as const } };
+  });
+
   const launch: ThreadLaunchService["Service"]["launch"] = Effect.fn("ThreadLaunchService.launch")(
-    function* (input) {
+    function* (requested) {
+      const input = yield* hermesInScratch(requested); // Fork add-on: Hermes provider.
       yield* ProjectCloneTracker.rejectCommandsDuringClone(cloneTracker, {
         type: "thread.create",
         projectId: input.projectId,
