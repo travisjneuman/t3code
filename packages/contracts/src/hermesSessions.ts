@@ -19,6 +19,7 @@ import {
 } from "./auth.ts";
 import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+import { SessionInsights } from "./sessionInsights.ts";
 
 export const HERMES_SESSIONS_WS_METHODS = {
   list: "hermesSessions.list",
@@ -30,6 +31,7 @@ export const HERMES_SESSIONS_WS_METHODS = {
   unarchive: "hermesSessions.unarchive",
   dashboard: "hermesSessions.dashboard",
   t3Tools: "hermesSessions.t3Tools",
+  insights: "hermesSessions.insights",
 } as const;
 
 /** How far back the section lists sessions before "Load more"; pinned ones always show. */
@@ -249,6 +251,23 @@ export const HermesSessionsT3ToolsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.t3To
   error: HermesSessionsRpcError,
 });
 
+/**
+ * The details card for a Hermes session T3 has not opened as a thread: the
+ * same read a Hermes thread's `sessionInsights.get` makes, keyed by the
+ * Hermes session id, without importing the session.
+ */
+export const HermesSessionsInsightsInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  sessionId: TrimmedNonEmptyString,
+});
+export type HermesSessionsInsightsInput = typeof HermesSessionsInsightsInput.Type;
+
+export const HermesSessionsInsightsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.insights, {
+  payload: HermesSessionsInsightsInput,
+  success: SessionInsights,
+  error: HermesSessionsRpcError,
+});
+
 export const HermesSessionsRpcs = [
   HermesSessionsListRpc,
   HermesSessionsProvidersRpc,
@@ -259,6 +278,7 @@ export const HermesSessionsRpcs = [
   HermesSessionsUnarchiveRpc,
   HermesSessionsDashboardRpc,
   HermesSessionsT3ToolsRpc,
+  HermesSessionsInsightsRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -272,4 +292,5 @@ export const HERMES_SESSIONS_RPC_SCOPES = {
   [HERMES_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
   [HERMES_SESSIONS_WS_METHODS.dashboard]: AuthProvidersManageScope,
   [HERMES_SESSIONS_WS_METHODS.t3Tools]: AuthProvidersManageScope,
+  [HERMES_SESSIONS_WS_METHODS.insights]: AuthOrchestrationReadScope,
 } as const;
