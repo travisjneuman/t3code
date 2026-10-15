@@ -118,7 +118,24 @@ export const claudeContextBreakdown = (
     skills: contributors(usage.skills?.skillFrontmatter, (skill) =>
       contributor(skill.name, skillPluginName(skill) ?? skill.source, skill.tokens),
     ),
+    ...autoCompact(usage),
   };
+};
+
+/**
+ * Whether the CLI compacts on its own, and the token count at which it does.
+ * The threshold comes only while auto-compact is on. Older CLIs send neither,
+ * and a missing or sub-token value is left off.
+ */
+const autoCompact = (
+  usage: SDKControlGetContextUsageResponse,
+): Pick<SessionContextBreakdown, "autoCompactEnabled" | "autoCompactThreshold"> => {
+  const enabled: unknown = usage.isAutoCompactEnabled;
+  if (typeof enabled !== "boolean") return {};
+  const threshold = usage.autoCompactThreshold;
+  return enabled && threshold !== undefined && Number.isFinite(threshold) && threshold >= 1
+    ? { autoCompactEnabled: true, autoCompactThreshold: sessionInsightTokens(threshold) }
+    : { autoCompactEnabled: enabled };
 };
 
 /** Claude's server statuses match the contract's one for one. */

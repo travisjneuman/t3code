@@ -7,7 +7,11 @@
 import type {
   ExternalSessionDetails,
   ExternalSessionMessage,
+  ExternalSessionSummary,
   ProviderDriverKind,
+  SessionContextBreakdown,
+  SessionMcpServer,
+  SessionRecord,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -72,6 +76,31 @@ export interface TranscriptParser {
   readonly push: (line: string) => ReadonlyArray<ExternalSessionMessage>;
 }
 
+/**
+ * What a store records about one session beyond its summary, for the details
+ * card. Every field is optional: a source fills what its store records and
+ * leaves the rest out, which hides that row. Estimates say so
+ * (`costEstimated`, `context.estimated`).
+ */
+export interface ExternalSessionSourceInsights {
+  readonly session?: SessionRecord;
+  readonly context?: SessionContextBreakdown | null;
+  readonly mcpServers?: ReadonlyArray<SessionMcpServer> | null;
+}
+
+/**
+ * Reads a session's insights from its store, only when a details card asks.
+ * `summary` carries `details` (the session stream's view); `transcriptPath` is
+ * `source.transcriptPath(sessionPath)`. Must never fail: return `{}` on any
+ * error. Must stay cheap on repeat calls (cache by path, size and mtime) and
+ * read only allowlisted metadata, never IDs, credentials or env values.
+ * ExternalSessions.insights bounds it with a timeout.
+ */
+export type ReadSessionInsights = (
+  summary: ExternalSessionSummary,
+  transcriptPath: string | null,
+) => Effect.Effect<ExternalSessionSourceInsights, never, FileSystem.FileSystem>;
+
 export interface ExternalSessionSource {
   readonly driver: ProviderDriverKind;
   /** Directories to watch. Missing ones are skipped. */
@@ -100,6 +129,8 @@ export interface ExternalSessionSource {
    * Without it they age out of the list after two weeks.
    */
   readonly listsUntilArchived?: true;
+  /** The details card's session record, context and connectors; see `ReadSessionInsights`. */
+  readonly readInsights?: ReadSessionInsights;
 }
 
 // Tool output and pasted files can be huge; a summary line is enough here.
