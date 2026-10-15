@@ -14,6 +14,7 @@ import {
 } from "./auth.ts";
 import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { SessionContextBreakdown, SessionMcpServer, SessionRecord } from "./sessionInsights.ts";
 
 export const EXTERNAL_SESSIONS_WS_METHODS = {
   subscribeList: "externalSessions.subscribeList",
@@ -442,9 +443,10 @@ export const ExternalSessionsOpenInOriginRpc = Rpc.make(EXTERNAL_SESSIONS_WS_MET
 });
 
 /**
- * What the session details card shows beyond the summary's details: where the
- * session runs and the files its edit tools changed, read once from the
- * transcript tail when the card opens.
+ * What the session details card shows beyond the summary's details, in the
+ * same shapes a T3 thread's `sessionInsights.get` answers with: where the
+ * session runs, the agent's own record of it, its context and MCP servers as
+ * far as its store records them, and the files its edit tools changed.
  */
 export const ExternalSessionInsightsInput = Schema.Struct({
   key: TrimmedNonEmptyString,
@@ -468,6 +470,12 @@ export const ExternalSessionInsightsResult = Schema.Struct({
   outputs: Schema.NullOr(Schema.Array(ExternalSessionOutputFile)),
   /** The transcript is longer than what was read, so older edits may be missing. */
   truncated: Schema.Boolean,
+  /** What the agent's store records about the session: counts, tokens, cost, settings. */
+  session: Schema.optional(SessionRecord),
+  /** Null when the store records nothing about the session's context beyond the summary. */
+  context: Schema.optional(Schema.NullOr(SessionContextBreakdown)),
+  /** Null when the store does not record the session's MCP servers. */
+  mcpServers: Schema.optional(Schema.NullOr(Schema.Array(SessionMcpServer))),
 });
 export type ExternalSessionInsightsResult = typeof ExternalSessionInsightsResult.Type;
 
