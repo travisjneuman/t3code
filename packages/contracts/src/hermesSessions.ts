@@ -4,7 +4,8 @@
  * continues one in T3 as a thread in the Scratch project, and pins,
  * archives or deletes them in Hermes itself. `dashboard` reaches the
  * Hermes dashboard's config, key and custom-endpoint routes for
- * Settings › Providers; it never reveals a key's value. Fork add-on;
+ * Settings › Providers; it never reveals a key's value. `t3Tools` gives
+ * Hermes's API server T3's thread tools, or takes them away. Fork add-on;
  * see docs/user/hermes.md.
  */
 import * as Schema from "effect/Schema";
@@ -28,6 +29,7 @@ export const HERMES_SESSIONS_WS_METHODS = {
   listArchived: "hermesSessions.listArchived",
   unarchive: "hermesSessions.unarchive",
   dashboard: "hermesSessions.dashboard",
+  t3Tools: "hermesSessions.t3Tools",
 } as const;
 
 /** How far back the section lists sessions before "Load more"; pinned ones always show. */
@@ -166,6 +168,14 @@ export const HermesDashboardResult = Schema.Struct({
 });
 export type HermesDashboardResult = typeof HermesDashboardResult.Type;
 
+/** Turns the instance's T3 tools on, at the T3 `/mcp` URL Hermes can reach, or off. */
+export const HermesT3ToolsInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  enabled: Schema.Boolean,
+  url: Schema.optional(TrimmedNonEmptyString),
+});
+export type HermesT3ToolsInput = typeof HermesT3ToolsInput.Type;
+
 export const HermesSessionsEmptyResult = Schema.Struct({});
 export type HermesSessionsEmptyResult = typeof HermesSessionsEmptyResult.Type;
 
@@ -227,6 +237,12 @@ export const HermesSessionsDashboardRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.da
   error: HermesSessionsRpcError,
 });
 
+export const HermesSessionsT3ToolsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.t3Tools, {
+  payload: HermesT3ToolsInput,
+  success: HermesSessionsEmptyResult,
+  error: HermesSessionsRpcError,
+});
+
 export const HermesSessionsRpcs = [
   HermesSessionsListRpc,
   HermesSessionsProvidersRpc,
@@ -236,6 +252,7 @@ export const HermesSessionsRpcs = [
   HermesSessionsListArchivedRpc,
   HermesSessionsUnarchiveRpc,
   HermesSessionsDashboardRpc,
+  HermesSessionsT3ToolsRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -248,4 +265,5 @@ export const HERMES_SESSIONS_RPC_SCOPES = {
   [HERMES_SESSIONS_WS_METHODS.listArchived]: AuthOrchestrationReadScope,
   [HERMES_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
   [HERMES_SESSIONS_WS_METHODS.dashboard]: AuthProvidersManageScope,
+  [HERMES_SESSIONS_WS_METHODS.t3Tools]: AuthProvidersManageScope,
 } as const;

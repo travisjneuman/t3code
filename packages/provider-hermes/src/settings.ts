@@ -81,6 +81,27 @@ export const HermesSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    /** Hermes's API server gets T3's thread tools; set by the T3 tools switch. */
+    t3Tools: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    /** The T3 `/mcp` URL Hermes calls. */
+    t3ToolsUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    /** The bridge key Hermes presents; T3 binds each call to this instance's running thread. */
+    t3ToolsKey: TrimmedString.pipe(
+      secretSetting,
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    /** JSON of the Hermes config values the switch changed, restored when it is turned off. */
+    t3ToolsRestore: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),

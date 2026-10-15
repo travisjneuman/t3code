@@ -6,7 +6,8 @@
  * Hermes session, and syncs what Hermes added since; `update` pins, unpins or
  * archives, `delete` deletes the session in Hermes and its T3 thread. The
  * dashboard proxy serves Settings › Providers › Hermes Agent and never
- * returns a secret's value. Fork add-on; see docs/user/hermes.md.
+ * returns a secret's value; `t3Tools` gives Hermes's API server T3's thread
+ * tools, or takes them away. Fork add-on; see docs/user/hermes.md.
  *
  * @module hermes/HermesSessions
  */
@@ -33,6 +34,7 @@ import {
   type HermesSessionsProvidersResult,
   type HermesSessionsUnarchiveInput,
   type HermesSessionsUpdateInput,
+  type HermesT3ToolsInput,
   type OrchestrationV2AppThread,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
@@ -102,6 +104,9 @@ export class HermesSessions extends Context.Service<
     readonly dashboard: (
       input: HermesDashboardInput,
     ) => Effect.Effect<HermesDashboardResult, HermesSessionsError>;
+    readonly t3Tools: (
+      input: HermesT3ToolsInput,
+    ) => Effect.Effect<HermesSessionsEmptyResult, HermesSessionsError>;
   }
 >()("t3/hermes/HermesSessions") {}
 
@@ -142,6 +147,49 @@ const ENV_FIELDS = [
   "custom",
 ] as const;
 
+// T3 tools: Hermes's MCP servers are global, so while the switch is on every
+// platform but the API server is pinned to no MCP servers.
+const T3_TOOLS_SERVER = "t3-code";
+const T3_TOOLS_ENV_KEY = "MCP_T3_CODE_API_KEY";
+/** What a Hermes run needs to start, watch and steer T3 coworkers. */
+const T3_TOOLS = [
+  "t3_project_list",
+  "t3_project_read",
+  "t3_thread_launch",
+  "t3_thread_list",
+  "t3_thread_read",
+  "t3_thread_wait",
+  "t3_thread_send",
+  "t3_thread_interrupt",
+  "orchestrator_capabilities",
+];
+/** Hermes's platforms other than the API server, with the toolset each gets by default. */
+const NON_API_PLATFORMS: Readonly<Record<string, string>> = {
+  cli: "hermes-cli",
+  telegram: "hermes-telegram",
+  discord: "hermes-discord",
+  slack: "hermes-slack",
+  whatsapp: "hermes-whatsapp",
+  whatsapp_cloud: "hermes-whatsapp",
+  signal: "hermes-signal",
+  bluebubbles: "hermes-bluebubbles",
+  email: "hermes-email",
+  homeassistant: "hermes-homeassistant",
+  mattermost: "hermes-mattermost",
+  matrix: "hermes-matrix",
+  dingtalk: "hermes-dingtalk",
+  feishu: "hermes-feishu",
+  wecom: "hermes-wecom",
+  wecom_callback: "hermes-wecom-callback",
+  weixin: "hermes-weixin",
+  qqbot: "hermes-qqbot",
+  yuanbao: "hermes-yuanbao",
+  webhook: "hermes-webhook",
+  cron: "hermes-cron",
+};
+/** Toolsets Hermes adds once Discord's list is explicit; disabled to keep its default. */
+const DISCORD_EXPLICIT_TOOLSETS = ["discord", "discord_admin"];
+
 const decodeHermesSettings = Schema.decodeUnknownOption(HermesSettings);
 
 const failed = (message: string) => (cause: unknown) => new HermesSessionsError({ message, cause });
@@ -150,6 +198,51 @@ const fromApi = (error: HermesApi.HermesApiError) =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const httpUrlOf = (text: string | undefined): string | undefined => {
+  if (!text) return undefined;
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** A platform's toolset list as Hermes reads it, or undefined for its default. */
+const toolsetListOf = (value: unknown): ReadonlyArray<string> | undefined => {
+  if (Array.isArray(value)) return value.filter((name) => typeof name === "string");
+  if (typeof value === "string" && value.trim() !== "") {
+    return value
+      .split(",")
+      .map((name) => name.trim())
+      .filter((name) => name !== "");
+  }
+  return undefined;
+};
+
+/** What turning T3 tools on changed in Hermes's config, to put back when it is turned off. */
+interface T3ToolsRestore {
+  /** Each pinned platform's original list; null where it had none. */
+  readonly platforms: Record<string, unknown>;
+  /** `agent.disabled_toolsets` before T3 changed it; absent when T3 left it alone. */
+  readonly disabledToolsets?: unknown;
+}
+
+const parseT3ToolsRestore = (text: string): T3ToolsRestore | undefined => {
+  if (text === "") return undefined;
+  try {
+    const value: unknown = JSON.parse(text);
+    return isRecord(value) && isRecord(value.platforms)
+      ? {
+          platforms: value.platforms,
+          ...("disabledToolsets" in value ? { disabledToolsets: value.disabledToolsets } : {}),
+        }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 /** Replaces each non-empty secret-named string with a placeholder, at any depth. */
 const redactSecrets = (value: unknown): unknown => {
@@ -876,6 +969,136 @@ const make = Effect.gen(function* () {
     },
   );
 
+  /**
+   * Turns T3 tools on or off for one Hermes instance. On mints the instance's
+   * bridge key, pins every other platform to no MCP servers, adds the `t3-code`
+   * server limited to T3's thread tools, and restarts the gateway; off puts
+   * back what on changed. The restore snapshot is saved before Hermes is
+   * touched, so a half-finished switch can always be turned off.
+   */
+  const t3Tools: HermesSessions["Service"]["t3Tools"] = Effect.fn("HermesSessions.t3Tools")(
+    function* (input) {
+      const config = yield* settingsOf(input.instanceId);
+      const connection = HermesApi.dashboardConnectionOf(config);
+      const call = (method: string, path: string, body?: unknown, missingIsFine = false) =>
+        HermesApi.dashboardRequest(connection, method, path, body).pipe(
+          Effect.catchIf(
+            (error) => missingIsFine && error.status === 404,
+            () => Effect.succeed(undefined),
+          ),
+          Effect.mapError(fromApi),
+        );
+      const save = Effect.fn("HermesSessions.t3Tools.save")(function* (
+        patch: Record<string, unknown>,
+      ) {
+        const settings = yield* serverSettings.getSettings.pipe(
+          Effect.mapError(failed("Could not read settings.")),
+        );
+        const instance = settings.providerInstances[input.instanceId];
+        if (instance === undefined) {
+          return yield* new HermesSessionsError({
+            message: "That is not a Hermes Agent provider.",
+          });
+        }
+        const current = isRecord(instance.config) ? instance.config : {};
+        yield* serverSettings
+          .updateProviderInstance({
+            operation: "upsert",
+            instanceId: input.instanceId,
+            instance: { ...instance, config: { ...current, ...patch } },
+          })
+          .pipe(Effect.mapError(failed("Could not save the T3 tools settings.")));
+      });
+      const serverPath = `/api/mcp/servers/${T3_TOOLS_SERVER}`;
+
+      if (!input.enabled) {
+        yield* call("DELETE", serverPath, undefined, true);
+        yield* call("DELETE", "/api/env", { key: T3_TOOLS_ENV_KEY }, true);
+        const restore = parseT3ToolsRestore(config.t3ToolsRestore);
+        if (restore !== undefined) {
+          yield* call("PUT", "/api/config", {
+            config: {
+              platform_toolsets: restore.platforms,
+              ...("disabledToolsets" in restore
+                ? { agent: { disabled_toolsets: restore.disabledToolsets ?? null } }
+                : {}),
+            },
+          });
+        }
+        yield* save({ t3Tools: false, t3ToolsKey: "", t3ToolsRestore: "" });
+        yield* call("POST", "/api/gateway/restart");
+        return {};
+      }
+
+      const url = httpUrlOf(input.url);
+      if (url === undefined) {
+        return yield* new HermesSessionsError({
+          message: "Enter the T3 /mcp address Hermes can reach, such as https://<mac>.ts.net/mcp.",
+        });
+      }
+      const current = yield* call("GET", "/api/config");
+      const stored = isRecord(current) && isRecord(current.config) ? current.config : current;
+      const hermesConfig = isRecord(stored) ? stored : {};
+      const toolsets = isRecord(hermesConfig.platform_toolsets)
+        ? hermesConfig.platform_toolsets
+        : {};
+      const agent = isRecord(hermesConfig.agent) ? hermesConfig.agent : {};
+      const discordWasDefault = toolsetListOf(toolsets.discord) === undefined;
+      const disabled = toolsetListOf(agent.disabled_toolsets) ?? [];
+      // A second "on" keeps the first snapshot, never T3's own earlier writes.
+      const restore =
+        config.t3ToolsRestore ||
+        JSON.stringify({
+          platforms: Object.fromEntries(
+            Object.keys(NON_API_PLATFORMS).map((platform) => [
+              platform,
+              toolsets[platform] ?? null,
+            ]),
+          ),
+          ...(discordWasDefault ? { disabledToolsets: agent.disabled_toolsets ?? null } : {}),
+        } satisfies T3ToolsRestore);
+      const key = yield* crypto.randomBytes(32).pipe(
+        Effect.map((bytes) => Buffer.from(bytes).toString("base64url")),
+        Effect.mapError(failed("Could not create the T3 tools key.")),
+      );
+      yield* save({ t3Tools: true, t3ToolsUrl: url, t3ToolsKey: key, t3ToolsRestore: restore });
+
+      // Pin the other platforms before the server exists, so none ever sees it.
+      const pinned = Object.fromEntries(
+        Object.entries(NON_API_PLATFORMS).map(([platform, fallback]) => {
+          const list = (toolsetListOf(toolsets[platform]) ?? [fallback]).filter(
+            (name) => name !== T3_TOOLS_SERVER,
+          );
+          return [platform, list.includes("no_mcp") ? list : [...list, "no_mcp"]];
+        }),
+      );
+      yield* call("PUT", "/api/config", {
+        config: {
+          platform_toolsets: pinned,
+          ...(discordWasDefault
+            ? {
+                agent: {
+                  disabled_toolsets: [...new Set([...disabled, ...DISCORD_EXPLICIT_TOOLSETS])],
+                },
+              }
+            : {}),
+        },
+      });
+      yield* call("DELETE", serverPath, undefined, true);
+      yield* call("POST", "/api/mcp/servers", {
+        name: T3_TOOLS_SERVER,
+        url,
+        auth: "header",
+        bearer_token: key,
+      });
+      yield* call("PUT", "/api/config", {
+        config: { mcp_servers: { [T3_TOOLS_SERVER]: { tools: { include: T3_TOOLS } } } },
+      });
+      yield* call("POST", "/api/gateway/restart");
+      return {};
+    },
+  );
+
   return HermesSessions.of({
     list,
     providers,
@@ -885,6 +1108,7 @@ const make = Effect.gen(function* () {
     listArchived,
     unarchive,
     dashboard,
+    t3Tools,
   });
 });
 

@@ -125,6 +125,7 @@ import * as RelayDeliveryProof from "./scheduledTasks/RelayDeliveryProof.ts";
 import * as HeldHooksWaker from "./relay/HeldHooksWaker.ts";
 import * as McpOAuth from "./auth/McpOAuth.ts";
 import * as McpOAuthHttp from "./auth/mcpOAuthHttp.ts";
+import * as HermesMcpBridge from "./hermes/HermesMcpBridge.ts"; // Fork add-on: Hermes T3 tools.
 import {
   relayHookBaseUrl,
   ScheduledTaskWebhookOrigin,
@@ -728,6 +729,7 @@ const layerMakeRoutes = Layer.mergeAll(
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
+    Layer.provide(HermesMcpBridge.layer), // Fork add-on: Hermes T3 tools.
   ),
 ).pipe(
   // Guides read through the same pull request service as every other surface.
