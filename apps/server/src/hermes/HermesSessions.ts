@@ -219,7 +219,7 @@ const make = Effect.gen(function* () {
   const archive = yield* HermesSessionArchive.make;
 
   const commandId = (kind: string) =>
-    crypto.randomUUIDv4.pipe(
+    crypto.randomUUIDv4().pipe(
       Effect.map((id) => CommandId.make(`hermes-session-${kind}:${id}`)),
       Effect.mapError(failed("Could not update the thread.")),
     );
@@ -443,9 +443,9 @@ const make = Effect.gen(function* () {
     runs: ReadonlyArray<{ readonly ordinal: number; readonly startedAtMs: number }>,
   ) {
     if (entries.length === 0) return;
-    const batch = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(failed("Could not sync this session.")),
-    );
+    const batch = yield* crypto
+      .randomUUIDv4()
+      .pipe(Effect.mapError(failed("Could not sync this session.")));
     const now = yield* DateTime.now;
     const events: OrchestrationV2DomainEvent[] = [];
     for (const entry of entries) {
@@ -604,6 +604,28 @@ const make = Effect.gen(function* () {
     return { threadId, projectId };
   });
 
+  /**
+   * Removes the text-only copy a replacement left behind when its delete
+   * failed. The replacement took over its provider thread, so only its
+   * `import:` id still names it. A copy continued in T3 stays.
+   */
+  const dropLegacyCopy = (instanceId: ProviderInstanceId, sessionId: string) =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make(`import:${instanceId}:${sessionId}`);
+      const records = yield* Effect.option(
+        orchestrator.getThreadRecords(threadId, ["runs", "turnItems"]),
+      );
+      if (Option.isNone(records)) return;
+      const { thread, runs, turnItems } = records.value;
+      if (thread.deletedAt !== null || runs.length > 0) return;
+      if (!turnItems.some((item) => item.id.startsWith(LEGACY_IMPORT_PREFIX))) return;
+      yield* orchestrator
+        .dispatch({ type: "thread.delete", commandId: yield* commandId("replace"), threadId })
+        .pipe(
+          Effect.mapError(failed("Opened the full session, but the old thread is still there.")),
+        );
+    });
+
   const continueSession: HermesSessions["Service"]["continueSession"] = Effect.fn(
     "HermesSessions.continueSession",
   )(function* (input) {
@@ -625,6 +647,7 @@ const make = Effect.gen(function* () {
       });
     }
     yield* unarchiveThread(threadId);
+    if (threadId === freshId) yield* dropLegacyCopy(instanceId, sessionId);
     const opened = { threadId, projectId: records.thread.projectId };
     // A turn in flight writes its own items; the next open syncs the rest.
     if (records.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) return opened;

@@ -468,7 +468,7 @@ export const make = Effect.gen(function* () {
 
   const resolveProject = (target: ContinueTarget) =>
     Effect.gen(function* () {
-      const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed));
+      const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed));
       const title = path.basename(target.cwd) || target.cwd;
       const bootstrapped = yield* projects
         .bootstrap({
@@ -561,10 +561,7 @@ export const make = Effect.gen(function* () {
     const unsupported = (reason: ExternalSessionUnsupportedError["reason"]) =>
       new ExternalSessionUnsupportedError({ key: target.key, reason });
     const providerInstanceId = yield* resolveInstance(target);
-    const { stats, contents, syncOffset, history } = yield* readHistory(
-      target,
-      providerInstanceId,
-    );
+    const { stats, contents, syncOffset, history } = yield* readHistory(target, providerInstanceId);
     // Claude resumes only by a UUID session id.
     if (
       target.driver === "claudeAgent" &&
@@ -583,7 +580,7 @@ export const make = Effect.gen(function* () {
       }
       // Moved back to Other Agents (an archive); continuing takes it up again.
       if (existing.value.thread.archivedAt !== null) {
-        const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed));
+        const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed));
         yield* orchestrator
           .dispatch({
             type: "thread.unarchive",

@@ -265,7 +265,7 @@ export const make = Effect.gen(function* () {
         ),
       );
       const cwd = parent.thread.worktreePath ?? project.workspaceRoot;
-      const uuid = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+      const uuid = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
       const created = yield* git
         .createWorktree({
           cwd,

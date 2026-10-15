@@ -130,9 +130,9 @@ const make = Effect.gen(function* () {
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
 
   const start = Effect.fn("CompareAgents.start")(function* (input: CompareAgentsStartInput) {
-    const pairId = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(failed("Could not start the comparison.")),
-    );
+    const pairId = yield* crypto
+      .randomUUIDv4()
+      .pipe(Effect.mapError(failed("Could not start the comparison.")));
     const projectId =
       input.projectId ??
       (yield* managedFolders.ensureScratchProject.pipe(
@@ -197,7 +197,7 @@ const make = Effect.gen(function* () {
       readonly with?: CompareAgentsFollowUpSide;
     }>,
   ) {
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not send.")));
+    const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("Could not send.")));
     for (const { projection, text, side, with: sideInput } of sends) {
       const modelSelection = sideInput?.modelSelection ?? projection.thread.modelSelection;
       yield* orchestrator
@@ -222,7 +222,7 @@ const make = Effect.gen(function* () {
     projection: OrchestrationV2ThreadProjection,
     modes: { readonly interactionMode: ProviderInteractionMode; readonly runtimeMode: RuntimeMode },
   ) {
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not send.")));
+    const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("Could not send.")));
     const threadId = projection.thread.id;
     if (projection.thread.runtimeMode !== modes.runtimeMode) {
       yield* orchestrator
@@ -281,7 +281,7 @@ const make = Effect.gen(function* () {
 
   const stop = Effect.fn("CompareAgents.stop")(function* (input: CompareAgentsStopInput) {
     const sides = yield* readPair(input.pairId);
-    const id = yield* crypto.randomUUIDv4.pipe(Effect.mapError(failed("Could not stop.")));
+    const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("Could not stop.")));
     for (const projection of sides) {
       const run = projection.runs.findLast((candidate) =>
         INTERRUPTIBLE_RUN_STATUSES.has(candidate.status),
