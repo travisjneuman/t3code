@@ -13,6 +13,9 @@ between Automations and Relationships. They appear once a thread has been sent, 
 card has room for its full view; in a short window the card keeps to its essentials and leaves them
 out. Other Agents sessions share one card, so it stays open or closed as you move between them.
 
+Choose a section's title to collapse it to its heading, and again to expand it. Each section
+stays collapsed or expanded across threads and restarts.
+
 ## What each section shows
 
 - **Session**: the agent and model with its effort or Fast setting, whether the session is live,

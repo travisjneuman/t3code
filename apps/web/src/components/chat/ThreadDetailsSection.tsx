@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
+import { SectionCollapseToggle, useSectionCollapse } from "./ThreadDetailsSectionToggle"; // Fork add-on: collapsible sections.
 
 /** Sections share header and content insets in both the sidebar and popover. */
 export function ThreadDetailsSection({
@@ -18,6 +19,8 @@ export function ThreadDetailsSection({
   separated?: boolean;
   showHeading?: boolean;
 }) {
+  const collapse = useSectionCollapse(headingId, showHeading); // Fork add-on: collapsible sections.
+  const heading = <SectionCollapseToggle title={title} collapse={collapse} />; // Fork add-on: collapsible sections.
   return (
     <section
       {...props}
@@ -35,11 +38,11 @@ export function ThreadDetailsSection({
           id={headingId}
           className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none"
         >
-          {title}
+          {heading /* Fork add-on: collapsible sections. */}
         </h3>
         {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </div>
-      {children}
+      {collapse.collapsed ? null : children /* Fork add-on: collapsible sections. */}
     </section>
   );
 }
