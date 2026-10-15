@@ -31,6 +31,7 @@ import { CursorDriver, type CursorDriverEnv } from "@t3tools/provider-cursor/ser
 import { GrokDriver, type GrokDriverEnv } from "@t3tools/provider-grok/server";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
 import { MuseDriver, type MuseDriverEnv } from "@t3tools/provider-muse/server";
+import { HermesDriver, type HermesDriverEnv } from "@t3tools/provider-hermes/server"; // Fork add-on: Hermes provider.
 import { PiDriver, type PiDriverEnv } from "@t3tools/provider-pi/server";
 import type {
   AnyProviderDriver,
@@ -51,7 +52,8 @@ export type BuiltInDriversEnv =
   | GrokDriverEnv
   | OpenCodeDriverEnv
   | PiDriverEnv
-  | MuseDriverEnv;
+  | MuseDriverEnv
+  | HermesDriverEnv; // Fork add-on: Hermes provider.
 
 /**
  * Ordered list of built-in drivers. Order matters only for tie-breaking in
@@ -67,6 +69,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   AntigravityDriver,
   PiDriver,
   MuseDriver,
+  HermesDriver, // Fork add-on: Hermes provider.
   AcpRegistryDriver,
 ];
 

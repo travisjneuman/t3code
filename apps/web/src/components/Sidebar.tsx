@@ -292,6 +292,8 @@ import {
 } from "../composerDraftStore";
 // Fork add-on: read-only sessions from agents running outside T3.
 import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection";
+import { HermesSidebarSection } from "../hermes/HermesSidebarSection"; // Fork add-on: Hermes provider.
+import { isHermesThread } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
 import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on: session search.
 import { ContinuedFromLine, ContinuedThreadMarker } from "../external-sessions/handBack"; // Fork add-on: external-session hand back.
 // Fork add-on: thread export, save to notes, hand back, open comparison.
@@ -2858,7 +2860,10 @@ export default function Sidebar() {
     const preciseNow = new Date().toISOString();
     // Subagent child threads live in the parent's Agents surface, not the
     // sidebar roster (v2 models them as real threads with lineage).
-    const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
+    const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys).filter(
+      // Fork add-on: Hermes provider. Hermes threads live in their own section.
+      (thread) => !isHermesThread(thread, serverConfigs),
+    );
     inboxReturns.observe(workingShelfEnabled ? threads : null);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
@@ -5689,6 +5694,8 @@ export default function Sidebar() {
               )}
             </div>
           ) : null}
+          {/* Fork add-on: Hermes provider. */}
+          {!isSearchingThreads ? <HermesSidebarSection /> : null}
           {/* Fork add-on: read-only sessions from agents running outside T3. */}
           {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null}
         </SidebarGroup>

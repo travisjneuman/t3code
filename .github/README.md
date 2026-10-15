@@ -27,6 +27,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | --------------------------------------------- | ----------------------------------------------------------------------- |
 | [**Web apps**](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app |
 | [**Other Agents**](#other-agents)             | Follow and continue sessions you started in other agent apps            |
+| [**Hermes Agent**](#hermes-agent)             | Chat with a Hermes Agent running on this or another computer            |
 | [**Compare agents**](#compare-agents)         | One prompt, two models, side by side                                    |
 | [**Agent instructions**](#agent-instructions) | Delegation and agent rules as settings, globally or per project         |
 | [**Save to notes**](#save-to-notes)           | Files a thread into your notes folder or Obsidian vault                 |
@@ -58,6 +59,17 @@ Claude Code, Codex, Grok, Pi and Antigravity sessions that you started outside T
 - Sessions from the Claude desktop app and the Codex app can be opened in those apps, and any session can be archived in T3 without touching the original app.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/other-agents.md)
+
+### Hermes Agent
+
+Talk to a [Hermes Agent](https://github.com/NousResearch/hermes-agent) from T3 over its API, whether it runs here or on another computer. Its chat platforms, cron jobs and CLI keep working.
+
+- Sessions have their own **Hermes Agent** section above Other Agents: your T3 threads and Hermes's own sessions, newest first. Pin the ones you want on top.
+- Start one from the section's **+**, or pick Hermes Agent in any new thread's model picker.
+- Pick any model Hermes can use, per turn. Providers whose terms rule out use from another app are never offered.
+- Archive, unarchive and delete reach Hermes too. Hermes's config, keys and custom endpoints are editable in Settings.
+
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/hermes.md)
 
 ### Compare agents
 
@@ -157,6 +169,7 @@ Fork-specific docs, plus the fork's two front doors that list every user guide a
 | Every internals note, maintainer runbooks         | [Internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/README.md)                                                                                                                                                                                                               |
 | Web apps tabs: ChatGPT, Claude, Grok, Gemini      | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/desktop-remote-apps.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/remote-apps.md)                                                                                                       |
 | Other Agents, continue or hand back a session     | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/other-agents.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/external-sessions.md) · [session search](https://github.com/travisjneuman/t3code/blob/main/docs/internals/session-search.md) |
+| Hermes Agent, remote agent sessions               | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/hermes.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/hermes.md)                                                                                                                         |
 | Compare agents, review swap                       | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/compare-agents.md)                                                                                                                                                                                                           |
 | Delegation, worker models, presets                | [Agent instructions](https://github.com/travisjneuman/t3code/blob/main/docs/user/agent-instructions.md)                                                                                                                                                                                               |
 | Save to notes, export Markdown or JSON            | [Save and export threads](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md)                                                                                                                                                                                     |
