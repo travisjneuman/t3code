@@ -40,6 +40,7 @@ import { useThreadActions } from "../hooks/useThreadActions";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
 import { useThreadShells, waitForThreadShell } from "../state/entities";
+import { useEnvironments } from "../state/environments";
 import { environmentServerConfigsAtom } from "../state/server";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
@@ -156,6 +157,7 @@ function mergeRows(
 
 export function HermesSidebarSection() {
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
+  const { environments } = useEnvironments();
   const allThreads = useThreadShells();
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
   const [extra, setExtra] = useState(0);
@@ -210,6 +212,16 @@ export function HermesSidebarSection() {
     [targetsKey],
   );
 
+  // Listing waits for the environment's socket; asking earlier only fails with "not connected".
+  const connectedKey = useMemo(
+    () =>
+      environments
+        .filter((environment) => environment.connection.phase === "connected")
+        .map((environment) => environment.environmentId)
+        .join("\n"),
+    [environments],
+  );
+
   // One agent name, or "Hermes" when instances disagree.
   const sectionName = useMemo(() => {
     const names = new Set(
@@ -249,10 +261,12 @@ export function HermesSidebarSection() {
   );
 
   useEffect(() => {
-    if (targets.length === 0) return;
+    const connected = new Set(connectedKey.split("\n"));
+    const ready = targets.filter((target) => connected.has(target.environmentId));
+    if (ready.length === 0) return;
     let cancelled = false;
     void Promise.all(
-      targets.map(async (target) => {
+      ready.map(async (target) => {
         const result = await runHermes(
           hermesSessionsList,
           target.environmentId,
@@ -272,7 +286,7 @@ export function HermesSidebarSection() {
     return () => {
       cancelled = true;
     };
-  }, [targets, extra, refreshNonce, threadsSignature]);
+  }, [targets, connectedKey, extra, refreshNonce, threadsSignature]);
 
   // Sessions from Discord or cron move while T3 is in the background.
   useEffect(() => {
