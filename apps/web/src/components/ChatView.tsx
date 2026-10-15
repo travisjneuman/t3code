@@ -11211,7 +11211,7 @@ export default function ChatView(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             isServerThread={isServerThread}
             activeThreadTitle={activeThread.title}
-            activeProject={activeProject ?? null}
+            activeProject={hermesAgent ? null : (activeProject ?? null)} // Fork add-on: Hermes works outside projects.
             parentThreadLink={parentThreadLink}
             onOpenThread={onOpenRelatedThreadStable}
             rightPanelOpen={inlineRightPanelOwnsTitleBar}
