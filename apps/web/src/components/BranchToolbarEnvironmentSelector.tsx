@@ -60,8 +60,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // the glass seam joining it to the composer assumes a fixed strip height, so
   // a shorter label would drag the seam out of line whenever this label is the
   // only thing in the strip.
-  if (fixedLocation || envLocked || onEnvironmentChange === undefined) {
-    // Fork add-on: Hermes provider.
+  if (fixedLocation /* Fork add-on: Hermes provider. */ || envLocked || !onEnvironmentChange) {
     const label = fixedLocation?.label ?? activeEnvironment?.label ?? "Run on"; // Fork add-on: Hermes provider.
     const lockedRow = (
       <span
