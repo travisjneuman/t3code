@@ -3,6 +3,7 @@
 // and contract types, never Effect services.
 import type {
   DesktopBridge,
+  DesktopUpdateGateState,
   RemoteAppDownloadCapture,
   RemoteAppPanelNavigated,
   RemoteAppSendToThread,
@@ -12,7 +13,9 @@ import type {
 
 import * as IpcChannels from "./channels.ts";
 
-type ForkDesktopBridge = Required<Pick<DesktopBridge, "confirm" | "sourceSync" | "remoteApps">>;
+type ForkDesktopBridge = Required<
+  Pick<DesktopBridge, "confirm" | "sourceSync" | "remoteApps" | "updateGate">
+>;
 
 // Mirrors RemoteAppSiteSchema; the preload imports contract types only.
 const REMOTE_APP_SURFACES = new Set([
@@ -71,12 +74,35 @@ function isRemoteAppDownloadCapture(value: unknown): value is RemoteAppDownloadC
   );
 }
 
+function isDesktopUpdateGateState(value: unknown): value is DesktopUpdateGateState {
+  if (typeof value !== "object" || value === null) return false;
+  const queuedAt = (value as Partial<DesktopUpdateGateState>).queuedAt;
+  return queuedAt === null || typeof queuedAt === "number";
+}
+
 export function makeForkDesktopBridge(ipcRenderer: Electron.IpcRenderer): ForkDesktopBridge {
   return {
     confirm: (message) => ipcRenderer.invoke(IpcChannels.CONFIRM_DIALOG_CHANNEL, message),
     sourceSync: {
       isEnabled: () => ipcRenderer.invoke(IpcChannels.SOURCE_SYNC_ENABLED_CHANNEL),
       sync: () => ipcRenderer.invoke(IpcChannels.SOURCE_SYNC_CHANNEL),
+    },
+    updateGate: {
+      reportBusySessions: (count) =>
+        ipcRenderer.invoke(IpcChannels.UPDATE_GATE_REPORT_BUSY_CHANNEL, count),
+      getState: () => ipcRenderer.invoke(IpcChannels.UPDATE_GATE_GET_STATE_CHANNEL),
+      holdInstallIfBusy: () => ipcRenderer.invoke(IpcChannels.UPDATE_GATE_HOLD_IF_BUSY_CHANNEL),
+      installNow: () => ipcRenderer.invoke(IpcChannels.UPDATE_GATE_INSTALL_NOW_CHANNEL),
+      cancel: () => ipcRenderer.invoke(IpcChannels.UPDATE_GATE_CANCEL_CHANNEL),
+      onStateChange: (listener) => {
+        const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
+          if (isDesktopUpdateGateState(state)) listener(state);
+        };
+        ipcRenderer.on(IpcChannels.UPDATE_GATE_STATE_CHANGE_CHANNEL, wrappedListener);
+        return () => {
+          ipcRenderer.removeListener(IpcChannels.UPDATE_GATE_STATE_CHANGE_CHANNEL, wrappedListener);
+        };
+      },
     },
     remoteApps: {
       getState: () => ipcRenderer.invoke(IpcChannels.REMOTE_APP_GET_STATE_CHANNEL),

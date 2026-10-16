@@ -58,6 +58,7 @@ import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useProjects, useServerConfigs } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useQueuedProviderUpdate } from "../../maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { getRelativeTimeState } from "../../timestampFormat";
 import {
   ConnectionStatusDot,
@@ -574,9 +575,7 @@ export function EnvironmentProviderSettings({
   const refreshServerProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
-  const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
-    reportFailure: false,
-  });
+  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on: maintenance queue.
   const uninstallAcpRegistryManagedBinary = useAtomCommand(
     serverEnvironment.uninstallAcpRegistryManagedBinary,
     { reportFailure: false },

@@ -26,7 +26,10 @@ import {
   type ProviderUpdateToastView,
 } from "./ProviderUpdateLaunchNotification.logic";
 import { hiddenToastActionProps, stackedThreadToast, toastManager } from "./ui/toast";
-import { useAtomCommand } from "../state/use-atom-command";
+import {
+  isQueuedUpdateResult,
+  useQueuedProviderUpdate,
+} from "../maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 
 const seenProviderUpdateNotificationKeys = new Set<string>();
 type ProviderUpdateToastId = ReturnType<typeof toastManager.add>;
@@ -109,9 +112,7 @@ export function ProviderUpdatePrimaryNotification() {
     primaryEnvironment?.environmentId ?? null,
     AuthProvidersManageScope,
   );
-  const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
-    reportFailure: false,
-  });
+  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on: maintenance queue.
   const activeToastRef = useRef<ActiveProviderUpdateToast | null>(null);
   const { dismissedNotificationKeys, dismissNotificationKey } =
     useDismissedProviderUpdateNotificationKeys();
@@ -259,6 +260,8 @@ export function ProviderUpdatePrimaryNotification() {
           );
         }
 
+        if (activeToastRef.current === activeUpdate && results.some(isQueuedUpdateResult))
+          activeToastRef.current = null; // Fork add-on: maintenance queue.
         const activeUpdateToast = activeToastRef.current;
         if (activeUpdateToast !== activeUpdate) {
           return;

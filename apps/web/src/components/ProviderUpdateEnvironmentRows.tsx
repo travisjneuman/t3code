@@ -14,7 +14,7 @@ import {
 import { cn } from "~/lib/utils";
 import { serverEnvironment } from "~/state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
-import { useAtomCommand } from "~/state/use-atom-command";
+import { useQueuedProviderUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { useLocalEnvironmentUpdateGroups } from "./ProviderUpdateLaunchNotification.environments";
 import {
   collectProviderUpdateOutcomeSnapshots,
@@ -157,9 +157,7 @@ export function ProviderUpdateEnvironmentRows({
   readonly onInteract?: () => void;
 }) {
   const { groups } = useLocalEnvironmentUpdateGroups();
-  const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
-    reportFailure: false,
-  });
+  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on: maintenance queue.
   const groupByEnvironment = useMemo(
     () => new Map(groups.map((group) => [group.environmentId, group] as const)),
     [groups],

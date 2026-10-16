@@ -36,3 +36,12 @@ export const REMOTE_APP_DOWNLOAD_CAPTURED_CHANNEL = "remote-app:download-capture
 export const REMOTE_APP_PANEL_NAVIGATED_CHANNEL = "remote-app:panel-navigated";
 // Main to renderer: the surface menu's "Open in Side Panel" chose a site.
 export const REMOTE_APP_OPEN_IN_PANEL_CHANNEL = "remote-app:open-in-panel";
+
+// Maintenance queue: hold the update restart while sessions on this computer are active.
+export const UPDATE_GATE_REPORT_BUSY_CHANNEL = "desktop:update-gate-report-busy";
+export const UPDATE_GATE_GET_STATE_CHANNEL = "desktop:update-gate-get-state";
+export const UPDATE_GATE_HOLD_IF_BUSY_CHANNEL = "desktop:update-gate-hold-if-busy";
+export const UPDATE_GATE_INSTALL_NOW_CHANNEL = "desktop:update-gate-install-now";
+export const UPDATE_GATE_CANCEL_CHANNEL = "desktop:update-gate-cancel";
+// Main to renderer: a held install was added, released, or cancelled.
+export const UPDATE_GATE_STATE_CHANGE_CHANNEL = "desktop:update-gate-state-change";

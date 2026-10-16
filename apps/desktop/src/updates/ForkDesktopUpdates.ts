@@ -30,6 +30,7 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopUpdateGate from "./DesktopUpdateGate.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 import {
@@ -593,13 +594,11 @@ export const syncSource: Effect.Effect<
   }
   return yield* localSourceUpdates.syncSource.pipe(
     Effect.tap(() => updates.check("source-sync")),
-    Effect.map(
-      (result): DesktopSourceSyncResult => ({
-        ok: true,
-        merged: result.merged,
-        message: describeSourceSync(result),
-      }),
-    ),
+    Effect.map((result): DesktopSourceSyncResult => ({
+      ok: true,
+      merged: result.merged,
+      message: describeSourceSync(result),
+    })),
     Effect.catchTag("LocalSourceUpdateError", (error) =>
       logUpdaterError(error.message, { errorTag: error._tag, operation: error.operation }).pipe(
         Effect.as<DesktopSourceSyncResult>({ ok: false, merged: 0, message: error.message }),
@@ -609,15 +608,78 @@ export const syncSource: Effect.Effect<
 }).pipe(Effect.withSpan("desktop.updates.syncSource"));
 
 /**
+ * Holds every restart into a downloaded update, the update button's and a
+ * remote client's alike, while sessions on this computer are active, and runs the
+ * held install once they have been idle long enough.
+ */
+const gateInstalls = Effect.fn("desktop.updates.gateInstalls")(function* (
+  updates: DesktopUpdates.DesktopUpdates["Service"],
+) {
+  const gate = yield* DesktopUpdateGate.DesktopUpdateGate;
+  const heldState = (expectedVersion: Option.Option<string>) =>
+    Effect.gen(function* () {
+      const state = yield* updates.getState;
+      if (!DesktopUpdateGate.isHoldable(state, expectedVersion)) return Option.none();
+      if (!(yield* gate.holdIfBusy(expectedVersion))) return Option.none();
+      return Option.some<DesktopUpdateState>({
+        ...state,
+        message: DesktopUpdateGate.HELD_INSTALL_MESSAGE,
+      });
+    });
+
+  yield* gate.takeReady.pipe(
+    Effect.flatMap((held) =>
+      Option.match(held.expectedVersion, {
+        onNone: () => updates.install,
+        onSome: updates.installPrepared,
+      }),
+    ),
+    Effect.tap((result) =>
+      result.accepted
+        ? Effect.void
+        : logUpdaterWarning("held update install was not accepted", {
+            message: result.state.message,
+          }),
+    ),
+    Effect.forever,
+    Effect.forkScoped,
+  );
+
+  return DesktopUpdates.DesktopUpdates.of({
+    ...updates,
+    install: heldState(Option.none()).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => updates.install,
+          onSome: (state) => Effect.succeed({ accepted: false, completed: false, state }),
+        }),
+      ),
+    ),
+    installPrepared: (expectedVersion) =>
+      heldState(Option.some(expectedVersion)).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => updates.installPrepared(expectedVersion),
+            onSome: (state) =>
+              Effect.succeed({ accepted: false, completed: false, failed: false, state }),
+          }),
+        ),
+      ),
+  });
+});
+
+/**
  * Provides DesktopUpdates, and the LocalSourceUpdates it decides with. Local
  * source builds get the source updater; every other build gets upstream's.
+ * Either way, installs wait for this computer's sessions (DesktopUpdateGate).
  */
 export const layer = Layer.effect(
   DesktopUpdates.DesktopUpdates,
   Effect.gen(function* () {
     const localSourceUpdates = yield* LocalSourceUpdates.LocalSourceUpdates;
-    return (yield* localSourceUpdates.enabled)
+    const updates = (yield* localSourceUpdates.enabled)
       ? yield* makeLocalSource
       : yield* DesktopUpdates.make;
+    return yield* gateInstalls(updates);
   }),
-).pipe(Layer.provideMerge(LocalSourceUpdates.layer));
+).pipe(Layer.provideMerge(LocalSourceUpdates.layer), Layer.provideMerge(DesktopUpdateGate.layer));

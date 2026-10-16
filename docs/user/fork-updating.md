@@ -79,3 +79,23 @@ When source updates are off, for example on another platform or after the checko
 the app updates from GitHub Releases only if its build named a repository, as `owner/name`, in
 `T3CODE_DESKTOP_UPDATE_REPOSITORY` or `GITHUB_REPOSITORY`. A local build without either has no
 release feed; update it by pulling and building again.
+
+## Updates wait for active sessions
+
+Provider updates, T3 server updates, and the app's own restart into a new version wait while
+the sessions they would interrupt are active. A session is active while it is running or waiting
+for an approval or your input; paused and stopped sessions don't hold anything up. A Hermes
+Agent counts as active while its gateway is busy or any of its agents are running. A provider
+update waits only for that provider's sessions on that machine, and a server or app update waits
+for every session it would restart.
+
+A waiting update shows in the sidebar as **Waiting for N active sessions on** the machine's
+name, and runs by itself once those sessions have stayed idle for 2 minutes. **Update now** runs
+it right away; **Cancel** drops it, and a downloaded app update stays ready for the update
+button. If an update is still waiting after 4 hours, you get one notification.
+
+Before a provider update runs on this machine, that provider's idle sessions are closed so it
+can restart cleanly. The app's restart is held the same way whoever asks for it, including
+**Update everything**, a remote client, or an agent. Waiting server and provider updates are
+remembered by the browser or app window that queued them, which checks again when the computer
+wakes or the machine reconnects; a waiting app restart is forgotten if you quit the app.
