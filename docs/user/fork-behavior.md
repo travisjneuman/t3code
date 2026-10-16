@@ -49,3 +49,17 @@ worker, preset, project or text generation model saved as `openai-codex/gpt-6.1-
 
 A saved model that the provider no longer lists and that has no successor stays as it is. Model
 pickers in Settings show it as **Unavailable**, so you can see what still runs and pick another.
+
+## Status colors mean the same thing everywhere
+
+Green means connected or live, blue means in progress, amber means it needs attention, red means
+it failed, and grey means off or idle. So in **Settings → Connections**, each environment shows a
+status dot, and a pairing link that is waiting to be used is blue rather than amber. A sidebar
+thread that is waiting on background work is blue, because that work is still running. In
+**Usage**, the period buttons show no selection while **Limits** is shown, since limits ignore the
+period.
+
+The same holds in **OpenTelemetry export** in **Settings → Diagnostics**: an endpoint check in
+progress is blue, and a check that could not run says **Check failed** in red, with the reason on
+the dot. **Settings → Archive** leaves out "No archived threads" when archived Other Agents or
+Hermes sessions are listed below it.

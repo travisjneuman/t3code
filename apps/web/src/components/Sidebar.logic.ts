@@ -1125,10 +1125,12 @@ export function resolveThreadStatusPill(input: {
   }
 
   if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) {
+    // Fork add-on: background work is still in progress, so it takes the
+    // in-progress blue rather than the grey of a finished thread.
     return {
       label: "Waiting",
-      colorClass: "text-sidebar-muted-foreground",
-      dotClass: "bg-sidebar-muted-foreground",
+      colorClass: "text-sky-600 dark:text-sky-300/80",
+      dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: false,
     };
   }

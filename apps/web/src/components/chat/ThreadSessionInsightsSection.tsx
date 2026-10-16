@@ -13,6 +13,7 @@ import { getModelSelectionBooleanOptionValue } from "@t3tools/shared/model";
 import { memo, useMemo } from "react";
 
 import { labelSessionRecordSettings } from "../../external-sessions/atoms";
+import { HERMES_DRIVER } from "../../hermes/hermesSessions";
 import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import { getProviderInstanceEntry } from "../../providerInstances";
 import { formatProviderDriverKindLabel } from "../../providerModels";
@@ -63,9 +64,11 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
     insightsQuery.failure instanceof SessionInsightsError &&
     insightsQuery.failure.reason === "no-provider-thread";
   const insights = notStarted ? null : insightsQuery.data;
+  const summary = useThreadSessionSummary(threadRef);
   // An agent with its own session store (Hermes) works in its own folders,
-  // not the T3 project's.
-  const ownsWorkspace = insights?.session !== undefined;
+  // not the T3 project's. The driver settles it before the insights load, so
+  // the T3 folder never flashes in.
+  const ownsWorkspace = summary?.driver === HERMES_DRIVER || insights?.session !== undefined;
   const sessionFolder = ownsWorkspace ? undefined : props.workspaceRoot;
 
   return (

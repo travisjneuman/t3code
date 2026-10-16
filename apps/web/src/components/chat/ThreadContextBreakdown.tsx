@@ -159,7 +159,9 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
         </p>
       ) : null}
       {props.error !== null ? (
-        <p className="px-2.5 pt-1.5 text-2xs text-pretty text-muted-foreground">{props.error}</p>
+        <p className="px-2.5 pt-1.5 text-2xs text-pretty text-destructive">
+          Couldn't read session details: {props.error}
+        </p>
       ) : null}
     </ThreadDetailsSection>
   );

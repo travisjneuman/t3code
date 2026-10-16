@@ -56,6 +56,38 @@ const dashboard = async (
   return result === null ? null : result.body;
 };
 
+/** The row a dashboard section shows until its first load succeeds. */
+function DashboardPendingRow(props: {
+  readonly loadingTitle: string;
+  readonly failed: boolean;
+  readonly onRetry: () => Promise<void>;
+}) {
+  const [retrying, setRetrying] = useState(false);
+  if (!props.failed) {
+    return <SettingsRow title={props.loadingTitle} description="Needs the dashboard URL above." />;
+  }
+  return (
+    <SettingsRow
+      title="Couldn't reach the Hermes dashboard"
+      description="Check the dashboard URL above."
+      control={
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={retrying}
+          onClick={() => {
+            setRetrying(true);
+            void props.onRetry().finally(() => setRetrying(false));
+          }}
+        >
+          {retrying ? "Retrying" : "Retry"}
+        </Button>
+      }
+    />
+  );
+}
+
 export function HermesSettingsSection(props: {
   readonly environmentId: EnvironmentId;
   readonly instanceId: ProviderInstanceId;
@@ -273,6 +305,7 @@ function HermesConfigForm(props: { readonly target: Target }) {
     readonly categories: ReadonlyArray<string>;
   } | null>(null);
   const [config, setConfig] = useState<unknown>(null);
+  const [failed, setFailed] = useState(false);
   const [category, setCategory] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [changes, setChanges] = useState<ReadonlyMap<string, unknown>>(new Map());
@@ -289,7 +322,11 @@ function HermesConfigForm(props: { readonly target: Target }) {
       ),
       dashboard(props.target, "GET", "/api/config", "Could not load the Hermes config"),
     ]);
-    if (!isRecord(schemaBody) || !isRecord(schemaBody.fields) || configBody === null) return;
+    if (!isRecord(schemaBody) || !isRecord(schemaBody.fields) || configBody === null) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
     const fields = Object.entries(schemaBody.fields).flatMap(([path, entry]) =>
       isRecord(entry) && typeof entry.type === "string"
         ? [
@@ -334,7 +371,7 @@ function HermesConfigForm(props: { readonly target: Target }) {
 
   if (schema === null) {
     return (
-      <SettingsRow title="Loading Hermes config" description="Needs the dashboard URL above." />
+      <DashboardPendingRow loadingTitle="Loading Hermes config" failed={failed} onRetry={load} />
     );
   }
 
@@ -485,6 +522,7 @@ interface EnvKey {
 /** Hermes's `.env` keys: set or remove, never read back. */
 function HermesKeys(props: { readonly target: Target }) {
   const [keys, setKeys] = useState<ReadonlyArray<EnvKey> | null>(null);
+  const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState("");
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
   const [newName, setNewName] = useState("");
@@ -492,7 +530,11 @@ function HermesKeys(props: { readonly target: Target }) {
 
   const load = useCallback(async () => {
     const body = await dashboard(props.target, "GET", "/api/env", "Could not load Hermes keys");
-    if (!isRecord(body)) return;
+    if (!isRecord(body)) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
     setKeys(
       Object.entries(body)
         .flatMap(([name, entry]) =>
@@ -555,7 +597,9 @@ function HermesKeys(props: { readonly target: Target }) {
   };
 
   if (keys === null) {
-    return <SettingsRow title="Loading Hermes keys" description="Needs the dashboard URL above." />;
+    return (
+      <DashboardPendingRow loadingTitle="Loading Hermes keys" failed={failed} onRetry={load} />
+    );
   }
   const query = filter.trim().toLowerCase();
   const visible = keys.filter(
@@ -697,6 +741,7 @@ const EMPTY_ENDPOINT_DRAFT = { name: "", baseUrl: "", model: "", apiKey: "" };
 /** OpenAI-compatible endpoints Hermes routes to, such as a free gateway. */
 function HermesEndpoints(props: { readonly target: Target }) {
   const [endpoints, setEndpoints] = useState<ReadonlyArray<Endpoint> | null>(null);
+  const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState(EMPTY_ENDPOINT_DRAFT);
   const [busy, setBusy] = useState(false);
 
@@ -707,7 +752,11 @@ function HermesEndpoints(props: { readonly target: Target }) {
       "/api/providers/custom-endpoints",
       "Could not load custom endpoints",
     );
-    if (!isRecord(body) || !Array.isArray(body.endpoints)) return;
+    if (!isRecord(body) || !Array.isArray(body.endpoints)) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
     setEndpoints(
       body.endpoints.flatMap((entry) =>
         isRecord(entry) && typeof entry.id === "string"
@@ -785,7 +834,7 @@ function HermesEndpoints(props: { readonly target: Target }) {
   };
 
   if (endpoints === null) {
-    return <SettingsRow title="Loading endpoints" description="Needs the dashboard URL above." />;
+    return <DashboardPendingRow loadingTitle="Loading endpoints" failed={failed} onRetry={load} />;
   }
   const canAdd =
     draft.name.trim() !== "" &&
