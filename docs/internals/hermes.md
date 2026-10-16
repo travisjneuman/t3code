@@ -11,6 +11,16 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
   turns into turn items. Interrupt is `POST /v1/runs/{id}/stop`; Hermes approvals become T3
   approval requests and answer through `/v1/runs/{id}/approval`. Hermes may rotate a session id
   mid-run; the adapter follows the new id.
+- **Images go inline in the run request.** Hermes runs on another machine and can't read T3's
+  attachment store, so the adapter reads each image on the T3 server and sends it as a
+  `data:image/...;base64` `image_url` part in a one-message `input` array. `/v1/runs` passes that
+  content to the agent loop without normalizing it, so the parts must already be in the canonical
+  Chat Completions shape; a one-message array adds no history, so the session's own history still
+  applies. Hermes refuses bodies over 10 MB (`MAX_REQUEST_BYTES`), which base64 reaches at about
+  7.5 MB of images; the client refuses a larger request before sending. Steering
+  (`/v1/runs/{id}/steer`) takes text only, so a steer carrying an image sends nothing and adds a
+  failed item to the running turn instead of failing quietly in the outbox. Any image that can't
+  be read or sent fails the turn, never a text-only send.
 - **Hermes threads live in Scratch and in their own sidebar section.** `ThreadLaunchService`
   moves any new thread whose instance is a Hermes one into the Scratch project at its root, so the
   model picker and the section's **+** both work without a Hermes project. The main thread list

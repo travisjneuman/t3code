@@ -130,7 +130,10 @@ back on.
 
 ## Limits
 
-- Attachments aren't sent; the message names them instead.
+- Images (PNG, JPEG, GIF, WebP) are sent with the message, up to about 7 MB of images per
+  message. Other files aren't sent; the message names them instead.
+- An image can't be added to a run that is already working. Send it after the run finishes, or
+  queue the message.
 - T3's own text jobs, such as thread titles and commit messages, don't use Hermes, so they don't
   fill Hermes's session history.
 - Not available in the mobile app yet.

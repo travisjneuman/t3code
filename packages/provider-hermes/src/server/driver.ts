@@ -1,5 +1,6 @@
 import { ProviderDriverKind } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -32,7 +33,10 @@ const MAINTENANCE = makeManualOnlyProviderMaintenanceCapabilities({
   packageName: null,
 });
 
-export type HermesDriverEnv = IdAllocator.IdAllocatorV2 | ProviderHost.ProviderHost;
+export type HermesDriverEnv =
+  | IdAllocator.IdAllocatorV2
+  | ProviderHost.ProviderHost
+  | FileSystem.FileSystem;
 
 export const HermesDriver: ProviderDriver<HermesSettings, HermesDriverEnv> = {
   driverKind: DRIVER_KIND,

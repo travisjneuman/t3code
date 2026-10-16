@@ -47,6 +47,8 @@ export const dashboardConnectionOf = ({
 });
 
 const REQUEST_TIMEOUT_MS = 30_000;
+/** Hermes's API server answers 413 `body_too_large` above this (its `MAX_REQUEST_BYTES`). */
+const HERMES_MAX_REQUEST_BYTES = 10_000_000;
 const TERMINAL_EVENTS = new Set([
   "run.completed",
   "run.failed",
@@ -122,19 +124,34 @@ export const apiRequest = (
 ) =>
   requireApi(connection).pipe(
     Effect.andThen(
-      fetchJson(joinUrl(connection.apiUrl, path), {
-        what: `Hermes ${method} ${path.split("?")[0]}`,
-        method,
-        headers: {
-          Accept: "application/json",
-          ...(connection.apiKey ? { Authorization: `Bearer ${connection.apiKey}` } : {}),
-          ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
-          ...options.headers,
-        },
-        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      Effect.suspend(() => {
+        const what = `Hermes ${method} ${path.split("?")[0]}`;
+        const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+        const bytes = body === undefined ? 0 : Buffer.byteLength(body);
+        // Refused here so the user sees why, rather than a reset or a bare 413.
+        if (bytes > HERMES_MAX_REQUEST_BYTES)
+          return Effect.fail(
+            new HermesApiError({
+              code: "body_too_large",
+              detail: `${what} not sent: the request is ${formatMegabytes(bytes)} and Hermes accepts at most ${formatMegabytes(HERMES_MAX_REQUEST_BYTES)}.`,
+            }),
+          );
+        return fetchJson(joinUrl(connection.apiUrl, path), {
+          what,
+          method,
+          headers: {
+            Accept: "application/json",
+            ...(connection.apiKey ? { Authorization: `Bearer ${connection.apiKey}` } : {}),
+            ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+            ...options.headers,
+          },
+          ...(body === undefined ? {} : { body }),
+        });
       }),
     ),
   );
+
+const formatMegabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
 
 // ── Sessions ──────────────────────────────────────────────────────────
 
@@ -262,12 +279,26 @@ const decodeToolCalls = (value: unknown): HermesToolCall[] =>
     ];
   });
 
+/** A stored message's text; a multimodal message keeps its text parts and drops the images. */
+const messageText = (content: unknown) =>
+  typeof content === "string"
+    ? content
+    : Array.isArray(content)
+      ? content
+          .flatMap((part) =>
+            isRecord(part) && part.type === "text" && typeof part.text === "string"
+              ? [part.text]
+              : [],
+          )
+          .join("\n")
+      : "";
+
 const decodeMessage = (entry: unknown, index: number): HermesMessage | undefined =>
   isRecord(entry) && typeof entry.role === "string"
     ? {
         id: entry.id === undefined ? `index-${index}` : String(entry.id),
         role: entry.role,
-        content: typeof entry.content === "string" ? entry.content : "",
+        content: messageText(entry.content),
         timestamp: num(entry.timestamp),
         toolCalls: decodeToolCalls(entry.tool_calls),
         toolCallId: str(entry.tool_call_id),
@@ -303,8 +334,14 @@ export const modelOptions = (connection: HermesConnection) =>
 
 // ── Runs ──────────────────────────────────────────────────────────────
 
+/** A user-message part in the shape Hermes's agent loop reads natively. */
+export type HermesContentPart =
+  | { readonly type: "text"; readonly text: string }
+  | { readonly type: "image_url"; readonly image_url: { readonly url: string } };
+
 export interface HermesRunRequest {
-  readonly input: string;
+  /** Plain text, or the parts of one user message when it carries images. */
+  readonly input: string | ReadonlyArray<HermesContentPart>;
   readonly sessionId: string;
   readonly model?: string;
   readonly provider?: string;
@@ -322,7 +359,12 @@ export const startRun = (connection: HermesConnection, request: HermesRunRequest
   return apiRequest(connection, "POST", "/v1/runs", {
     headers: { "Idempotency-Key": request.idempotencyKey },
     body: {
-      input: request.input,
+      // `/v1/runs` takes the last message of an `input` array as the turn, content parts
+      // and all; one message adds no history, so the session keeps its own.
+      input:
+        typeof request.input === "string"
+          ? request.input
+          : [{ role: "user", content: request.input }],
       session_id: request.sessionId,
       ...(request.model ? { model: request.model } : {}),
       ...(request.provider ? { provider: request.provider } : {}),

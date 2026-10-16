@@ -1,7 +1,8 @@
 /**
  * Hermes Agent over its HTTP API. Hermes runs on another machine, so there is
  * no host process: each T3 thread is one Hermes session, each turn one
- * `/v1/runs` run, and its SSE event stream becomes T3 turn items.
+ * `/v1/runs` run, and its SSE event stream becomes T3 turn items. Images go
+ * inline in the run request because Hermes cannot read T3's attachment store.
  */
 import {
   ProviderDriverKind,
@@ -28,6 +29,7 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -35,6 +37,7 @@ import * as Stream from "effect/Stream";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import { isProviderNativeImageAttachment } from "@t3tools/provider-core/server/attachmentPrompt";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
@@ -228,6 +231,7 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
 ) {
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const providerHost = yield* ProviderHost.ProviderHost;
+  const fileSystem = yield* FileSystem.FileSystem;
   const connection = HermesApi.connectionOf(options.settings);
   // Fork add-on: Hermes T3 tools.
   const capabilities: OrchestrationV2ProviderCapabilities = options.settings.t3Tools
@@ -653,6 +657,25 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
         yield* updateSession("waiting");
       });
 
+      /** Marks a steering message with images as not delivered, inside the running turn. */
+      const notDelivered = Effect.fnUntraced(function* (turn: ActiveTurn, messageId: string) {
+        const time = yield* DateTime.now;
+        const base = baseItem(turn, `not-delivered:${messageId}`, time);
+        yield* publishRow(turn, base, "system", "failed", {
+          ...base,
+          type: "error",
+          status: "failed",
+          title: "Message not sent",
+          completedAt: time,
+          failure: makeProviderFailure({
+            class: "provider_error",
+            message:
+              "Hermes cannot take images while a run is active, so this message was not sent. Send it again after the run finishes.",
+            retryable: false,
+          }),
+        });
+      });
+
       const finish = Effect.fnUntraced(function* (
         turn: ActiveTurn,
         status: "completed" | "cancelled" | "interrupted" | "failed",
@@ -953,14 +976,70 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
         candidate.providerInstanceId === options.instanceId &&
         candidate.appThreadId === thread.appThreadId;
 
-      /** Hermes runs on another machine, so only the text goes; attachments are named. */
+      /** The message text; files other than images cannot reach Hermes, so they are named. */
       const promptText = (message: ProviderAdapter.ProviderAdapterV2TurnMessage) => {
-        const names = message.attachments.map((attachment) => attachment.name).filter(Boolean);
+        const names = message.attachments
+          .filter((attachment) => attachment.type !== "image")
+          .map((attachment) => attachment.name);
         const note = names.length
-          ? `\n\n(T3 Code could not send ${names.length === 1 ? "this attachment" : "these attachments"} to Hermes: ${names.join(", ")})`
+          ? `\n\n(T3 Code could not send ${names.length === 1 ? "this file" : "these files"} to Hermes: ${names.join(", ")})`
           : "";
         return `${message.text}${note}`.trim();
       };
+
+      /**
+       * Reads each image from T3's attachment store into a data URL part. Any image that
+       * cannot go fails the whole turn, so text never reaches Hermes looking complete
+       * without the image the user attached.
+       */
+      const imageParts = Effect.fnUntraced(function* (
+        message: ProviderAdapter.ProviderAdapterV2TurnMessage,
+        correlationId: string,
+      ) {
+        const parts: HermesApi.HermesContentPart[] = [];
+        for (const attachment of message.attachments) {
+          if (attachment.type !== "image") continue;
+          const log = {
+            correlationId,
+            attachmentId: attachment.id,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+          };
+          const fail = (category: string, detail: string) =>
+            Effect.logWarning("hermes.attachment.rejected", { ...log, category }).pipe(
+              Effect.andThen(Effect.fail(protocolError(detail))),
+            );
+          if (!isProviderNativeImageAttachment(attachment))
+            return yield* fail(
+              "unsupported_type",
+              `Hermes accepts PNG, JPEG, GIF, or WebP images; ${attachment.name} is ${attachment.mimeType}.`,
+            );
+          const path = providerHost.resolveAttachmentPath(attachment);
+          if (path === null)
+            return yield* fail(
+              "unresolved",
+              `T3 Code no longer has ${attachment.name}. Attach it again and resend.`,
+            );
+          const bytes = yield* fileSystem
+            .readFile(path)
+            .pipe(
+              Effect.catch(() =>
+                fail(
+                  "unreadable",
+                  `T3 Code could not read ${attachment.name}. Attach it again and resend.`,
+                ),
+              ),
+            );
+          parts.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${attachment.mimeType.toLowerCase()};base64,${Buffer.from(bytes).toString("base64")}`,
+            },
+          });
+          yield* Effect.logInfo("hermes.attachment.inlined", { ...log, bytes: bytes.byteLength });
+        }
+        return parts;
+      });
 
       const start = Effect.fnUntraced(function* (
         turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
@@ -977,7 +1056,8 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
         if (isBlockedHermesModel(selection.model))
           return yield* protocolError("This model is not offered through Hermes Agent");
         const text = promptText(turnInput.message);
-        if (!text) return yield* protocolError("Hermes Agent needs a text message");
+        const hasImages = turnInput.message.attachments.some((a) => a.type === "image");
+        if (!text && !hasImages) return yield* protocolError("Hermes Agent needs a text message");
         const { provider, model } = hermesRunModel(selection.model);
         const reasoningEffort = getModelSelectionStringOptionValue(selection, "reasoningEffort");
         const fast = getModelSelectionBooleanOptionValue(selection, "fastMode");
@@ -1040,9 +1120,12 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
           ...(options.settings.t3Tools ? [T3_TOOLS_INSTRUCTIONS] : []), // Fork add-on: Hermes T3 tools.
         ].join("\n\n");
         yield* Effect.gen(function* () {
+          const images = hasImages ? yield* imageParts(turnInput.message, nativeId) : [];
           const runId = yield* api(
             HermesApi.startRun(connection, {
-              input: text,
+              input: images.length
+                ? [...(text ? [{ type: "text" as const, text }] : []), ...images]
+                : text,
               sessionId: nativeSessionId!,
               ...(model ? { model } : {}),
               ...(provider ? { provider } : {}),
@@ -1063,7 +1146,24 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
                 : error instanceof Error
                   ? error.message
                   : "Hermes could not start the run.";
-            return eventPermit.withPermits(1)(finish(turn, "failed", detail));
+            const rejection =
+              error instanceof ProviderAdapter.ProviderAdapterProtocolError &&
+              error.payload instanceof HermesApi.HermesApiError
+                ? error.payload
+                : undefined;
+            const log =
+              hasImages && rejection && turn.runId === undefined
+                ? Effect.logWarning("hermes.attachment.rejected", {
+                    correlationId: nativeId,
+                    endpoint: "/v1/runs",
+                    category: rejection.status === undefined ? "network" : "http_rejected",
+                    status: rejection.status,
+                    code: rejection.code,
+                  })
+                : Effect.void;
+            return log.pipe(
+              Effect.andThen(eventPermit.withPermits(1)(finish(turn, "failed", detail))),
+            );
           }),
         );
       });
@@ -1170,6 +1270,19 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
           Effect.gen(function* () {
             const target = activeRun(args.providerTurnId, args.providerThread);
             if (!target) return yield* protocolError("This Hermes run cannot be steered");
+            // Hermes steers with text only. Nothing is sent, and the turn says so rather
+            // than a failed steer the outbox would retry out of sight.
+            if (args.message.attachments.some((attachment) => attachment.type === "image")) {
+              yield* Effect.logWarning("hermes.attachment.rejected", {
+                correlationId: target.turn.nativeId,
+                messageId: args.message.messageId,
+                attachmentIds: args.message.attachments.map((attachment) => attachment.id),
+                category: "steer_unsupported",
+              });
+              return yield* eventPermit.withPermits(1)(
+                notDelivered(target.turn, String(args.message.messageId)),
+              );
+            }
             const text = promptText(args.message);
             if (!text) return yield* protocolError("Hermes Agent needs a text message");
             yield* api(HermesApi.steerRun(connection, target.runId, text));
