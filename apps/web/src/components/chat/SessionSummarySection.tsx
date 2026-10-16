@@ -3,6 +3,7 @@ import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import type { LucideIcon } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { formatRelativeTimeLabel, formatRelativeTimeUntil } from "../../timestampFormat";
 import { StartTruncatedPath } from "../StartTruncatedPath";
@@ -41,6 +42,9 @@ export const SessionSummarySection = memo(function SessionSummarySection(props: 
 }) {
   const { view } = props;
   const { record } = view;
+  // The relative times read the clock while rendering; without this tick a
+  // memoized card keeps saying "just now" until its record changes.
+  useNowMinute();
   const PermissionsIcon = view.permissionsIcon;
   const count = (value: number) => value.toLocaleString();
   const cost =

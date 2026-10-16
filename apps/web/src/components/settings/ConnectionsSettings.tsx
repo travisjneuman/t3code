@@ -1437,34 +1437,40 @@ type SavedBackendListRowProps = {
   onAddRoute: (environment: EnvironmentPresentation) => void;
 };
 
+// Fork add-on: a status dot, so a live connection reads as on at a glance.
+const IDLE_STATUS_DOT = "bg-muted-foreground/40";
+
 function savedBackendStatus(environment: EnvironmentPresentation): {
   readonly text: string;
   readonly tone: "muted" | "error";
+  readonly dotClassName: string;
 } {
   if (!environment.entry.enabled && environment.connection.phase !== "unsupported")
-    return { text: "Off", tone: "muted" };
+    return { text: "Off", tone: "muted", dotClassName: IDLE_STATUS_DOT };
   const { connection } = environment;
   switch (connection.phase) {
     case "connected":
-      return { text: "Connected", tone: "muted" };
+      return { text: "Connected", tone: "muted", dotClassName: "bg-success" };
     case "connecting":
-      return { text: "Connecting", tone: "muted" };
+      return { text: "Connecting", tone: "muted", dotClassName: "bg-info" };
     case "reconnecting":
       return {
         text: connection.error ? `Reconnecting: ${connection.error}` : "Reconnecting",
         tone: "error",
+        dotClassName: "bg-warning",
       };
     case "unsupported":
-      return { text: "Client not supported", tone: "muted" };
+      return { text: "Client not supported", tone: "muted", dotClassName: IDLE_STATUS_DOT };
     case "error":
       return {
         text: connection.error ? `Connection failed: ${connection.error}` : "Connection failed",
         tone: "error",
+        dotClassName: "bg-destructive",
       };
     case "offline":
-      return { text: "Offline", tone: "muted" };
+      return { text: "Offline", tone: "muted", dotClassName: IDLE_STATUS_DOT };
     case "available":
-      return { text: "Not connected", tone: "muted" };
+      return { text: "Not connected", tone: "muted", dotClassName: IDLE_STATUS_DOT };
   }
 }
 
@@ -1597,6 +1603,13 @@ function SavedBackendListRow({
       dimmed={!enabled}
       subtitle={
         <span className="flex min-w-0 items-center gap-1">
+          <span
+            aria-hidden
+            className={cn(
+              "me-0.5 size-1.5 shrink-0 rounded-full",
+              resumingServerUpdate ? "bg-info" : status.dotClassName,
+            )}
+          />
           <Tooltip>
             {/* The status can change while the tooltip is open, and base-ui only
                 re-measures the popup when the trigger's payload changes. */}

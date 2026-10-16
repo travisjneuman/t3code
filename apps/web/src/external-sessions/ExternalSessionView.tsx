@@ -95,7 +95,7 @@ const TOOL_LABEL_MAX_CHARS = 240;
 
 const LIVENESS_DESCRIPTION = {
   running: "A turn is in progress",
-  idle: "Active in the last hour",
+  idle: "No turn running; active in the last hour",
   recent: "No activity in the last hour",
 } as const satisfies Record<ExternalSessionSummary["liveness"], string>;
 

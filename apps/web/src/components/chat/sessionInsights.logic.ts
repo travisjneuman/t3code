@@ -11,6 +11,7 @@ import type {
   SessionContextBreakdown,
   SessionContextCategoryKind,
   SessionContextContributor,
+  SessionMcpServer,
   SessionMcpServerStatus,
   SessionRecord,
 } from "@t3tools/contracts";
@@ -132,7 +133,8 @@ export const SESSION_STATUS_PRESENTATION: Record<
 > = {
   starting: { label: "Starting", dotClassName: "bg-info" },
   running: { label: "Working", dotClassName: "bg-info" },
-  waiting: { label: "Waiting", dotClassName: "bg-warning" },
+  // Mid-turn on a tool or subagent; the sidebar calls this Working too.
+  waiting: { label: "Working", dotClassName: "bg-info" },
   ready: { label: "Live", dotClassName: "bg-success" },
   stopped: { label: "Idle", dotClassName: "bg-muted-foreground/45" },
   error: { label: "Error", dotClassName: "bg-destructive" },
@@ -145,7 +147,8 @@ export const RECORD_STATUS_PRESENTATION: Record<
   { readonly label: string; readonly dotClassName: string }
 > = {
   active: { label: "Active", dotClassName: "bg-success" },
-  idle: { label: "Idle", dotClassName: "bg-success" },
+  // Idle reads the same wherever it appears: not working, grey.
+  idle: { label: "Idle", dotClassName: "bg-muted-foreground/45" },
   ended: { label: "Ended", dotClassName: "bg-muted-foreground/45" },
 };
 
@@ -178,8 +181,32 @@ export const MCP_SERVER_STATUS_PRESENTATION: Record<
   "needs-auth": { label: "Needs auth", dotClassName: "bg-warning" },
   failed: { label: "Failed", dotClassName: "bg-destructive" },
   disabled: { label: "Disabled", dotClassName: "bg-muted-foreground/45" },
-  configured: { label: "Configured", dotClassName: "bg-muted-foreground/45" },
+  // Fork add-on: an enabled server the agent does not report on reads as on,
+  // not off; the hollow ring keeps it apart from a confirmed connection.
+  configured: { label: "Enabled", dotClassName: "border-[1.5px] border-success" },
 };
+
+const UNVERIFIED_MCP_SERVER_HINT =
+  "Enabled in the agent's configuration. The agent does not report whether it connected.";
+
+/**
+ * A server's dot, label and tooltip. A server that is up but reports an error
+ * (a failed call, a warning) shows amber, so only `failed` reads red. Fork add-on.
+ */
+export function mcpServerStatusPresentation(server: SessionMcpServer): {
+  readonly label: string;
+  readonly dotClassName: string;
+  readonly hint: string | null;
+} {
+  const base = MCP_SERVER_STATUS_PRESENTATION[server.status];
+  const degraded =
+    server.error !== undefined && (server.status === "connected" || server.status === "configured");
+  return {
+    label: base.label,
+    dotClassName: degraded ? "bg-warning" : base.dotClassName,
+    hint: server.error ?? (server.status === "configured" ? UNVERIFIED_MCP_SERVER_HINT : null),
+  };
+}
 
 // Theme palette tokens with dark-mode steps, so adjacent categories stay
 // distinct on both canvases.

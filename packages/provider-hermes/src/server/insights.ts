@@ -367,22 +367,88 @@ export const readHermesSessionOutputs = (
   return [...byPath.values()];
 };
 
+interface McpCallOutcomes {
+  readonly succeeded: boolean;
+  /** The newest result's error, when that result failed. */
+  readonly lastError: string | undefined;
+}
+
+const MAX_MCP_ERROR_LENGTH = 240;
+
+const resultError = (content: string): string => {
+  const result = parseObject(content);
+  const detail =
+    (result === null ? undefined : text(result.error)) ?? "The call returned an error.";
+  return detail.length > MAX_MCP_ERROR_LENGTH
+    ? `${detail.slice(0, MAX_MCP_ERROR_LENGTH - 1)}…`
+    : detail;
+};
+
+interface ToolResult {
+  readonly name: string;
+  readonly failed: boolean;
+  readonly content: string;
+}
+
+/** The session's tool results, oldest first, named by the tool Hermes registered. */
+const toolResults = (messages: ReadonlyArray<HermesMessage>): ReadonlyArray<ToolResult> => {
+  const callNames = new Map<string, string>();
+  const results: Array<ToolResult> = [];
+  for (const message of messages) {
+    for (const call of message.toolCalls) callNames.set(call.id, call.name);
+    if (message.role !== "tool" || message.toolCallId === null) continue;
+    const name = callNames.get(message.toolCallId) ?? message.toolName;
+    if (name === undefined || name === null) continue;
+    results.push({ name, failed: failedResult(message.content), content: message.content });
+  }
+  return results;
+};
+
+/**
+ * What this session's calls to one server's tools returned. Hermes registers
+ * them as `mcp__<server>__<tool>` with every character outside
+ * `[A-Za-z0-9_]` replaced by `_` (`tools/mcp_tool_schema.py`).
+ */
+const mcpCallOutcomes = (
+  serverName: string,
+  results: ReadonlyArray<ToolResult>,
+): McpCallOutcomes | null => {
+  const prefix = `mcp__${serverName.replace(/[^A-Za-z0-9_]/g, "_")}__`;
+  let succeeded = false;
+  let latest: ToolResult | undefined;
+  for (const result of results) {
+    if (!result.name.startsWith(prefix)) continue;
+    if (!result.failed) succeeded = true;
+    latest = result;
+  }
+  if (latest === undefined) return null;
+  return { succeeded, lastError: latest.failed ? resultError(latest.content) : undefined };
+};
+
 /**
  * Servers from the agent's MCP configuration. Hermes reports what is
- * configured, not what connected, so an enabled server shows as configured.
+ * configured, not what connected, so an enabled server shows as configured
+ * until this session's own calls to its tools show how it answered.
  * Commands, URLs and environment values are never read past the name.
  */
-const decodeMcpServers = (body: unknown): ReadonlyArray<SessionMcpServer> | null => {
+const decodeMcpServers = (
+  body: unknown,
+  messages: ReadonlyArray<HermesMessage> | null,
+): ReadonlyArray<SessionMcpServer> | null => {
   if (!isRecord(body) || !Array.isArray(body.servers)) return null;
+  const results = messages === null ? null : toolResults(messages);
   return body.servers.flatMap((entry): Array<SessionMcpServer> => {
     if (!isRecord(entry)) return [];
     const name = text(entry.name);
     if (name === undefined) return [];
     const toolCount = Array.isArray(entry.tools) ? entry.tools.length : undefined;
+    const enabled = entry.enabled !== false;
+    const outcomes = enabled && results !== null ? mcpCallOutcomes(name, results) : null;
     return [
       {
         name,
-        status: entry.enabled === false ? "disabled" : "configured",
+        status: !enabled ? "disabled" : outcomes?.succeeded ? "connected" : "configured",
+        ...(outcomes?.lastError === undefined ? {} : { error: outcomes.lastError }),
         ...(toolCount === undefined || toolCount === 0 ? {} : { toolCount }),
       },
     ];
@@ -448,7 +514,7 @@ export const read = (options: {
     return {
       session,
       context: messages === null ? null : estimateContext(messages, model, maxTokens ?? 0),
-      mcpServers: decodeMcpServers(mcpBody),
+      mcpServers: decodeMcpServers(mcpBody, messages),
       outputs: messages === null ? null : readHermesSessionOutputs(messages),
     };
   });
