@@ -51,6 +51,11 @@ export const HermesSessionSummary = Schema.Struct({
   pinned: Schema.Boolean,
   /** The T3 thread already bound to this session, if any. */
   threadId: Schema.NullOr(ThreadId),
+  /**
+   * On a subagent Hermes started with `delegate_task`: the listed session it
+   * belongs under. Absent on top-level rows and from servers that predate it.
+   */
+  parentSessionId: Schema.optional(TrimmedNonEmptyString),
 });
 export type HermesSessionSummary = typeof HermesSessionSummary.Type;
 

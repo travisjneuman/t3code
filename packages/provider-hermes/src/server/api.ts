@@ -168,6 +168,13 @@ export interface HermesSession {
   readonly pinned: boolean;
   readonly archived: boolean;
   readonly parentSessionId: string | null;
+  /** `compression` when the conversation went on in a continuation session. */
+  readonly endReason: string | null;
+  /**
+   * Set on a listed row that Hermes projected onto its newest compression
+   * segment: the chain's first session, which keeps the conversation's children.
+   */
+  readonly lineageRootId: string | null;
 }
 
 const str = (value: unknown) => (typeof value === "string" && value ? value : null);
@@ -189,17 +196,25 @@ export const decodeSession = (value: unknown): HermesSession | undefined => {
     pinned: value.pinned === true,
     archived: value.archived === true,
     parentSessionId: str(value.parent_session_id),
+    endReason: str(value.end_reason),
+    lineageRootId: str(value._lineage_root_id),
   };
 };
 
 export const listSessions = (
   connection: HermesConnection,
-  options: { readonly limit: number; readonly offset: number },
+  options: {
+    readonly limit: number;
+    readonly offset: number;
+    /** Also list subagent runs and every compression segment, each as its own row. */
+    readonly includeChildren?: boolean;
+  },
 ) =>
   apiRequest(
     connection,
     "GET",
-    `/api/sessions?limit=${Math.min(200, options.limit)}&offset=${options.offset}`,
+    `/api/sessions?limit=${Math.min(200, options.limit)}&offset=${options.offset}` +
+      (options.includeChildren ? "&include_children=true" : ""),
   ).pipe(
     Effect.map((body) => ({
       sessions: (isRecord(body) && Array.isArray(body.data) ? body.data : []).flatMap((entry) => {

@@ -390,15 +390,87 @@ const make = Effect.gen(function* () {
       Effect.mapError(failed("Could not read T3's Hermes threads.")),
     );
 
+  /**
+   * Hermes's own subagents (`delegate_task` runs), each with the listed row it
+   * belongs under. A subagent's parent is usually a middle compression segment
+   * of a long conversation, and Hermes lists that conversation under its newest
+   * segment, so the walk climbs `parent_session_id` until it meets a listed id
+   * or a listed row's chain root. One with no listed ancestor is dropped.
+   * It is a second walk because `include_children` also turns off that
+   * newest-segment projection, and bound threads key on the projected ids.
+   *
+   * The child listing is ordered like the top-level one, a compression segment
+   * at its chain's newest activity, so it stops at the first row older than
+   * `floor` that is not a segment: every row after it is older too.
+   */
+  const subagentsUnder = Effect.fn("HermesSessions.subagentsUnder")(function* (
+    connection: HermesApi.HermesConnection,
+    listedIdOf: ReadonlyMap<string, string>,
+    floor: number,
+  ) {
+    if (listedIdOf.size === 0) return [];
+    const parentOf = new Map<string, string | null>();
+    const subagents: HermesApi.HermesSession[] = [];
+    pages: for (let page = 0; page < MAX_LIST_PAGES; page++) {
+      const result = yield* HermesApi.listSessions(connection, {
+        limit: LIST_PAGE_SIZE,
+        offset: page * LIST_PAGE_SIZE,
+        includeChildren: true,
+      });
+      for (const session of result.sessions) {
+        if (parentOf.has(session.id)) continue;
+        // Pins are back-filled past the page whatever their age.
+        if (
+          !session.pinned &&
+          session.endReason !== "compression" &&
+          toMs(session.lastActive) < floor
+        ) {
+          break pages;
+        }
+        parentOf.set(session.id, session.parentSessionId);
+        if (session.source === "subagent" && !listedIdOf.has(session.id)) subagents.push(session);
+      }
+      if (!result.hasMore) break;
+    }
+    return subagents.flatMap((session) => {
+      const seen = new Set<string>();
+      let current = session.parentSessionId;
+      while (current !== null && !seen.has(current)) {
+        const listedId = listedIdOf.get(current);
+        if (listedId !== undefined) return [{ session, parentSessionId: listedId }];
+        seen.add(current);
+        current = parentOf.get(current) ?? null;
+      }
+      return [];
+    });
+  });
+
   const list: HermesSessions["Service"]["list"] = Effect.fn("HermesSessions.list")(
     function* (input) {
       const connection = yield* connectionOf(input.instanceId);
       const bound = yield* boundThreads(input.instanceId);
       const cutoff = Date.now() - HERMES_SESSIONS_WINDOW_MS;
       const olderAllowed = input.extra * HERMES_SESSIONS_PAGE;
+      const summaryOf = (session: HermesApi.HermesSession): HermesSessionSummary => {
+        const thread = bound.get(session.id);
+        return {
+          id: session.id,
+          title: session.title ?? session.preview ?? "Untitled session",
+          source: session.source,
+          model: session.model,
+          lastActiveAt: toMs(session.lastActive),
+          messageCount: session.messageCount,
+          pinned: session.pinned,
+          // An archived thread is taken up again by continue, as a fresh pick.
+          threadId: thread === undefined || thread.archived ? null : thread.threadId,
+        };
+      };
       const byId = new Map<string, HermesSessionSummary>();
+      // Each listed row's id, by itself and by its compression chain's root.
+      const listedIdOf = new Map<string, string>();
       let older = 0;
       let hasMore = false;
+      let oldestListed = cutoff;
       // Hermes lists by last activity, newest first, with every pin back-filled
       // onto each page; the window and "Load more" decide where to stop.
       pages: for (let page = 0; page < MAX_LIST_PAGES; page++) {
@@ -408,31 +480,40 @@ const make = Effect.gen(function* () {
         }).pipe(Effect.mapError(fromApi));
         for (const session of result.sessions) {
           if (byId.has(session.id)) continue;
-          const lastActiveAt = toMs(session.lastActive);
-          if (!session.pinned && lastActiveAt < cutoff) {
+          const summary = summaryOf(session);
+          if (!session.pinned && summary.lastActiveAt < cutoff) {
             if (older >= olderAllowed) {
               hasMore = true;
               break pages;
             }
             older++;
+            oldestListed = Math.min(oldestListed, summary.lastActiveAt);
           }
-          const thread = bound.get(session.id);
-          byId.set(session.id, {
-            id: session.id,
-            title: session.title ?? session.preview ?? "Untitled session",
-            source: session.source,
-            model: session.model,
-            lastActiveAt,
-            messageCount: session.messageCount,
-            pinned: session.pinned,
-            // An archived thread is taken up again by continue, as a fresh pick.
-            threadId: thread === undefined || thread.archived ? null : thread.threadId,
-          });
+          byId.set(session.id, summary);
+          listedIdOf.set(session.id, session.id);
+          if (session.lineageRootId !== null) listedIdOf.set(session.lineageRootId, session.id);
         }
         if (!result.hasMore) break;
         if (page === MAX_LIST_PAGES - 1) hasMore = true;
       }
-      const sessions = [...byId.values()].sort(
+      // Subagents reach back as far as the listed rows do. Failing to read them
+      // costs only the nesting, never the list.
+      const subagents = yield* subagentsUnder(
+        connection,
+        listedIdOf,
+        hasMore ? oldestListed : 0,
+      ).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Hermes subagents unavailable", error).pipe(Effect.as([])),
+        ),
+      );
+      const sessions = [
+        ...byId.values(),
+        ...subagents.map(({ session, parentSessionId }) => ({
+          ...summaryOf(session),
+          parentSessionId,
+        })),
+      ].sort(
         (left, right) =>
           Number(right.pinned) - Number(left.pinned) || right.lastActiveAt - left.lastActiveAt,
       );

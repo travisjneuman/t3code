@@ -3,8 +3,9 @@
  * T3 threads running on a Hermes instance merged with the sessions that Hermes
  * holds and T3 has not opened (Discord, cron, the CLI). Pinned sessions first,
  * then the last few days; "Load more" reaches further back and "Show less"
- * returns to the window. Cmd/Ctrl-click and Shift-click select
- * several rows for the right-click actions. Fork add-on: Hermes provider.
+ * returns to the window. Subagents Hermes started sit indented under their
+ * parent. Cmd/Ctrl-click and Shift-click select several rows for the
+ * right-click actions. Fork add-on: Hermes provider.
  */
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -91,6 +92,8 @@ interface HermesRow {
   readonly lastActiveAt: number;
   readonly pinned: boolean;
   readonly running: boolean;
+  /** A subagent's parent row. */
+  readonly parentKey: string | null;
 }
 
 interface Listed {
@@ -116,12 +119,13 @@ function mergeRows(
   const rows: HermesRow[] = [];
   const claimed = new Set<string>();
   const sessions = listed?.sessions ?? [];
+  const sessionKey = (id: string) => `${target.environmentId}\u0000session:${id}`;
   for (const session of sessions) {
     const thread = session.threadId === null ? undefined : byThreadId.get(session.threadId);
     if (thread !== undefined) claimed.add(thread.id);
     const threadActiveAt = thread === undefined ? 0 : Date.parse(thread.updatedAt);
     rows.push({
-      key: `${target.environmentId}\u0000session:${session.id}`,
+      key: sessionKey(session.id),
       environmentId: target.environmentId,
       instanceId: target.instanceId,
       session,
@@ -130,12 +134,16 @@ function mergeRows(
       lastActiveAt: Math.max(session.lastActiveAt, threadActiveAt),
       pinned: session.pinned,
       running: threadRuntimeIsActive(thread?.runtime),
+      parentKey: session.parentSessionId === undefined ? null : sessionKey(session.parentSessionId),
     });
   }
   // Threads Hermes has not listed: new ones before their first reply lands,
   // or ones past the loaded window. The latter show once "Load more" reaches them.
   const oldestListed = sessions.reduce(
-    (oldest, session) => (session.pinned ? oldest : Math.min(oldest, session.lastActiveAt)),
+    (oldest, session) =>
+      session.pinned || session.parentSessionId !== undefined
+        ? oldest
+        : Math.min(oldest, session.lastActiveAt),
     Date.now() - HERMES_SESSIONS_WINDOW_MS,
   );
   const floor = listed === undefined || listed.hasMore ? oldestListed : 0;
@@ -156,9 +164,34 @@ function mergeRows(
       lastActiveAt,
       pinned: false,
       running: threadRuntimeIsActive(thread.runtime),
+      parentKey: null,
     });
   }
   return rows;
+}
+
+const newestFirst = (left: HermesRow, right: HermesRow) => right.lastActiveAt - left.lastActiveAt;
+
+/**
+ * Pinned rows first, then newest, each followed by its subagents. A subagent
+ * whose parent is not listed is left out.
+ */
+function nestRows(rows: ReadonlyArray<HermesRow>): HermesRow[] {
+  const topLevel: HermesRow[] = [];
+  const childrenOf = new Map<string, HermesRow[]>();
+  for (const row of rows) {
+    if (row.parentKey === null) {
+      topLevel.push(row);
+      continue;
+    }
+    const children = childrenOf.get(row.parentKey) ?? [];
+    children.push(row);
+    childrenOf.set(row.parentKey, children);
+  }
+  topLevel.sort(
+    (left, right) => Number(right.pinned) - Number(left.pinned) || newestFirst(left, right),
+  );
+  return topLevel.flatMap((row) => [row, ...(childrenOf.get(row.key)?.sort(newestFirst) ?? [])]);
 }
 
 export function HermesSidebarSection() {
@@ -308,20 +341,20 @@ export function HermesSidebarSection() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  const rows = useMemo(() => {
-    const merged = targets.flatMap((target) =>
-      mergeRows(
-        target,
-        listed.get(targetKey(target)),
-        threadsByTarget.get(targetKey(target)) ?? [],
-        activeThreadKey,
+  const rows = useMemo(
+    () =>
+      nestRows(
+        targets.flatMap((target) =>
+          mergeRows(
+            target,
+            listed.get(targetKey(target)),
+            threadsByTarget.get(targetKey(target)) ?? [],
+            activeThreadKey,
+          ),
+        ),
       ),
-    );
-    return merged.sort(
-      (left, right) =>
-        Number(right.pinned) - Number(left.pinned) || right.lastActiveAt - left.lastActiveAt,
-    );
-  }, [targets, listed, threadsByTarget, activeThreadKey]);
+    [targets, listed, threadsByTarget, activeThreadKey],
+  );
   const hasMore = targets.some((target) => listed.get(targetKey(target))?.hasMore === true);
 
   // Collapsed, the shelf still lists running sessions, like Other Agents.
@@ -329,6 +362,8 @@ export function HermesSidebarSection() {
     () => (expanded ? rows : rows.filter((row) => row.running)),
     [expanded, rows],
   );
+  // Collapsed, a running subagent may show without its parent; it is not indented then.
+  const visibleKeys = useMemo(() => new Set(visibleRows.map((row) => row.key)), [visibleRows]);
   // Shift-click ranges and multi-row actions cover only the rows on screen.
   const rowsRef = useRef(visibleRows);
   rowsRef.current = visibleRows;
@@ -703,6 +738,7 @@ export function HermesSidebarSection() {
               }
               isSelected={selected.has(row.key)}
               isOpening={opening.has(row.key)}
+              isNested={row.parentKey !== null && visibleKeys.has(row.parentKey)}
               nowMinute={nowMinute}
               onClick={handleClick}
               onContextMenu={handleContextMenu}
@@ -755,6 +791,8 @@ const HermesLine = memo(function HermesLine(props: {
   isSelected: boolean;
   /** Its session is being opened in T3. */
   isOpening: boolean;
+  /** A subagent shown under its parent row. */
+  isNested: boolean;
   nowMinute: string;
   onClick: (row: HermesRow, event: MouseEvent) => void;
   onContextMenu: (row: HermesRow, position: MenuPosition, anchor: Element) => void;
@@ -808,7 +846,7 @@ const HermesLine = memo(function HermesLine(props: {
     className,
   };
   return (
-    <li className="list-none py-px">
+    <li className={cn("list-none py-px", props.isNested && "pl-4")}>
       {row.thread !== null ? (
         <Link
           to="/$environmentId/$threadId"
