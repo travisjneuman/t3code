@@ -3,7 +3,6 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import { SectionCollapseToggle, useSectionCollapse } from "./ThreadDetailsSectionToggle"; // Fork add-on: collapsible sections.
 
-/** Sections share header and content insets in both the sidebar and popover. */
 export function ThreadDetailsSection({
   headingId,
   title,
