@@ -39,3 +39,13 @@ than ids like `openai-codex`. Codex models under Pi are named as OpenAI writes t
 A model whose name starts with its group's name and a space, such as **Grok 4.20** under
 **Grok**, keeps its full name; T3 Code would show it as **4.20**. A name with punctuation after
 the group's name, such as **OpenCode Zen: Step 5**, is still shortened to **Step 5**.
+
+## Retired models move to their successor
+
+When a provider replaces a model with a newer id, saved choices follow it. Pi's **OpenAI** models
+replace the legacy `openai-codex` ones, so once Pi reports that you are signed in, a default,
+worker, preset, project or text generation model saved as `openai-codex/gpt-6.1-sol` becomes
+`openai/gpt-6.1-sol`. Hidden models, model order and favorites move the same way.
+
+A saved model that the provider no longer lists and that has no successor stays as it is. Model
+pickers in Settings show it as **Unavailable**, so you can see what still runs and pick another.

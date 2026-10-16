@@ -86,7 +86,8 @@ export function resolveModelPickerSelectedModel(input: {
       availableModels.find((option) => option.isDefault)
     );
   }
-  return input.options.find((option) => option.slug === input.model);
+  const exact = input.options.find((option) => option.slug === input.model); // Fork add-on: retired models.
+  return exact ?? input.options.find((option) => option.supersedes?.includes(input.model)); // Fork add-on: retired models.
 }
 
 export function shouldIncludeModelPickerOption(input: {
