@@ -35,7 +35,8 @@ stays collapsed or expanded across threads and restarts.
   and the skills or commands they advertise when they report them. A breakdown marked **Estimated**, with `~` before its numbers, was counted
   from the session's stored text rather than reported by the provider; hover the label for what
   it leaves out. **Compact context** compacts the conversation when the provider supports it.
-- **Connectors**: the MCP servers the agent itself loaded, with their status (Connected, Pending,
+- **Connectors**: the MCP servers and connectors (claude.ai connectors, Codex apps) the agent
+  itself loaded, with their status (Connected, Pending,
   Needs auth, Failed, Disabled, or Configured when the agent reports only its configuration),
   version and tool count. Hover a failed server to see its error.
 - **Outputs**: files the session changed, newest first, with the lines added and removed in all of

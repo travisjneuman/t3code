@@ -388,8 +388,8 @@ export const makeClaudeSource = (desktopArchive?: ClaudeDesktopArchive): Externa
         });
         return {
           session,
-          context: claudeContextBreakdown(index, window),
-          mcpServers: claudeMcpServers(index),
+          context: claudeContextBreakdown(index, window, desktop?.connectorNames),
+          mcpServers: claudeMcpServers(index, desktop?.connectorNames),
           modelUsage,
         };
       }),

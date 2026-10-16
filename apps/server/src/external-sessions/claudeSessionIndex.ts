@@ -435,12 +435,16 @@ const mcpTool = (name: string): { readonly server: string; readonly tool: string
   return { server: name.slice(5, separator), tool: name.slice(separator + 2) };
 };
 
-/** Server names as the CLI reported them, keyed by their normalized form. */
-const serverNames = (index: ClaudeSessionIndex) => {
+/**
+ * Server names as the CLI reported them, keyed by their normalized form. A
+ * claude.ai connector is reported by its id, so a known connector name wins.
+ */
+const serverNames = (index: ClaudeSessionIndex, connectorNames: ReadonlyMap<string, string>) => {
   const names = new Map<string, string>();
   for (const name of [...index.mcpInstructions.keys(), ...index.mcpProblems.keys()]) {
     names.set(normalizeServer(name), name);
   }
+  for (const [id, name] of connectorNames) names.set(normalizeServer(id), name);
   return names;
 };
 
@@ -451,8 +455,9 @@ const serverNames = (index: ClaudeSessionIndex) => {
  */
 export const claudeMcpServers = (
   index: ClaudeSessionIndex,
+  connectorNames: ReadonlyMap<string, string> = new Map(),
 ): ReadonlyArray<SessionMcpServer> | null => {
-  const names = serverNames(index);
+  const names = serverNames(index, connectorNames);
   const servers = new Map<string, { status: SessionMcpServer["status"]; tools: number }>();
   const server = (normalized: string) => {
     let entry = servers.get(normalized);
@@ -492,6 +497,7 @@ const ESTIMATE_NOTE =
 export const claudeContextBreakdown = (
   index: ClaudeSessionIndex,
   window: ClaudeContextWindow | null,
+  connectorNames: ReadonlyMap<string, string> = new Map(),
 ): SessionContextBreakdown | null => {
   const total = index.contextTokens;
   if (total === null || window === null) return null;
@@ -501,7 +507,7 @@ export const claudeContextBreakdown = (
   ]);
   const skills = namedContributors(index.skills);
   const agents = namedContributors(index.customAgents);
-  const names = serverNames(index);
+  const names = serverNames(index, connectorNames);
   const mcpTools = [...index.deferredTools].flatMap((name): Array<SessionContextContributor> => {
     const tool = mcpTool(name);
     if (tool === null) return [];
