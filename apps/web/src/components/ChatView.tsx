@@ -622,7 +622,12 @@ import { useAssetUrls } from "../assets/assetUrls";
 import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
 import { recallableComposerPrompt } from "./chat/composerPromptHistory";
 import { observeResize } from "~/lib/observeResize";
-import { HERMES_DRIVER, hermesAgentName, hermesMachineName } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
+import {
+  HERMES_DRIVER,
+  hermesAgentName,
+  hermesMachineName,
+  hermesRunLocation,
+} from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
 
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
@@ -3285,6 +3290,11 @@ export default function ChatView(props: ChatViewProps) {
         : null,
     [activeProviderInstanceId, multipleModelSelections, selectedProvider, settings],
   );
+  // Fork add-on: Hermes provider. Run on names Hermes's machine and stays fixed.
+  const hermesFixedRunLocation = useMemo(
+    () => hermesRunLocation(hermesAgent, logicalProjectEnvironments),
+    [hermesAgent, logicalProjectEnvironments],
+  );
   const { enabled: interactionModeEnabled, interactionMode } = resolveComposerInteractionMode({
     planModeEnabled: settings.planModeEnabled,
     provider: activeProviderStatus,
@@ -4256,7 +4266,7 @@ export default function ChatView(props: ChatViewProps) {
     persistInActiveThreads: settings.persistComposerContextStrip,
     hasActiveProject: activeProject !== null && !showProviderSubagentBar,
     isGitRepo,
-    showEnvironmentIndicator: showComposerEnvironmentIndicator,
+    showEnvironmentIndicator: showComposerEnvironmentIndicator || hermesAgent !== null, // Fork add-on: Hermes provider.
     hostsRestingComposerControls: routeKind === "server",
   });
   const showComposerContextStrip = shouldShowComposerContextStrip({
@@ -4264,7 +4274,7 @@ export default function ChatView(props: ChatViewProps) {
     persistInActiveThreads: settings.persistComposerContextStrip,
     hasActiveProject: activeProject !== null && !showProviderSubagentBar,
     isGitRepo,
-    showEnvironmentIndicator: showComposerEnvironmentIndicator,
+    showEnvironmentIndicator: showComposerEnvironmentIndicator || hermesAgent !== null, // Fork add-on: Hermes provider.
     hostsRestingComposerControls: routeKind === "server" && restingComposerControlsVisible,
   });
   const mountComposerModelStrip =
@@ -4373,7 +4383,7 @@ export default function ChatView(props: ChatViewProps) {
     setDraftThreadContext,
   ]);
   const onAutoEnvironment = () => {
-    if (envLocked || !draftId) return;
+    if (envLocked || hermesAgent || !draftId) return; // Fork add-on: Hermes provider.
     if (composerHasAttachments) {
       toastManager.add({
         type: "warning",
@@ -4415,7 +4425,7 @@ export default function ChatView(props: ChatViewProps) {
   }, [draftId, activeProjectKey]);
 
   const onEnvironmentChange = (nextEnvironmentId: EnvironmentId) => {
-    if (envLocked || !draftId || sendInFlightRef.current) return;
+    if (envLocked || hermesAgent || !draftId || sendInFlightRef.current) return; // Fork add-on: Hermes provider.
     const originalDraft = getDraftSession(draftId);
     if (!originalDraft || originalDraft.promotedTo) return;
     const target = logicalProjectEnvironments.find(
@@ -7866,7 +7876,7 @@ export default function ChatView(props: ChatViewProps) {
       }
 
       if (command === "composer.cycleHost") {
-        if (envLocked || !draftId || !hasMultipleEnvironments) return;
+        if (envLocked || hermesAgent || !draftId || !hasMultipleEnvironments) return; // Fork add-on: Hermes provider.
         event.preventDefault();
         event.stopPropagation();
         if (event.repeat) return;
@@ -7996,6 +8006,7 @@ export default function ChatView(props: ChatViewProps) {
     draftId,
     environmentId,
     envLocked,
+    hermesAgent, // Fork add-on: Hermes provider.
     hasMultipleEnvironments,
     logicalProjectEnvironments,
     onEnvironmentChangeStable,
@@ -11389,7 +11400,7 @@ export default function ChatView(props: ChatViewProps) {
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}
                                 threadId={activeThread.id}
-                                showGitControls={isGitRepo}
+                                showGitControls={isGitRepo && !hermesAgent} // Fork add-on: Hermes works in its own workspace.
                                 {...(routeKind === "draft" && draftId ? { draftId } : {})}
                                 onEnvModeChange={onEnvModeChangeStable}
                                 startFromOrigin={startFromOrigin}
@@ -11422,6 +11433,7 @@ export default function ChatView(props: ChatViewProps) {
                                 availableEnvironments={logicalProjectEnvironments}
                                 composerControlsHostRef={setRestingComposerControlsHost}
                                 contextStripVisible={showComposerContextStrip}
+                                fixedRunLocation={hermesFixedRunLocation} // Fork add-on: Hermes provider.
                               />
                             </div>
                           )}
