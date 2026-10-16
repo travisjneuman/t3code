@@ -133,7 +133,11 @@ back on.
 ## Limits
 
 - Images (PNG, JPEG, GIF, WebP) are sent with the message, up to about 7 MB of images per
-  message. Other files aren't sent; the message names them instead.
+  message. Large PNG and JPEG images are scaled down to 2000 pixels on their long side first, so
+  the limit mostly matters for several images at once. A message over it isn't sent, and its error
+  says so. Other files aren't sent; the message names them instead.
+- Hermes may not be able to look at an image from an earlier message again. Attach it again to
+  ask about it later.
 - An image can't be added to a run that is already working. Send it after the run finishes, or
   queue the message.
 - T3's own text jobs, such as thread titles and commit messages, don't use Hermes, so they don't
