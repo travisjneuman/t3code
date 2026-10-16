@@ -6508,6 +6508,20 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 cursor = response.nextCursor ?? undefined;
                 if (cursor === undefined) break;
               }
+              // Installed connectors run behind Codex's apps runtime, so each
+              // enabled one gets its own row; they are an enrichment.
+              const apps = yield* client.request("app/installed", { threadId }).pipe(
+                Effect.map((response) => response.apps),
+                Effect.orElseSucceed(() => []),
+              );
+              for (const app of apps) {
+                if (!app.enabled) continue;
+                const server = sessionMcpServer({
+                  name: app.runtimeName ?? app.id,
+                  status: app.callable ? "connected" : "configured",
+                });
+                if (server !== undefined) servers.push(server);
+              }
               return servers;
             }).pipe(Effect.mapError(mcpAppsError("Failed to list Codex MCP servers."))),
         };

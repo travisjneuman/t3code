@@ -4,9 +4,10 @@
  * `CLAUDE_CODE_AUTO_COMPACT_WINDOW`) capped at the model's window, else the
  * model's window from T3's Claude catalog. The auto-compact threshold and
  * buffer follow the CLI's own arithmetic (Claude Code 2.1.30x): the threshold
- * sits `min(max output, 20k) + 13k` below the window. Only the two
- * auto-compact keys are kept from each settings file. Fork add-on: session
- * details.
+ * sits `min(max output, 20k) + 13k` below the window, or lower at
+ * `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` percent of the window less the output
+ * reserve. Only the two auto-compact keys and that one `env` entry are kept
+ * from each settings file. Fork add-on: session details.
  *
  * @module external-sessions/claudeContextWindow
  */
@@ -21,10 +22,12 @@ import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   resolveClaudeCatalogContextWindowTokens,
 } from "../provider/ClaudeModelCatalog.ts";
-import { parseJsonObject, readText, statMtimeMs } from "./ExternalSessionSource.ts";
+import { asRecord, parseJsonObject, readText, statMtimeMs } from "./ExternalSessionSource.ts";
 
-/** What the CLI reserves below the window: summary output (capped at 20k) plus 13k. */
-const AUTO_COMPACT_BUFFER_TOKENS = 20_000 + 13_000;
+/** What the CLI reserves for the summary's output, capped at 20k. */
+const SUMMARY_OUTPUT_TOKENS = 20_000;
+/** What the CLI reserves below the window: summary output plus 13k. */
+const AUTO_COMPACT_BUFFER_TOKENS = SUMMARY_OUTPUT_TOKENS + 13_000;
 const RESTAT_MS = 5 * 1000;
 const MAX_CACHED_FILES = 200;
 const CLAUDE_INSTANCE = ProviderInstanceId.make("claudeAgent");
@@ -40,9 +43,10 @@ export interface ClaudeContextWindow {
 interface AutoCompactSettings {
   readonly window: number | null;
   readonly enabled: boolean | null;
+  readonly percent: number | null;
 }
 
-const NO_SETTINGS: AutoCompactSettings = { window: null, enabled: null };
+const NO_SETTINGS: AutoCompactSettings = { window: null, enabled: null, percent: null };
 
 /** "240000", 240000, "500k", "1m", or "200" for 200k; "auto" and anything else mean unset. */
 const windowTokens = (value: unknown): number | null => {
@@ -56,6 +60,13 @@ const windowTokens = (value: unknown): number | null => {
   } else return null;
   if (!Number.isFinite(tokens) || tokens <= 0) return null;
   return Math.round(tokens < 1_000 ? tokens * 1_000 : tokens);
+};
+
+/** `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`: a percent in (0, 100], else unset. */
+const compactPercent = (value: unknown): number | null => {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const percent = Number.parseFloat(String(value));
+  return Number.isFinite(percent) && percent > 0 && percent <= 100 ? percent : null;
 };
 
 const isTruthyEnv = (value: string | undefined) =>
@@ -109,6 +120,7 @@ export const makeClaudeContextWindow = () => {
         settings = {
           window: windowTokens(record?.autoCompactWindow),
           enabled: typeof enabled === "boolean" ? enabled : null,
+          percent: compactPercent(asRecord(record?.env)?.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE),
         };
       }
       if (known === undefined && files.size >= MAX_CACHED_FILES) files.clear();
@@ -134,24 +146,29 @@ export const makeClaudeContextWindow = () => {
       paths.push(userSettings);
       let setWindow = windowTokens(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
       let enabled: boolean | null = null;
+      let percent = compactPercent(process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE);
       for (const path of paths) {
         const settings = yield* readSettings(path);
         setWindow ??= settings.window;
         enabled ??= settings.enabled;
+        percent ??= settings.percent;
       }
       const max = modelWindow(model);
       const window = setWindow === null ? max : Math.min(setWindow, max ?? setWindow);
       if (window === null) return null;
       const autoCompactEnabled =
         enabled !== false && !isTruthyEnv(process.env.DISABLE_AUTO_COMPACT);
-      return {
-        window,
-        autoCompactEnabled,
-        autoCompactThreshold:
-          autoCompactEnabled && window > AUTO_COMPACT_BUFFER_TOKENS
-            ? window - AUTO_COMPACT_BUFFER_TOKENS
-            : null,
-      };
+      let threshold =
+        autoCompactEnabled && window > AUTO_COMPACT_BUFFER_TOKENS
+          ? window - AUTO_COMPACT_BUFFER_TOKENS
+          : null;
+      if (threshold !== null && percent !== null) {
+        threshold = Math.min(
+          threshold,
+          Math.floor((window - SUMMARY_OUTPUT_TOKENS) * (percent / 100)),
+        );
+      }
+      return { window, autoCompactEnabled, autoCompactThreshold: threshold };
     });
 
   return { resolve };

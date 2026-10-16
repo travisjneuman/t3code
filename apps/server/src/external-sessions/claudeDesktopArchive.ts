@@ -3,8 +3,9 @@
  * tab) keeps one `local_<id>.json` per session under
  * `<Claude app data>/claude-code-sessions/<uuid>/<uuid>/`. Only `cliSessionId`,
  * `isArchived` and a short allowlist of session settings for the details card
- * (model, effort, permission mode, times, completed turns, CLI version, and
- * whether Remote Control was used) are kept from each, plus the file's
+ * (model, effort, permission mode, times, completed turns, CLI version,
+ * whether Remote Control was used, and each claude.ai connector's id and
+ * name) are kept from each, plus the file's
  * `local_<id>` name, which Claude's `claude://code/continue` link opens; the
  * rest of the record holds account and bridge identifiers, so it is dropped
  * right after parsing and never logged or sent. T3 never writes these files, so a session
@@ -62,6 +63,8 @@ export interface ClaudeDesktopSessionMetadata {
   readonly cliVersion: string | null;
   /** Remote Control was turned on for the session; the bridge ids themselves are dropped. */
   readonly remoteControl: boolean;
+  /** Each claude.ai connector's name by its id, which is all the transcript names it by. */
+  readonly connectorNames: ReadonlyMap<string, string>;
 }
 
 interface SessionRecord {
@@ -73,6 +76,19 @@ interface SessionRecord {
 const epochMs = (value: unknown): number | null => {
   const ms = asCount(value);
   return ms === null || ms === 0 ? null : ms;
+};
+
+/** Connector names by id; each entry's url and tool list are dropped. */
+const connectorNames = (value: unknown): ReadonlyMap<string, string> => {
+  const names = new Map<string, string>();
+  if (!Array.isArray(value)) return names;
+  for (const entry of value) {
+    const connector = asRecord(entry);
+    const id = asString(connector?.uuid);
+    const name = asString(connector?.name);
+    if (id !== null && name !== null) names.set(id, name);
+  }
+  return names;
 };
 
 /** The CLI session id a record names, whether it is archived, and the allowlisted settings. */
@@ -93,6 +109,7 @@ const sessionRecord = (text: string): SessionRecord | null => {
       completedTurns: turns === null ? null : Math.round(turns),
       cliVersion: asString(asRecord(record.toolSurfaceSnapshot)?.cliVersion),
       remoteControl: Array.isArray(record.bridgeSessionIds) && record.bridgeSessionIds.length > 0,
+      connectorNames: connectorNames(record.remoteMcpServersConfig),
     },
   };
 };
