@@ -37,7 +37,7 @@ import {
 
 const LIVENESS_DOT_CLASS = {
   running: "bg-info",
-  idle: "bg-success",
+  idle: "bg-muted-foreground/45",
   recent: "bg-muted-foreground/45",
 } as const satisfies Record<ExternalSessionSummary["liveness"], string>;
 
@@ -108,7 +108,8 @@ function ExternalSessionDetailsContent(props: {
   readonly summary: ExternalSessionSummary;
 }) {
   const { summary } = props;
-  const insights = useExternalSessionInsights(props.environmentId, props.sessionKey).data;
+  const insightsQuery = useExternalSessionInsights(props.environmentId, props.sessionKey);
+  const insights = insightsQuery.data;
   const details = summary.details;
   const cwd = summary.cwd ?? undefined;
   const record = insights?.session;
@@ -134,7 +135,7 @@ function ExternalSessionDetailsContent(props: {
       />
       <ThreadContextBreakdown
         insights={contextReading}
-        error={null}
+        error={insightsQuery.error}
         contextWindow={contextWindow}
         onCompactContext={undefined}
         compactDisabled
@@ -175,10 +176,11 @@ function externalSessionView(
       }),
     ),
   );
-  // A running session reads as running; otherwise the agent's own status says more.
+  // The scan's liveness is current; a stored record status only adds that the
+  // session ended, since an old record can still say active.
   const status =
-    summary.liveness !== "running" && record.status !== undefined
-      ? RECORD_STATUS_PRESENTATION[record.status]
+    summary.liveness !== "running" && record.status === "ended"
+      ? RECORD_STATUS_PRESENTATION.ended
       : {
           label: LIVENESS_LABEL[summary.liveness],
           dotClassName: LIVENESS_DOT_CLASS[summary.liveness],

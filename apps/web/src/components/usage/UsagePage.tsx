@@ -427,7 +427,8 @@ export function UsagePage() {
         <ToggleGroup
           aria-label="Usage period"
           variant="segmented"
-          value={[String(windowDays)]}
+          // Fork add-on: limits ignore the period, so none reads as picked.
+          value={showingLimits ? [] : [String(windowDays)]}
           disabled={showingLimits}
           onValueChange={(next) => {
             const value = next[0];

@@ -4,7 +4,7 @@ import { memo } from "react";
 
 import { cn } from "../../lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { MCP_SERVER_STATUS_PRESENTATION } from "./sessionInsights.logic";
+import { mcpServerStatusPresentation } from "./sessionInsights.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadDetailsStatusDot } from "./ThreadDetailsStatRow";
 import {
@@ -37,7 +37,7 @@ export const ThreadConnectorsSection = memo(function ThreadConnectorsSection(pro
 
 function ConnectorRow(props: { readonly server: SessionMcpServer }) {
   const { server } = props;
-  const status = MCP_SERVER_STATUS_PRESENTATION[server.status];
+  const status = mcpServerStatusPresentation(server);
   const details = [
     server.version ? `v${server.version.replace(/^v/i, "")}` : null,
     server.toolCount !== undefined
@@ -63,12 +63,12 @@ function ConnectorRow(props: { readonly server: SessionMcpServer }) {
           </p>
         ) : null}
       </div>
-      {server.error ? (
+      {status.hint ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" tabIndex={0} />}>
             {statusLabel}
           </TooltipTrigger>
-          <TooltipPopup>{server.error}</TooltipPopup>
+          <TooltipPopup>{status.hint}</TooltipPopup>
         </Tooltip>
       ) : (
         statusLabel

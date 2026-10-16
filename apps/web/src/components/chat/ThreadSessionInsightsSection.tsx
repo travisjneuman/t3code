@@ -65,7 +65,8 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
   const insights = notStarted ? null : insightsQuery.data;
   // An agent with its own session store (Hermes) works in its own folders,
   // not the T3 project's.
-  const sessionFolder = insights?.session === undefined ? props.workspaceRoot : undefined;
+  const ownsWorkspace = insights?.session !== undefined;
+  const sessionFolder = ownsWorkspace ? undefined : props.workspaceRoot;
 
   return (
     <div data-thread-session-details>
@@ -78,6 +79,7 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
         threadRef={threadRef}
         host={insights?.host ?? null}
         workspaceRoot={sessionFolder}
+        ownsWorkspace={ownsWorkspace}
       />
       <ThreadContextBreakdown
         insights={insights}
@@ -112,14 +114,16 @@ function ThreadEnvironmentSection(props: {
   readonly threadRef: ScopedThreadRef;
   readonly host: string | null;
   readonly workspaceRoot: string | undefined;
+  /** The agent works in its own folders, so T3's checkout would mislabel it. */
+  readonly ownsWorkspace: boolean;
 }) {
   const summary = useThreadSessionSummary(props.threadRef);
   if (summary === null) return null;
   return (
     <SessionEnvironmentSection
       host={props.host}
-      folder={props.workspaceRoot ?? summary.worktreePath}
-      branch={summary.branch}
+      folder={props.ownsWorkspace ? null : (props.workspaceRoot ?? summary.worktreePath)}
+      branch={props.ownsWorkspace ? null : summary.branch}
     />
   );
 }
