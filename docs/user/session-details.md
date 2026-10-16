@@ -36,9 +36,11 @@ stays collapsed or expanded across threads and restarts.
   from the session's stored text rather than reported by the provider; hover the label for what
   it leaves out. **Compact context** compacts the conversation when the provider supports it.
 - **Connectors**: the MCP servers and connectors (claude.ai connectors, Codex apps) the agent
-  itself loaded, with their status (Connected, Pending,
-  Needs auth, Failed, Disabled, or Configured when the agent reports only its configuration),
-  version and tool count. Hover a failed server to see its error.
+  itself loaded, with their status, version and tool count. A green dot is **Connected**, a
+  hollow green ring is **Enabled** (switched on, but the agent doesn't report whether it
+  connected), amber is a server that is up but returned an error or **Needs auth**, red is
+  **Failed**, blue is **Pending** and grey is **Disabled**. Hover a status to see its error or
+  what it means.
 - **Outputs**: files the session changed, newest first, with the lines added and removed in all of
   them next to the heading. In a thread, choose a file to open its turn's diff. For Other Agents
   sessions and Hermes, whose edits have no T3 diff, choose a file to open it in your editor.
@@ -48,7 +50,7 @@ stays collapsed or expanded across threads and restarts.
 | Provider                              | Context breakdown | Connectors |
 | ------------------------------------- | ----------------- | ---------- |
 | Claude                                | Yes               | Yes        |
-| Hermes                                | Estimated         | Configured |
+| Hermes                                | Estimated         | Partly     |
 | Codex                                 | Token totals      | Yes        |
 | OpenCode                              | Token totals      | Yes        |
 | Grok, Antigravity, ACP agents, Cursor | Token totals      | Configured |

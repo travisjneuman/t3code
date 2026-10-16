@@ -721,9 +721,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       <div className={ITEM_ROW_INNER_CLASSNAME}>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
+            {/* Fork add-on: an unused, unexpired link is waiting, not a problem. */}
             <ConnectionStatusDot
-              tooltipText={`Link created at ${formatAccessTimestamp(pairingLink.createdAt)}`}
-              dotClassName="bg-warning"
+              tooltipText={`Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}`}
+              dotClassName="bg-info"
             />
             <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
           </div>

@@ -390,14 +390,19 @@ interface ToolResult {
   readonly content: string;
 }
 
-/** The session's tool results, oldest first, named by the tool Hermes registered. */
+/**
+ * The session's tool results, oldest first, named by the tool Hermes
+ * registered. The result's own name wins: tools reached through Hermes's
+ * `tool_call` bridge answer a call named `tool_call`, but each result is
+ * stored under the real tool's name.
+ */
 const toolResults = (messages: ReadonlyArray<HermesMessage>): ReadonlyArray<ToolResult> => {
   const callNames = new Map<string, string>();
   const results: Array<ToolResult> = [];
   for (const message of messages) {
     for (const call of message.toolCalls) callNames.set(call.id, call.name);
     if (message.role !== "tool" || message.toolCallId === null) continue;
-    const name = callNames.get(message.toolCallId) ?? message.toolName;
+    const name = message.toolName ?? callNames.get(message.toolCallId);
     if (name === undefined || name === null) continue;
     results.push({ name, failed: failedResult(message.content), content: message.content });
   }

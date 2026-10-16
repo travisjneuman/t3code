@@ -5,6 +5,7 @@
  * Fork add-on: agent instructions.
  */
 import { PROVIDER_DISPLAY_NAMES, type ServerProvider } from "@t3tools/contracts";
+import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
 import {
@@ -41,7 +42,14 @@ export function ProviderInstructionsControl({
   const kind = picked !== null && kinds.includes(picked) ? picked : (kinds[0] ?? null);
   const edited = useRef(false);
   if (kind === null) {
-    return <p className="mt-3 pb-3.5 text-sm text-muted-foreground">No providers are set up.</p>;
+    return (
+      <p className="mt-3 pb-3.5 text-sm text-muted-foreground">
+        No providers are set up.{" "}
+        <Link to="/settings/providers" className="underline underline-offset-2">
+          Set one up in Providers
+        </Link>
+      </p>
+    );
   }
   const current = settings.agentProviderInstructions[kind] ?? "";
   const labelOf = (candidate: string) =>

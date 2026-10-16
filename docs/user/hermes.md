@@ -54,8 +54,10 @@ token totals, cost, and when it was last active or ended. **Machine** is the com
 on. Context is estimated from the stored messages and marked **Estimated**; it leaves out
 Hermes's system prompt and tool definitions, so the real use is higher. The window size is shown
 only when the session uses the model Hermes is configured with. **Connectors** lists the MCP
-servers in Hermes's config as Configured or Disabled; Hermes doesn't report whether they
-connected.
+servers in Hermes's config. Hermes doesn't report whether they connected, so an enabled server
+shows **Enabled** until the session calls one of its tools: then it shows **Connected**, or amber
+with the error when its latest call failed. The card doesn't show the thread's T3 folder or
+branch, since Hermes works in its own folders.
 
 ## Models
 

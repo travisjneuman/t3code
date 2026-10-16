@@ -761,6 +761,7 @@ const HermesLine = memo(function HermesLine(props: {
 }) {
   const { row } = props;
   const source = row.session?.source;
+  const status = row.running ? "Running" : props.isOpening ? "Opening" : null;
   const className = cn(
     "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     props.isActive || props.isSelected
@@ -778,8 +779,10 @@ const HermesLine = memo(function HermesLine(props: {
         iconClassName="size-3.5"
       />
       <span className="min-w-0 flex-1 truncate">{row.title}</span>
-      {row.running || props.isOpening ? (
-        <CircleDashedIcon aria-hidden className="size-3.5 shrink-0 text-info" />
+      {status !== null ? (
+        <span aria-hidden title={status} className="flex shrink-0">
+          <CircleDashedIcon className="size-3.5 text-info" />
+        </span>
       ) : (
         <>
           {row.pinned ? <PinIcon aria-label="Pinned" className="size-3 shrink-0" /> : null}
@@ -792,6 +795,8 @@ const HermesLine = memo(function HermesLine(props: {
   );
   const common = {
     title: source && source !== "api_server" ? `${row.title} · ${source}` : row.title,
+    // The status glyph is aria-hidden, so the row's name carries it instead.
+    "aria-label": status !== null ? `${row.title}, ${status.toLowerCase()}` : undefined,
     "aria-current": props.isActive ? ("page" as const) : undefined,
     "aria-selected": props.isSelected || undefined,
     "aria-busy": props.isOpening || undefined,

@@ -1,7 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
+import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime"; // Fork add-on: check failure status.
 import type { OtlpEndpointCheckResult, OtlpSignal } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useState } from "react";
 
+import { formatEnvironmentQueryError } from "../../state/query"; // Fork add-on: check failure status.
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -21,7 +23,13 @@ const SIGNALS = [
 
 type SignalKey = (typeof SIGNALS)[number]["key"];
 
-type EndpointCheck = { readonly url: string; readonly result: OtlpEndpointCheckResult | null };
+// Fork add-on: a failed check request is kept so it doesn't fall back to "Not checked".
+type CheckRequestFailed = { readonly _tag: "CheckFailed"; readonly message: string };
+
+type EndpointCheck = {
+  readonly url: string;
+  readonly result: OtlpEndpointCheckResult | CheckRequestFailed | null;
+};
 
 const isHttpUrl = (url: string) => /^https?:\/\/./i.test(url);
 
@@ -29,8 +37,11 @@ function endpointStatus(url: string, check: EndpointCheck | undefined) {
   if (url === "") return { label: "Off", dot: "bg-muted-foreground/40" };
   if (check?.url !== url) return { label: "Not checked", dot: "bg-muted-foreground/40" };
   const { result } = check;
-  if (result === null) return { label: "Checking…", dot: "bg-warning" };
+  // Fork add-on: in progress is informational; amber is reserved for needs-attention.
+  if (result === null) return { label: "Checking…", dot: "bg-info" };
   switch (result._tag) {
+    case "CheckFailed": // Fork add-on: see CheckRequestFailed.
+      return { label: "Check failed", dot: "bg-destructive", tooltip: result.message };
     case "Accepted":
       return { label: `Connected · ${Math.round(result.latencyMs)} ms`, dot: "bg-success" };
     case "Rejected":
@@ -88,7 +99,11 @@ function TelemetryExportForm() {
       if (previous[key]?.url !== url || previous[key].result !== null) return previous;
       const next = { ...previous };
       if (response._tag === "Success") next[key] = { url, result: response.value };
-      else delete next[key];
+      // Fork add-on: see CheckRequestFailed.
+      else if (!isAtomCommandInterrupted(response)) {
+        const message = formatEnvironmentQueryError(response.cause);
+        next[key] = { url, result: { _tag: "CheckFailed", message } };
+      } else delete next[key];
       return next;
     });
   };
@@ -156,7 +171,12 @@ function TelemetryExportForm() {
             <div key={key} className="grid gap-1.5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5">
-                  {status && <ConnectionStatusDot dotClassName={status.dot} />}
+                  {status && (
+                    <ConnectionStatusDot
+                      dotClassName={status.dot}
+                      tooltipText={status.tooltip ?? null} // Fork add-on: check failure detail.
+                    />
+                  )}
                   <Label htmlFor={key}>{label} endpoint</Label>
                 </div>
                 {status && <span className="text-xs text-muted-foreground">{status.label}</span>}

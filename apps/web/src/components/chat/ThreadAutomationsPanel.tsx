@@ -30,11 +30,19 @@ import {
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
 } from "./threadDetailsPanelStyles";
 
+// Fork add-on: theme tokens and a spoken label, matching the settings page.
 const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
   never: "bg-muted-foreground/40",
-  running: "bg-sky-500",
-  succeeded: "bg-emerald-500",
+  running: "bg-info",
+  succeeded: "bg-success",
   failed: "bg-destructive",
+};
+
+const LAST_RUN_LABEL: Record<ScheduledTask["lastRunStatus"], string> = {
+  never: "Not run yet",
+  running: "Running",
+  succeeded: "Last run succeeded",
+  failed: "Last run failed",
 };
 
 export function ThreadAutomationsPanel(props: {
@@ -152,7 +160,10 @@ export function ThreadAutomationsPanel(props: {
               THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
             )}
           >
-            <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+            <span
+              className="relative inline-flex size-4 shrink-0 items-center justify-center"
+              title={LAST_RUN_LABEL[task.lastRunStatus]}
+            >
               <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
               <span
                 className={cn(
@@ -161,6 +172,7 @@ export function ThreadAutomationsPanel(props: {
                 )}
                 aria-hidden
               />
+              <span className="sr-only">{LAST_RUN_LABEL[task.lastRunStatus]}</span>
             </span>
             <div className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-foreground/80">

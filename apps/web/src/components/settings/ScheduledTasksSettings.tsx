@@ -763,9 +763,12 @@ function WebhookDeliveriesDialog({
               </DeliveryBlock>
             </div>
           ) : selectedId !== null ? null : deliveries === null ? (
-            <p className="text-sm text-muted-foreground" role="status">
-              Loading deliveries…
-            </p>
+            // Fork add-on: a failed list never gets data, so the error above stands alone.
+            deliveriesQuery.error ? null : (
+              <p className="text-sm text-muted-foreground" role="status">
+                Loading deliveries…
+              </p>
+            )
           ) : deliveries.length === 0 ? (
             <p className="text-sm text-muted-foreground">No requests yet.</p>
           ) : (

@@ -30,6 +30,8 @@ import { Button } from "../components/ui/button";
 import { toastManager } from "../components/ui/toast";
 import { WorkspacePageContainer } from "../components/WorkspacePageContainer";
 import { ArchivedHermesSessions } from "../hermes/ArchivedHermesSessions"; // Fork add-on: Hermes provider.
+import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
+import { cn } from "../lib/utils";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { useEnvironmentIdentities } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -46,16 +48,31 @@ import {
  * it is flattened here so both lists scroll as one page.
  */
 export function ArchivedThreadsPanel() {
+  const { scope } = useSettingsScope();
+  // Same atom family the upstream panel reads, so this adds no request.
+  const t3Archive = useArchivedThreadSnapshots(scope.environmentIds);
+  const t3ArchiveEmpty =
+    !t3Archive.isLoading &&
+    t3Archive.error === null &&
+    t3Archive.snapshots.every(({ snapshot }) => snapshot.threads.length === 0);
   return (
-    <div className="scrollbar-gutter-both topbar-scroll-fade flex min-h-0 flex-1 flex-col overflow-y-auto [&>[data-settings-page-scroll]]:flex-none [&>[data-settings-page-scroll]]:overflow-visible [&>[data-settings-page-scroll]]:[-webkit-mask-image:none] [&>[data-settings-page-scroll]]:[mask-image:none]">
+    <div
+      className={cn(
+        "scrollbar-gutter-both topbar-scroll-fade flex min-h-0 flex-1 flex-col overflow-y-auto [&>[data-settings-page-scroll]]:flex-none [&>[data-settings-page-scroll]]:overflow-visible [&>[data-settings-page-scroll]]:[-webkit-mask-image:none] [&>[data-settings-page-scroll]]:[mask-image:none]",
+        // The upstream panel would say "No archived threads" above archived rows. Hermes rows
+        // load inside their own component, so whether any section rendered is read with :has().
+        t3ArchiveEmpty &&
+          "[&:has(>[data-archived-external-sessions]>*)>[data-settings-page-scroll]]:hidden",
+      )}
+    >
       <UpstreamArchivedThreadsPanel />
-      <ArchivedExternalSessions />
+      <ArchivedExternalSessions flushTop={!t3ArchiveEmpty} />
     </div>
   );
 }
 
 /** External sessions are per environment, not per project, so project scopes show none. */
-function ArchivedExternalSessions() {
+function ArchivedExternalSessions(props: { readonly flushTop: boolean }) {
   const { scope } = useSettingsScope();
   const identities = useEnvironmentIdentities();
   if (scope.kind !== "all" && scope.kind !== "environment") return null;
@@ -64,7 +81,10 @@ function ArchivedExternalSessions() {
       ? (identities.find((identity) => identity.environmentId === environmentId)?.label ?? null)
       : null;
   return (
-    <WorkspacePageContainer className="gap-8 pt-0">
+    <WorkspacePageContainer
+      data-archived-external-sessions
+      className={cn("gap-8", props.flushTop && "pt-0")}
+    >
       {scope.environmentIds.map((environmentId) => (
         <EnvironmentArchivedSessions
           key={environmentId}
