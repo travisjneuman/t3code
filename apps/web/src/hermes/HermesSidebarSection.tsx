@@ -324,8 +324,14 @@ export function HermesSidebarSection() {
   }, [targets, listed, threadsByTarget, activeThreadKey]);
   const hasMore = targets.some((target) => listed.get(targetKey(target))?.hasMore === true);
 
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
+  // Collapsed, the shelf still lists running sessions, like Other Agents.
+  const visibleRows = useMemo(
+    () => (expanded ? rows : rows.filter((row) => row.running)),
+    [expanded, rows],
+  );
+  // Shift-click ranges and multi-row actions cover only the rows on screen.
+  const rowsRef = useRef(visibleRows);
+  rowsRef.current = visibleRows;
   const refresh = useCallback(() => setRefreshNonce((value) => value + 1), []);
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
@@ -685,9 +691,9 @@ export function HermesSidebarSection() {
           <PlusIcon aria-hidden className="size-3.5" />
         </button>
       </div>
-      {expanded ? (
+      {expanded || visibleRows.length > 0 ? (
         <ul className="flex flex-col">
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <HermesLine
               key={row.key}
               row={row}
@@ -702,7 +708,7 @@ export function HermesSidebarSection() {
               onContextMenu={handleContextMenu}
             />
           ))}
-          {hasMore ? (
+          {expanded && hasMore ? (
             <li className="list-none">
               <button
                 type="button"
@@ -714,7 +720,7 @@ export function HermesSidebarSection() {
               </button>
             </li>
           ) : null}
-          {extra > 0 ? (
+          {expanded && extra > 0 ? (
             <li className="list-none">
               <button type="button" onClick={() => setExtra(0)} className={MORE_BUTTON_CLASS}>
                 <MinusIcon aria-hidden className="size-3.5 shrink-0" />
