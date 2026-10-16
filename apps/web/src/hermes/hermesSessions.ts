@@ -15,6 +15,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   type EnvironmentId,
+  type EnvironmentMachineKind,
   HERMES_SESSIONS_WS_METHODS,
   ProviderDriverKind,
   type ProviderInstanceId,
@@ -184,6 +185,31 @@ export function hermesMachineName(
   if (!host) return "its Hermes server";
   if (LOOPBACK_HOSTS.has(host)) return "the T3 host";
   return /^[\d.]+$/.test(host) || host.includes(":") ? host : (host.split(".")[0] ?? host);
+}
+
+/** A machine the selected agent always runs on, shown in place of the Run on picker. */
+export interface FixedRunLocation {
+  readonly label: string;
+  readonly machine: EnvironmentMachineKind;
+  readonly tooltip: string;
+}
+
+/**
+ * Hermes always runs on its own machine, so Run on names that machine and
+ * cannot be changed while Hermes is picked. The icon follows the connected
+ * environment of the same name when there is one.
+ */
+export function hermesRunLocation(
+  agent: { readonly name: string; readonly machine: string } | null,
+  environments: ReadonlyArray<{ readonly label: string; readonly machine: EnvironmentMachineKind }>,
+): FixedRunLocation | undefined {
+  if (!agent) return undefined;
+  const machine = agent.machine.toLowerCase();
+  return {
+    label: agent.machine,
+    machine: environments.find((env) => env.label.toLowerCase() === machine)?.machine ?? "server",
+    tooltip: `${agent.name} always runs on ${agent.machine}`,
+  };
 }
 
 /** The provider part of a Hermes model slug (`provider::model`), or null for "Hermes default". */

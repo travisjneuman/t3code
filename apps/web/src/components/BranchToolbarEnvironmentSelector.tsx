@@ -6,6 +6,7 @@ import { ScaleIcon } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
+import type { FixedRunLocation } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import {
@@ -24,6 +25,7 @@ interface BranchToolbarEnvironmentSelectorProps {
   environmentId: EnvironmentId;
   availableEnvironments: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
+  fixedLocation?: FixedRunLocation | undefined; // Fork add-on: Hermes provider.
 }
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
@@ -33,6 +35,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   environmentId,
   availableEnvironments,
   onEnvironmentChange,
+  fixedLocation, // Fork add-on: Hermes provider.
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const activeEnvironment = useMemo(() => {
@@ -57,23 +60,27 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // the glass seam joining it to the composer assumes a fixed strip height, so
   // a shorter label would drag the seam out of line whenever this label is the
   // only thing in the strip.
-  if (envLocked || onEnvironmentChange === undefined) {
+  if (fixedLocation || envLocked || onEnvironmentChange === undefined) {
+    // Fork add-on: Hermes provider.
+    const label = fixedLocation?.label ?? activeEnvironment?.label ?? "Run on"; // Fork add-on: Hermes provider.
     const lockedRow = (
       <span
         className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
         data-composer-context-control
       >
         <EnvironmentMachineIcon
-          kind={activeEnvironment?.machine ?? "server"}
+          kind={fixedLocation?.machine ?? activeEnvironment?.machine ?? "server"} // Fork add-on: Hermes provider.
           className="size-3 shrink-0"
         />
-        <ComposerContextLabel>{activeEnvironment?.label ?? "Run on"}</ComposerContextLabel>
+        <ComposerContextLabel>{label /* Fork add-on: Hermes provider. */}</ComposerContextLabel>
       </span>
     );
     return (
       <Tooltip>
         <TooltipTrigger render={lockedRow} />
-        <TooltipPopup>{activeEnvironment?.label ?? "Run on"}</TooltipPopup>
+        <TooltipPopup>
+          {fixedLocation?.tooltip ?? label /* Fork add-on: Hermes provider. */}
+        </TooltipPopup>
       </Tooltip>
     );
   }
