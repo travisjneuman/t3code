@@ -31,6 +31,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
@@ -47,6 +48,21 @@ import * as HermesApi from "./api.ts";
 import { hermesRunModel, isBlockedHermesModel } from "./models.ts";
 
 const HERMES_PROVIDER = ProviderDriverKind.make("hermes");
+
+/**
+ * A turn T3 refused before anything reached Hermes, such as an unreadable image or an
+ * oversized body. `makeProviderFailure` shows its message instead of the generic
+ * start-failure advice, which would tell the user to retry a send that cannot succeed.
+ */
+class HermesTurnNotSentError extends Schema.TaggedError<HermesTurnNotSentError>()(
+  "HermesTurnNotSentError",
+  { detail: Schema.String },
+) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
 const TOOL_AS_COMMAND = /terminal|shell|bash|exec/i;
 const FLUSH_DELAY_MS = 50;
 
@@ -241,14 +257,23 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
       }
     : HermesProviderCapabilitiesV2;
 
-  const protocolError = (detail: string, payload?: unknown) =>
+  const protocolError = (detail: string, payload?: unknown, cause?: HermesTurnNotSentError) =>
     new ProviderAdapter.ProviderAdapterProtocolError({
       driver: HERMES_PROVIDER,
       detail,
       ...(payload === undefined ? {} : { payload }),
+      ...(cause === undefined ? {} : { cause }),
     });
+  const notSentError = (detail: string, payload?: unknown) =>
+    protocolError(detail, payload, new HermesTurnNotSentError({ detail }));
   const api = <A>(effect: Effect.Effect<A, HermesApi.HermesApiError>) =>
-    effect.pipe(Effect.mapError((error) => protocolError(error.detail, error)));
+    effect.pipe(
+      Effect.mapError((error) =>
+        error.code === "body_too_large"
+          ? notSentError(error.detail, error)
+          : protocolError(error.detail, error),
+      ),
+    );
 
   return ProviderAdapter.ProviderAdapterV2.of({
     instanceId: options.instanceId,
@@ -1007,7 +1032,7 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
           };
           const fail = (category: string, detail: string) =>
             Effect.logWarning("hermes.attachment.rejected", { ...log, category }).pipe(
-              Effect.andThen(Effect.fail(protocolError(detail))),
+              Effect.andThen(Effect.fail(notSentError(detail))),
             );
           if (!isProviderNativeImageAttachment(attachment))
             return yield* fail(
@@ -1156,7 +1181,12 @@ export const makeHermesAdapterV2 = Effect.fn("makeHermesAdapterV2")(function* (
                 ? Effect.logWarning("hermes.attachment.rejected", {
                     correlationId: nativeId,
                     endpoint: "/v1/runs",
-                    category: rejection.status === undefined ? "network" : "http_rejected",
+                    category:
+                      rejection.code === "body_too_large"
+                        ? "body_too_large"
+                        : rejection.status === undefined
+                          ? "network"
+                          : "http_rejected",
                     status: rejection.status,
                     code: rejection.code,
                   })
