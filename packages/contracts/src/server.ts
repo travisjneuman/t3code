@@ -77,6 +77,7 @@ export const ServerProviderModel = Schema.Struct({
   shortName: Schema.optional(TrimmedNonEmptyString),
   subProvider: Schema.optional(TrimmedNonEmptyString),
   aliases: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  supersedes: Schema.optional(Schema.Array(TrimmedNonEmptyString)), // Fork add-on: retired models.
   badge: Schema.optional(Schema.Literal("new")),
   isCustom: Schema.Boolean,
   isDefault: Schema.optional(Schema.Boolean),

@@ -4,6 +4,7 @@ export type ModelEsque = {
   shortName?: string | undefined;
   subProvider?: string | undefined;
   aliases?: ReadonlyArray<string> | undefined;
+  supersedes?: ReadonlyArray<string> | undefined; // Fork add-on: retired models.
   isDefault?: boolean | undefined;
   badge?: "new" | undefined;
   isLegacy?: boolean | undefined;

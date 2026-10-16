@@ -107,6 +107,7 @@ function parseDiscoveredModels(data: unknown, state: unknown): ReadonlyArray<Ser
       slug,
       name: brandPiModelName(provider, id, recordString(model, "name")), // Fork add-on: provider and model brand names.
       subProvider: brandProviderName(provider), // Fork add-on: provider and model brand names.
+      ...(provider === "openai" ? { supersedes: [`openai-codex/${id}`] } : {}), // Fork add-on: retired models; Pi's ChatGPT login replaced openai-codex.
       isCustom: false,
       capabilities: thinkingCapabilitiesForPiModel(
         model,
