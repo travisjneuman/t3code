@@ -21,6 +21,7 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
+import { queueDesktopInstallWhileBusy } from "../../maintenance-queue/desktopGate"; // Fork add-on: maintenance queue.
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -162,6 +163,7 @@ async function installLocalUpdate(
   bridge: DesktopBridge,
   reportError: ReportLocalUpdateError = toastUpdateError,
 ): Promise<boolean> {
+  if (await queueDesktopInstallWhileBusy(bridge)) return false; // Fork add-on: maintenance queue.
   try {
     const result = await bridge.installUpdate();
     if (!result.accepted) {

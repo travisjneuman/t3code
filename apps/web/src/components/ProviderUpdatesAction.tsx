@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { useEnvironments } from "~/state/environments";
 import { serverEnvironment } from "~/state/server";
-import { useAtomCommand } from "~/state/use-atom-command";
+import { useQueuedProviderUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import {
   canOneClickUpdateProviderCandidate,
   collectProviderUpdateCandidates,
@@ -16,9 +16,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 export function useProviderUpdates() {
   const { environments } = useEnvironments();
-  const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
-    reportFailure: false,
-  });
+  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on: maintenance queue.
   const machines = useMemo(
     () =>
       environments.flatMap((environment) => {

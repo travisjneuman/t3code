@@ -34,6 +34,7 @@ import { observeResize } from "~/lib/observeResize";
 import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem";
 import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate";
 import { SidebarSourceSyncButton } from "~/source-updates/SidebarSourceSyncButton";
+import { MaintenanceQueueCapsule } from "~/maintenance-queue/MaintenanceQueueCapsule"; // Fork add-on: maintenance queue.
 import "../../sidebar-compact/footerButtons.css";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
@@ -244,6 +245,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
       <SidebarThreadUndoNotice />
+      <MaintenanceQueueCapsule /> {/* Fork add-on: maintenance queue. */}
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />

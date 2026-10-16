@@ -377,6 +377,7 @@ import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on: thread expo
 import { SaveToNotesRpcs } from "./saveToNotes.ts"; // Fork add-on: save to notes.
 import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on: compare agents.
 import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
+import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
 
 export const WS_METHODS = {
   projectsList: "projects.list",
@@ -2068,4 +2069,5 @@ export const WsRpcGroup = RpcGroup.make(
   ...SaveToNotesRpcs, // Fork add-on: save to notes.
   ...CompareAgentsRpcs, // Fork add-on: compare agents.
   ...HermesSessionsRpcs, // Fork add-on: Hermes provider.
+  ...MaintenanceQueueRpcs, // Fork add-on: maintenance queue.
 ).middleware(RpcScopeAuthorization);

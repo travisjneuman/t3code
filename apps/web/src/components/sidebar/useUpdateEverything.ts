@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { APP_VERSION } from "~/branding";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
+import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { useEnvironments } from "~/state/environments";
 import { useNpmReleasePublished } from "~/state/npmRelease";
 import { serverEnvironment } from "~/state/server";
@@ -163,7 +164,9 @@ export function useUpdateEverything(localUpdateVersion: string | null) {
               if (runOutcome.status !== "updated") {
                 providerFailures.set(
                   run.environmentId,
-                  runOutcome.status === "failed" ? runOutcome.line : "Provider update interrupted",
+                  runOutcome.status === "failed"
+                    ? runOutcome.line
+                    : interruptedProviderUpdateLine(run.environmentId), // Fork add-on: maintenance queue.
                 );
               }
               return runOutcome;

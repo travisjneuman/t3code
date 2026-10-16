@@ -165,5 +165,5 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   }
   yield* ipc.handle(PreviewIpc.listBrowserImportSources);
   yield* ipc.handle(PreviewIpc.importBrowserCookies);
-  yield* installForkIpcHandlers(ipc); // Fork add-on: confirm, source sync, remote apps.
+  yield* installForkIpcHandlers(ipc); // Fork add-on: confirm, source sync, remote apps, update gate.
 });

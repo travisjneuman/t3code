@@ -76,7 +76,7 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
-  ...makeForkDesktopBridge(ipcRenderer), // Fork add-on: confirm, source sync, remote apps.
+  ...makeForkDesktopBridge(ipcRenderer), // Fork add-on: confirm, source sync, remote apps, update gate.
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {
