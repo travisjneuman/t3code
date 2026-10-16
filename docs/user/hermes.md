@@ -22,7 +22,8 @@ Hermes sessions live in their own section of the sidebar, named after the agent,
 Agents**, and never inside a project. It lists the T3 threads you started with Hermes together
 with the sessions Hermes holds from anywhere else, newest first, from the last three days.
 **Load more** goes further back and **Show less** returns to the last three days. Pin a session
-to keep it at the top whatever its age.
+to keep it at the top whatever its age. Subagents a session started with Hermes's `delegate_task`
+appear indented under it.
 
 - Click **+** on the section header to start a new session, or pick **Hermes Agent** in any new
   thread's model picker. Either way the thread moves into the Hermes section. Hermes works in its
@@ -112,11 +113,12 @@ lands in the Scratch project, like every Hermes thread.
 
 To turn it on, open **Settings › Providers › Hermes Agent › T3 tools**, check the T3 address
 Hermes will use and flip the switch. The address must end in `/mcp` and be reachable from Hermes's
-machine; the desktop app fills in its Tailscale address when it has one. That name resolves only
-where Tailscale DNS is on. If Hermes's machine keeps it off, for example behind another VPN, use an
-address it can reach instead, such as this computer's LAN address and T3's port
-(`http://192.168.1.20:3773/mcp`). To change the address, turn the switch off, edit it, and turn it
-back on.
+machine; the desktop app fills in its Tailscale address when it has one. Some VPN kill switches,
+such as ProtonVPN's Advanced kill switch, block connections Hermes's machine starts over Tailscale,
+even though connections coming in over the tailnet or the LAN still work. If Hermes's machine runs
+one, use an address it can reach outside Tailscale instead, such as this computer's LAN address
+and T3's port (`http://192.168.1.20:3773/mcp`). To change the address, turn the switch off, edit
+it, and turn it back on.
 
 - Only Hermes's API server, which T3 uses, gets the tools. T3 pins every other platform, including
   Discord, cron and the CLI, to no MCP servers while the switch is on, and puts their settings
