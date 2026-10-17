@@ -20,7 +20,13 @@ import {
 import type { ContextMenuItem, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { ChevronRightIcon, CircleDashedIcon, ClockIcon, CpuIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  CircleAlertIcon,
+  CircleDashedIcon,
+  ClockIcon,
+  CpuIcon,
+} from "lucide-react";
 import { memo, useMemo, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
@@ -37,6 +43,7 @@ import { useStableCallback } from "../hooks/useStableCallback";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
 import type { ProviderInstanceEntry } from "../providerInstances";
+import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 
@@ -319,7 +326,7 @@ function SidebarSubagentRows(props: {
   ) => void;
 }) {
   return (
-    <li role="presentation" className="list-none ps-4">
+    <li role="presentation" className="list-none ps-3">
       <TooltipProvider delay={150} closeDelay={0} timeout={400}>
         <ul role="presentation" className="flex flex-col">
           {props.subagents.map((entry) => (
@@ -374,7 +381,7 @@ const SubagentLine = memo(function SubagentLine(props: {
     props.onOpen(threadRef);
   };
   return (
-    <li className="list-none py-px">
+    <li className="list-none">
       <Tooltip>
         <TooltipTrigger
           render={
@@ -394,7 +401,8 @@ const SubagentLine = memo(function SubagentLine(props: {
                 }rem)`,
               }}
               className={cn(
-                "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md pe-(--sidebar-row-content-inset) text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                AGENT_LINE_CLASS,
+                "pe-(--sidebar-row-content-inset)",
                 props.isActive
                   ? "bg-sidebar-row-active text-sidebar-foreground"
                   : running
@@ -411,19 +419,24 @@ const SubagentLine = memo(function SubagentLine(props: {
               accentColor={props.providerEntry.accentColor}
               acpRegistryAgentId={props.providerEntry.acpRegistryAgentId}
               acpRegistryIconUrl={props.providerEntry.acpRegistryIconUrl}
-              className="size-3.5 shrink-0"
-              iconClassName="size-3.5"
+              className={AGENT_LINE_ICON_CLASS}
+              iconClassName="size-3"
             />
           ) : (
-            <CpuIcon aria-hidden className="size-3.5 shrink-0 opacity-60" />
+            <CpuIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "opacity-60")} />
           )}
           <span className="min-w-0 flex-1 truncate">{thread.title}</span>
           {running ? (
-            <CircleDashedIcon aria-hidden className="size-3.5 shrink-0 text-info" />
+            <CircleDashedIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-info")} />
           ) : (
-            <span className="shrink-0 tabular-nums text-secondary-label">
-              {compactTimeLabel(thread.updatedAt)}
-            </span>
+            <>
+              {status === "Failed" ? (
+                <CircleAlertIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-error")} />
+              ) : null}
+              <span className="shrink-0 tabular-nums text-secondary-label">
+                {compactTimeLabel(thread.updatedAt)}
+              </span>
+            </>
           )}
         </TooltipTrigger>
         <ThreadHoverCardPopup side="right" align="start" sideOffset={4}>

@@ -31,6 +31,7 @@ import {
 } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { cn } from "../lib/utils";
+import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
 import { readLocalApi } from "../localApi";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { waitForThreadShell } from "../state/entities";
@@ -569,7 +570,7 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
   const { environmentId, session } = props.entry;
   const running = session.liveness === "running";
   return (
-    <li className="list-none py-px">
+    <li className="list-none">
       <Tooltip>
         <TooltipTrigger
           render={
@@ -584,7 +585,8 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
                 props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
               }}
               className={cn(
-                "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                AGENT_LINE_CLASS,
+                "px-(--sidebar-row-content-inset)",
                 props.isActive
                   ? "bg-sidebar-row-active text-sidebar-foreground"
                   : session.liveness === "recent"
@@ -597,12 +599,12 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
           <ProviderInstanceIcon
             driverKind={session.driver}
             displayName={externalSessionProductName(session)}
-            className="size-3.5 shrink-0"
-            iconClassName="size-3.5"
+            className={AGENT_LINE_ICON_CLASS}
+            iconClassName="size-3"
           />
           <span className="min-w-0 flex-1 truncate">{externalSessionTitle(session)}</span>
           {running ? (
-            <CircleDashedIcon aria-hidden className="size-3.5 shrink-0 text-info" />
+            <CircleDashedIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-info")} />
           ) : (
             <span className="shrink-0 tabular-nums text-secondary-label">
               {compactTimeLabel(session.updatedAt)}
