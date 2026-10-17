@@ -164,7 +164,7 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 /**
  * The machine the instance's Hermes runs on, from its API URL: the host's
- * first label ("tjn-serve" for `http://tjn-serve.tailnet.ts.net:8642`), an IP
+ * first label ("agent-host" for `http://agent-host.example.ts.net:8642`), an IP
  * as is, or "the T3 host" for a loopback URL.
  */
 export function hermesMachineName(

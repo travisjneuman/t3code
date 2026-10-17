@@ -5,6 +5,7 @@ import { Atom } from "effect/reactivity";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
 import { collectHostUpdateTargets, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on: host releases.
+import { skippedAsFailed } from "~/host-release/hostRelease"; // Fork add-on: skipped updates stay retryable.
 import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { useEnvironments } from "~/state/environments";
 import { useNpmReleasePublished } from "~/state/npmRelease";
@@ -79,7 +80,7 @@ export function useUpdateEverything(localUpdateVersion: string | null) {
   ];
   const restarts = collectRestartingMachines(machines, servers, localUpdateVersion !== null);
   const providers = useProviderUpdates();
-  const updateServer = useServerUpdate();
+  const updateServer = skippedAsFailed(useServerUpdate()); // Fork add-on: skipped updates stay retryable.
 
   const { summary, lines } = describeUpdateEverything({
     localVersion: localUpdateVersion,

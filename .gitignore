@@ -36,6 +36,10 @@ apps/mobile/.generated/
 /.generated/
 artifacts/app-store/screenshots/
 .github/pr-assets/
+# Fork add-on: fleet host config for scripts/tjn-hosts.ts lives outside the repo.
+hosts.json
+hosts.json.*
+hosts.local*.json
 native/**/target/
 node_modules/
 .alchemy/

@@ -877,6 +877,10 @@ async function maintain(request: Request) {
     !(await exists(path.join(host.t3Home, "runtime", ".service-state.host-maintenance"))),
     "An unfinished maintenance state file exists; resolve it before maintenance.",
   );
+  requireState(
+    !(await exists(`${host.service.file}.host-maintenance`)),
+    "An unfinished maintenance service file exists; resolve it before maintenance.",
+  );
   unchanged(
     downloaded ? { ...before, versions: [...before.versions, target].sort() } : before,
     await inspect(host),
@@ -888,7 +892,17 @@ async function maintain(request: Request) {
     await unchangedAfterStop(host, before);
     const keptBackup = await backup(host, before);
     await unchangedAfterStop(host, before);
-    await fs.writeFile(host.service.file, serviceContents, { flush: true });
+    // A crash mid-write must leave the old or new service file, never a truncated one.
+    const nextService = `${host.service.file}.host-maintenance`;
+    const serviceMode = (await fs.stat(host.service.file)).mode & 0o777;
+    await fs.writeFile(nextService, serviceContents, {
+      flag: "wx",
+      mode: serviceMode,
+      flush: true,
+    });
+    // The umask can narrow the create mode; keep the old file's permissions exactly.
+    await fs.chmod(nextService, serviceMode);
+    await fs.rename(nextService, host.service.file);
     if (!pruning) {
       // A terminal update record is tied to its old activeVersion; archive it in the backup, not in the new state.
       const next = { protocol: 3, activeVersion: target };

@@ -12,6 +12,7 @@ import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncResult, Atom } from "effect/reactivity";
 
 import { APP_VERSION } from "~/branding";
+import type { ServerUpdateOutcome } from "~/components/ServerUpdateAction";
 import {
   collectServerUpdateTargets,
   type UpdateEverythingMachine,
@@ -111,4 +112,19 @@ export function collectHostUpdateTargets(
   return hostUpdateTarget === null
     ? { targets: [], skipped: [] }
     : collectServerUpdateTargets(machines, hostUpdateTarget);
+}
+
+/**
+ * Update everything settles a skipped server update as a retryable failure, as Retry does,
+ * instead of counting a server that never started updating as updated.
+ */
+export function skippedAsFailed<Args extends ReadonlyArray<unknown>>(
+  update: (...args: Args) => Promise<ServerUpdateOutcome>,
+): (...args: Args) => Promise<ServerUpdateOutcome> {
+  return async (...args) => {
+    const outcome = await update(...args);
+    return outcome.status === "skipped"
+      ? { status: "failed", message: "Could not start the update" }
+      : outcome;
+  };
 }

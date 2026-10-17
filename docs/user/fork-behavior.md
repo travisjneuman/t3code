@@ -24,6 +24,10 @@ cannot be found, no server update is offered; the app does not ask a server to i
 unpublished version. Boot-service installations use release archives. npm-based servers still
 need that version to be available on npm before they can update.
 
+If **Update everything** cannot start a server's update, for example because that server is
+already updating or its connection dropped, the server is listed as failed and **Retry** offers it
+again, instead of being counted as updated.
+
 ## Tailscale HTTPS needs HTTPS certificates
 
 [Tailscale HTTPS](remote-access.md#tailscale-https) needs **HTTPS Certificates** turned on for your
