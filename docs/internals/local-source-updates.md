@@ -42,7 +42,7 @@ that could discard unrelated work created while the agent ran. Cleanup checks Gi
 exit status; failure reports manual recovery with Git's output. After a successful
 abort, any remaining modified or untracked paths are reported as "left in the checkout"
 rather than removed or claimed clean. Only after the commit is the build remembered
-and `origin HEAD:main` pushed.
+and the fork pushed.
 
 Post-repair and build-finalization staging uses `git add -u`, never blanket staging
 of untracked files. Conflict resolutions still stage only their explicit paths, and
@@ -62,6 +62,13 @@ The push is best-effort and goes only to `origin`, which must not be upstream. W
 builds the fork may have no write access to it, so a failed push never fails the
 update: the merge and build stand, and the result says the push was skipped. Nothing
 ever pushes to `upstream`.
+
+When `TJN_REPO_SYNC_RUNNER` names an existing repository sync script, the push runs
+`python3 <runner> push-safe` in the checkout instead of `git push origin HEAD:main`, so
+the owner's other checkouts are pulled to the same commit. A Finder launch has no shell
+environment, so the variable is read from the login shell with `PATH`. The runner
+exits 0 when it refuses, so only a last output line starting with `pushed` counts as
+pushed; a push whose fan-out was blocked is logged as a warning.
 
 ## Sync without building
 
@@ -92,6 +99,19 @@ lost `Fork add-on` line, aborts the merge, and that nightly is remembered (in me
 and skipped until a newer one lands or the button, which has the agent, merges it. A dirty checkout fails
 `inspect`, so a round during local edits is a logged skip. Every round that
 merges tries the same push.
+
+## One build per checkout
+
+Two desktop builds in one checkout overwrite each other's `dist` output, and a merge
+during a build changes the code being built. `scripts/build-desktop-artifact.ts` holds
+`release/.desktop-build.lock` (gitignored, holding its pid) for the whole build, and a
+second build refuses to start. Sync, auto-sync and update check the lock before they
+touch the checkout: auto-sync skips that round and tries again 30 minutes later, and
+the button or update reports the running build. `inspect` leaves the version stamp in
+place while a build holds the lock, since that build owns it. A lock whose process is
+gone, or older than six hours, is stale and replaced. The app's own `vp i` runs before
+its build takes the lock, so a terminal build started during that install is not
+caught.
 
 ## Conflicts
 

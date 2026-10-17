@@ -16,6 +16,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
+import { findCheckoutBuild } from "./CheckoutBuildLock.ts";
 
 const COMMAND_OUTPUT_LIMIT = 16_000;
 const MARKER_REPORT_OUTPUT_LIMIT = 1_048_576;
@@ -29,6 +30,8 @@ const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
 const ANSI_PATTERN = /\u001b\[[0-9;]*m/gu;
 // Overrides the checkout path the build recorded in the packaged package.json.
 const SOURCE_REPOSITORY_PATH_ENV = "T3CODE_SOURCE_REPOSITORY_PATH";
+// A repository sync script that pushes with `push-safe`; without it, plain git pushes.
+const SYNC_RUNNER_ENV = "TJN_REPO_SYNC_RUNNER";
 const UPSTREAM_REPOSITORY = "pingdotgg/t3code";
 const UPSTREAM_REMOTE_URL = "https://github.com/pingdotgg/t3code.git";
 // The scheme, user, and host of a GitHub remote: https, ssh, scp-style, or git protocol.
@@ -500,6 +503,22 @@ export const make = Effect.gen(function* () {
     return repositoryPath;
   });
 
+  // The in-process lock does not see a build started from a terminal or by
+  // other tooling; merging, installing or building under one breaks both.
+  const requireIdleCheckout = (operation: LocalSourceUpdateOperation) =>
+    Effect.gen(function* () {
+      const repo = yield* requireRepositoryPath;
+      const holder = yield* Effect.sync(() => findCheckoutBuild(repo));
+      if (holder !== undefined) {
+        return yield* makeError(
+          operation,
+          `another desktop build (process ${holder}) is running in this checkout; try again once it finishes`,
+          new Error("build in progress"),
+          repo,
+        );
+      }
+    });
+
   const runCommand = Effect.fn("desktop.localSourceUpdates.runCommand")(function* (input: {
     readonly operation: LocalSourceUpdateOperation;
     readonly command: string;
@@ -620,7 +639,8 @@ export const make = Effect.gen(function* () {
     const readStatus = gitChecked("inspect", ["status", "--porcelain=v1", "--untracked-files=all"]);
     let status = yield* readStatus;
     // Quitting mid-build skips the build's own restore and leaves the version
-    // stamp behind; that alone must not block the next update.
+    // stamp behind; that alone must not block the next update. A build that is
+    // still running owns its stamp.
     const stampedOnly = yield* git("inspect", [
       "diff",
       "--numstat",
@@ -633,6 +653,7 @@ export const make = Effect.gen(function* () {
       .map((line) => line.slice(3));
     if (
       dirtyPaths.length > 0 &&
+      findCheckoutBuild(repo) === undefined &&
       dirtyPaths.every((path) => (RELEASE_PACKAGE_FILES as ReadonlyArray<string>).includes(path)) &&
       stampedOnly.stdout
         .trim()
@@ -1183,14 +1204,21 @@ export const make = Effect.gen(function* () {
 
   // Pushes only to origin, never to upstream. A failed push never fails the
   // sync or build: the merge stands locally and the result says why it was skipped.
+  // A configured sync runner pushes instead of plain git, so its owner's other
+  // checkouts are pulled to the pushed commit too.
   const pushFork = Effect.fn("desktop.localSourceUpdates.pushFork")(function* (repo: string) {
     yield* reportProgress({ phase: "pushing" });
-    const result = yield* runCommand({
-      operation: "push",
-      command: "git",
-      args: ["push", "origin", "HEAD:main"],
-      cwd: repo,
-    }).pipe(
+    const configuredRunner = process.env[SYNC_RUNNER_ENV]?.trim();
+    const runner =
+      configuredRunner &&
+      (yield* fileSystem.exists(configuredRunner).pipe(Effect.orElseSucceed(() => false)))
+        ? configuredRunner
+        : undefined;
+    const result = yield* runCommand(
+      runner
+        ? { operation: "push", command: "python3", args: [runner, "push-safe"], cwd: repo }
+        : { operation: "push", command: "git", args: ["push", "origin", "HEAD:main"], cwd: repo },
+    ).pipe(
       Effect.catchTag("LocalSourceUpdateError", (error) =>
         Effect.succeed<CommandResult>({
           stdout: "",
@@ -1200,11 +1228,26 @@ export const make = Effect.gen(function* () {
         }),
       ),
     );
-    if (result.exitCode === 0) {
-      yield* logSourceInfo("pushed the fork to origin", { repositoryPath: repo });
+    // The runner exits 0 when it refuses too; its last line says what it did.
+    const runnerOutcome = runner ? (result.stdout.trim().split("\n").at(-1)?.trim() ?? "") : "";
+    if (result.exitCode === 0 && (!runner || runnerOutcome.startsWith("pushed"))) {
+      if (runner && runnerOutcome !== "pushed") {
+        yield* logSourceWarning("pushed the fork, but not every checkout was pulled", {
+          repositoryPath: repo,
+          outcome: runnerOutcome,
+        });
+      } else {
+        yield* logSourceInfo("pushed the fork to origin", {
+          repositoryPath: repo,
+          via: runner ? "sync runner" : "git",
+        });
+      }
       return { pushed: true } satisfies ForkPushResult;
     }
-    const reason = summarizePushFailure(trimOutput(result));
+    const reason =
+      runner && result.exitCode === 0
+        ? `sync runner: ${runnerOutcome || "no result"}`
+        : summarizePushFailure(trimOutput(result));
     yield* logSourceWarning("fork push skipped", {
       repositoryPath: repo,
       reason,
@@ -1217,6 +1260,7 @@ export const make = Effect.gen(function* () {
   const repositoryLock = yield* Semaphore.make(1);
 
   const syncAndBuild = Effect.gen(function* () {
+    yield* requireIdleCheckout("build");
     const inspection = yield* inspect;
     const repo = inspection.repositoryPath;
     const merging = inspection.behind > 0;
@@ -1409,6 +1453,7 @@ export const make = Effect.gen(function* () {
   // button then builds that release.
   const syncUpstream = (agent: boolean) =>
     Effect.gen(function* () {
+      yield* requireIdleCheckout("merge");
       const inspection = yield* inspect;
       const repo = inspection.repositoryPath;
       const git = (args: ReadonlyArray<string>) =>

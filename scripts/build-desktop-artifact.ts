@@ -4027,6 +4027,7 @@ const cliRuntimeLayer = Layer.mergeAll(Logger.layer([Logger.consolePretty()]), N
 
 if (import.meta.main) {
   Command.run(buildDesktopArtifactCli, { version: "0.0.0" }).pipe(
+    Fork.withCheckoutBuildLock, // Fork add-on: one desktop build per checkout.
     Effect.scoped,
     Effect.provide(cliRuntimeLayer),
     NodeRuntime.runMain,
