@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { cn } from "../../lib/utils"; // Fork add-on: compact lineage agents
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import {
@@ -72,6 +73,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import {
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
+  THREAD_DETAILS_PANEL_AGENT_LINE_CLASS, // Fork add-on: compact lineage agents
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
@@ -88,6 +90,7 @@ export function resolveThreadLineageWindow<Row>(
 }
 
 function ThreadLineageRowList(props: {
+  readonly compact: boolean; // Fork add-on: compact lineage agents
   readonly hiddenCount: number;
   readonly onShowMore: () => void;
   readonly children: ReactNode;
@@ -109,9 +112,23 @@ function ThreadLineageRowList(props: {
         <button
           type="button"
           onClick={props.onShowMore}
-          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
+          className={
+            props.compact // Fork add-on: compact lineage agents
+              ? cn(
+                  THREAD_DETAILS_PANEL_AGENT_LINE_CLASS,
+                  "text-muted-foreground/70 hover:text-foreground/80",
+                )
+              : `flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`
+          }
         >
-          <PlusIcon aria-hidden className="size-4 shrink-0" />
+          <PlusIcon
+            aria-hidden
+            className={
+              props.compact
+                ? "size-3 shrink-0"
+                : "size-4 shrink-0" /* Fork add-on: compact lineage agents */
+            }
+          />
           Show {Math.min(props.hiddenCount, THREAD_LINEAGE_PAGE_COUNT)} more
         </button>
       ) : null}
@@ -123,6 +140,7 @@ function ThreadLineageGroup(props: {
   readonly label: string | null;
   readonly rows: ReadonlyArray<ThreadRelationshipWalkRow>;
   readonly expanded: boolean;
+  readonly compact: boolean; // Fork add-on: compact lineage agents
   readonly children: (rows: ReadonlyArray<ThreadRelationshipWalkRow>) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(props.expanded);
@@ -149,6 +167,7 @@ function ThreadLineageGroup(props: {
       ) : null}
       {expanded ? (
         <ThreadLineageRowList
+          compact={props.compact /* Fork add-on: compact lineage agents */}
           hiddenCount={hiddenCount}
           onShowMore={() => setVisibleCount((count) => count + THREAD_LINEAGE_PAGE_COUNT)}
         >
@@ -302,9 +321,15 @@ export function ThreadRelationshipsPanel(props: {
   });
   const lineage = nestSubagentLineage(graph, projection, props.threadId, active, previous); // Fork add-on: nested lineage
   const groups = [
-    { id: "related", label: null, rows: related, expanded: true },
-    { id: "active", label: null, rows: lineage.active, expanded: true }, // Fork add-on: nested lineage
-    { id: "previous", label: "Previous agents", rows: lineage.previous, expanded: false }, // Fork add-on: nested lineage
+    { id: "related", label: null, rows: related, expanded: true, compact: false }, // Fork add-on: compact lineage agents
+    { id: "active", label: null, rows: lineage.active, expanded: true, compact: true }, // Fork add-on: nested lineage, compact lineage agents
+    {
+      id: "previous", // Fork add-on: nested lineage, compact lineage agents
+      label: "Previous agents",
+      rows: lineage.previous,
+      expanded: false,
+      compact: true,
+    },
   ];
   const runningCount =
     (projection?.subagents.filter(
@@ -470,6 +495,7 @@ export function ThreadRelationshipsPanel(props: {
                 workflowGroup?.workflow.status === "running" &&
                 agent?.origin === "provider_native" &&
                 providerDriver === "claudeAgent";
+              const compact = isSubagent && !isParent && !workflowGroup; // Fork add-on: compact lineage agents
               const trailingVisibilityClass = (workflowGroup ? canStopWorkflow : canStop)
                 ? "group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0 [@media(hover:none)]:opacity-0"
                 : "";
@@ -507,9 +533,16 @@ export function ThreadRelationshipsPanel(props: {
                     provider={provider}
                     fallbackIcon={RelationshipIcon}
                     status={rowStatus}
+                    compact={compact /* Fork add-on: compact lineage agents */}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">
+                    <span
+                      className={
+                        compact // Fork add-on: compact lineage agents
+                          ? "block truncate text-left"
+                          : "block truncate text-left text-sm font-medium leading-4 text-foreground/85"
+                      }
+                    >
                       {threadTitle}
                     </span>
                   </span>
@@ -520,7 +553,9 @@ export function ThreadRelationshipsPanel(props: {
                   !failed &&
                   (deriveSubagentElapsedMs(agent, 0) !== null || canStopWorkflow) ? (
                     <span
-                      className={`shrink-0 text-2xs font-normal tabular-nums text-muted-foreground ${canStopWorkflow ? "min-w-6 text-end" : ""} ${trailingVisibilityClass}`}
+                      className={
+                        `shrink-0 ${compact ? "" : "text-2xs"} font-normal tabular-nums text-muted-foreground ${canStopWorkflow ? "min-w-6 text-end" : ""} ${trailingVisibilityClass}` /* Fork add-on: compact lineage agents */
+                      }
                     >
                       <AgentElapsed agent={agent} compact />
                     </span>
@@ -529,7 +564,7 @@ export function ThreadRelationshipsPanel(props: {
                       className={
                         workflowGroup
                           ? "sr-only"
-                          : `shrink-0 text-2xs ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}`
+                          : `shrink-0 ${compact ? "" : "text-2xs"} ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}` // Fork add-on: compact lineage agents
                       }
                     >
                       {threadRelationshipStatusLabel(rowStatus)}
@@ -545,7 +580,13 @@ export function ThreadRelationshipsPanel(props: {
                       <ThreadDetailsControl
                         size="sm"
                         variant="ghost"
-                        part={workflowGroup ? "primary" : "row"}
+                        part={
+                          workflowGroup
+                            ? "primary"
+                            : compact
+                              ? "agentLine"
+                              : "row" /* Fork add-on: compact lineage agents */
+                        }
                         disabled={node?.missing === true}
                         onClick={() => openThread(threadId)}
                       />
@@ -580,7 +621,9 @@ export function ThreadRelationshipsPanel(props: {
                 <li
                   key={threadId}
                   style={lineageIndentStyle(depth) /* Fork add-on: nested lineage */}
-                  className="group relative flex h-8 items-center rounded-lg"
+                  className={
+                    `group relative flex items-center ${compact ? "h-5 rounded-md" : "h-8 rounded-lg"}` /* Fork add-on: compact lineage agents */
+                  }
                 >
                   {isMergeTarget ? (
                     <div className={THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS}>

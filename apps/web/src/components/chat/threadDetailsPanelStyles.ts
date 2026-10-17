@@ -1,3 +1,5 @@
+import { AGENT_LINE_CLASS } from "../../sidebar-compact/agentLines"; // Fork add-on: compact lineage agents
+
 const THREAD_DETAILS_PANEL_RESTING_BUTTON_SURFACE_CLASS = "bg-transparent shadow-none";
 
 const THREAD_DETAILS_PANEL_HOVER_SURFACE_CLASS =
@@ -15,6 +17,9 @@ export const THREAD_DETAILS_PANEL_LABEL_CLASS =
 const THREAD_DETAILS_PANEL_CONTROL_CLASS = `h-8 min-w-0 rounded-lg border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-[13px] font-medium text-foreground/80`;
 
 export const THREAD_DETAILS_PANEL_ROW_CLASS = `${THREAD_DETAILS_PANEL_CONTROL_CLASS} w-full justify-start ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`;
+
+// Fork add-on: compact lineage agents. A Lineage subagent row, sized like the sidebar's subagent lines.
+export const THREAD_DETAILS_PANEL_AGENT_LINE_CLASS = `${AGENT_LINE_CLASS} min-w-0 justify-start border-transparent px-2.5 text-foreground/80 ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`;
 
 export const THREAD_DETAILS_PANEL_SELECT_ROW_CLASS = `${THREAD_DETAILS_PANEL_ROW_CLASS} pe-0 [&_[data-slot=select-icon]]:-me-px [&_[data-slot=select-icon]]:relative [&_[data-slot=select-icon]]:flex [&_[data-slot=select-icon]]:h-full [&_[data-slot=select-icon]]:w-8 [&_[data-slot=select-icon]]:shrink-0 [&_[data-slot=select-icon]]:items-center [&_[data-slot=select-icon]]:justify-center [&_[data-slot=select-icon]]:before:absolute [&_[data-slot=select-icon]]:before:-left-px [&_[data-slot=select-icon]]:before:top-1/2 [&_[data-slot=select-icon]]:before:h-4 [&_[data-slot=select-icon]]:before:w-px [&_[data-slot=select-icon]]:before:-translate-y-1/2 [&_[data-slot=select-icon]]:before:bg-border/65 [&_[data-slot=select-icon]>svg]:me-0 [&_[data-slot=select-icon]>svg]:size-4 [&_[data-slot=select-icon]>svg]:text-muted-foreground [&_[data-slot=select-icon]>svg]:opacity-100`;
 

@@ -47,15 +47,21 @@ export function ThreadRelationshipIcon({
   provider,
   status,
   fallbackIcon: FallbackIcon = BotIcon,
+  compact = false, // Fork add-on: compact lineage agents
 }: {
   driver?: ProviderDriverKind | undefined;
   provider?: ServerProvider | undefined;
   status: string | null;
   fallbackIcon?: LucideIcon;
+  compact?: boolean; // Fork add-on: compact lineage agents
 }) {
-  const iconClassName = "size-4 shrink-0 text-muted-foreground";
+  const iconClassName = `${compact ? "size-3" : "size-4"} shrink-0 text-muted-foreground`; // Fork add-on: compact lineage agents
   return (
-    <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+    <span
+      className={
+        `relative inline-flex ${compact ? "size-3" : "size-4"} shrink-0 items-center justify-center` /* Fork add-on: compact lineage agents */
+      }
+    >
       {driver ? (
         <ProviderInstanceIcon
           driverKind={driver}
@@ -69,7 +75,9 @@ export function ThreadRelationshipIcon({
       )}
       <span
         className={cn(
-          "absolute -bottom-1 -right-1 size-2 rounded-full border-2 border-card",
+          compact // Fork add-on: compact lineage agents
+            ? "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-card"
+            : "absolute -bottom-1 -right-1 size-2 rounded-full border-2 border-card",
           status === "running" ||
             status === "in_progress" ||
             status === "pending" ||
