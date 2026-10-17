@@ -2392,64 +2392,67 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {/* Fork add-on: compact sidebar cards. */}
             <div
               data-fork-card-part="meta"
-              className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs"
+              // Equal side columns keep the machine centered in the card.
+              className="mt-0.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 text-secondary-label text-xs"
             >
-              {/* Fork add-on: nested subagents. */}
-              <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
-              {/* Fork add-on: the machine first, then the branch when there is one. */}
-              {showsScratchMachine ? (
-                <>
-                  <EnvironmentMachineIcon
-                    aria-hidden
-                    kind={props.environmentMachine}
-                    className="size-3 shrink-0 text-muted-foreground/40"
-                  />
-                  <span className="min-w-0 truncate text-muted-foreground/40">
-                    {props.environmentLabel}
-                  </span>
-                </>
-              ) : null}
-              {thread.branch ? (
-                <>
-                  <ThreadWorktreeIndicator thread={thread} />
-                  <span className="flex min-w-0 flex-1 text-muted-foreground/40">
-                    <MiddleTruncate value={thread.branch} showTitle={false} />
-                  </span>
-                </>
-              ) : (
-                <span className="flex-1" />
-              )}
-              {terminalStatusIcon}
-              {prBadge}
-              {diff ? (
-                <span className="shrink-0 font-mono">
-                  <span className="text-diff-addition-foreground">
-                    +{formatDiffCount(diff.insertions)}
-                  </span>{" "}
-                  <span className="text-diff-deletion-foreground">
-                    −{formatDiffCount(diff.deletions)}
-                  </span>
-                </span>
-              ) : null}
-              <span
-                aria-hidden
-                className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
-              >
-                {isRemote && !showsScratchMachine ? (
-                  <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
+              <span className="flex min-w-0 items-center gap-1.5">
+                {/* Fork add-on: nested subagents. */}
+                <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
+                {thread.branch ? (
+                  <>
+                    <ThreadWorktreeIndicator thread={thread} />
+                    <span className="flex min-w-0 flex-1 text-muted-foreground/40">
+                      <MiddleTruncate value={thread.branch} showTitle={false} />
+                    </span>
+                  </>
+                ) : null}
+              </span>
+              {/* Fork add-on: the machine the thread runs on, centered. */}
+              <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground/40">
+                {showsScratchMachine ? (
+                  <>
                     <EnvironmentMachineIcon
                       aria-hidden
                       kind={props.environmentMachine}
-                      className="size-3.5"
+                      className="size-3 shrink-0"
                     />
+                    <span className="min-w-0 truncate">{props.environmentLabel}</span>
+                  </>
+                ) : null}
+              </span>
+              <span className="flex min-w-0 items-center justify-end gap-1.5">
+                {terminalStatusIcon}
+                {prBadge}
+                {diff ? (
+                  <span className="shrink-0 font-mono">
+                    <span className="text-diff-addition-foreground">
+                      +{formatDiffCount(diff.insertions)}
+                    </span>{" "}
+                    <span className="text-diff-deletion-foreground">
+                      −{formatDiffCount(diff.deletions)}
+                    </span>
                   </span>
                 ) : null}
-                {/* Fork add-on: external-session hand back. */}
-                <ContinuedThreadMarker threadId={thread.id} />
-                <SidebarProviderStack
-                  thread={thread}
-                  providerEntryByInstanceId={props.providerEntryByInstanceId}
-                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none inline-flex shrink-0 items-center gap-1"
+                >
+                  {isRemote && !showsScratchMachine ? (
+                    <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
+                      <EnvironmentMachineIcon
+                        aria-hidden
+                        kind={props.environmentMachine}
+                        className="size-3.5"
+                      />
+                    </span>
+                  ) : null}
+                  {/* Fork add-on: external-session hand back. */}
+                  <ContinuedThreadMarker threadId={thread.id} />
+                  <SidebarProviderStack
+                    thread={thread}
+                    providerEntryByInstanceId={props.providerEntryByInstanceId}
+                  />
+                </span>
               </span>
             </div>
           </div>

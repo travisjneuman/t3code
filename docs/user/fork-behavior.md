@@ -39,8 +39,8 @@ threads and restarts. See [Session details](session-details.md#open-them).
 ## Thread cards name their machine
 
 Every thread card in the sidebar names the machine the thread runs on, the one picked in **Run
-on**, even when the thread is in a project, since one project can live on several machines. A
-thread's branch, when it has one, follows the machine.
+on**, centered at its bottom, even when the thread is in a project, since one project can live on
+several machines. A thread's branch, when it has one, sits at the bottom left.
 
 ## Subagents sit under their thread
 
