@@ -28,7 +28,7 @@ import * as ElectronDialog from "./electron/ElectronDialog.ts";
 import * as ElectronMenu from "./electron/ElectronMenu.ts";
 import * as ElectronPowerMonitor from "./electron/ElectronPowerMonitor.ts";
 import * as ElectronProtocol from "./electron/ElectronProtocol.ts";
-import * as ElectronSafeStorage from "./electron/ElectronSafeStorage.ts";
+// Fork add-on: ElectronSafeStorage is provided by ./fork/fileSafeStorage.ts.
 import * as ElectronShell from "./electron/ElectronShell.ts";
 import * as ElectronTheme from "./electron/ElectronTheme.ts";
 import * as ElectronUpdater from "./electron/ElectronUpdater.ts";
@@ -66,6 +66,7 @@ import * as DesktopLegacyLocalStorage from "./app/DesktopLegacyLocalStorage.ts";
 import * as DesktopTelemetryPublisher from "./telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopRendererHistory from "./telemetry/DesktopRendererHistory.ts";
 import * as ForkDesktopUpdates from "./updates/ForkDesktopUpdates.ts"; // Fork add-on: replaces DesktopUpdates.
+import * as ForkFileSafeStorage from "./fork/fileSafeStorage.ts"; // Fork add-on: replaces ElectronSafeStorage.
 import * as BrowserImport from "./preview/BrowserImport/BrowserImport.ts";
 import * as LinuxBrowserSecret from "./preview/BrowserImport/LinuxBrowserSecret.ts";
 import * as BrowserSession from "./preview/BrowserSession.ts";
@@ -132,7 +133,7 @@ const layerElectron = Layer.mergeAll(
   ElectronMenu.layer,
   ElectronPowerMonitor.layer,
   ElectronProtocol.layer,
-  ElectronSafeStorage.layer,
+  ForkFileSafeStorage.layer, // Fork add-on: replaces ElectronSafeStorage.layer.
   ElectronShell.layer,
   ElectronTheme.layer,
   ElectronUpdater.layer,

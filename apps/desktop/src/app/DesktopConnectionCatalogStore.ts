@@ -479,20 +479,32 @@ export const make = Effect.gen(function* () {
       if (!(yield* encryptionAvailable)) {
         return Option.none<string>();
       }
-      const decrypted = yield* decodeSecretBytes(catalogPath, document.value.encryptedCatalog).pipe(
-        Effect.flatMap((encryptedCatalog) =>
-          safeStorage.decryptString(encryptedCatalog).pipe(
-            Effect.mapError(
-              (cause) =>
-                new DesktopConnectionCatalogStoreProtectionError({
-                  operation: "decrypt-catalog",
-                  catalogPath,
-                  cause,
-                }),
-            ),
-          ),
+      // Fork add-on: the encrypted bytes stay in scope so a legacy catalog can be rewritten.
+      const encryptedCatalog = yield* decodeSecretBytes(
+        catalogPath,
+        document.value.encryptedCatalog,
+      );
+      const decrypted = yield* safeStorage.decryptString(encryptedCatalog).pipe(
+        Effect.mapError(
+          (cause) =>
+            new DesktopConnectionCatalogStoreProtectionError({
+              operation: "decrypt-catalog",
+              catalogPath,
+              cause,
+            }),
         ),
       );
+      // Fork add-on: move a keychain-encrypted catalog to the fork's file key.
+      if (safeStorage.needsReencryption?.(encryptedCatalog)) {
+        yield* writeCatalog(decrypted).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Could not re-encrypt the desktop connection catalog.", {
+              catalogPath,
+              error,
+            }),
+          ),
+        );
+      }
       return Option.some(decrypted);
     }).pipe(Effect.withSpan("desktop.connectionCatalogStore.get")),
     set: Effect.fn("desktop.connectionCatalogStore.set")(function* (catalog) {
