@@ -412,8 +412,22 @@ const make = Effect.gen(function* () {
       !owned.has(entry.path) &&
       !(entry.info.cwd !== null && excludedRoots.some((root) => isUnder(entry.info.cwd!, root)));
 
+    // Keys whose ownership was read after they first appeared. A session T3
+    // just started (a delegated subagent) would otherwise list until the
+    // cached ownership expires; its provider thread exists by the time the
+    // native file does, so one fresh read hides it.
+    const ownershipChecked = new Set<string>();
+
     const publish = Effect.gen(function* () {
       yield* ownedSessionIds;
+      if (
+        [...entries].some(
+          ([key, entry]) => !ownershipChecked.has(key) && isListed(entry, Date.now()),
+        )
+      ) {
+        yield* refreshOwnedIds;
+      }
+      for (const key of entries.keys()) ownershipChecked.add(key);
       const inClaude = yield* claudeDesktopArchive.archivedIds;
       const claudeDesktopHas = yield* claudeDesktopArchive.hasRecord;
       const now = Date.now();

@@ -36,6 +36,14 @@ In the thread details card, choose a section's title, such as **Automations** or
 collapse it to its heading, and again to expand it. Each section remembers its state across
 threads and restarts. See [Session details](session-details.md#open-them).
 
+## Subagents sit under their thread
+
+Subagents a thread started, through `delegate_task` or the provider's own subagent tool, appear as
+single lines under that thread in the sidebar, wherever the thread sits: Active, Working, Snoozed
+or Settled. They stay there after they finish. Hover one for its provider, model and status; open
+it to review its work, or right-click it to archive or delete it. Choose the **subagents** line
+under a thread to hide all of its subagents, and again to show them all.
+
 ## Codex can show hidden models
 
 OpenAI keeps some models out of the Codex picker, such as older or long-context versions. To list

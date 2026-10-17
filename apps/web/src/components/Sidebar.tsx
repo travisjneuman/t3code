@@ -147,6 +147,7 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { useSidebarSubagents } from "../subagents/SidebarSubagentRows"; // Fork add-on: nested subagents.
 import {
   useEnvironmentIdentities,
   useConnectedEnvironmentIds,
@@ -3027,6 +3028,13 @@ export default function Sidebar() {
       params: buildThreadRouteParams(threadRef),
     });
   };
+  // Fork add-on: nested subagents.
+  const forkSubagents = useSidebarSubagents({
+    threads,
+    activeThreadKey: routeThreadKey,
+    providerEntriesByEnvironment,
+    onOpen: navigateToThread,
+  });
 
   const handleThreadFileDrop = async (threadRef: ScopedThreadRef, files: File[]) => {
     const dropId = queuePendingFileDrop({ threadRef, files });
@@ -4893,6 +4901,7 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          items.push(...forkSubagents.render(item.key)); // Fork add-on: nested subagents.
                           continue;
                         }
                         switch (item.marker) {
