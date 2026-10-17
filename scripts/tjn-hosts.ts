@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   compareVersions,
+  deliveryDir,
   hashFile,
   powershellArgs,
   psQuote,
@@ -13,6 +14,8 @@ import {
   Refusal,
   requireState,
   run,
+  sftp,
+  sftpPath,
   shellQuote,
   version,
   type Host,
@@ -29,6 +32,7 @@ const CACHE = path.join(homedir(), "Library", "Caches", "t3code-fork-release");
 const PLATFORMS = ["win32-x64", "linux-x64"] as const;
 const USAGE = `Usage: node scripts/tjn-hosts.ts release [--build-host name] [--dry-run]
        node scripts/tjn-hosts.ts status
+       node scripts/tjn-hosts.ts stage <host> [--dry-run]
        node scripts/tjn-hosts.ts prune <host>|--all --confirm-idle [--dry-run]
        node scripts/tjn-hosts.ts rollback <host> [--to version] --confirm-idle [--dry-run]
 Exit codes: 0 success; 1 command/IO failure; 2 usage; 3 preflight refusal or locked host;
@@ -37,6 +41,8 @@ Exit codes: 0 success; 1 command/IO failure; 2 usage; 3 preflight refusal or loc
 nothing and does not need --confirm-idle. Changing runs lock each host they cover and keep a
 phase journal under ~/Library/Application Support/t3code-fork/host-runs.
 Unreachable hosts are reported and skipped during release preflight only.
+A host with stageFrom gets each release from that host over SSH after publication; stage
+repeats that for the published release. Its in-app Update then installs without downloading.
 Rollback requiring a database restore is refused before stopping the service.
 After pruning a migrated release, fix forward; this tool never writes live userdata.`;
 
@@ -152,6 +158,22 @@ async function config(): Promise<HostConfig> {
     requireState(
       !contains(p.join(home, "userdata"), raw.service.file),
       "Service file cannot be inside live userdata.",
+    );
+  }
+  for (const [name, raw] of Object.entries(hosts)) {
+    if (!record(raw) || raw.stageFrom === undefined) {
+      continue;
+    }
+    const source =
+      typeof raw.stageFrom === "string" && Object.hasOwn(hosts, raw.stageFrom)
+        ? hosts[raw.stageFrom]
+        : undefined;
+    requireState(
+      raw.stageFrom !== name &&
+        record(source) &&
+        source.os === raw.os &&
+        source.stageFrom === undefined,
+      "stageFrom must name another configured host with the same OS that downloads its own releases.",
     );
   }
   for (const platform of PLATFORMS) {
@@ -293,30 +315,71 @@ async function snapshot(host: Host): Promise<Snapshot> {
 }
 
 async function copyArchive(host: Host, v: string, destination: string) {
-  const joined = hostPath(host)
-    .join(host.cacheDir, v, archiveName(v, `${host.os}-x64`))
-    .replaceAll("\\", "/");
-  // Windows OpenSSH's SFTP resolves `C:/...` against the home directory; absolute drive paths need `/C:/...`.
-  const source = host.os === "win32" ? `/${joined}` : joined;
-  const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-  // SFTP preserves archive bytes; native stdout piped through Windows PowerShell does not.
-  await run(
-    "sftp",
-    [
-      "-b",
-      "-",
-      "-o",
-      "BatchMode=yes",
-      "-o",
-      "ConnectTimeout=10",
-      "-o",
-      "ServerAliveInterval=15",
-      "-o",
-      "ServerAliveCountMax=3",
-      host.ssh,
-    ],
-    { input: `get ${quote(source)} ${quote(destination)}\n` },
-  );
+  const source = hostPath(host).join(host.cacheDir, v, archiveName(v, `${host.os}-x64`));
+  await sftp(host.ssh, [["get", sftpPath(host.os, source), destination]]);
+}
+
+interface Delivery {
+  name: string;
+  host: Host;
+  source: string;
+  sourceHost: Host;
+}
+
+// The source downloads the published archive itself, so delivery never depends on which
+// host built it or on the Mac's transfer cache.
+function deliverySteps(v: string, deliveries: Delivery[]): Step[] {
+  return deliveries.flatMap(({ name, host, source, sourceHost }): Step[] => {
+    const archive = archiveName(v, `${host.os}-x64`);
+    const sourceCache = hostPath(sourceHost).join(sourceHost.cacheDir, deliveryDir(v));
+    const targetCache = hostPath(host).join(host.cacheDir, deliveryDir(v));
+    const installedDir = hostPath(host).join(host.t3Home, "runtime", "versions", v);
+    return [
+      {
+        host: source,
+        phase: `deliver:${name}`,
+        mutates: true,
+        does: [
+          remoteShown(sourceHost, { action: "deliver", version: v, to: name }),
+          `on host: download ${archive} and SHA256SUMS from the fork release v${v} into ${sourceCache}; check its SHA-256`,
+          `on host: sftp -b - ${host.ssh}: mkdir ${targetCache}; put ${archive} there; then rm -r ${sourceCache}`,
+        ],
+        ifStopped: `${name}'s delivery cache ${targetCache} may remain.`,
+        leaves: `${name}'s delivery cache ${targetCache}`,
+      },
+      {
+        host: name,
+        phase: "install",
+        mutates: true,
+        final: true,
+        does: [
+          remoteShown(host, { action: "install", version: v }),
+          `on host: recheck the SHA-256; extract into ${installedDir} with .install-complete; rm -r ${targetCache}`,
+        ],
+        ifStopped: `${installedDir} is complete or absent; ${targetCache} may remain.`,
+      },
+    ];
+  });
+}
+
+async function deliverReleases(v: string, deliveries: Delivery[], journal: Journal) {
+  for (const { name, host, source, sourceHost } of deliveries) {
+    const sha256 = await journal.step(source, `deliver:${name}`, async () => {
+      const result = await remote(sourceHost, { action: "deliver", version: v, to: host });
+      requireState(
+        record(result) &&
+          result.archive === archiveName(v, `${host.os}-x64`) &&
+          typeof result.sha256 === "string" &&
+          /^[a-f0-9]{64}$/.test(result.sha256),
+        "Invalid delivery receipt.",
+      );
+      return result.sha256;
+    });
+    await journal.step(name, "install", () =>
+      remote(host, { action: "install", version: v, sha256 }),
+    );
+    console.log(`${name}: ${v} staged from ${source}; its Update installs it without downloading.`);
+  }
 }
 
 interface ReleasePlan {
@@ -329,6 +392,7 @@ interface ReleasePlan {
   chosen: Array<{ platform: Platform; name: string; host: Host; ordinal: number }>;
   migrations: Record<string, boolean>;
   staging: string;
+  deliveries: Delivery[];
 }
 
 // Read-only: git, the GitHub listing and host inspection. Dry runs stop after this.
@@ -465,7 +529,21 @@ async function releasePreflight(cfg: HostConfig, override?: string): Promise<Rel
     !(await exists(staging)),
     `Mac staging directory ${staging} already exists; inspect and remove it deliberately before releasing.`,
   );
-  return { v, tag, tagSha, sha, existing, skipped, chosen, migrations, staging };
+  const deliveries: Delivery[] = [];
+  for (const [name, host] of Object.entries(cfg.hosts)) {
+    const source = host.stageFrom;
+    if (source === undefined) {
+      continue;
+    }
+    if (!snapshots.has(name) || !snapshots.has(source)) {
+      console.error(`${name}: it or ${source} is unreachable; afterwards run \`stage ${name}\`.`);
+    } else if (snapshots.get(name)!.versions.includes(v)) {
+      console.error(`${name}: ${v} is already installed there; nothing to deliver.`);
+    } else {
+      deliveries.push({ name, host, source, sourceHost: cfg.hosts[source]! });
+    }
+  }
+  return { v, tag, tagSha, sha, existing, skipped, chosen, migrations, staging, deliveries };
 }
 
 // The exact argv the run executes; dry runs and the journal print the same arrays.
@@ -595,6 +673,7 @@ function releaseSteps(p: ReleasePlan): Step[] {
       does: [`rm -r ${p.staging}`],
       ifStopped: "The Mac staging directory may remain.",
     },
+    ...deliverySteps(p.v, p.deliveries),
   ];
 }
 
@@ -716,12 +795,40 @@ async function release(p: ReleasePlan, journal: Journal) {
     );
   }
   console.log(`Published ${p.tag}; retained tags, removed other releases and build caches.`);
+  try {
+    await deliverReleases(p.v, p.deliveries, journal);
+  } catch (error) {
+    throw new Refusal(
+      `Published ${p.tag}, but delivery did not finish: ${error instanceof Error ? error.message : String(error)}\nRemove any leftover delivery cache named below, then run \`stage <host>\`.`,
+      1,
+    );
+  }
   if (p.skipped.length > 0) {
     console.log(`Unreachable hosts skipped (not validated or changed): ${p.skipped.join(", ")}`);
   }
   console.log(
     "Use each host's Update; use Update everything only after every connected host has the intended release source.",
   );
+}
+
+// Read-only: the GitHub listing, the target's snapshot and the source's reachability.
+async function stagePreflight(cfg: HostConfig, name: string) {
+  const host = cfg.hosts[name]!;
+  const source = host.stageFrom;
+  requireState(source !== undefined, "Host has no stageFrom; it downloads its own releases.");
+  const v = version(currentRelease(await releases()).tag_name.slice(1));
+  const before = await snapshot(host);
+  requireState(
+    compareVersions(before.state.activeVersion, v) < 0,
+    "Host already runs the published fork release; nothing to stage.",
+  );
+  requireState(
+    !before.versions.includes(v),
+    "The published release is already installed on the host; apply it with its Update.",
+  );
+  const sourceHost = cfg.hosts[source]!;
+  await remote(sourceHost, { action: "ready" });
+  return { v, deliveries: [{ name, host, source, sourceHost }] };
 }
 
 function migrationReceipt(release: Release): ReleaseReceipt {
@@ -986,7 +1093,10 @@ async function main() {
       idle = true;
     } else if (
       arg === "--dry-run" &&
-      (command === "release" || command === "prune" || command === "rollback") &&
+      (command === "release" ||
+        command === "prune" ||
+        command === "rollback" ||
+        command === "stage") &&
       !dryRun
     ) {
       dryRun = true;
@@ -1002,7 +1112,7 @@ async function main() {
       }
     } else if (
       !arg.startsWith("-") &&
-      (command === "prune" || command === "rollback") &&
+      (command === "prune" || command === "rollback" || command === "stage") &&
       !hostName
     ) {
       hostName = arg;
@@ -1012,8 +1122,9 @@ async function main() {
   }
   if (
     !command ||
-    !["release", "status", "prune", "rollback"].includes(command) ||
-    ((command === "prune" || command === "rollback") && all === Boolean(hostName))
+    !["release", "status", "prune", "rollback", "stage"].includes(command) ||
+    ((command === "prune" || command === "rollback") && all === Boolean(hostName)) ||
+    (command === "stage" && !hostName)
   ) {
     throw new Refusal(USAGE, 2);
   }
@@ -1055,6 +1166,26 @@ async function main() {
       const plan = await journal.step(null, "preflight", () => releasePreflight(cfg, buildHost));
       journal.plan(releaseSteps(plan));
       await release(plan, journal);
+    });
+    return;
+  }
+  if (command === "stage") {
+    requireState(Object.hasOwn(cfg.hosts, hostName!), "Unknown configured host.");
+    const source = cfg.hosts[hostName!]!.stageFrom;
+    const locked = source === undefined ? [hostName!] : [source, hostName!];
+    if (dryRun) {
+      const plan = await stagePreflight(cfg, hostName!);
+      await printDryRun(
+        [`stage ${plan.v} onto ${hostName} from ${source}`],
+        locked,
+        deliverySteps(plan.v, plan.deliveries),
+      );
+      return;
+    }
+    await changing("stage", locked, "whole", async (journal) => {
+      const plan = await journal.step(null, "preflight", () => stagePreflight(cfg, hostName!));
+      journal.plan(deliverySteps(plan.v, plan.deliveries));
+      await deliverReleases(plan.v, plan.deliveries, journal);
     });
     return;
   }

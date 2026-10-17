@@ -63,6 +63,15 @@ Each `buildHosts` list is ordered: the first reachable host builds that platform
 fallback host's inventory name after the preferred builder. Keep caches disjoint from both the
 checkout and T3 home.
 
+A host whose server cannot download releases itself, for example because VPN split tunneling lets
+its T3 executable reach only the tailnet, can name a sibling with the same OS in `"stageFrom"`.
+After each publication the sibling downloads that host's archive from the fork release, checks it
+against `SHA256SUMS`, and puts it in the host's cache with `sftp` over SSH; the host then rechecks
+the hash and installs it into `runtime/versions/<version>`. Its in-app **Update** finds that
+complete install and skips the download. The sibling's own SSH configuration must resolve the
+host's `ssh` alias without a prompt. `stage <host>` repeats the delivery for the published release
+when the host or its sibling was unreachable during `release`.
+
 ## Release and update
 
 Run the coordinator from the fork checkout on the Mac:
@@ -71,6 +80,7 @@ Run the coordinator from the fork checkout on the Mac:
 node scripts/tjn-hosts.ts release [--dry-run]
 node scripts/tjn-hosts.ts release --build-host <name> [--dry-run]
 node scripts/tjn-hosts.ts status
+node scripts/tjn-hosts.ts stage <host> [--dry-run]
 node scripts/tjn-hosts.ts prune <host> --confirm-idle [--dry-run]
 node scripts/tjn-hosts.ts prune --all --confirm-idle [--dry-run]
 node scripts/tjn-hosts.ts rollback <host> --confirm-idle [--dry-run]
@@ -111,7 +121,9 @@ The steady-state workflow is:
    version, and each platform needs a reachable configured builder.
    Other inspection failures refuse the release rather than counting as unreachable. Both platforms
    build from the same commit. The Mac collects the archives and `SHA256SUMS`, compares the builders'
-   hashes, and uploads them together using `gh`.
+   hashes, and uploads them together using `gh`. Each reachable `stageFrom` host then gets its
+   archive from its sibling. If a delivery fails or was skipped, remove any delivery cache the
+   error names and run `stage <host>`.
 3. In the Mac app, use each host's **Update** in **Settings → Connections**. Before a host's first
    fork update, set `T3CODE_RELEASE_BASE_URL` to the fork's release download base in its service
    environment and restart its service. **Update everything** is safe only once every connected host

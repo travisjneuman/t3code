@@ -24,6 +24,8 @@ export interface Host {
   service:
     | { kind: "task"; name: string; file: string }
     | { kind: "systemd"; unit: string; file: string };
+  // A host that cannot download releases itself gets each one from this sibling over SSH.
+  stageFrom?: string;
 }
 export interface HostConfig {
   version: 1;
@@ -65,9 +67,19 @@ export interface Snapshot {
 }
 export interface Request {
   host: Host;
-  action: "ready" | "inspect" | "build" | "remove-cache" | "prune" | "rollback";
+  action:
+    | "ready"
+    | "inspect"
+    | "build"
+    | "remove-cache"
+    | "prune"
+    | "rollback"
+    | "deliver"
+    | "install";
   version?: string;
   sha?: string;
+  sha256?: string;
+  to?: Host;
   expected?: Snapshot;
   migrationsUnchanged?: boolean;
   confirmIdle?: boolean;
@@ -177,6 +189,39 @@ export async function run(
   } finally {
     await log?.close();
   }
+}
+export const archiveFile = (os: Host["os"], v: string) =>
+  `t3-${v}-${os}-x64.${os === "win32" ? "zip" : "tar.gz"}`;
+export const deliveryDir = (v: string) => `deliver-${v}`;
+// Windows OpenSSH's SFTP resolves `C:/...` against the home directory; absolute drive paths need `/C:/...`.
+export const sftpPath = (os: Host["os"], file: string) => {
+  const slashed = file.replaceAll("\\", "/");
+  return os === "win32" ? `/${slashed}` : slashed;
+};
+const sftpQuote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+/** Runs one SFTP batch; SFTP preserves archive bytes, native stdout piped through PowerShell does not. */
+export async function sftp(ssh: string, commands: Array<[string, ...string[]]>) {
+  await run(
+    "sftp",
+    [
+      "-b",
+      "-",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=3",
+      ssh,
+    ],
+    {
+      input: commands
+        .map(([command, ...files]) => [command, ...files.map(sftpQuote)].join(" ") + "\n")
+        .join(""),
+    },
+  );
 }
 export async function hashFile(file: string): Promise<string> {
   const hash = createHash("sha256");
@@ -784,59 +829,43 @@ async function rewrittenService(host: Host, target: string, upstream: boolean) {
   );
   return next;
 }
-async function downloadUpstream(host: Host, target: string) {
-  const dir = path.join(versionsPath(host), target);
-  if (await exists(dir)) {
-    await installed(host, target);
-    return false;
-  }
-  const cache = path.join(host.cacheDir, target);
-  requireState(
-    !(await exists(cache)),
-    "Rollback cache already exists; refusing to reuse or overwrite it.",
-  );
-  const cacheFilesystem = (await exists(host.cacheDir))
-    ? host.cacheDir
-    : path.dirname(host.cacheDir);
-  await realDirectory(cacheFilesystem);
-  await realDirectory(versionsPath(host));
-  const sameFilesystem =
-    (await fs.stat(cacheFilesystem, { bigint: true })).dev ===
-    (await fs.stat(versionsPath(host), { bigint: true })).dev;
-  const systemRoot = process.env.SystemRoot ?? process.env.windir;
-  requireState(host.os !== "win32" || systemRoot, "Windows system tar location is unavailable.");
-  const tar = host.os === "win32" ? path.join(systemRoot!, "System32", "tar.exe") : "tar";
-  await cacheRoot(host);
-  await fs.mkdir(cache, { mode: 0o700 });
-  await realDirectory(cache);
-  const platform = `${host.os}-x64`;
-  const name = `t3-${target}-${platform}.${host.os === "win32" ? "zip" : "tar.gz"}`;
-  const base = `https://github.com/pingdotgg/t3code/releases/download/v${target}`;
+// Downloads `name` from a release base URL and returns the SHA-256 its SHA256SUMS lists.
+async function downloadVerified(base: string, name: string, file: string) {
   const sums = await fetch(`${base}/SHA256SUMS`, { signal: AbortSignal.timeout(60_000) });
-  requireState(sums.ok, "Upstream checksums are unavailable; fix forward instead.");
+  requireState(sums.ok, `Release checksums are unavailable at ${base}.`);
   const matches = (await sums.text())
     .split(/\r?\n/)
     .filter((line) => line.trim().endsWith(` ${name}`));
   requireState(
     matches.length === 1 && /^[a-f0-9]{64}  /.test(matches[0]!),
-    "Missing or ambiguous upstream checksum.",
+    "Missing or ambiguous release checksum.",
   );
   const response = await fetch(`${base}/${name}`, { signal: AbortSignal.timeout(600_000) });
   requireState(
     response.ok && response.body !== null,
-    "Upstream archive is unavailable; fix forward instead.",
+    `Release archive ${name} is unavailable at ${base}.`,
   );
-  const archive = path.join(cache, name);
   await pipeline(
     Readable.fromWeb(response.body),
-    createWriteStream(archive, { flags: "wx", mode: 0o600 }),
+    createWriteStream(file, { flags: "wx", mode: 0o600 }),
   );
-  requireState(
-    (await hashFile(archive)) === matches[0]!.slice(0, 64),
-    "Upstream archive checksum mismatch.",
-  );
+  const sha256 = matches[0]!.slice(0, 64);
+  requireState((await hashFile(file)) === sha256, "Release archive checksum mismatch.");
+  return sha256;
+}
+// Extracts a checked archive inside its cache, then publishes `versions/<target>` complete or not at all.
+async function installArchive(host: Host, target: string, cache: string, archive: string) {
+  const dir = path.join(versionsPath(host), target);
+  requireState(!(await exists(dir)), "Version directory already exists; refusing to overwrite it.");
+  await realDirectory(versionsPath(host));
+  const sameFilesystem =
+    (await fs.stat(cache, { bigint: true })).dev ===
+    (await fs.stat(versionsPath(host), { bigint: true })).dev;
+  const systemRoot = process.env.SystemRoot ?? process.env.windir;
+  requireState(host.os !== "win32" || systemRoot, "Windows system tar location is unavailable.");
+  const tar = host.os === "win32" ? path.join(systemRoot!, "System32", "tar.exe") : "tar";
   const entries = (await run(tar, ["-tf", archive])).split(/\r?\n/);
-  const stem = name.replace(/\.(zip|tar\.gz)$/, "");
+  const stem = path.basename(archive).replace(/\.(zip|tar\.gz)$/, "");
   requireState(
     entries.every(
       (entry) =>
@@ -845,7 +874,7 @@ async function downloadUpstream(host: Host, target: string) {
         !entry.includes("\\") &&
         !entry.includes(":"),
     ),
-    "Unexpected upstream archive layout.",
+    "Unexpected release archive layout.",
   );
   const listing = (await run(tar, ["-tvf", archive])).split(/\r?\n/);
   requireState(
@@ -879,7 +908,87 @@ async function downloadUpstream(host: Host, target: string) {
     }
   }
   await installed(host, target);
+}
+async function downloadUpstream(host: Host, target: string) {
+  const dir = path.join(versionsPath(host), target);
+  if (await exists(dir)) {
+    await installed(host, target);
+    return false;
+  }
+  const cache = path.join(host.cacheDir, target);
+  requireState(
+    !(await exists(cache)),
+    "Rollback cache already exists; refusing to reuse or overwrite it.",
+  );
+  await cacheRoot(host);
+  await fs.mkdir(cache, { mode: 0o700 });
+  await realDirectory(cache);
+  const name = archiveFile(host.os, target);
+  const archive = path.join(cache, name);
+  await downloadVerified(
+    `https://github.com/pingdotgg/t3code/releases/download/v${target}`,
+    name,
+    archive,
+  );
+  await installArchive(host, target, cache, archive);
   return true;
+}
+// Runs on the source host: fetch the published fork archive for `to` and put it in `to`'s
+// delivery cache. The source's own cache copy is removed either way.
+async function deliver(request: Request) {
+  const { host, to } = request;
+  const v = version(request.version);
+  requireState(to !== undefined && to.os === host.os, "Delivery target must share the source OS.");
+  const name = archiveFile(to.os, v);
+  const cache = path.join(host.cacheDir, deliveryDir(v));
+  requireState(
+    !(await exists(cache)),
+    "Delivery cache already exists on the source; inspect and remove it deliberately.",
+  );
+  await cacheRoot(host);
+  await fs.mkdir(cache, { mode: 0o700 });
+  try {
+    const archive = path.join(cache, name);
+    const sha256 = await downloadVerified(
+      `https://github.com/travisjneuman/t3code/releases/download/v${v}`,
+      name,
+      archive,
+    );
+    const remoteCache = path.join(to.cacheDir, deliveryDir(v));
+    // A leftover target cache fails `mkdir`, which stops the batch before anything is written.
+    await sftp(to.ssh, [
+      ["-mkdir", sftpPath(to.os, to.cacheDir)],
+      ["mkdir", sftpPath(to.os, remoteCache)],
+      ["put", archive.replaceAll("\\", "/"), sftpPath(to.os, path.join(remoteCache, name))],
+    ]);
+    return { archive: name, sha256 };
+  } finally {
+    await fs.rm(cache, { recursive: true, force: true });
+  }
+}
+// Runs on the delivery target. The in-app updater treats a complete `versions/<v>` as cached.
+async function install(request: Request) {
+  const { host } = request;
+  const v = version(request.version);
+  requireState(
+    typeof request.sha256 === "string" && /^[a-f0-9]{64}$/.test(request.sha256),
+    "Missing delivered archive checksum.",
+  );
+  await realDirectory(host.cacheDir);
+  const cache = path.join(host.cacheDir, deliveryDir(v));
+  await realDirectory(cache);
+  try {
+    const archive = path.join(cache, archiveFile(host.os, v));
+    await plainFile(archive);
+    requireState(
+      (await hashFile(archive)) === request.sha256,
+      "Delivered archive differs from the release checksum.",
+    );
+    await installArchive(host, v, cache, archive);
+  } finally {
+    await fs.rm(cache, { recursive: true, force: true });
+  }
+  return { staged: v };
 }
 async function backupSpace(host: Host) {
   const root = backupRoot(host);
@@ -1214,6 +1323,10 @@ export async function runHost(request: Request) {
     case "prune":
     case "rollback":
       return maintain(request);
+    case "deliver":
+      return deliver(request);
+    case "install":
+      return install(request);
     case "remove-cache": {
       const dir = path.join(request.host.cacheDir, version(request.version));
       await realDirectory(dir);
