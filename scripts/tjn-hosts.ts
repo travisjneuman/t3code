@@ -634,7 +634,7 @@ async function release(p: ReleasePlan, journal: Journal) {
           "Transferred archive differs from the host checksum.",
         );
       });
-      return { ...build, destination, name, sha256 };
+      return { ...build, destination, archive: name, sha256 };
     }),
   );
   const failures = results.filter((result) => result.status === "rejected");
@@ -669,7 +669,7 @@ async function release(p: ReleasePlan, journal: Journal) {
   await journal.step(null, "notes", async () => {
     await fs.writeFile(
       pub.sums,
-      built.map((build) => `${build.sha256}  ${build.name}\n`).join(""),
+      built.map((build) => `${build.sha256}  ${build.archive}\n`).join(""),
       {
         flag: "wx",
       },
