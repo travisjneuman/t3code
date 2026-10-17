@@ -14,3 +14,6 @@ export const THREAD_CARD_LAYOUT = "compact";
 
 /** Card row height in px, including the row's 3px vertical padding. */
 export const THREAD_CARD_ROW_HEIGHT = 63;
+
+/** Slim row height in px (Settled and Snoozed), matching the single-line agent lists. */
+export const THREAD_SLIM_ROW_HEIGHT = 20;

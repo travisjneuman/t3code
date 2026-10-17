@@ -8,7 +8,11 @@ import {
   type SidebarListMarker,
   type SidebarSection,
 } from "./Sidebar.logic";
-import { THREAD_CARD_ROW_HEIGHT as CARD } from "../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
+// Fork add-on: compact sidebar cards.
+import {
+  THREAD_CARD_ROW_HEIGHT as CARD,
+  THREAD_SLIM_ROW_HEIGHT as SLIM,
+} from "../sidebar-compact/threadCardLayout";
 
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const hidden = { ...stationary, scaleY: 0 };
@@ -141,9 +145,9 @@ export function createSidebarSortingStrategy(input: {
       if (item.key !== active.key) groups[item.section].push(item);
     }
     const scale =
-      slimHeight !== undefined ? slimHeight / 36 : (headerScale ?? (cardHeight ?? CARD) / CARD); // Fork add-on: compact sidebar cards.
+      slimHeight !== undefined ? slimHeight / SLIM : (headerScale ?? (cardHeight ?? CARD) / CARD); // Fork add-on: compact sidebar cards.
     cardHeight ??= CARD * scale; // Fork add-on: compact sidebar cards.
-    slimHeight ??= 36 * scale;
+    slimHeight ??= SLIM * scale; // Fork add-on: compact sidebar cards.
     const labelHeight = (input.boundaryLabelHeight ?? 0) * scale;
     const group = groups[target.section];
     const order =
