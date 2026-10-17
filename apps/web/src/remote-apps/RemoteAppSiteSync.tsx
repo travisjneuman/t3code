@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+
+import { useStableCallback } from "~/hooks/useStableCallback";
 
 import { activeRemoteAppSite } from "./remoteAppState";
 import {
@@ -21,10 +23,8 @@ export function RemoteAppSiteSync() {
   const backgroundSites = sites.filter((site) => !backgroundDisabledSites.includes(site));
   const sitesKey = sites.join(",");
   const backgroundSitesKey = backgroundSites.join(",");
-  const availabilityRef = useRef({ sites, backgroundSites, idleUnloadMinutes });
-  availabilityRef.current = { sites, backgroundSites, idleUnloadMinutes };
-  const setActiveSurfaceRef = useRef(setActiveSurface);
-  setActiveSurfaceRef.current = setActiveSurface;
+  const getAvailability = useStableCallback(() => ({ sites, backgroundSites, idleUnloadMinutes }));
+  const setActiveSurfaceStable = useStableCallback(setActiveSurface);
   const activeSite = activeRemoteAppSite(state);
   const activeSiteUnavailable = loaded && activeSite !== undefined && !sites.includes(activeSite);
 
@@ -32,18 +32,17 @@ export function RemoteAppSiteSync() {
   // the idle limit crosses IPC.
   useEffect(() => {
     if (bridge === undefined || !loaded) return;
-    void bridge.setAvailableSites(availabilityRef.current).catch(() => undefined);
-  }, [backgroundSitesKey, bridge, idleUnloadMinutes, loaded, sitesKey]);
+    void bridge.setAvailableSites(getAvailability()).catch(() => undefined);
+  }, [backgroundSitesKey, bridge, getAvailability, idleUnloadMinutes, loaded, sitesKey]);
 
   // The shell keeps the active site's view; once T3 is showing, sending the
   // list again releases it.
   useEffect(() => {
     if (bridge === undefined || !activeSiteUnavailable) return;
-    void setActiveSurfaceRef
-      .current("t3code")
-      .then(() => bridge.setAvailableSites(availabilityRef.current))
+    void setActiveSurfaceStable("t3code")
+      .then(() => bridge.setAvailableSites(getAvailability()))
       .catch(() => undefined);
-  }, [activeSiteUnavailable, bridge]);
+  }, [activeSiteUnavailable, bridge, getAvailability, setActiveSurfaceStable]);
 
   return null;
 }
