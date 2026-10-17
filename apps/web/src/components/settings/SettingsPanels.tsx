@@ -170,13 +170,12 @@ import {
   useSettingsSearchTargetId,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
-// Fork add-on: save to notes, local source updates.
-import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings";
+import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on
 import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on: agent instructions.
-import {
-  SOURCE_UPDATE_ACTION_LABELS,
-  withSourceUpdateDescription,
-} from "../../source-updates/sourceUpdateWording";
+/* Fork add-on */ import {
+  SOURCE_UPDATE_ACTION_LABELS, // Fork add-on
+  withSourceUpdateDescription, // Fork add-on
+} from "../../source-updates/sourceUpdateWording"; // Fork add-on
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 
@@ -3001,8 +3000,7 @@ export function GeneralSettingsPanel() {
             />
           }
         />
-        {/* Fork add-on: save to notes. */}
-        <SaveToNotesSettingsRows />
+        <SaveToNotesSettingsRows /* Fork add-on */ />
       </SettingsSection>
 
       <SettingsSection id="confirmations" title="Confirmations">
@@ -3127,8 +3125,7 @@ export function GeneralSettingsPanel() {
         ) : null}
       </SettingsSection>
 
-      {/* Fork add-on: agent instructions. */}
-      <AgentInstructionsSettingsSection />
+      <AgentInstructionsSettingsSection /* Fork add-on */ />
 
       <SettingsSection id="text-generation" title="Text generation">
         <SettingsRow

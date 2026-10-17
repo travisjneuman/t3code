@@ -30,12 +30,11 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
-// Fork add-on: compare agents, remote apps, local source updates, compact sidebar.
-import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem";
-import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate";
-import { SidebarSourceSyncButton } from "~/source-updates/SidebarSourceSyncButton";
+import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem"; // Fork add-on
+import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate"; // Fork add-on
+import { SidebarSourceSyncButton } from "~/source-updates/SidebarSourceSyncButton"; // Fork add-on
 import { MaintenanceQueueCapsule } from "~/maintenance-queue/MaintenanceQueueCapsule"; // Fork add-on: maintenance queue.
-import "../../sidebar-compact/footerButtons.css";
+import "../../sidebar-compact/footerButtons.css"; // Fork add-on
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -227,12 +226,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
-          {/* Fork add-on: compare agents. */}
-          <CompareAgentsSidebarItem />
+          <CompareAgentsSidebarItem /* Fork add-on */ />
         </>
       )}
-      {/* Fork add-on: local source updates. */}
-      <SidebarSourceSyncButton />
+      <SidebarSourceSyncButton /* Fork add-on */ />
       <SidebarUpdatePill />
     </SidebarMenu>
   );

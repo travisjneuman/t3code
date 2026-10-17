@@ -765,8 +765,7 @@ export function ProviderInstanceCard({
   };
 
   // Fork add-on: Hermes provider. Hermes providers the model picker leaves out.
-  const hiddenHermesProviders = (() => {
-    // Fork add-on: Hermes provider.
+  const hiddenHermesProviders /* Fork add-on */ = (() => {
     const config = instance.config; // Fork add-on: Hermes provider.
     const value = // Fork add-on: Hermes provider.
       config !== null && typeof config === "object" && "hiddenProviders" in config // Fork add-on: Hermes provider.
@@ -776,11 +775,9 @@ export function ProviderInstanceCard({
       ? value.filter((entry): entry is string => typeof entry === "string") // Fork add-on: Hermes provider.
       : []; // Fork add-on: Hermes provider.
   })(); // Fork add-on: Hermes provider.
-  const updateHiddenHermesProviders = (next: ReadonlyArray<string>) => {
-    // Fork add-on: Hermes provider.
+  const updateHiddenHermesProviders = (next: ReadonlyArray<string> /* Fork add-on */) => {
     const { config: _omit, ...rest } = instance; // Fork add-on: Hermes provider.
-    onUpdate({
-      // Fork add-on: Hermes provider.
+    /* Fork add-on */ onUpdate({
       ...rest, // Fork add-on: Hermes provider.
       config: nextConfigBlobWithValue(instance.config, "hiddenProviders", next), // Fork add-on: Hermes provider.
     } as ProviderInstanceConfig); // Fork add-on: Hermes provider.
@@ -1273,24 +1270,22 @@ export function ProviderInstanceCard({
           readOnly={readOnly}
         />
       ) : null}
-      {/* Fork add-on: Hermes provider. */}
-      {environmentId !== undefined && instance.driver === "hermes" ? (
-        <HermesSettingsSection
-          environmentId={environmentId}
-          instanceId={instanceId}
-          config={instance.config}
-          models={modelsForDisplay}
-          hiddenProviders={hiddenHermesProviders}
-          onHiddenProvidersChange={updateHiddenHermesProviders}
-          hiddenModels={hiddenModels}
-          onHiddenModelsChange={onHiddenModelsChange}
-          readOnly={readOnly}
-          canWritePreferences={canWriteSettings}
-        />
-      ) : null}{" "}
-      {/* Fork add-on: Hermes provider. */}
+      {environmentId !== undefined && instance.driver === "hermes" ? ( // Fork add-on
+        <HermesSettingsSection // Fork add-on
+          environmentId={environmentId} // Fork add-on
+          instanceId={instanceId} // Fork add-on
+          config={instance.config} // Fork add-on
+          models={modelsForDisplay} // Fork add-on
+          hiddenProviders={hiddenHermesProviders} // Fork add-on
+          onHiddenProvidersChange={updateHiddenHermesProviders} // Fork add-on
+          hiddenModels={hiddenModels} // Fork add-on
+          onHiddenModelsChange={onHiddenModelsChange} // Fork add-on
+          readOnly={readOnly} // Fork add-on
+          canWritePreferences={canWriteSettings} // Fork add-on
+        /> // Fork add-on
+      ) : /* Fork add-on */ null}{" "}
       {/* Fork add-on: Hermes provider. Hermes lists its models in its own section above. */}
-      {driverOption !== undefined &&
+      {driverOption !== undefined && // Fork add-on
       (instance.driver !== "hermes" || environmentId === undefined) ? ( // Fork add-on: Hermes provider.
         <SettingsSection title="Models">
           <div className="px-3 py-3 sm:px-4">

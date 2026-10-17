@@ -95,8 +95,8 @@ const resolveTailscaleMagicDnsAdvertisedEndpoint = Effect.fn(
       // Fork add-on: without tailnet HTTPS, Setup's `tailscale serve` waits for approval and times out.
       description: isReachable
         ? "HTTPS endpoint served by Tailscale Serve."
-        : input.httpsCertificatesEnabled === false
-          ? "Turn on HTTPS Certificates on the DNS page of the Tailscale admin console, then choose Setup."
+        : input.httpsCertificatesEnabled === false // Fork add-on
+          ? "Turn on HTTPS Certificates on the DNS page of the Tailscale admin console, then choose Setup." // Fork add-on
           : "MagicDNS hostname. Configure Tailscale Serve for HTTPS access.",
     }),
   );
@@ -140,8 +140,8 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
       dnsName,
       serveEnabled: input.serveEnabled === true,
       ...(input.servePort === undefined ? {} : { servePort: input.servePort }),
-      ...(input.readHttpsCertificatesEnabled === undefined
-        ? {}
+      ...(input.readHttpsCertificatesEnabled === undefined // Fork add-on
+        ? {} // Fork add-on
         : { httpsCertificatesEnabled: yield* input.readHttpsCertificatesEnabled }), // Fork add-on
       ...(input.probe === undefined ? {} : { probe: input.probe }),
     });

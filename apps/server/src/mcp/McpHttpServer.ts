@@ -157,21 +157,21 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         ? yield* clients.value.authenticate(request)
         : undefined);
     // Fork add-on: Hermes T3 tools. A Hermes instance's bridge key acts as its running thread.
-    const bridged =
-      !invocation && Option.isSome(hermesBridge) && looksLikeProviderToken(token)
-        ? yield* hermesBridge.value.resolve(token)
-        : undefined;
-    if (bridged !== undefined) {
-      const refused =
-        bridged.refusal === undefined
-          ? undefined
-          : yield* HermesMcpBridge.refuseUnboundRequest(request, bridged.refusal);
-      if (refused !== undefined) return refused;
-      return yield* httpEffect.pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, bridged.scope),
-        Effect.map(normalizeMcpHttpResponse),
-      );
-    }
+    const bridged = // Fork add-on
+      !invocation && Option.isSome(hermesBridge) && looksLikeProviderToken(token) // Fork add-on
+        ? yield* hermesBridge.value.resolve(token) // Fork add-on
+        : undefined; // Fork add-on
+    if (bridged !== undefined /* Fork add-on */) {
+      const refused = // Fork add-on
+        bridged.refusal === undefined // Fork add-on
+          ? undefined // Fork add-on
+          : yield* HermesMcpBridge.refuseUnboundRequest(request, bridged.refusal); // Fork add-on
+      if (refused !== undefined) return refused; // Fork add-on
+      /* Fork add-on */ return yield* httpEffect.pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, bridged.scope), // Fork add-on
+        Effect.map(normalizeMcpHttpResponse), // Fork add-on
+      ); // Fork add-on
+    } // Fork add-on
     if (!invocation) {
       yield* Effect.logWarning("rejected MCP request with an unusable credential", {
         reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",

@@ -144,9 +144,8 @@ export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
 /** Let Muse pick the account's default model. Never send this ID to Muse. */
 export const MUSE_DEFAULT_MODEL = "default";
 
-// Fork add-on: Hermes provider.
-/** Let Hermes use its own configured model. Never send this ID to Hermes. */
-export const HERMES_DEFAULT_MODEL = "default";
+/** Fork add-on: Let Hermes use its own configured model. Never send this ID to Hermes. */
+export const HERMES_DEFAULT_MODEL = "default"; // Fork add-on
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,

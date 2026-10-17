@@ -501,17 +501,18 @@ const sessionIdOf = (providerThread: OrchestrationV2ProviderThread) => {
     : Effect.succeed(nativeId);
 };
 
-// Fork add-on: session details.
-const sessionMcpServers = (servers: ReadonlyArray<Mcp.Server>): ReadonlyArray<SessionMcpServer> =>
-  servers.flatMap((server) => {
-    const status = server.status;
-    const mapped = sessionMcpServer({
-      name: server.name,
-      status: status.status === "needs_auth" ? "needs-auth" : status.status,
-      error: "error" in status ? status.error : undefined,
-    });
-    return mapped === undefined ? [] : [mapped];
-  });
+const sessionMcpServers /* Fork add-on */ = (
+  servers: ReadonlyArray<Mcp.Server> /* Fork add-on */,
+): ReadonlyArray<SessionMcpServer> /* Fork add-on */ =>
+  /* Fork add-on */ servers.flatMap((server) => {
+    const status = server.status; // Fork add-on
+    const mapped /* Fork add-on */ = sessionMcpServer({
+      name: server.name, // Fork add-on
+      status: status.status === "needs_auth" ? "needs-auth" : status.status, // Fork add-on
+      error: "error" in status ? status.error : undefined, // Fork add-on
+    }); // Fork add-on
+    return mapped === undefined ? [] : [mapped]; // Fork add-on
+  }); // Fork add-on
 
 const textOf = (content: ReadonlyArray<{ readonly type: string; readonly text?: string }>) =>
   content.flatMap((part) => (part.type === "text" && part.text ? [part.text] : [])).join("\n");
@@ -2993,8 +2994,8 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
         buildRuntimeInstructions({
           harness: "OpenCode",
           model: turnInput.modelSelection.model,
-          agentScope: { thread: turnInput.appThread, provider: OPENCODE_PROVIDER },
-        }), // Fork add-on: agent instructions.
+          agentScope: { thread: turnInput.appThread, provider: OPENCODE_PROVIDER }, // Fork add-on: agent instructions.
+        }),
         t3OrchestrationSystemPrompt(state.mcp !== undefined),
       ]
         .filter((part) => part !== undefined && part.length > 0)
@@ -3302,35 +3303,34 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           const state = nativeId == null ? undefined : threads.get(nativeId);
           return state !== undefined && hasBackground(state);
         }),
-      // Fork add-on: session details.
-      // MCP servers are configured per location, so a thread lists those of
+      // Fork add-on: MCP servers are configured per location, so a thread lists those of
       // the directory its session runs in.
-      sessionInsights: {
-        mcpServers: ({ providerThread }) =>
-          Effect.gen(function* () {
-            const sessionId = yield* sessionIdOf(providerThread);
-            const state = threads.get(sessionId);
-            if (state === undefined) {
-              return yield* new ProviderAdapter.ProviderAdapterProtocolError({
-                driver: OPENCODE_PROVIDER,
-                detail: `OpenCode session ${sessionId} is not open in this provider session`,
-              });
-            }
-            const response = yield* client.mcp
-              .list({ location: { directory: state.directory } })
-              .pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderAdapter.ProviderAdapterProtocolError({
-                      driver: OPENCODE_PROVIDER,
-                      detail: "OpenCode MCP server list failed",
-                      cause,
-                    }),
-                ),
-              );
-            return sessionMcpServers(response.data);
-          }),
-      },
+      sessionInsights: /* Fork add-on */ {
+        mcpServers: ({ providerThread } /* Fork add-on */) =>
+          /* Fork add-on */ Effect.gen(function* () {
+            const sessionId = yield* sessionIdOf(providerThread); // Fork add-on
+            const state = threads.get(sessionId); // Fork add-on
+            if (state === undefined /* Fork add-on */) {
+              /* Fork add-on */ return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                driver: OPENCODE_PROVIDER, // Fork add-on
+                detail: `OpenCode session ${sessionId} is not open in this provider session`, // Fork add-on
+              }); // Fork add-on
+            } // Fork add-on
+            const response = yield* client.mcp // Fork add-on
+              .list({ location: { directory: state.directory } }) // Fork add-on
+              /* Fork add-on */ .pipe(
+                /* Fork add-on */ Effect.mapError(
+                  (cause /* Fork add-on */) =>
+                    /* Fork add-on */ new ProviderAdapter.ProviderAdapterProtocolError({
+                      driver: OPENCODE_PROVIDER, // Fork add-on
+                      detail: "OpenCode MCP server list failed", // Fork add-on
+                      cause, // Fork add-on
+                    }), // Fork add-on
+                ), // Fork add-on
+              ); // Fork add-on
+            return sessionMcpServers(response.data); // Fork add-on
+          }), // Fork add-on
+      }, // Fork add-on
       getModelContextWindow: (selection, cwd) =>
         selection.instanceId === instanceId
           ? windowOf(cwd === undefined ? session.cwd : cwd, selection.model)

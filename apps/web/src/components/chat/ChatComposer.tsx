@@ -282,9 +282,9 @@ import {
 } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
-import {
-  AgentThreadPresetControl,
-  AgentThreadPresetMenuItems,
+/* Fork add-on */ import {
+  AgentThreadPresetControl, // Fork add-on
+  AgentThreadPresetMenuItems, // Fork add-on
 } from "../../agent-instructions/AgentThreadPresetControl"; // Fork add-on: agent instructions.
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
@@ -1221,7 +1221,8 @@ const supervisedRuntimeModeOption = {
   mode: "approval-required" as const,
   ...runtimeModeConfig["approval-required"],
 };
-export const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
+export // Fork add-on: compare agents.
+const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   // Fork add-on: compare agents (exported for its follow-up box).
   showInteractionModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
@@ -2367,7 +2368,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   }
 
-  const selectedIsHermes =
+  const selectedIsHermes = // Fork add-on
     selectedProviderEntry?.driverKind === HERMES_DRIVER && multipleModelSelections === null; // Fork add-on: Hermes provider.
   const selectedModelForPickerWithCustomFallback = (() => {
     const currentOptions = modelOptionsByInstance.get(selectedInstanceId) ?? [];
@@ -5051,8 +5052,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     {
       id: "mode",
       content: (
-        <>
-          {/* Fork add-on: agent instructions. */}
+        /* Fork add-on */ <>
           <ComposerFooterModeControls
             showInteractionModeToggle={planModeUiEnabled}
             interactionMode={interactionMode}
@@ -5063,15 +5063,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             onToggleInteractionMode={toggleInteractionMode}
             onRuntimeModeChange={handleRuntimeModeChange}
           />
-          {activeThreadId ? (
-            <AgentThreadPresetControl
-              environmentId={environmentId}
-              threadId={activeThreadId}
-              size={composerControlsCollapsed ? "xs" : "sm"}
-              hidden={composerControlsHidden || restingHiddenBlockCount > 0}
-            />
-          ) : null}{" "}
-          {/* Fork add-on: agent instructions. */}
+          {activeThreadId ? ( // Fork add-on
+            <AgentThreadPresetControl // Fork add-on
+              environmentId={environmentId} // Fork add-on
+              threadId={activeThreadId} // Fork add-on
+              size={composerControlsCollapsed ? "xs" : "sm"} // Fork add-on
+              hidden={composerControlsHidden || restingHiddenBlockCount > 0} // Fork add-on
+            /> // Fork add-on
+          ) : /* Fork add-on */ null}{" "}
         </> // Fork add-on: agent instructions.
       ),
     },
@@ -5160,14 +5159,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         instanceEntries={providerInstanceEntries}
         keybindings={keybindings}
         modelOptionsByInstance={modelOptionsByInstance}
-        {...(selectedIsHermes
-          ? {
-              triggerLabel: hermesComposerTriggerLabel(
-                hermesAgentName(settings, selectedInstanceId),
-                selectedModelForPicker,
-                modelOptionsByInstance.get(selectedInstanceId) ?? [],
-              ),
-            }
+        {...(selectedIsHermes // Fork add-on
+          ? /* Fork add-on */ {
+              triggerLabel: /* Fork add-on */ hermesComposerTriggerLabel(
+                hermesAgentName(settings, selectedInstanceId), // Fork add-on
+                selectedModelForPicker, // Fork add-on
+                modelOptionsByInstance.get(selectedInstanceId) ?? [], // Fork add-on
+              ), // Fork add-on
+            } // Fork add-on
           : {})} // Fork add-on: Hermes provider.
         size={composerControlsCollapsed ? "xs" : "sm"}
         triggerClassName={
@@ -5246,13 +5245,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             traitsMenuContent={
               hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
             }
-            forkMenuContent={
-              activeThreadId && hiddenRestingBlockIds.includes("mode") ? (
-                <AgentThreadPresetMenuItems
-                  environmentId={environmentId}
-                  threadId={activeThreadId}
-                />
-              ) : undefined
+            forkMenuContent /* Fork add-on */={
+              activeThreadId && hiddenRestingBlockIds.includes("mode") ? ( // Fork add-on
+                <AgentThreadPresetMenuItems // Fork add-on
+                  environmentId={environmentId} // Fork add-on
+                  threadId={activeThreadId} // Fork add-on
+                /> // Fork add-on
+              ) : undefined // Fork add-on
             } // Fork add-on: agent instructions.
             onToggleInteractionMode={toggleInteractionMode}
             onRuntimeModeChange={handleRuntimeModeChange}

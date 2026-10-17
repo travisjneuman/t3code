@@ -454,7 +454,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
   // with "/" and silently break slash-command expansion.
   pi.on("before_agent_start", (event, ctx) => {
     reconcileDiscovery(ctx);
-    return { systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV)}] ?? "") }; // Fork add-on: agent instructions.
+    return { systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV /* Fork add-on: agent instructions. */)}] ?? "") };
   });
 }
 `;

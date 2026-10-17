@@ -1622,7 +1622,7 @@ function OpenCommandPaletteDialog(props: {
           </>
         ),
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-        shortcutCommand: "chat.newLocal", // Fork add-on: chat.new starts in No project
+        shortcutCommand: "chat.newLocal",
         run: async () => {
           await startNewThreadFromContext({
             activeDraftThread,
@@ -2114,14 +2114,13 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  // Fork add-on: compare agents.
-  actionItems.push(
-    ...useCompareAgentsPaletteItems({
-      navigate,
-      environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId,
-      activeThread: activeThread ?? null,
-    }),
-  );
+  /* Fork add-on */ actionItems.push(
+    /* Fork add-on */ ...useCompareAgentsPaletteItems({
+      navigate, // Fork add-on
+      environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId, // Fork add-on
+      activeThread: activeThread ?? null, // Fork add-on
+    }), // Fork add-on
+  ); // Fork add-on
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
   const settingsSearchItems: CommandPaletteActionItem[] = searchSettings(
     deferredQuery,
@@ -2799,9 +2798,8 @@ function OpenCommandPaletteDialog(props: {
           },
         ];
 
-  // Fork add-on: session search.
-  let displayedGroups: CommandPaletteView["groups"] =
-    otherAgentsGroup === null ? filteredGroups : [...filteredGroups, otherAgentsGroup];
+  let displayedGroups: CommandPaletteView["groups"] = // Fork add-on
+    otherAgentsGroup === null ? filteredGroups : [...filteredGroups, otherAgentsGroup]; // Fork add-on
   if (newProjectFlow !== null) {
     displayedGroups = [
       ...(newProjectMachineGroup ? [newProjectMachineGroup] : []),

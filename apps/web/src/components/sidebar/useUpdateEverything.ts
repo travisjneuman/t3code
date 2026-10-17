@@ -157,8 +157,8 @@ export function useUpdateEverything(localUpdateVersion: string | null) {
               if (runOutcome.status !== "updated") {
                 providerFailures.set(
                   run.environmentId,
-                  runOutcome.status === "failed" // Fork add-on: maintenance queue.
-                    ? runOutcome.line // Fork add-on: maintenance queue.
+                  runOutcome.status === "failed"
+                    ? runOutcome.line
                     : interruptedProviderUpdateLine(run.environmentId), // Fork add-on: maintenance queue.
                 );
               }

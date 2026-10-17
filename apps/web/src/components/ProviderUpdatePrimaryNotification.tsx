@@ -26,9 +26,9 @@ import {
   type ProviderUpdateToastView,
 } from "./ProviderUpdateLaunchNotification.logic";
 import { hiddenToastActionProps, stackedThreadToast, toastManager } from "./ui/toast";
-import {
-  isQueuedUpdateResult,
-  useQueuedProviderUpdate,
+/* Fork add-on */ import {
+  isQueuedUpdateResult, // Fork add-on
+  useQueuedProviderUpdate, // Fork add-on
 } from "../maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 
 const seenProviderUpdateNotificationKeys = new Set<string>();
@@ -251,7 +251,10 @@ export function ProviderUpdatePrimaryNotification() {
           );
         }
 
-        if (activeToastRef.current === activeUpdate && results.some(isQueuedUpdateResult))
+        /* Fork add-on */ if (
+          activeToastRef.current === activeUpdate && // Fork add-on
+          results.some(isQueuedUpdateResult) /* Fork add-on */
+        )
           activeToastRef.current = null; // Fork add-on: maintenance queue.
         const activeUpdateToast = activeToastRef.current;
         if (activeUpdateToast !== activeUpdate) {

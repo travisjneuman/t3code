@@ -532,20 +532,19 @@ export interface ProviderAdapterV2McpApps {
   }) => Effect.Effect<{ readonly contents: ReadonlyArray<unknown> }, ProviderAdapterV2Error>;
 }
 
-// Fork add-on: session details.
-/**
+/** Fork add-on: session details.
  * What a live session reports about itself, read on demand. Each method is
  * optional: a provider implements only what its protocol exposes.
  */
-export interface ProviderAdapterV2SessionInsights {
-  /** Null when the session cannot report a breakdown right now. */
-  readonly contextBreakdown?: (input: {
-    readonly providerThread: OrchestrationV2ProviderThread;
-  }) => Effect.Effect<SessionContextBreakdown | null, ProviderAdapterV2Error>;
-  readonly mcpServers?: (input: {
-    readonly providerThread: OrchestrationV2ProviderThread;
-  }) => Effect.Effect<ReadonlyArray<SessionMcpServer>, ProviderAdapterV2Error>;
-}
+export interface ProviderAdapterV2SessionInsights /* Fork add-on */ {
+  /** Fork add-on: Null when the session cannot report a breakdown right now. */
+  readonly contextBreakdown?: (input: /* Fork add-on */ {
+    readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on
+  }) => Effect.Effect<SessionContextBreakdown | null, ProviderAdapterV2Error>; // Fork add-on
+  readonly mcpServers?: (input: /* Fork add-on */ {
+    readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on
+  }) => Effect.Effect<ReadonlyArray<SessionMcpServer>, ProviderAdapterV2Error>; // Fork add-on
+} // Fork add-on
 
 export type ProviderAdapterV2SubagentOutcome = {
   readonly status: "completed" | "failed" | "cancelled";
@@ -641,12 +640,11 @@ export interface ProviderAdapterV2SessionRuntime {
    * calls stay plain tool rows.
    */
   readonly mcpApps?: ProviderAdapterV2McpApps;
-  // Fork add-on: session details.
-  /**
+  /** Fork add-on: session details.
    * The context breakdown and MCP server list a session sidebar shows, read
    * from the live native session. Absent means the provider reports neither.
    */
-  readonly sessionInsights?: ProviderAdapterV2SessionInsights;
+  readonly sessionInsights?: ProviderAdapterV2SessionInsights; // Fork add-on
   readonly rollbackThread: (
     input: ProviderAdapterV2RollbackThreadInput,
   ) => Effect.Effect<ProviderAdapterV2ThreadSnapshot, ProviderAdapterV2Error>;

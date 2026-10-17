@@ -289,10 +289,10 @@ import { HermesSidebarSection } from "../hermes/HermesSidebarSection"; // Fork a
 import { isHermesThread } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
 import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on: session search.
 import { ContinuedFromLine } from "../external-sessions/handBack"; // Fork add-on: external-session hand back.
-import {
-  forkThreadActionMenuBuilder,
-  isForkThreadMenuId,
-  runForkThreadMenuItem,
+/* Fork add-on */ import {
+  forkThreadActionMenuBuilder, // Fork add-on
+  isForkThreadMenuId, // Fork add-on
+  runForkThreadMenuItem, // Fork add-on
 } from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back, open comparison.
 import { THREAD_CARD_LAYOUT } from "../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
 import "../sidebar-compact/threadCardLayout.css"; // Fork add-on: compact sidebar cards.
@@ -389,9 +389,9 @@ type SidebarOptimisticDrop = {
 
 interface SidebarThreadPartitionInput {
   readonly threads: readonly EnvironmentThreadShell[];
-  readonly providerEntriesByEnvironment: ReadonlyMap<
-    string,
-    ReadonlyMap<string, SidebarProviderEntry>
+  readonly providerEntriesByEnvironment: /* Fork add-on */ ReadonlyMap<
+    string, // Fork add-on
+    ReadonlyMap<string, SidebarProviderEntry> // Fork add-on
   >; // Fork add-on: Hermes provider classification.
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
@@ -454,9 +454,9 @@ function routeThreadOnly(
 // the component body, later hook calls made the compiler treat these maps as
 // possibly mutated and recompute them, and every dnd-kit input with them.
 function useSidebarThreads(input: {
-  readonly providerEntriesByEnvironment: ReadonlyMap<
-    string,
-    ReadonlyMap<string, SidebarProviderEntry>
+  readonly providerEntriesByEnvironment: /* Fork add-on */ ReadonlyMap<
+    string, // Fork add-on
+    ReadonlyMap<string, SidebarProviderEntry> // Fork add-on
   >; // Fork add-on: Hermes provider classification.
   readonly projectScopeKey: string | null;
   readonly scopedProjectKeys: ReadonlySet<string> | null;
@@ -600,9 +600,10 @@ function useSidebarThreads(input: {
 function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   const { threads, scopedProjectKeys, serverConfigs, optimisticDrop, workingShelfEnabled } = input;
   const preciseNow = new Date().toISOString();
-  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys).filter(
-    (thread) => !isHermesThread(thread, input.providerEntriesByEnvironment),
-  ); // Fork add-on: Hermes threads live in their own section.
+  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys)
+    /* Fork add-on */ .filter(
+      (thread) => !isHermesThread(thread, input.providerEntriesByEnvironment), // Fork add-on
+    ); // Fork add-on: Hermes threads live in their own section.
   inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -1033,8 +1034,10 @@ function SidebarThreadTooltip({
             </div>
           </div>
         ) : null}
-        <ContinuedFromLine threadId={thread.id} environmentId={thread.environmentId} />
-        {/* Fork add-on: external-session hand back. */}
+        <ContinuedFromLine // Fork add-on
+          threadId={thread.id} // Fork add-on
+          environmentId={thread.environmentId} // Fork add-on
+        />
         {previousProviderNames.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
             <ArrowRightLeftIcon className="size-3 shrink-0 stroke-muted-foreground" />
@@ -1369,8 +1372,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     onDiscard(draftId);
   };
   return (
-    <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5">
-      {/* Fork add-on: compact sidebar cards. */}
+    <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5" /* Fork add-on */>
       <div
         role="button"
         tabIndex={0}
@@ -1388,28 +1390,27 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
       >
         <span className="sr-only">{preview}</span>
         <div
-          data-fork-card-part="box"
+          data-fork-card-part="box" // Fork add-on
           className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
         >
-          {/* Fork add-on: compact sidebar cards. */}
-          <div data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
-            {/* Fork add-on: compact sidebar cards. */}
+          <div
+            data-fork-card-part="head" // Fork add-on
+            className="flex h-5 min-w-0 items-center gap-1.5"
+          >
             <SquarePenIcon aria-hidden className={draftPenClassName} />
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
             <span
-              data-fork-card-part="project"
+              data-fork-card-part="project" // Fork add-on
               className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label"
             >
-              {/* Fork add-on: compact sidebar cards. */}
               {props.projectDisplayName}
             </span>
             <span
-              data-fork-card-part="status"
+              data-fork-card-part="status" // Fork add-on
               className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end"
             >
-              {/* Fork add-on: compact sidebar cards. */}
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -1429,10 +1430,9 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
           </div>
           <div
             aria-hidden
-            data-fork-card-part="title"
+            data-fork-card-part="title" // Fork add-on
             className="mt-0.5 truncate text-sm font-medium text-foreground/90"
           >
-            {/* Fork add-on: compact sidebar cards. */}
             {preview}
           </div>
         </div>
@@ -2140,11 +2140,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
               )}
             >
-              {props.project ? <ProjectFavicon project={props.project} className="size-3" /> : null}
-              {/* Fork add-on: compact sidebar cards. */}
+              {props.project ? (
+                <ProjectFavicon project={props.project} className="size-3" /* Fork add-on */ />
+              ) : null}
             </span>
-            <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
-            {/* Fork add-on: nested subagents. */}
+            <SubagentToggle threadKey={threadKey} count={props.subagentCount} /* Fork add-on */ />
             {draftIndicator}
             {title}
             {pinIndicator}
@@ -2298,12 +2298,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         >
           {accessibleTitle}
           <div
-            data-fork-card-part="box"
+            data-fork-card-part="box" // Fork add-on
             className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
           >
-            {/* Fork add-on: compact sidebar cards. */}
-            <div data-fork-card-part="head" className="flex h-5 min-w-0 items-center gap-1.5">
-              {/* Fork add-on: compact sidebar cards. */}
+            <div
+              data-fork-card-part="head" // Fork add-on
+              className="flex h-5 min-w-0 items-center gap-1.5"
+            >
               {draftIndicator}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
@@ -2463,8 +2464,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
-            <div data-fork-card-part="title" className="mt-1 flex min-w-0">
-              {/* Fork add-on: compact sidebar cards. */}
+            <div data-fork-card-part="title" className="mt-1 flex min-w-0" /* Fork add-on */>
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
@@ -2472,24 +2472,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 </span>
               ) : null}
             </div>
-            <ThreadCardMeta
-              thread={thread}
-              threadKey={threadKey}
-              subagentCount={props.subagentCount}
-              environmentLabel={props.environmentLabel}
-              environmentMachine={props.environmentMachine}
-              isRemote={isRemote}
-              terminalStatusIcon={terminalStatusIcon}
-              prBadge={prBadge}
-              diff={diff}
-              providerStack={
+            <ThreadCardMeta // Fork add-on
+              thread={thread} // Fork add-on
+              threadKey={threadKey} // Fork add-on
+              subagentCount={props.subagentCount} // Fork add-on
+              environmentLabel={props.environmentLabel} // Fork add-on
+              environmentMachine={props.environmentMachine} // Fork add-on
+              isRemote={isRemote} // Fork add-on
+              terminalStatusIcon={terminalStatusIcon} // Fork add-on
+              prBadge={prBadge} // Fork add-on
+              diff={diff} // Fork add-on
+              providerStack /* Fork add-on */={
                 <SidebarProviderStack
                   thread={thread}
                   providerEntryByInstanceId={props.providerEntryByInstanceId}
                 />
-              }
+              } // Fork add-on
             />
-            {/* Fork add-on: compact cards, nested subagents, centered machines, external-session hand back. */}
           </div>
           {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
         </TooltipTrigger>
@@ -2776,13 +2775,13 @@ export default function Sidebar() {
   });
   const newThreadContext = useHandleNewThread();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const startScratchThreadOnClick = useScratchThreadClick(
-    newThreadContext.activeThread?.environmentId ??
-      newThreadContext.activeDraftThread?.environmentId ??
-      primaryEnvironmentId,
-    () => {
-      if (isMobile) setOpenMobile(false);
-    },
+  const startScratchThreadOnClick /* Fork add-on */ = useScratchThreadClick(
+    newThreadContext.activeThread?.environmentId ?? // Fork add-on
+      newThreadContext.activeDraftThread?.environmentId ?? // Fork add-on
+      primaryEnvironmentId, // Fork add-on
+    (/* Fork add-on */) => {
+      if (isMobile) setOpenMobile(false); // Fork add-on
+    }, // Fork add-on
   ); // Fork add-on: scratch-thread action.
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
@@ -3081,11 +3080,11 @@ export default function Sidebar() {
       params: buildThreadRouteParams(threadRef),
     });
   };
-  const forkSubagents = useSidebarSubagents({
-    threads,
-    activeThreadKey: routeThreadKey,
-    providerEntriesByEnvironment,
-    onOpen: navigateToThread,
+  const forkSubagents /* Fork add-on */ = useSidebarSubagents({
+    threads, // Fork add-on
+    activeThreadKey: routeThreadKey, // Fork add-on
+    providerEntriesByEnvironment, // Fork add-on
+    onOpen: navigateToThread, // Fork add-on
   }); // Fork add-on: nested subagents.
 
   const handleThreadFileDrop = async (threadRef: ScopedThreadRef, files: File[]) => {
@@ -4259,7 +4258,7 @@ export default function Sidebar() {
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
-        if (isForkThreadMenuId(clicked.value))
+        if (isForkThreadMenuId(clicked.value) /* Fork add-on */)
           return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on: thread export, save to notes, hand back, open comparison.
         if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
         if (clicked.value?.startsWith("snooze:")) {
@@ -4766,8 +4765,7 @@ export default function Sidebar() {
               </p>
             )
           ) : null}
-          <SessionSearchResults query={threadSearchQuery} />
-          {/* Fork add-on: session search. */}
+          <SessionSearchResults query={threadSearchQuery} /* Fork add-on */ />
           {!isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"
@@ -5056,8 +5054,10 @@ export default function Sidebar() {
                           onClick={showMoreSettled}
                           className={AGENT_MORE_BUTTON_CLASS} // Fork add-on: compact sidebar cards.
                         >
-                          <PlusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
-                          {/* Fork add-on: compact sidebar cards. */}
+                          <PlusIcon
+                            aria-hidden
+                            className={AGENT_LINE_ICON_CLASS} /* Fork add-on */
+                          />
                           Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
                         </button>
                       </li>
@@ -5095,10 +5095,8 @@ export default function Sidebar() {
               )}
             </div>
           ) : null}
-          {!isSearchingThreads ? <HermesSidebarSection /> : null}
-          {/* Fork add-on: Hermes provider. */}
-          {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null}
-          {/* Fork add-on: read-only sessions from agents running outside T3. */}
+          {!isSearchingThreads ? <HermesSidebarSection /> : null /* Fork add-on */}
+          {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null /* Fork add-on */}
         </SidebarGroup>
       </SidebarContent>
       <SidebarChromeFooter />

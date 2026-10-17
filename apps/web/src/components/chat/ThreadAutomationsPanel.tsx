@@ -33,17 +33,17 @@ import {
 // Fork add-on: theme tokens and a spoken label, matching the settings page.
 const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
   never: "bg-muted-foreground/40",
-  running: "bg-info",
-  succeeded: "bg-success",
+  running: "bg-info", // Fork add-on
+  succeeded: "bg-success", // Fork add-on
   failed: "bg-destructive",
 };
 
-const LAST_RUN_LABEL: Record<ScheduledTask["lastRunStatus"], string> = {
-  never: "Not run yet",
-  running: "Running",
-  succeeded: "Last run succeeded",
-  failed: "Last run failed",
-};
+const LAST_RUN_LABEL: Record<ScheduledTask["lastRunStatus"], string> /* Fork add-on */ = {
+  never: "Not run yet", // Fork add-on
+  running: "Running", // Fork add-on
+  succeeded: "Last run succeeded", // Fork add-on
+  failed: "Last run failed", // Fork add-on
+}; // Fork add-on
 
 export function ThreadAutomationsPanel(props: {
   readonly environmentId: EnvironmentId;
@@ -162,7 +162,7 @@ export function ThreadAutomationsPanel(props: {
           >
             <span
               className="relative inline-flex size-4 shrink-0 items-center justify-center"
-              title={LAST_RUN_LABEL[task.lastRunStatus]}
+              title={LAST_RUN_LABEL[task.lastRunStatus]} // Fork add-on
             >
               <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
               <span
@@ -172,7 +172,9 @@ export function ThreadAutomationsPanel(props: {
                 )}
                 aria-hidden
               />
-              <span className="sr-only">{LAST_RUN_LABEL[task.lastRunStatus]}</span>
+              <span className="sr-only" /* Fork add-on */>
+                {LAST_RUN_LABEL[task.lastRunStatus] /* Fork add-on */}
+              </span /* Fork add-on */>
             </span>
             <div className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-foreground/80">

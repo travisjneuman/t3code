@@ -2063,15 +2063,16 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
         hasPendingBackgroundWork: Effect.sync(
           () => observedChildren.size > 0 || wake !== undefined,
         ),
-        sessionInsights: {
-          contextBreakdown: ({ providerThread }) =>
-            Effect.sync(() =>
-              sessionUsageBreakdown(
-                thread?.id === providerThread.id
-                  ? thread.contextUsage
-                  : providerThread.contextUsage,
-              ),
-            ),
+        sessionInsights: /* Fork add-on */ {
+          contextBreakdown: ({ providerThread } /* Fork add-on */) =>
+            /* Fork add-on */ Effect.sync(
+              (/* Fork add-on */) =>
+                /* Fork add-on */ sessionUsageBreakdown(
+                  thread?.id === providerThread.id // Fork add-on
+                    ? thread.contextUsage // Fork add-on
+                    : providerThread.contextUsage, // Fork add-on
+                ), // Fork add-on
+            ), // Fork add-on
         }, // Fork add-on: session details.
         ensureThread: (args) =>
           register(args).pipe(

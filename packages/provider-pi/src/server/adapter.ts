@@ -46,9 +46,9 @@ import { parsePiCompactCommand, type PiCompactCommand } from "./commands.ts";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import {
-  sessionTotalsBreakdown,
-  sessionUsageBreakdown,
+/* Fork add-on */ import {
+  sessionTotalsBreakdown, // Fork add-on
+  sessionUsageBreakdown, // Fork add-on
 } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import {
@@ -2370,16 +2370,17 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           Effect.sync(
             () => pendingWake !== null && pendingWake.state.providerThread.id === providerThread.id,
           ),
-        sessionInsights: {
-          contextBreakdown: ({ providerThread }) =>
-            DateTime.now.pipe(
-              Effect.flatMap((now) => readTokenUsage(null, now)),
-              Effect.map((usage) =>
-                usage === undefined
-                  ? sessionUsageBreakdown(providerThread.contextUsage)
-                  : sessionTotalsBreakdown(usage),
-              ),
-            ),
+        sessionInsights: /* Fork add-on */ {
+          contextBreakdown: ({ providerThread } /* Fork add-on */) =>
+            /* Fork add-on */ DateTime.now.pipe(
+              Effect.flatMap((now) => readTokenUsage(null, now)), // Fork add-on
+              /* Fork add-on */ Effect.map(
+                (usage /* Fork add-on */) =>
+                  usage === undefined // Fork add-on
+                    ? sessionUsageBreakdown(providerThread.contextUsage) // Fork add-on
+                    : sessionTotalsBreakdown(usage), // Fork add-on
+              ), // Fork add-on
+            ), // Fork add-on
         }, // Fork add-on: session details.
         getModelContextWindow: (selection) => {
           if (selection.instanceId !== options.instanceId) return undefined;

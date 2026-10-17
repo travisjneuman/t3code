@@ -63,10 +63,10 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
 });
 
 // Fork add-on: ndev app icon for every brand, as repository-relative paths.
-const sourceTreeIconPaths = {
-  ico: FORK_BRAND_ASSET_PATHS.windowsIconIco,
-  macPng: FORK_BRAND_ASSET_PATHS.macIconPng,
-  universalPng: FORK_BRAND_ASSET_PATHS.universalIconPng,
+const sourceTreeIconPaths /* Fork add-on */ = {
+  ico: FORK_BRAND_ASSET_PATHS.windowsIconIco, // Fork add-on
+  macPng: FORK_BRAND_ASSET_PATHS.macIconPng, // Fork add-on
+  universalPng: FORK_BRAND_ASSET_PATHS.universalIconPng, // Fork add-on
 } as const;
 
 function resolveSourceTreeIconPath(
@@ -77,11 +77,11 @@ function resolveSourceTreeIconPath(
   // Fork add-on: ndev app icon; no per-brand directory.
   const fileName =
     ext === "ico"
-      ? sourceTreeIconPaths.ico
+      ? sourceTreeIconPaths.ico // Fork add-on
       : environment.platform === "darwin"
-        ? sourceTreeIconPaths.macPng
-        : sourceTreeIconPaths.universalPng;
-  return environment.path.join(environment.rootDir, fileName);
+        ? sourceTreeIconPaths.macPng // Fork add-on
+        : sourceTreeIconPaths.universalPng; // Fork add-on
+  return environment.path.join(environment.rootDir, fileName); // Fork add-on
 }
 
 const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (

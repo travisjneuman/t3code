@@ -813,23 +813,25 @@ const make = Effect.gen(function* () {
 
   // Fork add-on: Hermes provider. Hermes runs on its own machine, so a new
   // Hermes thread lives in the Scratch project whatever project it began in.
-  const hermesInScratch = Effect.fn("ThreadLaunchService.hermesInScratch")(function* (
-    input: ThreadLaunchInput,
-  ) {
-    if (input.reuseExistingThread === true) return input;
-    const providers = yield* providerRegistry.getProviders;
-    const instance = providers.find(
-      (provider) => provider.instanceId === input.modelSelection.instanceId,
-    );
-    if (instance?.driver !== "hermes") return input;
-    const { projectId } = yield* managedFolders.ensureScratchProject.pipe(
-      Effect.mapError(mapError(input, "resolve-project")),
-    );
-    return { ...input, projectId, workspaceStrategy: { type: "root" as const } };
-  });
+  const hermesInScratch /* Fork add-on */ = Effect.fn("ThreadLaunchService.hermesInScratch")(
+    /* Fork add-on */ function* (
+      input: ThreadLaunchInput, // Fork add-on
+    ) /* Fork add-on */ {
+      if (input.reuseExistingThread === true) return input; // Fork add-on
+      const providers = yield* providerRegistry.getProviders; // Fork add-on
+      const instance /* Fork add-on */ = providers.find(
+        (provider) => provider.instanceId === input.modelSelection.instanceId, // Fork add-on
+      ); // Fork add-on
+      if (instance?.driver !== "hermes") return input; // Fork add-on
+      const { projectId } /* Fork add-on */ = yield* managedFolders.ensureScratchProject.pipe(
+        Effect.mapError(mapError(input, "resolve-project")), // Fork add-on
+      ); // Fork add-on
+      return { ...input, projectId, workspaceStrategy: { type: "root" as const } }; // Fork add-on
+    }, // Fork add-on
+  ); // Fork add-on
 
   const launch: ThreadLaunchService["Service"]["launch"] = Effect.fn("ThreadLaunchService.launch")(
-    function* (requested) {
+    function* (requested /* Fork add-on */) {
       const input = yield* hermesInScratch(requested); // Fork add-on: Hermes provider.
       yield* ProjectCloneTracker.rejectCommandsDuringClone(cloneTracker, {
         type: "thread.create",

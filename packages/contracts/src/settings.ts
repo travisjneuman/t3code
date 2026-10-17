@@ -28,12 +28,12 @@ import {
   ProviderOptionSelections,
 } from "./model.ts";
 import { ModelSelection } from "./modelSelection.ts";
-import {
-  AGENT_NULLABLE_PROJECT_SETTING_KEYS,
-  AGENT_PROJECT_SCOPED_SETTING_KEYS,
-  AgentServerSettingsFields,
-  AgentSettingsOptionalFields,
-  AgentSettingsPatchFields,
+/* Fork add-on */ import {
+  AGENT_NULLABLE_PROJECT_SETTING_KEYS, // Fork add-on
+  AGENT_PROJECT_SCOPED_SETTING_KEYS, // Fork add-on
+  AgentServerSettingsFields, // Fork add-on
+  AgentSettingsOptionalFields, // Fork add-on
+  AgentSettingsPatchFields, // Fork add-on
 } from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
 import { CodexHiddenModelsSettingFields } from "./forkCodexSettings.ts"; // Fork add-on: Codex hidden models.
 import { ProjectScript, type ProjectMutation } from "./project.ts";
@@ -1251,9 +1251,8 @@ export const providerInstanceConfigEnabledFlag = (config: unknown): boolean | un
  * Matches the `enabled` decoding default of each driver's settings schema.
  */
 const DEFAULT_DISABLED_PROVIDER_DRIVERS: ReadonlySet<ProviderDriverKind> = new Set(
-  // Fork add-on: Hermes provider.
-  ["cursor", "grok", "muse", "pi", "opencode", "antigravity", "hermes"].map((driver) =>
-    ProviderDriverKind.make(driver),
+  ["cursor", "grok", "muse", "pi", "opencode", "antigravity", "hermes" /* Fork add-on */].map(
+    (driver) => ProviderDriverKind.make(driver),
   ),
 );
 

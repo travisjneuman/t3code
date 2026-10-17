@@ -2,9 +2,9 @@ import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
-import {
-  type ForkAgentScope,
-  forkAgentInstructionsBlock,
+/* Fork add-on */ import {
+  type ForkAgentScope, // Fork add-on
+  forkAgentInstructionsBlock, // Fork add-on
 } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
 import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
 import {
@@ -299,8 +299,8 @@ export function buildPiRpcLaunch(input: {
       ...(hasT3Extension && input.extensionPath !== undefined
         ? { [T3_PI_MCP_EXTENSION_PATH_ENV]: input.extensionPath }
         : {}),
-      ...(hasT3Extension
-        ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock(input.agentScope) }
+      ...(hasT3Extension // Fork add-on
+        ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock(input.agentScope) } // Fork add-on
         : {}), // Fork add-on: agent instructions.
       ...(hasT3Extension && input.runtimeMode !== undefined
         ? {

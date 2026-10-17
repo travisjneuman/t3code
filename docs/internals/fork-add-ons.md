@@ -10,16 +10,36 @@ touches upstream files, so the fork is shaped like a plug-in rather than a patch
 - An upstream file gets only one-line hooks at stable points that call into fork-owned code: an
   import, a spread into a list or layer, a mount. A hook is one line so a conflict on it is
   obvious and quick to re-apply.
-- Every fork line in an upstream file carries the text `Fork add-on`, usually as a trailing
-  comment naming the feature. `git grep -n "Fork add-on"` lists the whole fork footprint in
-  upstream files, and a fork change to an upstream file without the marker is a bug.
-- Files that cannot hold a comment, such as JSON manifests (a package `exports` entry, the stamped
-  release versions) and images, carry no marker, so the marker check cannot protect them. Keep
-  those edits to what a feature cannot do without.
+- Every fork code line in an upstream file carries `Fork add-on` inline, usually as a trailing
+  comment naming the feature. A multi-line fork comment is marked once on its first line.
+  `git grep -n "Fork add-on"` lists the whole fork footprint in upstream files, and a fork change
+  to an upstream file without the marker is a bug.
+- JSON and binary assets cannot hold comments, and generated files cannot retain hand-added
+  markers reliably. The exceptions below are not protected by the marker check; review their
+  fork diff explicitly during upstream sync. Keep those edits to what a feature cannot do without.
 - Upstream docs stay identical to `upstream/main`. Fork documentation is in fork-owned pages under
   `docs/`, and the repository landing page is `.github/README.md`. When the fork changes how an
   upstream feature behaves, say so in [`fork-behavior.md`](../user/fork-behavior.md), not in the
   upstream guide.
+
+## Marker exceptions
+
+- JSON: `package.json`, `apps/server/package.json`, `apps/web/package.json`,
+  `packages/provider-core/package.json`, `packages/shared/package.json`, and
+  `apps/web/public/manifest.webmanifest`. `tsconfig.json` files accept comments, so their fork
+  lines carry markers.
+- Generated output: `pnpm-lock.yaml` and `apps/web/src/routeTree.gen.ts`. Do not hand-mark
+  package-manager or router output; regeneration would remove the markers.
+- Binary icons: `apps/web/public/apple-touch-icon.png`, `apps/web/public/favicon-16x16.png`,
+  `apps/web/public/favicon-32x32.png`, and `apps/web/public/favicon.ico`.
+- `.gitignore` patterns cannot have trailing comments: the comment would become part of the
+  pattern. Each fork pattern instead has an immediately preceding `# Fork add-on` line.
+
+Blank separator lines need no marker. Except for the `.gitignore` rule above, never add
+marker-only lines. Keep markers on real fork code in positions the formatter preserves, such as
+list elements; do not mark upstream lines merely rewrapped around a fork addition. Use comments
+inside JSX expressions or tags and XML comments in SVG, never marker text in strings, template
+payloads, JSX text, or JSON.
 
 ## Identity
 
@@ -42,11 +62,17 @@ surface.
 
 ## Marker check during upstream sync
 
-Before each upstream merge, the sync ([local source updates](./local-source-updates.md)) counts
-the `Fork add-on` lines in each file. After the merge it counts again. Files that lost marker lines
-are handed once to the merge agent to re-apply them. If any are still missing, the merge is
-aborted and the checkout is left as it was.
+Upstream sync ([local source updates](./local-source-updates.md)) requires no unexplained
+marked-line loss. Files with marker deficits get one repair pass with their original
+`HEAD:path:line:text` lines. Restore fork behavior in upstream's current form, keep markers inline,
+and move them with moved code; never recreate obsolete scaffolding or add markers to lines without
+fork behavior. Unrestored lines need an explicit moved or obsolete disposition: a move consumes
+the named destination's surplus over its HEAD file (following renames) once per marker, and an
+obsolete line needs a reason. A file the merge deleted always needs dispositions for its markers,
+even when other files gained some. Accepted dispositions are recorded in the merge commit.
+Unexplained losses attempt `git merge --abort`; an abort failure or anything left in the checkout
+is reported rather than cleaned up.
 
 This catches the quiet failure of a clean merge: upstream rewrites the code around a hook, git
 takes upstream's version, and the hook disappears without a conflict. It only works when every
-fork line in an upstream file carries the marker.
+fork code line in an upstream file carries its marker inline.

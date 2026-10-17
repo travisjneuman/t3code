@@ -412,7 +412,7 @@ export function UsagePage() {
           aria-label="Usage period"
           variant="segmented"
           // Fork add-on: limits ignore the period, so none reads as picked.
-          value={showingLimits ? [] : [String(windowDays)]}
+          value={showingLimits ? [] : [String(windowDays)]} // Fork add-on
           disabled={showingLimits}
           onValueChange={(next) => {
             const value = next[0];

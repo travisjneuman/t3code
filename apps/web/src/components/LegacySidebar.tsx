@@ -2887,12 +2887,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                   disabled={desktopUpdateButtonDisabled || desktopUpdateActionPending}
                   onClick={handleDesktopUpdateButtonClick}
                 >
-                  {/* Fork add-on: local source updates. */}
-                  <SourceUpdateActionLabel action={desktopUpdateButtonAction}>
+                  <SourceUpdateActionLabel action={desktopUpdateButtonAction} /* Fork add-on */>
                     {desktopUpdateButtonAction === "download"
                       ? "Download ARM build"
                       : "Install ARM build"}
-                  </SourceUpdateActionLabel>
+                  </SourceUpdateActionLabel /* Fork add-on */>
                 </Button>
               </AlertAction>
             ) : null}

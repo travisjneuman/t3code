@@ -677,16 +677,15 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     };
   })();
 
-  const { hermesSections, expandedHermesGroups, toggleHermesGroup, showHermesModelProvider } =
-    useHermesModelPickerSections({
-      // Fork add-on: Hermes provider.
+  const { hermesSections, expandedHermesGroups, toggleHermesGroup, showHermesModelProvider } = // Fork add-on
+    /* Fork add-on */ useHermesModelPickerSections({
       activeDriverKind: activeEntry?.driverKind, // Fork add-on: Hermes provider.
       activeInstanceId: props.activeInstanceId, // Fork add-on: Hermes provider.
       activeModelSlug, // Fork add-on: Hermes provider.
       selectedInstanceId, // Fork add-on: Hermes provider.
-      selectedDriverKind:
-        selectedInstanceId === "favorites"
-          ? undefined
+      selectedDriverKind: // Fork add-on
+        selectedInstanceId === "favorites" // Fork add-on
+          ? undefined // Fork add-on
           : entryByInstanceId.get(selectedInstanceId)?.driverKind, // Fork add-on: Hermes provider.
       isSearching, // Fork add-on: Hermes provider.
       filteredModels, // Fork add-on: Hermes provider.

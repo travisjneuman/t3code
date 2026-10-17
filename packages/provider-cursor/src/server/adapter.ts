@@ -2446,15 +2446,15 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               ),
           ),
           startTurn,
-          sessionInsights: {
-            mcpServers: ({ providerThread }) =>
-              mcpSessions
-                .read(providerThread.appThreadId ?? input.threadId)
-                .pipe(
-                  Effect.map((mcp) =>
-                    sessionConfiguredMcpServers(Object.keys(cursorMcpServers(mcp) ?? {})),
-                  ),
-                ),
+          sessionInsights: /* Fork add-on */ {
+            mcpServers: ({ providerThread } /* Fork add-on */) =>
+              mcpSessions // Fork add-on
+                .read(providerThread.appThreadId ?? input.threadId) // Fork add-on
+                /* Fork add-on */ .pipe(
+                  /* Fork add-on */ Effect.map(
+                    (mcp) => sessionConfiguredMcpServers(Object.keys(cursorMcpServers(mcp) ?? {})), // Fork add-on
+                  ), // Fork add-on
+                ), // Fork add-on
           }, // Fork add-on: session details.
           compactThread: (turnInput) =>
             startTurn({

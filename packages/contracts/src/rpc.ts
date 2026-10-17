@@ -1321,12 +1321,11 @@ const WsMcpAppsUpdateModelContextRpc = Rpc.make(WS_METHODS.mcpAppsUpdateModelCon
   error: Schema.Union([McpAppRequestError, EnvironmentAuthorizationError]),
 });
 
-// Fork add-on: session details.
-const WsSessionInsightsGetRpc = Rpc.make(WS_METHODS.sessionInsightsGet, {
-  payload: SessionInsightsInput,
-  success: SessionInsights,
-  error: Schema.Union([SessionInsightsError, EnvironmentAuthorizationError]),
-});
+const WsSessionInsightsGetRpc /* Fork add-on */ = Rpc.make(WS_METHODS.sessionInsightsGet, {
+  payload: SessionInsightsInput, // Fork add-on
+  success: SessionInsights, // Fork add-on
+  error: Schema.Union([SessionInsightsError, EnvironmentAuthorizationError]), // Fork add-on
+}); // Fork add-on
 
 const WsMcpAppsReadResourceRpc = Rpc.make(WS_METHODS.mcpAppsReadResource, {
   payload: McpAppReadResourceInput,

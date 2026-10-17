@@ -1962,10 +1962,10 @@ const make = Effect.gen(function* () {
           operation: "delegate-task",
         });
         const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
-        const policy = yield* forkPolicy.prepare({
-          parent,
-          request: input,
-          isRetry: isRetryOfAcceptedDelegation,
+        const policy /* Fork add-on */ = yield* forkPolicy.prepare({
+          parent, // Fork add-on
+          request: input, // Fork add-on
+          isRetry: isRetryOfAcceptedDelegation, // Fork add-on
         }); // Fork add-on: agent instructions.
         const target = yield* resolveTargetRechecking({
           parent,
@@ -2000,10 +2000,10 @@ const make = Effect.gen(function* () {
         // Fork add-on: agent instructions. An explicit `isolation: "worktree"`
         // request uses upstream's prepared worktree; otherwise the Worker
         // workspace setting decides.
-        const workspace =
-          workspaceStrategy === undefined
-            ? yield* forkPolicy.provisionWorkspace(policy, parent)
-            : { task: policy.task, command: {}, discard: Effect.void };
+        const workspace = // Fork add-on
+          workspaceStrategy === undefined // Fork add-on
+            ? yield* forkPolicy.provisionWorkspace(policy, parent) // Fork add-on
+            : { task: policy.task, command: {}, discard: Effect.void }; // Fork add-on
         // ThreadManagementService.dispatch is the chokepoint for this command
         // type's own enablement check, using the same command id and its
         // receipt-replay exemption, so no separate assert runs here.
@@ -2066,10 +2066,10 @@ const make = Effect.gen(function* () {
             runId: childRunEvent.event.payload.id,
           });
         }
-        yield* forkPolicy.startTimeLimit(policy, {
-          parentThreadId: scope.thread.threadId,
-          taskId,
-          commandId,
+        /* Fork add-on */ yield* forkPolicy.startTimeLimit(policy, {
+          parentThreadId: scope.thread.threadId, // Fork add-on
+          taskId, // Fork add-on
+          commandId, // Fork add-on
         }); // Fork add-on: agent instructions.
 
         if (input.mode !== "wait") {

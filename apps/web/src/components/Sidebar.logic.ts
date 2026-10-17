@@ -1127,8 +1127,8 @@ export function resolveThreadStatusPill(input: {
     // in-progress blue rather than the grey of a finished thread.
     return {
       label: "Waiting",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      colorClass: "text-sky-600 dark:text-sky-300/80", // Fork add-on
+      dotClass: "bg-sky-500 dark:bg-sky-300/80", // Fork add-on
       pulse: false,
     };
   }

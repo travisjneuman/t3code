@@ -2363,12 +2363,12 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
-  const { hermesAgent, hermesFixedRunLocation } = resolveHermesChatPresentation(
-    selectedProvider,
-    activeProviderInstanceId,
-    multipleModelSelections !== null,
-    settings,
-    logicalProjectEnvironments,
+  const { hermesAgent, hermesFixedRunLocation } /* Fork add-on */ = resolveHermesChatPresentation(
+    selectedProvider, // Fork add-on
+    activeProviderInstanceId, // Fork add-on
+    multipleModelSelections !== null, // Fork add-on
+    settings, // Fork add-on
+    logicalProjectEnvironments, // Fork add-on
   ); // Fork add-on: Hermes provider and fixed host.
   const { enabled: interactionModeEnabled, interactionMode } = resolveComposerInteractionMode({
     planModeEnabled: settings.planModeEnabled,
@@ -8439,12 +8439,12 @@ export default function ChatView(props: ChatViewProps) {
               onUpdateProjectScript={updateProjectScriptStable}
               onDeleteProjectScript={deleteProjectScriptStable}
               contextWindow={activeContextWindow} // Fork add-on: session details in the full card.
-              {...(manualCompactionProviderAvailable
-                ? {
-                    onCompactContext: onComposerCompactContextStable,
-                    compactDisabled,
-                    compactDisabledReason,
-                  }
+              {...(manualCompactionProviderAvailable // Fork add-on
+                ? /* Fork add-on */ {
+                    onCompactContext: onComposerCompactContextStable, // Fork add-on
+                    compactDisabled, // Fork add-on
+                    compactDisabledReason, // Fork add-on
+                  } // Fork add-on
                 : {})} // Fork add-on: session compaction.
               {...(isServerThread ? { onOpenTurnDiff: onOpenTurnDiffStable } : {})} // Fork add-on: session diffs.
               {...(hermesAgent ? { hermesMachine: hermesAgent.machine } : {})} // Fork add-on: Hermes provider.

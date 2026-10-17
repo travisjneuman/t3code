@@ -132,7 +132,7 @@ export interface TailscaleStatus {
   readonly magicDnsName: string | null;
   readonly tailnetIpv4Addresses: readonly string[];
   /** Fork add-on: false until the tailnet turns on HTTPS certificates, which Serve needs. */
-  readonly httpsCertificatesEnabled?: boolean;
+  readonly httpsCertificatesEnabled?: boolean; // Fork add-on
 }
 
 const collectStdout = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
@@ -204,8 +204,8 @@ export const parseTailscaleStatus = (
         magicDnsName: normalizeMagicDnsName(parsed),
         tailnetIpv4Addresses,
         // Fork add-on: Serve needs the tailnet's HTTPS certificates.
-        httpsCertificatesEnabled:
-          Array.isArray(parsed.CertDomains) && parsed.CertDomains.length > 0,
+        httpsCertificatesEnabled: // Fork add-on
+          Array.isArray(parsed.CertDomains) && parsed.CertDomains.length > 0, // Fork add-on
       };
     }),
   );

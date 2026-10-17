@@ -2127,11 +2127,13 @@ export const layerWithOptions = (
               });
               const sessionScope = yield* Scope.fork(sessionScopes);
               yield* agentScope.clear(input.threadId);
-              const forkProjectId = yield* projectionStore.getThread(input.threadId).pipe(
-                Effect.tap((thread) => Effect.sync(() => rememberForkAgentThread(thread))),
-                Effect.map((thread) => thread.projectId),
-                Effect.orElseSucceed(() => undefined),
-              ); // Fork add-on: agent instructions.
+              const forkProjectId /* Fork add-on */ = yield* projectionStore
+                .getThread(input.threadId) // Fork add-on
+                /* Fork add-on */ .pipe(
+                  Effect.tap((thread) => Effect.sync(() => rememberForkAgentThread(thread))), // Fork add-on
+                  Effect.map((thread) => thread.projectId), // Fork add-on
+                  Effect.orElseSucceed(() => undefined), // Fork add-on
+                ); // Fork add-on: agent instructions.
               const runtime = yield* adapter
                 .openSession({
                   threadId: input.threadId,

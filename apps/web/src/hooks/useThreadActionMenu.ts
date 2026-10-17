@@ -21,10 +21,10 @@ import {
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
-import {
-  isForkThreadMenuId,
-  runForkThreadMenuItem,
-  withForkThreadMenuItems,
+/* Fork add-on */ import {
+  isForkThreadMenuId, // Fork add-on
+  runForkThreadMenuItem, // Fork add-on
+  withForkThreadMenuItems, // Fork add-on
 } from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back.
 import { threadEnvironment } from "../state/threads";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
@@ -150,9 +150,8 @@ export function useThreadActionMenu(input: {
       const menuItems = withForkThreadMenuItems(items, thread); // Fork add-on: thread export, save to notes, hand back.
       const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on: thread export.
       if (clicked._tag === "Failure" || clicked.value === null) return;
-      // Fork add-on: thread export, save to notes, hand back, open comparison.
-      if (isForkThreadMenuId(clicked.value))
-        return runForkThreadMenuItem(threadRef, clicked.value, router);
+      if (isForkThreadMenuId(clicked.value) /* Fork add-on */)
+        return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on
       const action: ThreadActionMenuId = clicked.value;
       if (
         threadActionRequiresOperate(action) &&

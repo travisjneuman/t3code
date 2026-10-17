@@ -26,12 +26,11 @@ const providerSecretFields = new Map([
   ["codex", secretSettingsFields(CodexSettings)],
   ["claudeAgent", secretSettingsFields(ClaudeSettings)],
   ["antigravity", secretSettingsFields(AntigravitySettings)],
-  // Fork add-on: Hermes provider.
   ...[
     cursorClient,
     grokClient,
     museClient,
-    hermesClient,
+    hermesClient, // Fork add-on
     openCodeClient,
     piClient,
     acpRegistryClient,

@@ -513,9 +513,8 @@ export const layer = Layer.effect(
           }
 
           const providers = orderProviderSnapshots(
-            withHermesAccountCodexModels([...mergedProviders.values()]).map((provider) =>
-              // Fork add-on: Hermes Codex lists the account's live models
-              classifyCompatibility(provider, manifest),
+            /* Fork add-on */ withHermesAccountCodexModels([...mergedProviders.values()]).map(
+              (provider) => classifyCompatibility(provider, manifest),
             ),
           );
           const providersToPersist = providers.filter((provider) =>

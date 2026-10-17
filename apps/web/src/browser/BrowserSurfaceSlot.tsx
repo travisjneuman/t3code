@@ -9,7 +9,7 @@ import { observeResize } from "../lib/observeResize";
 // A docked sheet (the right panel in a narrow window) covers the app at
 // --z-sheet (46), so a page placed in one rises just above it. Dialogs (50 and
 // up) and the floating player's webview (48) still cover it.
-const SHEET_SURFACE_Z_INDEX = 47;
+const SHEET_SURFACE_Z_INDEX = 47; // Fork add-on
 
 export function BrowserSurfaceSlot(props: {
   readonly tabId: string;
@@ -41,9 +41,8 @@ export function BrowserSurfaceSlot(props: {
     const update = () => {
       const rect = element.getBoundingClientRect();
       const presentation = presentationRef.current;
-      // Fork add-on: web pages in the narrow-window panel sheet.
-      const zIndex =
-        sheet === null ? presentation.zIndex : Math.max(presentation.zIndex, SHEET_SURFACE_Z_INDEX);
+      const zIndex = // Fork add-on
+        sheet === null ? presentation.zIndex : Math.max(presentation.zIndex, SHEET_SURFACE_Z_INDEX); // Fork add-on
       const presented = lease.present(
         {
           x: Math.round(rect.x),
@@ -85,10 +84,10 @@ export function BrowserSurfaceSlot(props: {
     const stopObserving = observeResize(observed, update);
     // Fork add-on: web pages in the narrow-window panel sheet.
     // A sheet slides in by translation, which no resize reports; measure where it settles.
-    const onSheetTransitionEnd = (event: Event) => {
-      if (event.target === sheet) update();
-    };
-    sheet?.addEventListener("transitionend", onSheetTransitionEnd);
+    const onSheetTransitionEnd = (event: Event /* Fork add-on */) => {
+      if (event.target === sheet) update(); // Fork add-on
+    }; // Fork add-on
+    sheet?.addEventListener("transitionend", onSheetTransitionEnd); // Fork add-on
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {

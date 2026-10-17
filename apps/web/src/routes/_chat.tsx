@@ -125,17 +125,17 @@ function ChatRouteGlobalShortcuts() {
         event.preventDefault();
         event.stopPropagation();
         // Fork add-on: like the sidebar's New thread button, start in No project.
-        const scratchTarget = legacySidebarEnabled
-          ? null
-          : scratchEnvironmentId(
-              activeThread?.environmentId ??
-                activeDraftThread?.environmentId ??
-                primaryEnvironmentId,
-            );
-        if (scratchTarget !== null) {
-          void startScratchThread(scratchTarget);
-          return;
-        }
+        const scratchTarget = legacySidebarEnabled // Fork add-on
+          ? null // Fork add-on
+          : /* Fork add-on */ scratchEnvironmentId(
+              activeThread?.environmentId ?? // Fork add-on
+                activeDraftThread?.environmentId ?? // Fork add-on
+                primaryEnvironmentId, // Fork add-on
+            ); // Fork add-on
+        if (scratchTarget !== null /* Fork add-on */) {
+          void startScratchThread(scratchTarget); // Fork add-on
+          return; // Fork add-on
+        } // Fork add-on
         if (!legacySidebarEnabled && projectGroupCount > 1) {
           openCommandPalette({ open: "new-thread-in" });
           return;

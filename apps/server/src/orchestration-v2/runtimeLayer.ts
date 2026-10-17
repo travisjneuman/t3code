@@ -346,10 +346,11 @@ const layerMcpAppRequestsProvided = McpAppRequests.layer.pipe(
   ),
 );
 
-// Fork add-on: session details.
-const layerSessionInsightsProvided = SessionInsights.layer.pipe(
-  Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerProviderSessionManagerProvided)),
-);
+const layerSessionInsightsProvided /* Fork add-on */ = SessionInsights.layer.pipe(
+  /* Fork add-on */ Layer.provide(
+    Layer.mergeAll(layerThreadManagementProvided, layerProviderSessionManagerProvided), // Fork add-on
+  ), // Fork add-on
+); // Fork add-on
 
 export const layer = Layer.mergeAll(
   layerCommandOutputHubProvided,
@@ -379,29 +380,27 @@ export const layerProduction = Layer.mergeAll(
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
-  // Fork add-on: read-only sessions from agents running outside T3 (whole block).
-  ExternalSessions.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        layerProjectService,
-        layerOrchestratorProvided,
-        layerEventSinkProvided,
-        layerEventStoreProvided,
-        IdAllocator.layer,
-        ProviderSessionRuntime.layer,
-      ),
-    ),
-  ),
-  // Fork add-on: Hermes provider (whole block).
-  HermesSessions.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        layerOrchestratorProvided,
-        layerEventSinkProvided,
-        layerManagedProjectFoldersProvided,
-        IdAllocator.layer,
-        TurnItemPositionStore.layer,
-      ),
-    ),
-  ),
+  /* Fork add-on: read-only sessions from agents running outside T3. */ ExternalSessions.layer.pipe(
+    /* Fork add-on */ Layer.provide(
+      /* Fork add-on */ Layer.mergeAll(
+        layerProjectService, // Fork add-on
+        layerOrchestratorProvided, // Fork add-on
+        layerEventSinkProvided, // Fork add-on
+        layerEventStoreProvided, // Fork add-on
+        IdAllocator.layer, // Fork add-on
+        ProviderSessionRuntime.layer, // Fork add-on
+      ), // Fork add-on
+    ), // Fork add-on
+  ), // Fork add-on
+  /* Fork add-on: Hermes provider. */ HermesSessions.layer.pipe(
+    /* Fork add-on */ Layer.provide(
+      /* Fork add-on */ Layer.mergeAll(
+        layerOrchestratorProvided, // Fork add-on
+        layerEventSinkProvided, // Fork add-on
+        layerManagedProjectFoldersProvided, // Fork add-on
+        IdAllocator.layer, // Fork add-on
+        TurnItemPositionStore.layer, // Fork add-on
+      ), // Fork add-on
+    ), // Fork add-on
+  ), // Fork add-on
 ).pipe(Layer.provide(Scheduler.layer), Layer.provideMerge(layerEventInfrastructure));

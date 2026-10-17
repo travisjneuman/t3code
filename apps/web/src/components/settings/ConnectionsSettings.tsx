@@ -150,9 +150,7 @@ import {
   type ServerPairingLinkRecord,
 } from "~/environments/primary";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
-import {
-  // Fork add-on: host releases.
-  // Fork add-on: host releases.
+/* Fork add-on */ import {
   resolveHostVersionMismatch, // Fork add-on: host releases.
   useHostUpdateTarget, // Fork add-on: host releases.
   useHostVersionMismatch, // Fork add-on: host releases.
@@ -721,9 +719,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
           <div className="flex min-h-5 items-center gap-1.5">
             {/* Fork add-on: an unused, unexpired link is waiting, not a problem. */}
             <ConnectionStatusDot
-              tooltipText={
-                `Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}` /* Fork add-on: unused link status. */
-              }
+              tooltipText={`Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}`} // Fork add-on: unused link status.
               dotClassName={"bg-info" /* Fork add-on: unused link status. */}
             />
             <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
@@ -1377,10 +1373,9 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
         </div>
       </div>
       {/* Fork add-on: says what Tailscale HTTPS still needs. */}
-      {needsTailscaleSetup && endpoint.description ? (
-        <p className="mt-1 text-xs text-muted-foreground">{endpoint.description}</p>
-      ) : null}{" "}
-      {/* Fork add-on: Tailscale HTTPS prerequisites. */}
+      {needsTailscaleSetup && endpoint.description ? ( // Fork add-on
+        <p className="mt-1 text-xs text-muted-foreground">{endpoint.description}</p> // Fork add-on
+      ) : /* Fork add-on */ null}{" "}
     </div>
   );
 });
@@ -1603,14 +1598,13 @@ function SavedBackendListRow({
       dimmed={!enabled}
       subtitle={
         <span className="flex min-w-0 items-center gap-1">
-          <span
-            aria-hidden
-            className={cn(
-              "me-0.5 size-1.5 shrink-0 rounded-full",
-              resumingServerUpdate ? "bg-info" : status.dotClassName,
-            )}
+          <span // Fork add-on
+            aria-hidden // Fork add-on
+            className /* Fork add-on */={cn(
+              "me-0.5 size-1.5 shrink-0 rounded-full", // Fork add-on
+              resumingServerUpdate ? "bg-info" : status.dotClassName, // Fork add-on
+            )} // Fork add-on
           />{" "}
-          {/* Fork add-on: connection status dots. */}
           <Tooltip>
             {/* The status can change while the tooltip is open, and base-ui only
                 re-measures the popup when the trigger's payload changes. */}

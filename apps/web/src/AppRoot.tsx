@@ -15,8 +15,7 @@ import type { AppRouter } from "./router";
 export function AppRoot({ router }: { readonly router: AppRouter }) {
   return (
     <AppAtomRegistryProvider>
-      {/* Fork add-on: remote apps. */}
-      <RemoteAppSync />
+      <RemoteAppSync /* Fork add-on: remote apps. */ />
       <RouterProvider router={router} />
       <ElectronBrowserHost />
       <BrowserProfileReporter />

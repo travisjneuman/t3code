@@ -2635,11 +2635,13 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 }
 
 // Fork add-on: latest and nightly packages use the same fork-owned artwork.
-export function resolveDesktopBuildIconAssets(_version: string): DesktopBuildIconAssets {
+export function resolveDesktopBuildIconAssets(
+  _version: string, // Fork add-on
+): DesktopBuildIconAssets {
   return {
-    macIconPng: FORK_BRAND_ASSET_PATHS.macIconPng,
-    linuxIconPng: FORK_BRAND_ASSET_PATHS.universalIconPng,
-    windowsIconIco: FORK_BRAND_ASSET_PATHS.windowsIconIco,
+    macIconPng: FORK_BRAND_ASSET_PATHS.macIconPng, // Fork add-on
+    linuxIconPng: FORK_BRAND_ASSET_PATHS.universalIconPng, // Fork add-on
+    windowsIconIco: FORK_BRAND_ASSET_PATHS.windowsIconIco, // Fork add-on
   };
 }
 
@@ -2661,7 +2663,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 // Fork add-on: one app name for every channel, without a stage label.
-export function resolveDesktopProductName(_version: string): string {
+export function resolveDesktopProductName(_version: string): string /* Fork add-on */ {
   return Fork.REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on: identity.
 }
 
@@ -2730,7 +2732,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
     // Fork add-on: seal unsigned builds, and record the checkout for local source updates.
-    if (!signed) buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs");
+    if (!signed) buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs"); // Fork add-on
     buildConfig.extraMetadata = { t3codeSourceRepositoryPath: repoRoot }; // Fork add-on
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
@@ -3932,11 +3934,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     const from = path.join(stageDistDir, entry);
     const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
     // Fork add-on: a mac `dir` build also outputs its app, which local source updates install.
-    if (stat?.type === "Directory" && options.platform === "mac" && options.target === "dir") {
-      const bundleOutput = path.join(options.outputDir, entry);
-      copiedArtifacts.push(yield* Fork.copyForkAppBundle(from, bundleOutput));
-      continue;
-    }
+    const isMacDirBuild = options.platform === "mac" && options.target === "dir"; // Fork add-on
+    if (stat?.type === "Directory" && isMacDirBuild) /* Fork add-on */ {
+      const bundleOutput = path.join(options.outputDir, entry); // Fork add-on
+      copiedArtifacts.push(yield* Fork.copyForkAppBundle(from, bundleOutput)); // Fork add-on
+      continue; // Fork add-on
+    } // Fork add-on
     if (!stat || stat.type !== "File") continue;
 
     const to = path.join(options.outputDir, entry);

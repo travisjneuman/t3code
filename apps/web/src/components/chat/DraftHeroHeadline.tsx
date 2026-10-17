@@ -53,12 +53,11 @@ interface DraftHeroHeadlineProps {
   readonly draftId: DraftId | null;
   readonly activeProjectRef: ScopedProjectRef | null;
   readonly activeProjectTitle: string | null;
-  /**
+  /** Fork add-on: Hermes provider.
    * Set while a Hermes model is picked. Hermes works on its own machine, so
    * the headline names the agent and that machine instead of a project.
-   * Fork add-on: Hermes provider.
    */
-  readonly hermesAgent?: { readonly name: string; readonly machine: string } | null;
+  readonly hermesAgent?: { readonly name: string; readonly machine: string } | null; // Fork add-on
 }
 
 export function DraftHeroHeadline({
@@ -352,19 +351,22 @@ export function DraftHeroHeadline({
       </Tooltip>
     ) : null;
 
-  // Fork add-on: Hermes provider.
-  if (hermesAgent) {
-    return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
-        <h1 className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
-          What should {hermesAgent.name} work on?
-        </h1>
-        <p className="mt-2 flex h-6 items-center text-muted-foreground/70 text-sm">
-          Runs on {hermesAgent.machine}
-        </p>
-      </div>
-    );
-  }
+  if (hermesAgent /* Fork add-on */) {
+    /* Fork add-on */ return (
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center" /* Fork add-on */>
+        <h1 // Fork add-on
+          className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl" // Fork add-on
+        >
+          What should {hermesAgent.name /* Fork add-on */} work on?
+        </h1 /* Fork add-on */>
+        <p // Fork add-on
+          className="mt-2 flex h-6 items-center text-muted-foreground/70 text-sm" // Fork add-on
+        >
+          Runs on {hermesAgent.machine /* Fork add-on */}
+        </p /* Fork add-on */>
+      </div> // Fork add-on
+    ); // Fork add-on
+  } // Fork add-on
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col items-center">

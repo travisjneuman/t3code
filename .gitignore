@@ -38,7 +38,9 @@ artifacts/app-store/screenshots/
 .github/pr-assets/
 # Fork add-on: fleet host config for scripts/tjn-hosts.ts lives outside the repo.
 hosts.json
+# Fork add-on: fleet host config variants.
 hosts.json.*
+# Fork add-on: local fleet host config variants.
 hosts.local*.json
 native/**/target/
 node_modules/

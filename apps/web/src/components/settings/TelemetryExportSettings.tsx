@@ -24,11 +24,11 @@ const SIGNALS = [
 type SignalKey = (typeof SIGNALS)[number]["key"];
 
 // Fork add-on: a failed check request is kept so it doesn't fall back to "Not checked".
-type CheckRequestFailed = { readonly _tag: "CheckFailed"; readonly message: string };
+type CheckRequestFailed = { readonly _tag: "CheckFailed"; readonly message: string }; // Fork add-on
 
 type EndpointCheck = {
   readonly url: string;
-  readonly result: OtlpEndpointCheckResult | CheckRequestFailed | null;
+  readonly result: OtlpEndpointCheckResult | CheckRequestFailed | null; // Fork add-on
 };
 
 const isHttpUrl = (url: string) => /^https?:\/\/./i.test(url);
@@ -38,10 +38,10 @@ function endpointStatus(url: string, check: EndpointCheck | undefined) {
   if (check?.url !== url) return { label: "Not checked", dot: "bg-muted-foreground/40" };
   const { result } = check;
   // Fork add-on: in progress is informational; amber is reserved for needs-attention.
-  if (result === null) return { label: "Checking…", dot: "bg-info" };
+  if (result === null) return { label: "Checking…", dot: "bg-info" }; // Fork add-on
   switch (result._tag) {
     case "CheckFailed": // Fork add-on: see CheckRequestFailed.
-      return { label: "Check failed", dot: "bg-destructive", tooltip: result.message };
+      return { label: "Check failed", dot: "bg-destructive", tooltip: result.message }; // Fork add-on
     case "Accepted":
       return { label: `Connected · ${Math.round(result.latencyMs)} ms`, dot: "bg-success" };
     case "Rejected":
@@ -100,10 +100,10 @@ function TelemetryExportForm() {
       const next = { ...previous };
       if (response._tag === "Success") next[key] = { url, result: response.value };
       // Fork add-on: see CheckRequestFailed.
-      else if (!isAtomCommandInterrupted(response)) {
-        const message = formatEnvironmentQueryError(response.cause);
-        next[key] = { url, result: { _tag: "CheckFailed", message } };
-      } else delete next[key];
+      else if (!isAtomCommandInterrupted(response) /* Fork add-on */) {
+        const message = formatEnvironmentQueryError(response.cause); // Fork add-on
+        next[key] = { url, result: { _tag: "CheckFailed", message } }; // Fork add-on
+      } else delete next[key]; // Fork add-on
       return next;
     });
   };

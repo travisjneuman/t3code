@@ -1285,8 +1285,8 @@ describe("resolveThreadStatusPill", () => {
     ).toMatchObject({
       label: "Waiting",
       // Fork add-on: pending background work reads as in progress.
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      colorClass: "text-sky-600 dark:text-sky-300/80", // Fork add-on
+      dotClass: "bg-sky-500 dark:bg-sky-300/80", // Fork add-on
       pulse: false,
     });
   });

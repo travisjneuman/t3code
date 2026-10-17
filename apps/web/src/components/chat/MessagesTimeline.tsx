@@ -2726,8 +2726,10 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
-      {/* Fork add-on: send replies to desktop web apps. */}
-      <RemoteAppSendMessageAction message={message} visible={showCopyButton && !copyStreaming} />
+      <RemoteAppSendMessageAction // Fork add-on
+        message={message} // Fork add-on
+        visible={showCopyButton && !copyStreaming} // Fork add-on
+      />
       {projectedItem?.item.type === "assistant_message" ? (
         <AssistantForkButton projectedItem={projectedItem} />
       ) : null}

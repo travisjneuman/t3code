@@ -64,19 +64,18 @@ export interface ThreadDetailsPanelProps extends Pick<
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
-  // Fork add-on: session details.
-  contextWindow?: ContextWindowSnapshot | null;
-  /** Present when the provider can compact on request; the button follows the composer's. */
-  onCompactContext?: () => void;
-  compactDisabled?: boolean;
-  compactDisabledReason?: string | null;
-  onOpenTurnDiff?: (runId: RunId, filePath?: string) => void;
-  /**
+  contextWindow?: ContextWindowSnapshot | null; // Fork add-on
+  /** Fork add-on: Present when the provider can compact on request; the button follows the composer's. */
+  onCompactContext?: () => void; // Fork add-on
+  compactDisabled?: boolean; // Fork add-on
+  compactDisabledReason?: string | null; // Fork add-on
+  onOpenTurnDiff?: (runId: RunId, filePath?: string) => void; // Fork add-on
+  /** Fork add-on: Hermes provider.
    * Set for a Hermes thread: the machine Hermes works on. Hermes never uses
    * the project's folder, so the workspace and version control controls give
-   * way to that machine's name. Fork add-on: Hermes provider.
+   * way to that machine's name.
    */
-  hermesMachine?: string;
+  hermesMachine?: string; // Fork add-on
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -125,13 +124,12 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             showHeading={false}
           >
             <div className="flex flex-col">
-              {/* Fork add-on: Hermes provider. */}
-              {props.hermesMachine !== undefined ? (
-                <p className="px-1.5 py-1 text-muted-foreground text-sm">
-                  Runs on {props.hermesMachine}, in Hermes's own workspace
-                </p>
-              ) : null}
-              {density === "full" && localWorkspace ? (
+              {props.hermesMachine !== undefined ? ( // Fork add-on
+                <p className="px-1.5 py-1 text-muted-foreground text-sm" /* Fork add-on */>
+                  Runs on {props.hermesMachine /* Fork add-on */}, in Hermes's own workspace
+                </p> // Fork add-on
+              ) : /* Fork add-on */ null}
+              {density === "full" && localWorkspace ? ( // Fork add-on
                 <BranchToolbar
                   layout="panel"
                   panelSection="workspace"
@@ -143,7 +141,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {density !== "essential" && props.showOpenInPicker && localWorkspace ? (
+              {density !== "essential" && props.showOpenInPicker && localWorkspace ? ( // Fork add-on
                 <OpenInPicker
                   keybindings={props.keybindings}
                   environmentId={props.environmentId}
@@ -153,7 +151,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {props.activeProjectScripts && localWorkspace ? (
+              {props.activeProjectScripts && localWorkspace ? ( // Fork add-on
                 <ProjectScriptsControl
                   environmentId={props.environmentId}
                   displayMode="panel"
@@ -169,7 +167,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             </div>
           </ThreadDetailsSection>
 
-          {props.gitCwd && localWorkspace ? (
+          {props.gitCwd && localWorkspace ? ( // Fork add-on
             <ThreadDetailsSection
               headingId="thread-details-version-control-heading"
               title="Version Control"
@@ -198,19 +196,18 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
             <ThreadAutomationsPanel environmentId={props.environmentId} threadId={props.threadId} />
           ) : null}
 
-          {/* Fork add-on: session details. */}
-          {density === "full" && !props.draftId ? (
-            <ThreadSessionDetails
-              environmentId={props.environmentId}
-              threadId={props.threadId}
-              workspaceRoot={props.gitCwd ?? undefined}
-              contextWindow={props.contextWindow ?? null}
-              onCompactContext={props.onCompactContext}
-              compactDisabled={props.compactDisabled ?? true}
-              compactDisabledReason={props.compactDisabledReason ?? null}
-              onOpenTurnDiff={props.onOpenTurnDiff}
-            />
-          ) : null}
+          {density === "full" && !props.draftId ? ( // Fork add-on
+            <ThreadSessionDetails // Fork add-on
+              environmentId={props.environmentId} // Fork add-on
+              threadId={props.threadId} // Fork add-on
+              workspaceRoot={props.gitCwd ?? undefined} // Fork add-on
+              contextWindow={props.contextWindow ?? null} // Fork add-on
+              onCompactContext={props.onCompactContext} // Fork add-on
+              compactDisabled={props.compactDisabled ?? true} // Fork add-on
+              compactDisabledReason={props.compactDisabledReason ?? null} // Fork add-on
+              onOpenTurnDiff={props.onOpenTurnDiff} // Fork add-on
+            /> // Fork add-on
+          ) : /* Fork add-on */ null}
 
           {density === "full" && !props.draftId ? (
             <ThreadRelationshipsPanel

@@ -416,7 +416,10 @@ function SidebarUpdateControl() {
           ? { status: "downloading", percent: state.downloadPercent }
           : { status: "waiting" };
     return (
-      <SidebarMenuItem className="ml-auto flex min-w-0 flex-1" data-update-capsule="">
+      <SidebarMenuItem
+        className="ml-auto flex min-w-0 flex-1"
+        data-update-capsule="" /* Fork add-on */
+      >
         <SidebarUpdateCapsule
           run={run}
           local={local}

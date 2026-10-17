@@ -22,7 +22,7 @@ export function getDesktopScheme(isDevelopment: boolean): string {
 }
 
 // Fork add-on: exported for the remote app tabs.
-export function getDesktopOrigin(isDevelopment: boolean): string {
+export function getDesktopOrigin(isDevelopment: boolean /* Fork add-on */): string {
   return `${getDesktopScheme(isDevelopment)}://${DESKTOP_HOST}`;
 }
 

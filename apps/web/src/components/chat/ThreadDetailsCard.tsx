@@ -94,9 +94,9 @@ export function ThreadDetailsCard({
       const lineage = element.querySelector<HTMLElement>("[data-thread-relationships-panel]");
       // Fork add-on: session details. They are long and render only at full density, so
       // counting them would hide themselves.
-      const sessionDetails = element.querySelector<HTMLElement>("[data-thread-session-details]");
-      const fittingHeight =
-        next - (lineage?.offsetHeight ?? 0) - (sessionDetails?.offsetHeight ?? 0);
+      const sessionDetails = element.querySelector<HTMLElement>("[data-thread-session-details]"); // Fork add-on
+      const fittingHeight = // Fork add-on
+        next - (lineage?.offsetHeight ?? 0) - (sessionDetails?.offsetHeight ?? 0); // Fork add-on
       setMeasurements((current) => {
         const heights = current.key === measurementKey ? current.heights : { full: 0, compact: 0 };
         const fullContentHeight =

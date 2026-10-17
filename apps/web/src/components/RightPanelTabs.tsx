@@ -536,8 +536,7 @@ function RightPanelEmptyState(props: {
               />
             ),
           )}
-          {/* Fork add-on: remote app panel. */}
-          <RemoteAppPanelTab.LauncherItems />
+          <RemoteAppPanelTab.LauncherItems /* Fork add-on */ />
         </div>
       </div>
     </div>
@@ -1389,8 +1388,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                       </SurfaceMenuItem>
                     );
                   })}
-                  {/* Fork add-on: remote app panel. */}
-                  <RemoteAppPanelTab.MenuItems />
+                  <RemoteAppPanelTab.MenuItems /* Fork add-on */ />
                 </MenuPopup>
               </Menu>
             ) : null}

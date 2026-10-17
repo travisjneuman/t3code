@@ -480,11 +480,11 @@ export const make = Effect.gen(function* () {
         return Option.none<string>();
       }
       // Fork add-on: the encrypted bytes stay in scope so a legacy catalog can be rewritten.
-      const encryptedCatalog = yield* decodeSecretBytes(
-        catalogPath,
-        document.value.encryptedCatalog,
-      );
-      const decrypted = yield* safeStorage.decryptString(encryptedCatalog).pipe(
+      const encryptedCatalog /* Fork add-on */ = yield* decodeSecretBytes(
+        catalogPath, // Fork add-on
+        document.value.encryptedCatalog, // Fork add-on
+      ); // Fork add-on
+      const decrypted /* Fork add-on */ = yield* safeStorage.decryptString(encryptedCatalog).pipe(
         Effect.mapError(
           (cause) =>
             new DesktopConnectionCatalogStoreProtectionError({
@@ -495,16 +495,20 @@ export const make = Effect.gen(function* () {
         ),
       );
       // Fork add-on: move a keychain-encrypted catalog to the fork's file key.
-      if (safeStorage.needsReencryption?.(encryptedCatalog)) {
-        yield* writeCatalog(decrypted).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("Could not re-encrypt the desktop connection catalog.", {
-              catalogPath,
-              error,
-            }),
-          ),
-        );
-      }
+      if (safeStorage.needsReencryption?.(encryptedCatalog) /* Fork add-on */) {
+        /* Fork add-on */ yield* writeCatalog(decrypted).pipe(
+          /* Fork add-on */ Effect.catch(
+            (error /* Fork add-on */) =>
+              /* Fork add-on */ Effect.logWarning(
+                "Could not re-encrypt the desktop connection catalog.", // Fork add-on
+                /* Fork add-on */ {
+                  catalogPath, // Fork add-on
+                  error, // Fork add-on
+                }, // Fork add-on
+              ), // Fork add-on
+          ), // Fork add-on
+        ); // Fork add-on
+      } // Fork add-on
       return Option.some(decrypted);
     }).pipe(Effect.withSpan("desktop.connectionCatalogStore.get")),
     set: Effect.fn("desktop.connectionCatalogStore.set")(function* (catalog) {

@@ -8,11 +8,10 @@ import {
   type SidebarListMarker,
   type SidebarSection,
 } from "./Sidebar.logic";
-// Fork add-on: compact sidebar cards.
-import {
-  THREAD_CARD_ROW_HEIGHT as CARD,
-  THREAD_SLIM_ROW_HEIGHT as SLIM,
-} from "../sidebar-compact/threadCardLayout";
+/* Fork add-on */ import {
+  THREAD_CARD_ROW_HEIGHT as CARD, // Fork add-on
+  THREAD_SLIM_ROW_HEIGHT as SLIM, // Fork add-on
+} from "../sidebar-compact/threadCardLayout"; // Fork add-on
 
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const hidden = { ...stationary, scaleY: 0 };

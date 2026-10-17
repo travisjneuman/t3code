@@ -14,10 +14,10 @@ without a project.
 
 ## Connected servers follow published fork releases
 
-Connected servers running the fork update to the newest published, non-draft fork release on the
-app's channel that is no newer than the app itself. Releases are compared by version, not by
-publication order. A server already at or past that target counts as current, even if the app has
-had another source update since the last host release.
+In the web and desktop clients, connected servers running the fork update to the newest published,
+non-draft fork release on the app's channel that is no newer than the app itself. Releases are
+compared by version, not by publication order. A server already at or past that target counts as
+current, even if the app has had another source update since the last host release.
 
 Use **Update everything** or the server's update action when a release is offered. If the release
 cannot be found, no server update is offered; the app does not ask a server to install an
@@ -27,6 +27,16 @@ need that version to be available on npm before they can update.
 If **Update everything** cannot start a server's update, for example because that server is
 already updating or its connection dropped, the server is listed as failed and **Retry** offers it
 again, instead of being counted as updated.
+
+The native mobile client's release check works differently: it uses the connected server's channel
+and the first matching non-draft release in the release listing, not the web/desktop version cap
+or version sorting. It offers that release only if it is newer than the server. Mobile updates do
+not use the web client's maintenance queue and may interrupt running threads.
+
+The legacy sidebar's update button updates only the desktop app, not connected servers or
+providers. It asks for confirmation before installing, but skips the standard sidebar's fresh
+active-session check. The desktop app can still hold the restart while sessions are busy. Use
+the standard sidebar's **Update everything** for coordinated updates.
 
 ## Tailscale HTTPS needs HTTPS certificates
 
@@ -96,7 +106,11 @@ it failed, and grey means off or idle. So in **Settings → Connections**, each 
 status dot, and a pairing link that is waiting to be used is blue rather than amber. A sidebar
 thread that is waiting on background work is blue, because that work is still running. In
 **Usage**, the period buttons show no selection while **Limits** is shown, since limits ignore the
-period.
+period. Pooled account bars in **Limits** also show an even-spending marker: a remaining-allowance
+bar ending to its right means you are using less than an even share of the period; to its left
+means you are using more. It is hidden when the period's timing is unknown or within the first or last 2% of
+the period. Weekly and monthly durations may be inferred from the reset date when the provider
+omits them.
 
 The same holds in **OpenTelemetry export** in **Settings → Diagnostics**: an endpoint check in
 progress is blue, and a check that could not run says **Check failed** in red, with the reason on

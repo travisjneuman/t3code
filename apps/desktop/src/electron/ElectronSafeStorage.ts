@@ -63,7 +63,7 @@ export class ElectronSafeStorage extends Context.Service<
     ) => Effect.Effect<string, ElectronSafeStorageDecryptError>;
     readonly selectedStorageBackend: Effect.Effect<Option.Option<string>>;
     // Fork add-on: true when a stored secret predates the fork's file key and should be rewritten.
-    readonly needsReencryption?: (value: Uint8Array) => boolean;
+    readonly needsReencryption?: (value: Uint8Array) => boolean; // Fork add-on
   }
 >()("@t3tools/desktop/electron/ElectronSafeStorage") {}
 

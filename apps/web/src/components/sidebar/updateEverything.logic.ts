@@ -262,10 +262,10 @@ export function describeUpdateCapsule(
   }
   const done = machines.filter(({ status }) => status === "done").length;
   // Fork add-on: "This app" is a row in the run too, so it counts toward the total.
-  const total = machines.length + (local === null ? 0 : 1);
+  const total = machines.length + (local === null ? 0 : 1); // Fork add-on
   if (machines.some(({ status }) => isActive(status))) {
     // Fork add-on: count This app.
-    return { tone: "default", label: `${done} of ${total} updated`, action: null };
+    return { tone: "default", label: `${done} of ${total} updated`, action: null }; // Fork add-on
   }
   if (local?.status === "downloading") {
     return {
@@ -283,7 +283,7 @@ export function describeUpdateCapsule(
     };
   }
   // Fork add-on: count This app.
-  return { tone: "default", label: `${done} of ${total} updated`, action: null };
+  return { tone: "default", label: `${done} of ${total} updated`, action: null }; // Fork add-on
 }
 
 export const RUN_STATUS_LABELS: Record<UpdateRunMachineStatus, string> = {
