@@ -43,6 +43,7 @@ import {
   resolveDefaultProviderModelSelection,
   sortProviderInstanceEntries,
 } from "../providerInstances";
+import { useEnvironmentProviders } from "../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../state/server";
 import { AgentInstructionsPreview } from "./AgentInstructionsPreview";
 import { AgentPresetsControl } from "./AgentPresetsControl";
@@ -159,7 +160,10 @@ export function AgentInstructionsSettingsSection() {
   const scopeKey = targets.map((entry) => `${entry.environmentId}:${entry.projectId}`).join(",");
   const instructionsEdited = useRef(false);
 
-  const providers = environment?.serverConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
+  const providersByEnvironment = useEnvironmentProviders();
+  const providers =
+    (environment ? providersByEnvironment.get(environment.environmentId) : undefined) ??
+    EMPTY_SERVER_PROVIDERS;
   const entries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(
       deriveProviderInstanceEntries(providers),

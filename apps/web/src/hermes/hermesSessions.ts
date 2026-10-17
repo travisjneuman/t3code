@@ -221,10 +221,13 @@ export function hermesModelProvider(model: string): string | null {
 /** True when the thread runs on a Hermes instance of its environment. */
 export function isHermesThread(
   thread: { readonly environmentId: string; readonly providerInstanceId: string },
-  configs: ReadonlyMap<string, Pick<ServerConfig, "providers"> | null | undefined>,
+  providersByEnvironment: ReadonlyMap<
+    string,
+    ReadonlyMap<string, { readonly driverKind: ProviderDriverKind }>
+  >,
 ): boolean {
-  return (configs.get(thread.environmentId)?.providers ?? []).some(
-    (provider) =>
-      provider.driver === HERMES_DRIVER && provider.instanceId === thread.providerInstanceId,
+  return (
+    providersByEnvironment.get(thread.environmentId)?.get(thread.providerInstanceId)?.driverKind ===
+    HERMES_DRIVER
   );
 }

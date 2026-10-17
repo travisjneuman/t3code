@@ -12,7 +12,6 @@ import {
   type EnvironmentId,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
-  type ServerProvider,
 } from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { formatModelSlugName } from "@t3tools/shared/model";
@@ -89,7 +88,6 @@ import { ExternalSessionDetailsCard } from "./ExternalSessionDetails";
 import { useExternalSessionPanel } from "./ExternalSessionPanel";
 
 const EMPTY_MESSAGES: ReadonlyArray<ExternalSessionMessage> = [];
-const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const NO_TURN_DIFFS: [] = [];
 const NO_RUNS: [] = [];
 /** Tool lines show their first line, capped, like a standard tool row label. */
@@ -263,7 +261,6 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
                   resolvedTheme={resolvedTheme}
                   timestampFormat={timestampFormat}
                   workspaceRoot={cwd}
-                  providerStatuses={EMPTY_PROVIDERS}
                   runs={NO_RUNS}
                   anchorMessageId={null}
                   onAnchorReady={noop}

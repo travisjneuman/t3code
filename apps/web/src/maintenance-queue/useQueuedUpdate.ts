@@ -24,6 +24,7 @@ import { useCallback } from "react";
 
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "../state/presentation";
+import { serverEnvironment } from "../state/server";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   idleForMs,
@@ -70,7 +71,8 @@ async function releaseLocalProviderSessions(job: QueuedUpdate): Promise<boolean>
     environmentPresentations.presentationAtom(job.environmentId),
   );
   if (presentation === null || !isThisMachine(presentation.entry.target)) return false;
-  const instanceIds = jobInstanceIds(job, presentation.serverConfig) ?? [];
+  const config = appAtomRegistry.get(serverEnvironment.configValueAtom(job.environmentId));
+  const instanceIds = jobInstanceIds(job, config) ?? [];
   // A server without this RPC, or one that fails or never answers, closes
   // nothing and holds nothing: unknown is treated as idle.
   return withRpcTimeout(
@@ -90,9 +92,7 @@ async function releaseLocalProviderSessions(job: QueuedUpdate): Promise<boolean>
  * the caller runs the update.
  */
 export async function holdUpdateIfBusy(job: QueuedUpdate): Promise<boolean> {
-  const config =
-    appAtomRegistry.get(environmentPresentations.presentationAtom(job.environmentId))
-      ?.serverConfig ?? null;
+  const config = appAtomRegistry.get(serverEnvironment.configValueAtom(job.environmentId));
   if (jobWatchesHermes(job, config)) await refreshHermesActivity(job.environmentId);
   const idle =
     idleForMs(job.environmentId, jobInstanceIds(job, config), Date.now()) >=

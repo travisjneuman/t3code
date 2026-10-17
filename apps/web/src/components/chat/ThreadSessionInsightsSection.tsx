@@ -17,7 +17,7 @@ import { HERMES_DRIVER } from "../../hermes/hermesSessions";
 import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import { getProviderInstanceEntry } from "../../providerInstances";
 import { formatProviderDriverKindLabel } from "../../providerModels";
-import { useServerConfigs } from "../../state/entities";
+import { useEnvironmentProviders } from "../../state/environments";
 import { useSessionInsights, useThreadSessionSummary } from "../../state/sessionInsights";
 import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
@@ -139,7 +139,7 @@ function ThreadSessionSummarySection(props: {
 }) {
   const { record, contextWindow } = props;
   const summary = useThreadSessionSummary(props.threadRef);
-  const providers = useServerConfigs().get(props.threadRef.environmentId)?.providers;
+  const providers = useEnvironmentProviders().get(props.threadRef.environmentId);
   const view = useMemo((): SessionSummaryView | null => {
     if (summary === null) return null;
     const entry = providers

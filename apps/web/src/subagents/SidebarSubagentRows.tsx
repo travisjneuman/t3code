@@ -125,7 +125,12 @@ function groupSubagents(
   return groups;
 }
 
-const NO_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map();
+type SubagentProviderEntry = Pick<
+  ProviderInstanceEntry,
+  "driverKind" | "displayName" | "accentColor" | "acpRegistryAgentId" | "acpRegistryIconUrl"
+>;
+
+const NO_PROVIDER_ENTRIES: ReadonlyMap<string, SubagentProviderEntry> = new Map();
 
 /**
  * Called once by the sidebar. `count(parentKey)` feeds that row's toggle;
@@ -136,7 +141,7 @@ const NO_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map(
 export function useSidebarSubagents(input: {
   threads: ReadonlyArray<EnvironmentThreadShell>;
   activeThreadKey: string | null;
-  providerEntriesByEnvironment: ReadonlyMap<string, ReadonlyMap<string, ProviderInstanceEntry>>;
+  providerEntriesByEnvironment: ReadonlyMap<string, ReadonlyMap<string, SubagentProviderEntry>>;
   onOpen: (threadRef: ScopedThreadRef) => void;
 }): {
   readonly count: (parentKey: string) => number;
@@ -337,7 +342,7 @@ function SidebarSubagentRows(props: {
   subagents: ReadonlyArray<SidebarSubagent>;
   capped: boolean;
   activeThreadKey: string | null;
-  providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
+  providerEntryByInstanceId: ReadonlyMap<string, SubagentProviderEntry>;
   nowMinute: string;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onContextMenu: (
@@ -411,7 +416,7 @@ function SidebarSubagentRows(props: {
 const SubagentLine = memo(function SubagentLine(props: {
   entry: SidebarSubagent;
   isActive: boolean;
-  providerEntry: ProviderInstanceEntry | null;
+  providerEntry: SubagentProviderEntry | null;
   nowMinute: string;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onContextMenu: (

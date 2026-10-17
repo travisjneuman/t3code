@@ -95,9 +95,7 @@ export async function runQueuedUpdateNow(key: string): Promise<void> {
 function notifyLongWait(job: QueuedUpdate, now: number): void {
   if (job.notifiedAt !== null || now - job.queuedAt < LONG_WAIT_MS) return;
   markQueuedUpdateNotified(queuedUpdateKey(job), now);
-  const config =
-    appAtomRegistry.get(environmentPresentations.presentationAtom(job.environmentId))
-      ?.serverConfig ?? null;
+  const config = appAtomRegistry.get(serverEnvironment.configValueAtom(job.environmentId));
   toastManager.add(
     stackedThreadToast({
       type: "warning",
@@ -120,7 +118,7 @@ async function runIfIdle(job: QueuedUpdate): Promise<void> {
   // its current threads yet; what this client last saw of them can be stale.
   const connectedFor = connectedForMs(job.environmentId, Date.now());
   if (connectedFor === null || connectedFor < MAINTENANCE_QUEUE_IDLE_MS) return;
-  const config = presentation.serverConfig;
+  const config = appAtomRegistry.get(serverEnvironment.configValueAtom(job.environmentId));
   if (jobWatchesHermes(job, config)) await refreshHermesActivity(job.environmentId);
   const instanceIds = jobInstanceIds(job, config);
   if (idleForMs(job.environmentId, instanceIds, Date.now()) < MAINTENANCE_QUEUE_IDLE_MS) return;

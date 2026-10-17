@@ -16,7 +16,6 @@ import {
   modelSelectionLabel,
   providerInstanceLabel,
   type RunId,
-  type ServerProvider,
   type ThreadId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
@@ -36,7 +35,6 @@ import { useDiffPanelStore } from "../diffPanelStore";
 import { useTimelineLiveFollow } from "../forkTimelineLiveFollow";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
-import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useRightPanelStore } from "../rightPanelStore";
 import {
   derivePhase,
@@ -45,11 +43,14 @@ import {
   isLatestRunSettled,
   type TimelineEntriesProjection,
 } from "../session-logic";
-import { useProjects, useThreadProjection, useThreadVisibleTurnItems } from "../state/entities";
-import { useEnvironments } from "../state/environments";
+import {
+  useProjects,
+  useThreadCheckpointSummaries,
+  useThreadProjection,
+  useThreadVisibleTurnItems,
+} from "../state/entities";
 import { buildThreadRouteParams } from "../threadRoutes";
 
-const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const noop = () => {};
 const noopAsync = async () => {};
 
@@ -63,7 +64,6 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
   const { resolvedTheme } = useTheme();
   const { timestampFormat } = useEnvironmentSettings(environmentId);
   const projects = useProjects();
-  const { environments } = useEnvironments();
   const projection = useThreadProjection(threadRef)?.projection ?? null;
   const visibleTurnItems = useThreadVisibleTurnItems(threadRef);
 
@@ -109,7 +109,7 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
   const activeTurnInProgress = isWorking || !isLatestRunSettled(latestRun, runtime);
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activityRun, runtime, null) ?? runlessWorkStartedAt;
-  const { turnDiffSummaries } = useTurnDiffSummaries(projection);
+  const turnDiffSummaries = useThreadCheckpointSummaries(threadRef);
 
   const hasEntries = timelineEntries.length > 0;
   const {
@@ -149,9 +149,6 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
       (project) =>
         project.environmentId === environmentId && project.id === projection.thread.projectId,
     )?.workspaceRoot;
-  const providerStatuses =
-    environments.find((entry) => entry.environmentId === environmentId)?.serverConfig?.providers ??
-    EMPTY_PROVIDERS;
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col">
@@ -194,7 +191,6 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
               resolvedTheme={resolvedTheme}
               timestampFormat={timestampFormat}
               workspaceRoot={workspaceRoot}
-              providerStatuses={providerStatuses}
               runs={projection.runs}
               anchorMessageId={null}
               onAnchorReady={noop}

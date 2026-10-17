@@ -123,7 +123,7 @@ function DesktopHoldCapsule() {
 
 export function MaintenanceQueueCapsule() {
   const jobs = useQueuedUpdates();
-  const presentations = useAtomValue(environmentPresentations.presentationsAtom);
+  const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   // Re-render when session activity changes the counts below.
   useSyncExternalStore(subscribeActivity, getActivityVersion, getActivityVersion);
   const now = Date.now();

@@ -39,6 +39,7 @@ import {
 } from "@t3tools/shared/model";
 import { cn } from "../../lib/utils";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { useStableCallback } from "../../hooks/useStableCallback";
 import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -130,11 +131,6 @@ function providerEnvironmentsEqual(
       );
     })
   );
-}
-
-function readConfigCustomModels(config: unknown): ReadonlyArray<CustomModelDefinition> {
-  if (config === null || typeof config !== "object") return [];
-  return readCustomModelEntries((config as Record<string, unknown>).customModels);
 }
 
 function readConfigString(config: unknown, key: string): string | null {
@@ -609,6 +605,7 @@ interface ProviderInstanceCardProps {
 }
 
 const EMPTY_ACP_PROJECTS: NonNullable<ProviderInstanceCardProps["acpProjects"]> = [];
+const NO_CUSTOM_MODELS: ReadonlyArray<CustomModelDefinition> = [];
 
 /**
  * Unknown drivers (`driverOption === undefined`) get a read-only
@@ -716,8 +713,16 @@ export function ProviderInstanceCard({
   const driverKind: ProviderDriverKind | null = isProviderDriverKind(instance.driver)
     ? instance.driver
     : null;
+  // Keyed on the stored list, not the whole instance, so writing another field
+  // leaves the models list (often ~50 rows) with the same props.
+  const storedCustomModels =
+    instance.config !== null && typeof instance.config === "object"
+      ? (instance.config as Record<string, unknown>).customModels
+      : undefined;
   const customModels =
-    instance.driver === "antigravity" ? [] : readConfigCustomModels(instance.config);
+    instance.driver === "antigravity"
+      ? NO_CUSTOM_MODELS
+      : readCustomModelEntries(storedCustomModels);
   const modelsForDisplay = deriveProviderModelsForDisplay({
     liveModels: liveProvider?.models,
     customModels,
@@ -761,24 +766,27 @@ export function ProviderInstanceCard({
 
   // Fork add-on: Hermes provider. Hermes providers the model picker leaves out.
   const hiddenHermesProviders = (() => {
-    const config = instance.config;
-    const value =
-      config !== null && typeof config === "object" && "hiddenProviders" in config
-        ? config.hiddenProviders
-        : undefined;
-    return Array.isArray(value)
-      ? value.filter((entry): entry is string => typeof entry === "string")
-      : [];
-  })();
+    // Fork add-on: Hermes provider.
+    const config = instance.config; // Fork add-on: Hermes provider.
+    const value = // Fork add-on: Hermes provider.
+      config !== null && typeof config === "object" && "hiddenProviders" in config // Fork add-on: Hermes provider.
+        ? config.hiddenProviders // Fork add-on: Hermes provider.
+        : undefined; // Fork add-on: Hermes provider.
+    return Array.isArray(value) // Fork add-on: Hermes provider.
+      ? value.filter((entry): entry is string => typeof entry === "string") // Fork add-on: Hermes provider.
+      : []; // Fork add-on: Hermes provider.
+  })(); // Fork add-on: Hermes provider.
   const updateHiddenHermesProviders = (next: ReadonlyArray<string>) => {
-    const { config: _omit, ...rest } = instance;
+    // Fork add-on: Hermes provider.
+    const { config: _omit, ...rest } = instance; // Fork add-on: Hermes provider.
     onUpdate({
-      ...rest,
-      config: nextConfigBlobWithValue(instance.config, "hiddenProviders", next),
-    } as ProviderInstanceConfig);
-  };
+      // Fork add-on: Hermes provider.
+      ...rest, // Fork add-on: Hermes provider.
+      config: nextConfigBlobWithValue(instance.config, "hiddenProviders", next), // Fork add-on: Hermes provider.
+    } as ProviderInstanceConfig); // Fork add-on: Hermes provider.
+  }; // Fork add-on: Hermes provider.
 
-  const updateCustomModels = (next: ReadonlyArray<CustomModelDefinition>) => {
+  const updateCustomModels = useStableCallback((next: ReadonlyArray<CustomModelDefinition>) => {
     const nextConfig = nextConfigBlobWithValue(
       instance.config,
       "customModels",
@@ -786,7 +794,7 @@ export function ProviderInstanceCard({
     );
     const { config: _omit, ...rest } = instance;
     onUpdate({ ...rest, config: nextConfig } as ProviderInstanceConfig);
-  };
+  });
 
   const updateEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) => {
     const cleaned = environment.filter((variable) => variable.name.trim().length > 0);
@@ -1195,7 +1203,6 @@ export function ProviderInstanceCard({
           }
         />
       </SettingsSection>
-
       {setup || environmentFields.length > 0 ? (
         <SettingsSection title="Setup">
           {setup}
@@ -1221,7 +1228,6 @@ export function ProviderInstanceCard({
           </div>
         </SettingsSection>
       ) : null}
-
       {instance.driver === "codex" && readCodexSetupMode(instance.config) === "managed" ? (
         <div
           inert={readOnly}
@@ -1247,7 +1253,6 @@ export function ProviderInstanceCard({
           {runtimeFields}
         </SettingsSection>
       ) : null}
-
       <SettingsSection
         title="Environment"
         inert={readOnly}
@@ -1268,7 +1273,6 @@ export function ProviderInstanceCard({
           readOnly={readOnly}
         />
       ) : null}
-
       {/* Fork add-on: Hermes provider. */}
       {environmentId !== undefined && instance.driver === "hermes" ? (
         <HermesSettingsSection
@@ -1283,11 +1287,11 @@ export function ProviderInstanceCard({
           readOnly={readOnly}
           canWritePreferences={canWriteSettings}
         />
-      ) : null}
-
+      ) : null}{" "}
+      {/* Fork add-on: Hermes provider. */}
       {/* Fork add-on: Hermes provider. Hermes lists its models in its own section above. */}
       {driverOption !== undefined &&
-      (instance.driver !== "hermes" || environmentId === undefined) ? (
+      (instance.driver !== "hermes" || environmentId === undefined) ? ( // Fork add-on: Hermes provider.
         <SettingsSection title="Models">
           <div className="px-3 py-3 sm:px-4">
             <p className="mb-3 text-xs text-muted-foreground">

@@ -10,7 +10,6 @@ import {
   TerminalIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
-import { Atom } from "effect/reactivity";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -153,6 +152,7 @@ import {
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import {
   // Fork add-on: host releases.
+  // Fork add-on: host releases.
   resolveHostVersionMismatch, // Fork add-on: host releases.
   useHostUpdateTarget, // Fork add-on: host releases.
   useHostVersionMismatch, // Fork add-on: host releases.
@@ -192,7 +192,12 @@ import {
 import { APP_VERSION } from "~/branding";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server";
+import { environmentIdsKey } from "~/state/environmentAtomList";
+import {
+  environmentUpdateStatesAtom,
+  primaryServerKeybindingsAtom,
+  serverEnvironment,
+} from "~/state/server";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import {
   OutdatedServerUpdateAction,
@@ -716,8 +721,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
           <div className="flex min-h-5 items-center gap-1.5">
             {/* Fork add-on: an unused, unexpired link is waiting, not a problem. */}
             <ConnectionStatusDot
-              tooltipText={`Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}`}
-              dotClassName="bg-info"
+              tooltipText={
+                `Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}` /* Fork add-on: unused link status. */
+              }
+              dotClassName={"bg-info" /* Fork add-on: unused link status. */}
             />
             <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
           </div>
@@ -1372,7 +1379,8 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
       {/* Fork add-on: says what Tailscale HTTPS still needs. */}
       {needsTailscaleSetup && endpoint.description ? (
         <p className="mt-1 text-xs text-muted-foreground">{endpoint.description}</p>
-      ) : null}
+      ) : null}{" "}
+      {/* Fork add-on: Tailscale HTTPS prerequisites. */}
     </div>
   );
 });
@@ -1433,39 +1441,39 @@ type SavedBackendListRowProps = {
 };
 
 // Fork add-on: a status dot, so a live connection reads as on at a glance.
-const IDLE_STATUS_DOT = "bg-muted-foreground/40";
+const IDLE_STATUS_DOT = "bg-muted-foreground/40"; // Fork add-on: connection status dots.
 
 function savedBackendStatus(environment: EnvironmentPresentation): {
   readonly text: string;
   readonly tone: "muted" | "error";
-  readonly dotClassName: string;
+  readonly dotClassName: string; // Fork add-on: connection status dots.
 } {
   if (!environment.entry.enabled && environment.connection.phase !== "unsupported")
-    return { text: "Off", tone: "muted", dotClassName: IDLE_STATUS_DOT };
+    return { text: "Off", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
   const { connection } = environment;
   switch (connection.phase) {
     case "connected":
-      return { text: "Connected", tone: "muted", dotClassName: "bg-success" };
+      return { text: "Connected", tone: "muted", dotClassName: "bg-success" }; // Fork add-on: connection status dots.
     case "connecting":
-      return { text: "Connecting", tone: "muted", dotClassName: "bg-info" };
+      return { text: "Connecting", tone: "muted", dotClassName: "bg-info" }; // Fork add-on: connection status dots.
     case "reconnecting":
       return {
         text: connection.error ? `Reconnecting: ${connection.error}` : "Reconnecting",
         tone: "error",
-        dotClassName: "bg-warning",
+        dotClassName: "bg-warning", // Fork add-on: connection status dots.
       };
     case "unsupported":
-      return { text: "Client not supported", tone: "muted", dotClassName: IDLE_STATUS_DOT };
+      return { text: "Client not supported", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
     case "error":
       return {
         text: connection.error ? `Connection failed: ${connection.error}` : "Connection failed",
         tone: "error",
-        dotClassName: "bg-destructive",
+        dotClassName: "bg-destructive", // Fork add-on: connection status dots.
       };
     case "offline":
-      return { text: "Offline", tone: "muted", dotClassName: IDLE_STATUS_DOT };
+      return { text: "Offline", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
     case "available":
-      return { text: "Not connected", tone: "muted", dotClassName: IDLE_STATUS_DOT };
+      return { text: "Not connected", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
   }
 }
 
@@ -1601,7 +1609,8 @@ function SavedBackendListRow({
               "me-0.5 size-1.5 shrink-0 rounded-full",
               resumingServerUpdate ? "bg-info" : status.dotClassName,
             )}
-          />
+          />{" "}
+          {/* Fork add-on: connection status dots. */}
           <Tooltip>
             {/* The status can change while the tooltip is open, and base-ui only
                 re-measures the popup when the trigger's payload changes. */}
@@ -2050,13 +2059,15 @@ export function ConnectionsSettings() {
   const listedEnvironments = savedEnvironments.filter(
     (environment) => !isDesktopLocalConnectionTarget(environment.entry.target),
   );
-  const savedServerUpdateStatesAtom = Atom.make((get) =>
-    savedEnvironments.map((environment) => ({
-      environment,
-      updateStatus: get(serverEnvironment.updateStateAtom(environment.environmentId)).status,
-    })),
+  const savedUpdateStates = useAtomValue(
+    environmentUpdateStatesAtom(
+      environmentIdsKey(savedEnvironments.map(({ environmentId }) => environmentId)),
+    ),
   );
-  const savedServerUpdateStates = useAtomValue(savedServerUpdateStatesAtom);
+  const savedServerUpdateStates = savedEnvironments.map((environment, index) => ({
+    environment,
+    updateStatus: savedUpdateStates[index]!.status,
+  }));
   const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on: host releases.
   const refreshHostUpdateTarget = useRefreshHostUpdateTarget(); // Fork add-on: host releases.
   useEffect(() => refreshHostUpdateTarget(), [refreshHostUpdateTarget]); // Fork add-on

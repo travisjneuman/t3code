@@ -27,6 +27,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { isElectron } from "../env";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "../state/presentation";
+import { serverEnvironment } from "../state/server";
 import { environmentThreadShells } from "../state/threads";
 import type { QueuedUpdate } from "./queueStore";
 
@@ -248,7 +249,12 @@ export function thisMachineEnvironments(): ReadonlyArray<{
   return Array.from(appAtomRegistry.get(environmentPresentations.presentationsAtom)).flatMap(
     ([environmentId, presentation]) =>
       isThisMachine(presentation.entry.target)
-        ? [{ environmentId, config: presentation.serverConfig }]
+        ? [
+            {
+              environmentId,
+              config: appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId)),
+            },
+          ]
         : [],
   );
 }
