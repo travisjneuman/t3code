@@ -96,7 +96,8 @@ review its work, or right-click it to archive or delete it.
 The thread details **Lineage** section lists every subagent below the thread too, not only the
 ones it started directly, each indented under the agent that started it, newest first. A tree
 stays together: while anything in it is working it stays in the main list, and only fully
-finished trees move under **Previous agents**.
+finished trees move under **Previous agents**. Subagent rows there, workflow groups included, use the
+sidebar's compact size.
 
 ## Other Agents across machines
 
