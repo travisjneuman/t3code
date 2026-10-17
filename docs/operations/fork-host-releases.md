@@ -98,6 +98,9 @@ the standalone builder also refuses to overwrite an archive. Failed builds retai
 caches for inspection. Resolve those leftovers deliberately before rerunning; there is no
 reuse-built option.
 
+Routine Mac source updates and builds do not require host releases or host updates. Hosts move only
+when a newer fork release is published and applied.
+
 The steady-state workflow is:
 
 1. Update the Mac app through its normal fork source update. Wait if there is no upstream nightly
@@ -109,8 +112,12 @@ The steady-state workflow is:
    Other inspection failures refuse the release rather than counting as unreachable. Both platforms
    build from the same commit. The Mac collects the archives and `SHA256SUMS`, compares the builders'
    hashes, and uploads them together using `gh`.
-3. In the Mac app, choose **Update everything**. The update queue waits for active sessions; it does
-   not build or publish releases. Hosts only move when a published update is applied.
+3. In the Mac app, use each host's **Update** in **Settings → Connections**. Before a host's first
+   fork update, set `T3CODE_RELEASE_BASE_URL` to the fork's release download base in its service
+   environment and restart its service. **Update everything** is safe only once every connected host
+   has loaded that setting: a host without it installs upstream's same-version archive, which a later
+   update will not replace with the fork. The update queue waits for active sessions; it does not
+   build or publish releases. Publishing alone never updates a host.
 4. Once the hosts are idle and the release has been accepted, run `prune <host> --confirm-idle` or
    `prune --all --confirm-idle`.
 5. Use `status` to read active versions, service state, installed version directories, launcher
