@@ -6,7 +6,7 @@ import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import {
   THREAD_DETAILS_PANEL_ROW_CLASS,
-  THREAD_DETAILS_PANEL_AGENT_LINE_CLASS, // Fork add-on: compact lineage agents
+  THREAD_DETAILS_PANEL_AGENT_PARTS, // Fork add-on: compact lineage agents
   THREAD_DETAILS_PANEL_SELECT_ROW_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_PRIMARY_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SECONDARY_CLASS,
@@ -18,7 +18,7 @@ import { ChevronDownIcon } from "lucide-react";
 
 const parts = {
   row: THREAD_DETAILS_PANEL_ROW_CLASS,
-  agentLine: THREAD_DETAILS_PANEL_AGENT_LINE_CLASS, // Fork add-on: compact lineage agents
+  ...THREAD_DETAILS_PANEL_AGENT_PARTS, // Fork add-on: compact lineage agents
   select: THREAD_DETAILS_PANEL_SELECT_ROW_CLASS,
   primary: THREAD_DETAILS_PANEL_SPLIT_PRIMARY_CLASS,
   secondary: THREAD_DETAILS_PANEL_SPLIT_SECONDARY_CLASS,

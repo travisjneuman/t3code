@@ -14,12 +14,14 @@ export function CollapsibleSectionHeader({
   expanded,
   tone = "muted",
   variant = "default",
+  size = "default", // Fork add-on: compact lineage agents
   accessory,
   ...buttonProps
 }: Omit<ComponentProps<"button">, "className" | "style" | "aria-expanded"> & {
   expanded: boolean;
   tone?: keyof typeof tones;
   variant?: "default" | "panel";
+  size?: "default" | "compact"; // Fork add-on: compact lineage agents
   accessory?: ReactNode;
 }) {
   return (
@@ -28,7 +30,8 @@ export function CollapsibleSectionHeader({
       type="button"
       aria-expanded={expanded}
       className={cn(
-        "flex h-8 w-full cursor-pointer items-center gap-2 rounded-md text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
+        "flex w-full cursor-pointer items-center rounded-md text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70", // Fork add-on: compact lineage agents
+        size === "compact" ? "h-5 gap-1.5 text-3xs" : "h-8 gap-2 text-xs", // Fork add-on: compact lineage agents
         variant === "panel" ? "ps-2 pe-2.5" : "px-2",
         tones[tone].label,
       )}

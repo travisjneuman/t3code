@@ -495,7 +495,7 @@ export function ThreadRelationshipsPanel(props: {
                 workflowGroup?.workflow.status === "running" &&
                 agent?.origin === "provider_native" &&
                 providerDriver === "claudeAgent";
-              const compact = isSubagent && !isParent && !workflowGroup; // Fork add-on: compact lineage agents
+              const compact = isSubagent && !isParent; // Fork add-on: compact lineage agents
               const trailingVisibilityClass = (workflowGroup ? canStopWorkflow : canStop)
                 ? "group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0 [@media(hover:none)]:opacity-0"
                 : "";
@@ -582,7 +582,7 @@ export function ThreadRelationshipsPanel(props: {
                         variant="ghost"
                         part={
                           workflowGroup
-                            ? "primary"
+                            ? "agentPrimary" // Fork add-on: compact lineage agents
                             : compact
                               ? "agentLine"
                               : "row" /* Fork add-on: compact lineage agents */
@@ -688,14 +688,22 @@ export function ThreadRelationshipsPanel(props: {
                     relationshipLink
                   )}
                   {canStop && agent ? (
-                    <div className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100">
+                    <div
+                      className={
+                        `pointer-events-none absolute ${compact ? "right-0.5" : "right-1"} top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100` /* Fork add-on: compact lineage agents */
+                      }
+                    >
                       <Tooltip>
                         <TooltipTrigger
                           render={
                             <ThreadDetailsControl
                               size="icon-xs"
                               variant="ghost"
-                              part="icon"
+                              part={
+                                compact
+                                  ? "agentIcon"
+                                  : "icon" /* Fork add-on: compact lineage agents */
+                              }
                               tone="destructive"
                               aria-label={`Stop subagent ${threadTitle}`}
                               disabled={stoppingId !== null}
@@ -704,9 +712,19 @@ export function ThreadRelationshipsPanel(props: {
                           }
                         >
                           {stoppingId === threadId ? (
-                            <LoaderCircleIcon aria-hidden className="size-3 animate-spin" />
+                            <LoaderCircleIcon
+                              aria-hidden
+                              className={
+                                `${compact ? "size-2.5" : "size-3"} animate-spin` /* Fork add-on: compact lineage agents */
+                              }
+                            />
                           ) : (
-                            <SquareIcon aria-hidden className="size-3 fill-current" />
+                            <SquareIcon
+                              aria-hidden
+                              className={
+                                `${compact ? "size-2.5" : "size-3"} fill-current` /* Fork add-on: compact lineage agents */
+                              }
+                            />
                           )}
                         </TooltipTrigger>
                         <TooltipPopup side="left">Stop subagent</TooltipPopup>

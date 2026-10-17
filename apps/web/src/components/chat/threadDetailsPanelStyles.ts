@@ -18,8 +18,20 @@ const THREAD_DETAILS_PANEL_CONTROL_CLASS = `h-8 min-w-0 rounded-lg border-transp
 
 export const THREAD_DETAILS_PANEL_ROW_CLASS = `${THREAD_DETAILS_PANEL_CONTROL_CLASS} w-full justify-start ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`;
 
-// Fork add-on: compact lineage agents. A Lineage subagent row, sized like the sidebar's subagent lines.
-export const THREAD_DETAILS_PANEL_AGENT_LINE_CLASS = `${AGENT_LINE_CLASS} min-w-0 justify-start border-transparent px-2.5 text-foreground/80 ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`;
+// Fork add-on: compact lineage agents. Lineage subagent rows, sized like the sidebar's subagent lines.
+const THREAD_DETAILS_PANEL_AGENT_LINE_CONTROL_CLASS = `${AGENT_LINE_CLASS} min-w-0 border-transparent px-2.5 text-foreground/80`; // Fork add-on: compact lineage agents
+export const THREAD_DETAILS_PANEL_AGENT_LINE_CLASS = `${THREAD_DETAILS_PANEL_AGENT_LINE_CONTROL_CLASS} justify-start ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`; // Fork add-on: compact lineage agents
+export const THREAD_DETAILS_PANEL_AGENT_SPLIT_GROUP_CLASS = `flex h-5 w-full items-center rounded-md ${THREAD_DETAILS_PANEL_SPLIT_GROUP_SURFACE_CLASS}`; // Fork add-on: compact lineage agents
+const THREAD_DETAILS_PANEL_AGENT_SPLIT_PRIMARY_CLASS = `${THREAD_DETAILS_PANEL_AGENT_LINE_CONTROL_CLASS} flex-1 justify-start rounded-e-none ${THREAD_DETAILS_PANEL_SPLIT_BUTTON_SURFACE_CLASS}`; // Fork add-on: compact lineage agents
+const THREAD_DETAILS_PANEL_AGENT_SPLIT_SECONDARY_CLASS = `${THREAD_DETAILS_PANEL_AGENT_LINE_CONTROL_CLASS} w-5 justify-center rounded-s-none px-0 ${THREAD_DETAILS_PANEL_SPLIT_BUTTON_SURFACE_CLASS}`; // Fork add-on: compact lineage agents
+const THREAD_DETAILS_PANEL_AGENT_ICON_ACTION_CLASS = `size-4 justify-center rounded-sm border-transparent bg-transparent p-0 sm:size-4 ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`; // Fork add-on: compact lineage agents
+export const THREAD_DETAILS_PANEL_AGENT_SPLIT_SEPARATOR_CLASS = "h-3 w-px shrink-0 bg-border/65"; // Fork add-on: compact lineage agents
+export const THREAD_DETAILS_PANEL_AGENT_PARTS = {
+  agentLine: THREAD_DETAILS_PANEL_AGENT_LINE_CLASS, // Fork add-on: compact lineage agents
+  agentPrimary: THREAD_DETAILS_PANEL_AGENT_SPLIT_PRIMARY_CLASS, // Fork add-on: compact lineage agents
+  agentSecondary: THREAD_DETAILS_PANEL_AGENT_SPLIT_SECONDARY_CLASS, // Fork add-on: compact lineage agents
+  agentIcon: THREAD_DETAILS_PANEL_AGENT_ICON_ACTION_CLASS, // Fork add-on: compact lineage agents
+}; // Fork add-on: compact lineage agents
 
 export const THREAD_DETAILS_PANEL_SELECT_ROW_CLASS = `${THREAD_DETAILS_PANEL_ROW_CLASS} pe-0 [&_[data-slot=select-icon]]:-me-px [&_[data-slot=select-icon]]:relative [&_[data-slot=select-icon]]:flex [&_[data-slot=select-icon]]:h-full [&_[data-slot=select-icon]]:w-8 [&_[data-slot=select-icon]]:shrink-0 [&_[data-slot=select-icon]]:items-center [&_[data-slot=select-icon]]:justify-center [&_[data-slot=select-icon]]:before:absolute [&_[data-slot=select-icon]]:before:-left-px [&_[data-slot=select-icon]]:before:top-1/2 [&_[data-slot=select-icon]]:before:h-4 [&_[data-slot=select-icon]]:before:w-px [&_[data-slot=select-icon]]:before:-translate-y-1/2 [&_[data-slot=select-icon]]:before:bg-border/65 [&_[data-slot=select-icon]>svg]:me-0 [&_[data-slot=select-icon]>svg]:size-4 [&_[data-slot=select-icon]>svg]:text-muted-foreground [&_[data-slot=select-icon]>svg]:opacity-100`;
 
