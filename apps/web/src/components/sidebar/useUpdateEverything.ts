@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { useMemo } from "react";
 
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
@@ -40,25 +39,21 @@ export type ReportLocalUpdateError = (title: string, description: string) => voi
 export function useUpdateEverything(localUpdateVersion: string | null) {
   const targetVersion = useHostUpdateTarget(); // Fork add-on: host releases.
   const { environments } = useEnvironments();
-  const machinesAtom = useMemo(
-    () =>
-      Atom.make((get) =>
-        environments.map((environment) => ({
-          environmentId: environment.environmentId,
-          label: environment.label,
-          serverConfig: environment.serverConfig,
-          connected: environment.connection.phase === "connected",
-          hostedByThisApp:
-            isElectron &&
-            (environment.entry.target._tag === "PrimaryConnectionTarget" ||
-              isDesktopLocalConnectionTarget(environment.entry.target)),
-          canMaintain: canUpdateServer(
-            get(environmentSession.sessionStateAtom(environment.environmentId)),
-          ),
-          updateState: get(serverEnvironment.updateStateAtom(environment.environmentId)),
-        })),
+  const machinesAtom = Atom.make((get) =>
+    environments.map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.label,
+      serverConfig: environment.serverConfig,
+      connected: environment.connection.phase === "connected",
+      hostedByThisApp:
+        isElectron &&
+        (environment.entry.target._tag === "PrimaryConnectionTarget" ||
+          isDesktopLocalConnectionTarget(environment.entry.target)),
+      canMaintain: canUpdateServer(
+        get(environmentSession.sessionStateAtom(environment.environmentId)),
       ),
-    [environments],
+      updateState: get(serverEnvironment.updateStateAtom(environment.environmentId)),
+    })),
   );
   const machines = useAtomValue(machinesAtom);
   // Fork add-on: host releases: remote servers move to the newest published fork release.
