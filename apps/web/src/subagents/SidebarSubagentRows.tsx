@@ -26,8 +26,17 @@ import {
   CircleDashedIcon,
   ClockIcon,
   CpuIcon,
+  MinusIcon,
+  PlusIcon,
 } from "lucide-react";
-import { memo, useMemo, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
+import {
+  memo,
+  useMemo,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
@@ -43,7 +52,11 @@ import { useStableCallback } from "../hooks/useStableCallback";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
 import type { ProviderInstanceEntry } from "../providerInstances";
-import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
+import {
+  AGENT_LINE_CLASS,
+  AGENT_LINE_ICON_CLASS,
+  AGENT_MORE_BUTTON_CLASS,
+} from "../sidebar-compact/agentLines";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 
@@ -51,6 +64,8 @@ import { formatRelativeTimeLabel } from "../timestampFormat";
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:subagents-expanded";
 const ExpandedKeysSchema = Schema.Array(Schema.String);
 const NO_KEYS: ReadonlyArray<string> = [];
+/** Subagents listed before "Show more". */
+const SHOWN_BEFORE_MORE = 3;
 /** Deeper subagents than this indent no further. */
 const MAX_INDENT_DEPTH = 3;
 
@@ -115,8 +130,8 @@ const NO_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map(
 /**
  * Called once by the sidebar. `count(parentKey)` feeds that row's toggle;
  * `render(parentKey)` is the subagent block that goes right after the row:
- * one node, or none when they are hidden. Hidden, only the subagent being
- * viewed stays visible.
+ * one node, or none when they are hidden. Shown, the first few are listed
+ * until "Show more"; hidden, only the subagent being viewed stays visible.
  */
 export function useSidebarSubagents(input: {
   threads: ReadonlyArray<EnvironmentThreadShell>;
@@ -214,7 +229,8 @@ export function useSidebarSubagents(input: {
   const render = (parentKey: string): ReactNode[] => {
     const subagents = groups.get(parentKey);
     if (subagents === undefined) return [];
-    const visible = expandedKeys.includes(parentKey)
+    const expanded = expandedKeys.includes(parentKey);
+    const visible = expanded
       ? subagents
       : subagents.filter((entry) => entry.key === input.activeThreadKey);
     if (visible.length === 0) return [];
@@ -223,6 +239,7 @@ export function useSidebarSubagents(input: {
       <SidebarSubagentRows
         key={`${parentKey}:subagents`}
         subagents={visible}
+        capped={expanded}
         activeThreadKey={input.activeThreadKey}
         providerEntryByInstanceId={
           input.providerEntriesByEnvironment.get(environmentId) ?? NO_PROVIDER_ENTRIES
@@ -312,9 +329,13 @@ function statusLabel(thread: EnvironmentThreadShell): string {
   }
 }
 
-/** A top-level thread's visible subagents, one line each. */
+/**
+ * A top-level thread's visible subagents, one line each. `capped` lists the
+ * first few, plus the one being viewed, until "Show more".
+ */
 function SidebarSubagentRows(props: {
   subagents: ReadonlyArray<SidebarSubagent>;
+  capped: boolean;
   activeThreadKey: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
   nowMinute: string;
@@ -325,11 +346,19 @@ function SidebarSubagentRows(props: {
     open: (threadRef: ScopedThreadRef) => void,
   ) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown =
+    props.capped && !showAll
+      ? props.subagents.filter(
+          (entry, index) => index < SHOWN_BEFORE_MORE || entry.key === props.activeThreadKey,
+        )
+      : props.subagents;
+  const hiddenCount = props.subagents.length - shown.length;
   return (
     <li role="presentation" className="list-none ps-3">
       <TooltipProvider delay={150} closeDelay={0} timeout={400}>
         <ul role="presentation" className="flex flex-col">
-          {props.subagents.map((entry) => (
+          {shown.map((entry) => (
             <SubagentLine
               key={entry.key}
               entry={entry}
@@ -345,6 +374,29 @@ function SidebarSubagentRows(props: {
               onContextMenu={props.onContextMenu}
             />
           ))}
+          {hiddenCount > 0 ? (
+            <li className="list-none">
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className={AGENT_MORE_BUTTON_CLASS}
+              >
+                <PlusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
+                {`Show ${hiddenCount} more`}
+              </button>
+            </li>
+          ) : props.capped && showAll && props.subagents.length > SHOWN_BEFORE_MORE ? (
+            <li className="list-none">
+              <button
+                type="button"
+                onClick={() => setShowAll(false)}
+                className={AGENT_MORE_BUTTON_CLASS}
+              >
+                <MinusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
+                Show less
+              </button>
+            </li>
+          ) : null}
         </ul>
       </TooltipProvider>
     </li>
