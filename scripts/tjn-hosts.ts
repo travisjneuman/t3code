@@ -611,14 +611,20 @@ async function main() {
     await release(cfg, buildHost);
     return;
   }
-  const published = await releases();
   if (command === "status") {
-    console.log(
-      JSON.stringify({
-        forkReleases: published.map((item) => ({ tag: item.tag_name, draft: item.draft })),
-      }),
-    );
+    // Host state stays readable when the GitHub listing is down.
     let failed = false;
+    try {
+      const published = await releases();
+      console.log(
+        JSON.stringify({
+          forkReleases: published.map((item) => ({ tag: item.tag_name, draft: item.draft })),
+        }),
+      );
+    } catch (error) {
+      failed = true;
+      console.error(`fork releases: ${error instanceof Error ? error.message : String(error)}`);
+    }
     for (const [name, host] of Object.entries(cfg.hosts)) {
       try {
         console.log(JSON.stringify({ host: name, ...(await snapshot(host)) }));
@@ -628,10 +634,11 @@ async function main() {
       }
     }
     if (failed) {
-      throw new Refusal("One or more host statuses could not be read.", 1);
+      throw new Refusal("The fork releases or one or more host statuses could not be read.", 1);
     }
     return;
   }
+  const published = await releases();
   const selected = all ? Object.keys(cfg.hosts) : [hostName!];
   requireState(
     selected.every((name) => Object.hasOwn(cfg.hosts, name)),
