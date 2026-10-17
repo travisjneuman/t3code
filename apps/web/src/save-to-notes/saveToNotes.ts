@@ -15,6 +15,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   type ContextMenuItem,
+  type EnvironmentId,
   SAVE_TO_NOTES_WS_METHODS,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -38,23 +39,37 @@ export type SaveToNotesMenuId = "save-to-notes" | "save-to-notes:summary" | "sav
 export const isSaveToNotesMenuId = (value: string | null): value is SaveToNotesMenuId =>
   value === "save-to-notes" || value === "save-to-notes:summary" || value === "save-to-notes:copy";
 
-const saveToNotesMenuItem: ContextMenuItem<SaveToNotesMenuId> = {
-  id: "save-to-notes",
-  label: "Save to notes…",
-  icon: "folder",
-  children: [
-    { id: "save-to-notes:summary", label: "Summary (the agent writes it)" },
-    { id: "save-to-notes:copy", label: "Full copy (prompts and answers)" },
-  ],
-};
+const SUMMARY_ITEM = {
+  id: "save-to-notes:summary",
+  label: "Summary (the agent writes it)",
+} as const;
+const COPY_ITEM = { id: "save-to-notes:copy", label: "Full copy (prompts and answers)" } as const;
 
-/** Adds "Save to notes…" right after "Export…", or last when a menu has none. */
+/**
+ * Adds "Save to notes…" right after "Export…", or last when a menu has none.
+ * Each child shows only when this connection may run it, and the parent goes
+ * when neither may. Menus are built on open, so a click-time read is current.
+ */
 export const withSaveToNotesMenuItem = <T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
+  environmentId: EnvironmentId,
 ): ReadonlyArray<ContextMenuItem<T | SaveToNotesMenuId>> => {
-  const exportIndex = items.findIndex((item) => item.id === "export");
-  if (exportIndex === -1) return [...items, saveToNotesMenuItem];
-  return [...items.slice(0, exportIndex + 1), saveToNotesMenuItem, ...items.slice(exportIndex + 1)];
+  const children = [
+    ...(appAtomRegistry.get(requestSummaryCommand.permissionAtom(environmentId))
+      ? [SUMMARY_ITEM]
+      : []),
+    ...(appAtomRegistry.get(saveCopyCommand.permissionAtom(environmentId)) ? [COPY_ITEM] : []),
+  ];
+  if (children.length === 0) return items;
+  const item: ContextMenuItem<SaveToNotesMenuId> = {
+    id: "save-to-notes",
+    label: "Save to notes…",
+    icon: "folder",
+    children,
+  };
+  const exportIndex = items.findIndex((entry) => entry.id === "export");
+  if (exportIndex === -1) return [...items, item];
+  return [...items.slice(0, exportIndex + 1), item, ...items.slice(exportIndex + 1)];
 };
 
 const failureToast = (title: string, error: unknown) =>

@@ -1,3 +1,7 @@
+import { classifyCliReleaseBaseUrl, type CliReleaseSource } from "./cliReleaseGuards.ts"; // Fork add-on: release source.
+
+export * from "./cliReleaseGuards.ts"; // Fork add-on: release source, HTTPS and download-size guards.
+
 const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code"; // Fork add-on: host releases come from the fork.
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
@@ -46,6 +50,11 @@ export function cliArchiveFileName(version: string, platformKey: CliArchivePlatf
 }
 
 const CLI_RELEASE_DEFAULT_BASE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases/download`;
+
+export function cliReleaseSourceOf(baseUrl: string | undefined): CliReleaseSource {
+  // Fork add-on: release source.
+  return classifyCliReleaseBaseUrl(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL); // Fork add-on
+} // Fork add-on
 
 export function cliReleaseDownloadBaseUrl(
   version: string,

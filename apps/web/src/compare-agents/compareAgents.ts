@@ -45,6 +45,12 @@ const stopCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   tag: COMPARE_AGENTS_WS_METHODS.stop,
 });
 
+/** Whether a connection may run each call, for hiding what the server would refuse. */
+export const compareStartPermissionAtom = startCommand.permissionAtom;
+export const compareReviewSwapPermissionAtom = reviewSwapCommand.permissionAtom;
+export const compareFollowUpPermissionAtom = followUpCommand.permissionAtom;
+export const compareStopPermissionAtom = stopCommand.permissionAtom;
+
 /** A pair id taken from a URL, or undefined when it is not one. */
 export const parsePairId = (value: unknown): string | undefined =>
   typeof value === "string" && comparePairOf(`compare:${value}:a`) !== null ? value : undefined;

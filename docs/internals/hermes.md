@@ -31,10 +31,27 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
   that file is what Settings › Archived lists.
 - **The dashboard is proxied and redacted on the server.** Settings call one RPC that forwards to
   the Hermes dashboard (config, schema, env, custom endpoints) with the stored basic-auth
-  credentials. Responses drop Hermes's partial reveals (`*_preview`, `redacted_value`) and
-  replace secret-named values; env rows go back as set or unset only. `/api/env/reveal` is never
-  called. A config save merges the redacted placeholders back to the stored values before the
-  `PUT`, so saving a form never overwrites a secret with the placeholder.
+  credentials. Responses drop Hermes's partial reveals (`*_preview`, `redacted_value`); env rows
+  go back as set or unset only, and `/api/env/reveal` is never called. Everything else is redacted
+  by field meaning
+  ([`hermesDashboardRedaction.ts`](../../apps/server/src/hermes/hermesDashboardRedaction.ts)): a
+  key is secret by its head noun (`token`, `secret`, `password`, `authorization`, `cookie`, a
+  qualified `*_key`), so counts like `max_tokens` and flags like `has_api_key` survive. Header
+  maps, `{name, value}` pairs with a secret name, and the `value`/`default` of a secret-named
+  object are hidden, and credentials inside plain strings (URL passwords, secret query params,
+  `Bearer` values, known key shapes) are masked in place. A config save restores unchanged
+  placeholders from the stored config and refuses one whose surrounding text was edited, so a
+  placeholder can never overwrite a secret.
+- **Session listings are coalesced and cached for 5 s per instance.** The cache key fingerprints
+  the instance's bound T3 threads and their latest run, so a T3 turn on one instance re-reads only
+  that Hermes, and T3-side session changes invalidate the instance. A listing has a 20 s overall
+  deadline; the subagent walk gets only what is left and degrades to no nesting. The sidebar
+  re-lists only the instances whose threads changed; focus and Refresh re-list all of them.
+- **The T3 tool allowlist is enforced at call time.** Hermes's `tools.include` lists
+  `HERMES_T3_TOOLS`, but a Hermes that ignores or loses it would otherwise reach every
+  orchestration tool its thread scope allows. Every bridged request passes
+  `refuseUnboundRequest`, which refuses a bound caller's `tools/call` for any other tool with a
+  tool error. `tools/list` is not filtered.
 - **Provider terms are enforced in the model list, not left to the user.**
   [`models.ts`](../../packages/provider-hermes/src/server/models.ts) drops Anthropic in every
   form and Google providers signed in through a Google client, and offers only free Kilo

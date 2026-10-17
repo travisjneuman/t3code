@@ -20,7 +20,10 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import { HttpClient } from "effect/http";
 
-import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
+import {
+  CLI_RELEASE_BASE_URL_ENV,
+  cliReleaseBaseUrlProblem, // Fork add-on: HTTPS-only release mirrors.
+} from "@t3tools/shared/cliRelease";
 
 import * as ServerConfig from "../config.ts";
 import * as DesktopAppUpdate from "../desktopUpdate/DesktopAppUpdate.ts";
@@ -212,6 +215,8 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     if (!isExactServiceVersion(targetVersion)) {
       return yield* failWith(`'${targetVersion}' is not an exact t3 version.`);
     }
+    const mirrorProblem = cliReleaseBaseUrlProblem(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
+    if (mirrorProblem) return yield* failWith(mirrorProblem); // Fork add-on
     if (yield* Ref.getAndSet(inFlight, true)) {
       return yield* failWith("A server update is already in progress.");
     }

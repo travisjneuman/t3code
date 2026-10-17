@@ -35,6 +35,8 @@ import {
   ExternalSessionUnsupportedError,
   externalSessionUnsupportedReason,
   type ExternalSessionEvent,
+  type ExternalSessionListOlderInput,
+  type ExternalSessionListOlderResult,
   type ExternalSessionListResult,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
@@ -96,6 +98,10 @@ const WATCH_RESTART_DELAY = "30 seconds";
 const OWNED_REFRESH_MS = 30 * 1000;
 const SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const SNAPSHOT_MESSAGES = 200;
+// Wire bounds per event, so a burst or a long transcript never sends one giant frame.
+const SNAPSHOT_FRAME_BYTES = 4 * 1024 * 1024;
+const APPEND_FRAME_BYTES = 1024 * 1024;
+const APPEND_FRAME_MESSAGES = 100;
 const FOLLOW_BYTES = 8 * 1024 * 1024;
 // A first read of a long transcript can take longer; its progress is kept for the next.
 const INSIGHTS_TIMEOUT = "8 seconds";
@@ -105,6 +111,13 @@ export class ExternalSessions extends Context.Service<
   {
     /** The newest sessions; a full list on subscribe and after every change. */
     readonly subscribeList: Stream.Stream<ExternalSessionListResult>;
+    /**
+     * One page of the sessions after `before` in list order, past the live
+     * list's cut. Read from the last published order; never streamed.
+     */
+    readonly listOlder: (
+      before: ExternalSessionListOlderInput["before"],
+    ) => Effect.Effect<ExternalSessionListOlderResult>;
     /** One session: a snapshot of its newest messages, then appends as it grows. */
     readonly subscribeSession: (
       key: string,
@@ -199,6 +212,11 @@ interface Registry {
   /** Session paths whose files changed, after each flush. */
   readonly changed: PubSub.PubSub<ReadonlySet<string>>;
   readonly summaryFor: (key: string) => ExternalSessionSummary | null;
+  /** The page of listed sessions after the cursor, from the last publish's full order. */
+  readonly listOlder: (
+    beforeMs: number,
+    beforeKey: string,
+  ) => { readonly sessions: Array<ExternalSessionSummary>; readonly more: boolean };
   /** Republishes the list, e.g. after an archive change. */
   readonly publish: Effect.Effect<void>;
   /** Re-reads which sessions T3 owns and republishes the list. */
@@ -211,6 +229,58 @@ interface Registry {
 }
 
 const sessionKey = (source: ExternalSessionSource, id: string) => `${source.driver}:${id}`;
+
+// Whole milliseconds, as `updatedAt` carries them, so a cursor read back from
+// the wire lands exactly where its session sorts.
+const listedMs = (entry: Entry) => Math.trunc(entry.info.updatedAtMs);
+
+/** List order: newest first, then by key so equal times keep a stable order for paging. */
+const listOrder = ([leftKey, left]: [string, Entry], [rightKey, right]: [string, Entry]) =>
+  listedMs(right) - listedMs(left) || (leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0);
+
+const wireBytes = (message: ExternalSessionMessage) => Buffer.byteLength(JSON.stringify(message));
+
+/** The newest messages within both bounds, oldest first; `cut` when any were left out. */
+const newestWithin = (
+  messages: ReadonlyArray<ExternalSessionMessage>,
+  maxMessages: number,
+  maxBytes: number,
+): { readonly messages: ReadonlyArray<ExternalSessionMessage>; readonly cut: boolean } => {
+  let start = messages.length;
+  let bytes = 0;
+  while (start > 0 && messages.length - start < maxMessages) {
+    const size = wireBytes(messages[start - 1]!);
+    // One message always fits; clipMessage keeps each far below the bound.
+    if (bytes + size > maxBytes && start < messages.length) break;
+    bytes += size;
+    start -= 1;
+  }
+  return { messages: start === 0 ? messages : messages.slice(start), cut: start > 0 };
+};
+
+/** Consecutive runs of messages, each within both bounds. */
+const framesOf = (
+  messages: ReadonlyArray<ExternalSessionMessage>,
+): Array<ReadonlyArray<ExternalSessionMessage>> => {
+  const frames: Array<ReadonlyArray<ExternalSessionMessage>> = [];
+  let frame: Array<ExternalSessionMessage> = [];
+  let bytes = 0;
+  for (const message of messages) {
+    const size = wireBytes(message);
+    if (
+      frame.length > 0 &&
+      (frame.length >= APPEND_FRAME_MESSAGES || bytes + size > APPEND_FRAME_BYTES)
+    ) {
+      frames.push(frame);
+      frame = [];
+      bytes = 0;
+    }
+    frame.push(message);
+    bytes += size;
+  }
+  if (frame.length > 0) frames.push(frame);
+  return frames;
+};
 
 const isUnder = (path: string, root: string) => {
   const comparedPath =
@@ -417,6 +487,8 @@ const make = Effect.gen(function* () {
     // cached ownership expires; its provider thread exists by the time the
     // native file does, so one fresh read hides it.
     const ownershipChecked = new Set<string>();
+    // Every listed session in list order as of the last publish; older pages read it.
+    let ordered: ReadonlyArray<[string, Entry]> = [];
 
     const publish = Effect.gen(function* () {
       yield* ownedSessionIds;
@@ -455,16 +527,21 @@ const make = Effect.gen(function* () {
           yield* archive.remove(key).pipe(Effect.ignore);
         }
       }
-      const sessions = listable
+      ordered = listable
         .filter(
           ([key, entry]) => archive.get(key) === undefined && claudeArchivedAt(entry) === undefined,
         )
-        .sort(([, a], [, b]) => b.info.updatedAtMs - a.info.updatedAtMs)
+        .sort(listOrder);
+      const sessions = ordered
         .slice(0, MAX_LISTED)
         .map(([key, entry]) => toSummary(key, entry, now));
+      const total = ordered.length;
       const current = yield* SubscriptionRef.get(list);
-      if (JSON.stringify(current.sessions) !== JSON.stringify(sessions)) {
-        yield* SubscriptionRef.set(list, { sessions });
+      if (
+        current.total !== total ||
+        JSON.stringify(current.sessions) !== JSON.stringify(sessions)
+      ) {
+        yield* SubscriptionRef.set(list, { sessions, total });
       }
       const mirrored = listable
         .flatMap(([key, entry]): Array<ExternalSessionArchivedSession> => {
@@ -589,6 +666,20 @@ const make = Effect.gen(function* () {
           ? null
           : { ...toSummary(key, entry, Date.now()), details: entry.info.details };
       },
+      listOlder: (beforeMs, beforeKey) => {
+        const start = ordered.findIndex(([key, entry]) => {
+          const ms = listedMs(entry);
+          return ms < beforeMs || (ms === beforeMs && key > beforeKey);
+        });
+        if (start === -1) return { sessions: [], more: false };
+        const now = Date.now();
+        return {
+          sessions: ordered
+            .slice(start, start + MAX_LISTED)
+            .map(([key, entry]) => toSummary(key, entry, now)),
+          more: start + MAX_LISTED < ordered.length,
+        };
+      },
       refreshOwned: Effect.andThen(refreshOwnedIds, publish),
       resolve: (key) =>
         Effect.gen(function* () {
@@ -621,6 +712,16 @@ const make = Effect.gen(function* () {
     Effect.map(RcRef.get(registryRef), (registry) => SubscriptionRef.changes(registry.list)),
   );
 
+  const listOlder: ExternalSessions["Service"]["listOlder"] = (before) =>
+    Effect.scoped(
+      Effect.map(RcRef.get(registryRef), (registry) => {
+        const beforeMs = Date.parse(before.updatedAt);
+        return Number.isNaN(beforeMs)
+          ? { sessions: [], more: false }
+          : registry.listOlder(beforeMs, before.key);
+      }),
+    );
+
   const subscribeSession: ExternalSessions["Service"]["subscribeSession"] = (key) =>
     Stream.unwrap(
       Effect.gen(function* () {
@@ -645,20 +746,39 @@ const make = Effect.gen(function* () {
         for (const line of snapshotSlice?.lines ?? []) {
           for (const message of parser.push(line)) messages.set(message.id, message);
         }
-        const all = [...messages.values()];
+        const newest = newestWithin(
+          [...messages.values()],
+          SNAPSHOT_MESSAGES,
+          SNAPSHOT_FRAME_BYTES,
+        );
         const snapshot: ExternalSessionEvent = {
           _tag: "snapshot",
           summary,
-          messages: all.slice(-SNAPSHOT_MESSAGES),
-          truncated: (snapshotSlice?.start ?? 0) > 0 || all.length > SNAPSHOT_MESSAGES,
+          messages: newest.messages,
+          truncated: (snapshotSlice?.start ?? 0) > 0 || newest.cut,
         };
 
         let offset = snapshotSlice?.end ?? 0;
         let lastSummary = JSON.stringify(summary);
+        let latestSummary = summary;
         const readAppended = Effect.gen(function* () {
           const out: Array<ExternalSessionEvent> = [];
           if (transcript !== null) {
-            const appended: Array<ExternalSessionMessage> = [];
+            // By id, as the client upserts: a message that grew within the
+            // burst keeps its first position and carries its latest text.
+            const appended = new Map<string, ExternalSessionMessage>();
+            // More new messages than a snapshot holds: the oldest are dropped
+            // here, and the client gets a fresh truncated snapshot instead.
+            let overflowed = false;
+            const add = (line: string) => {
+              for (const message of parser.push(line)) {
+                appended.set(message.id, message);
+                if (appended.size > SNAPSHOT_MESSAGES) {
+                  appended.delete(appended.keys().next().value!);
+                  overflowed = true;
+                }
+              }
+            };
             // Loop so a large burst is read in bounded chunks.
             for (;;) {
               const slice = yield* provide(
@@ -678,18 +798,37 @@ const make = Effect.gen(function* () {
                   readLines(transcript, { fromEnd: true, maxBytes: FOLLOW_BYTES }),
                 );
                 if (tail === null) break;
-                for (const line of tail.lines) appended.push(...parser.push(line));
+                for (const line of tail.lines) add(line);
                 offset = tail.end;
                 break;
               }
-              for (const line of slice.lines) appended.push(...parser.push(line));
+              for (const line of slice.lines) add(line);
               offset = slice.end;
               if (offset >= slice.size) break;
             }
-            if (appended.length > 0) out.push({ _tag: "append", messages: appended });
+            if (overflowed) {
+              latestSummary = registry.summaryFor(key) ?? latestSummary;
+              lastSummary = JSON.stringify(latestSummary);
+              const newer = newestWithin(
+                [...appended.values()],
+                SNAPSHOT_MESSAGES,
+                SNAPSHOT_FRAME_BYTES,
+              );
+              out.push({
+                _tag: "snapshot",
+                summary: latestSummary,
+                messages: newer.messages,
+                truncated: true,
+              });
+            } else {
+              for (const messages of framesOf([...appended.values()])) {
+                out.push({ _tag: "append", messages });
+              }
+            }
           }
           const next = registry.summaryFor(key);
           if (next !== null && JSON.stringify(next) !== lastSummary) {
+            latestSummary = next;
             lastSummary = JSON.stringify(next);
             out.push({ _tag: "summary", summary: next });
           }
@@ -912,6 +1051,7 @@ const make = Effect.gen(function* () {
 
   return ExternalSessions.of({
     subscribeList,
+    listOlder,
     subscribeSession,
     continueSession,
     subscribeRunningElsewhere: sync.runningElsewhere,

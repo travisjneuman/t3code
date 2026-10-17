@@ -23,7 +23,7 @@ const MIN_QUERY_LENGTH = 2;
 
 export interface SessionSearchEntry {
   readonly environmentId: EnvironmentId;
-  /** Set only when more than one environment returned matches. */
+  /** Set only when more than one environment is connected. */
   readonly environmentLabel: string | null;
   readonly hit: SessionSearchHit;
 }
@@ -33,9 +33,22 @@ interface SessionSearchState {
   readonly isLoading: boolean;
   /** False when a server stopped at its time budget, so older matches may be missing. */
   readonly complete: boolean;
+  /** Connected environments the search went to. */
+  readonly searchedHosts: number;
+  /** Environments that returned a result, with or without matches. */
+  readonly answeredHosts: number;
+  /** Labels of environments whose search failed; one still loading is not listed. */
+  readonly failedHostLabels: ReadonlyArray<string>;
 }
 
-const EMPTY_STATE: SessionSearchState = { entries: [], isLoading: false, complete: true };
+const EMPTY_STATE: SessionSearchState = {
+  entries: [],
+  isLoading: false,
+  complete: true,
+  searchedHosts: 0,
+  answeredHosts: 0,
+  failedHostLabels: [],
+};
 const EMPTY_STATE_ATOM = Atom.make(EMPTY_STATE).pipe(Atom.withLabel("web:session-search:empty"));
 
 /**
@@ -49,42 +62,76 @@ const sessionSearchQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRun
   idleTtlMs: 0,
 });
 
-/** Failed or unsupported environments (older servers) contribute nothing. */
+/**
+ * Failed environments (timeouts, disconnects, older servers without the
+ * method) contribute no hits but are named, so a missing host is visible.
+ */
 const sessionSearchResults = Atom.family((query: string) =>
   Atom.make((get): SessionSearchState => {
     const environmentIds = get(environmentSummaries.connectedEnvironmentIdsAtom);
     const found: Array<{ environmentId: EnvironmentId; hits: ReadonlyArray<SessionSearchHit> }> =
       [];
+    const failedIds: Array<EnvironmentId> = [];
     let isLoading = false;
     let complete = true;
+    let answeredHosts = 0;
     for (const environmentId of environmentIds) {
       const result = get(sessionSearchQuery({ environmentId, input: { query } }));
       isLoading ||= result.waiting;
       const value = Option.getOrNull(AsyncResult.value(result));
-      if (value === null) continue;
+      if (value === null) {
+        // A superseded request is interrupted, not failed; a waiting failure is retrying.
+        if (
+          AsyncResult.isFailure(result) &&
+          !result.waiting &&
+          !AsyncResult.isInterrupted(result)
+        ) {
+          failedIds.push(environmentId);
+        }
+        continue;
+      }
+      answeredHosts += 1;
       complete &&= value.complete;
       if (value.sessions.length > 0) found.push({ environmentId, hits: value.sessions });
     }
     const labels =
-      found.length > 1
+      environmentIds.length > 1 || failedIds.length > 0
         ? new Map(
             get(environmentSummaries.identitiesAtom).map(
               (identity) => [identity.environmentId, identity.label] as const,
             ),
           )
         : null;
+    const rowLabels = environmentIds.length > 1 ? labels : null;
     const entries = found
       .flatMap(({ environmentId, hits }) =>
         hits.map((hit) => ({
           environmentId,
-          environmentLabel: labels?.get(environmentId) ?? null,
+          environmentLabel: rowLabels?.get(environmentId) ?? null,
           hit,
         })),
       )
       .sort((a, b) => Date.parse(b.hit.updatedAt) - Date.parse(a.hit.updatedAt));
-    return { entries, isLoading, complete };
+    const failedHostLabels = failedIds.map(
+      (environmentId) => labels?.get(environmentId) ?? "A host",
+    );
+    return {
+      entries,
+      isLoading,
+      complete,
+      searchedHosts: environmentIds.length,
+      answeredHosts,
+      failedHostLabels,
+    };
   }).pipe(Atom.withLabel(`web:session-search:${query}`)),
 );
+
+const hostList = new Intl.ListFormat("en", { type: "conjunction" });
+
+/** "Studio didn't answer", "Studio and Office didn't answer". */
+export function failedHostsSummary(labels: ReadonlyArray<string>): string {
+  return `${hostList.format(labels)} didn't answer`;
+}
 
 /** Debounced search for the sidebar query; nothing runs below two characters. */
 export function useSessionSearch(query: string): SessionSearchState & {

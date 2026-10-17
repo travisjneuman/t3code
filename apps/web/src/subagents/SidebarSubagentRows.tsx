@@ -2,8 +2,8 @@
  * Subagents (delegate_task children and provider-native subagents) nested
  * under their top-level thread's sidebar row, one line each, in whichever
  * section that row sits. They stay after they finish so they can be reviewed,
- * archived or deleted. A toggle on the parent's row shows all of them or none;
- * none is the default. Fork add-on: nested subagents.
+ * archived or deleted. A toggle on the parent's row shows all of them or only
+ * the running ones; running only is the default. Fork add-on: nested subagents.
  */
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
@@ -65,8 +65,8 @@ const MAX_INDENT_DEPTH = 3;
 export interface SidebarSubagent {
   readonly key: string;
   readonly thread: EnvironmentThreadShell;
-  /** 0 for a direct child of the top-level thread. */
-  readonly depth: number;
+  /** The top-level thread's key for a direct child. */
+  readonly parentKey: string;
 }
 
 type MenuAction = "open" | "copy-thread-id" | "archive" | "delete";
@@ -77,8 +77,8 @@ const isSubagent = (thread: EnvironmentThreadShell) =>
 
 /**
  * Live subagents keyed by the top-level thread they descend from, each list
- * depth-first in the order they started. A subagent whose chain never reaches
- * a listed thread is left out.
+ * depth-first with the newest started first at every level. A subagent whose
+ * chain never reaches a listed thread is left out.
  */
 function groupSubagents(
   threads: ReadonlyArray<EnvironmentThreadShell>,
@@ -100,19 +100,19 @@ function groupSubagents(
     if (isSubagent(thread) || !childrenOf.has(key)) continue;
     const rows: SidebarSubagent[] = [];
     const seen = new Set<string>([key]);
-    const walk = (parentKey: string, depth: number) => {
+    const walk = (parentKey: string) => {
       const children = [...(childrenOf.get(parentKey) ?? [])].sort((left, right) =>
-        left.createdAt.localeCompare(right.createdAt),
+        right.createdAt.localeCompare(left.createdAt),
       );
       for (const child of children) {
         const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
         if (seen.has(childKey)) continue;
         seen.add(childKey);
-        rows.push({ key: childKey, thread: child, depth });
-        walk(childKey, depth + 1);
+        rows.push({ key: childKey, thread: child, parentKey });
+        walk(childKey);
       }
     };
-    walk(key, 0);
+    walk(key);
     groups.set(key, rows);
   }
   return groups;
@@ -128,8 +128,9 @@ const NO_PROVIDER_ENTRIES: ReadonlyMap<string, SubagentProviderEntry> = new Map(
 /**
  * Called once by the sidebar. `count(parentKey)` feeds that row's toggle;
  * `render(parentKey)` is the subagent block that goes right after the row:
- * one node, or none when they are hidden. Shown, the first few are listed
- * until "Show more"; hidden, only the subagent being viewed stays visible.
+ * one node, or none when nothing is visible. Shown, the first few are listed
+ * until "Show more"; hidden, only running subagents and the one being viewed
+ * stay visible, like the Other Agents and Hermes shelves.
  */
 export function useSidebarSubagents(input: {
   threads: ReadonlyArray<EnvironmentThreadShell>;
@@ -230,12 +231,13 @@ export function useSidebarSubagents(input: {
     const expanded = expandedKeys.includes(parentKey);
     const visible = expanded
       ? subagents
-      : subagents.filter((entry) => entry.key === input.activeThreadKey);
+      : subagents.filter((entry) => alwaysShown(entry, input.activeThreadKey));
     if (visible.length === 0) return [];
     const environmentId = visible[0]!.thread.environmentId;
     return [
       <SidebarSubagentRows
         key={`${parentKey}:subagents`}
+        tree={subagents}
         subagents={visible}
         capped={expanded}
         activeThreadKey={input.activeThreadKey}
@@ -327,11 +329,34 @@ function statusLabel(thread: EnvironmentThreadShell): string {
   }
 }
 
+const alwaysShown = (entry: SidebarSubagent, activeThreadKey: string | null) =>
+  entry.key === activeThreadKey || threadRuntimeIsActive(entry.thread.runtime);
+
+/**
+ * How far each listed subagent indents: one step per listed ancestor, so a
+ * subagent listed without its parent sits flush instead of under a stranger.
+ */
+function indentDepths(
+  tree: ReadonlyArray<SidebarSubagent>,
+  listed: ReadonlyArray<SidebarSubagent>,
+): ReadonlyMap<string, number> {
+  const parentOf = new Map(tree.map((entry) => [entry.key, entry.parentKey]));
+  const depths = new Map<string, number>();
+  for (const entry of listed) {
+    let ancestor: string | undefined = entry.parentKey;
+    while (ancestor !== undefined && !depths.has(ancestor)) ancestor = parentOf.get(ancestor);
+    depths.set(entry.key, ancestor === undefined ? 0 : depths.get(ancestor)! + 1);
+  }
+  return depths;
+}
+
 /**
  * A top-level thread's visible subagents, one line each. `capped` lists the
- * first few, plus the one being viewed, until "Show more".
+ * first few, plus running ones and the one being viewed, until "Show more".
  */
 function SidebarSubagentRows(props: {
+  /** Every subagent under the parent, listed or not. */
+  tree: ReadonlyArray<SidebarSubagent>;
   subagents: ReadonlyArray<SidebarSubagent>;
   capped: boolean;
   activeThreadKey: string | null;
@@ -345,13 +370,14 @@ function SidebarSubagentRows(props: {
   ) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
-  const shown =
-    props.capped && !showAll
-      ? props.subagents.filter(
-          (entry, index) => index < SHOWN_BEFORE_MORE || entry.key === props.activeThreadKey,
-        )
-      : props.subagents;
+  const cappedList = props.capped
+    ? props.subagents.filter(
+        (entry, index) => index < SHOWN_BEFORE_MORE || alwaysShown(entry, props.activeThreadKey),
+      )
+    : props.subagents;
+  const shown = showAll ? props.subagents : cappedList;
   const hiddenCount = props.subagents.length - shown.length;
+  const depths = indentDepths(props.tree, shown);
   return (
     <li role="presentation" className="list-none ps-3">
       <TooltipProvider delay={150} closeDelay={0} timeout={400}>
@@ -359,7 +385,8 @@ function SidebarSubagentRows(props: {
           {shown.map((entry) => (
             <SubagentLine
               key={entry.key}
-              entry={entry}
+              thread={entry.thread}
+              depth={depths.get(entry.key) ?? 0}
               isActive={entry.key === props.activeThreadKey}
               providerEntry={
                 props.providerEntryByInstanceId.get(
@@ -383,7 +410,7 @@ function SidebarSubagentRows(props: {
                 {`Show ${hiddenCount} more`}
               </button>
             </li>
-          ) : props.capped && showAll && props.subagents.length > SHOWN_BEFORE_MORE ? (
+          ) : showAll && cappedList.length < props.subagents.length ? (
             <li className="list-none">
               <button
                 type="button"
@@ -407,7 +434,9 @@ function SidebarSubagentRows(props: {
  * `nowMinute` only exists to refresh the age once a minute.
  */
 const SubagentLine = memo(function SubagentLine(props: {
-  entry: SidebarSubagent;
+  thread: EnvironmentThreadShell;
+  /** Listed ancestors above this line. */
+  depth: number;
   isActive: boolean;
   providerEntry: SubagentProviderEntry | null;
   nowMinute: string;
@@ -418,7 +447,7 @@ const SubagentLine = memo(function SubagentLine(props: {
     open: (threadRef: ScopedThreadRef) => void,
   ) => void;
 }) {
-  const { thread, depth } = props.entry;
+  const { thread, depth } = props;
   const now = Date.parse(`${props.nowMinute}:00Z`);
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const running = threadRuntimeIsActive(thread.runtime);

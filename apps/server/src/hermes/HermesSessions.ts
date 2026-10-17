@@ -12,6 +12,8 @@
  *
  * @module hermes/HermesSessions
  */
+import { createHash } from "node:crypto";
+
 import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -55,11 +57,13 @@ import {
 } from "@t3tools/provider-hermes/server";
 import { HermesSettings } from "@t3tools/provider-hermes/settings";
 import * as Cache from "effect/Cache";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -71,6 +75,8 @@ import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStore.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { HERMES_T3_TOOLS } from "./HermesMcpBridge.ts";
+import { redactSecrets, restoreSecrets } from "./hermesDashboardRedaction.ts";
 import * as HermesSessionArchive from "./hermesSessionArchive.ts";
 import {
   type HermesSessionEntry,
@@ -126,6 +132,9 @@ const LEGACY_IMPORT_PREFIX = "hermes-session-import:v1";
 const LIST_PAGE_SIZE = 200;
 // Enough for a long "Load more" history without walking an unbounded store.
 const MAX_LIST_PAGES = 25;
+/** One list, both walks, however many pages; each request alone may take 30 s. */
+const LIST_DEADLINE_MS = 20_000;
+const LIST_CACHE_TTL = Duration.seconds(5);
 const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
   "preparing",
   "queued",
@@ -143,10 +152,6 @@ const CRON_RUNS_LOOKUP = 50;
 /** Hermes pages a long session's messages, so the details read gets longer than one request. */
 const INSIGHTS_TIMEOUT = "30 seconds";
 const NO_ENTRIES: ReadonlyArray<HermesSessionEntry> = [];
-const REDACTED = "••••••";
-const SECRET_KEY = /(?:api_?key|secret|token|password)$/i;
-/** Hermes's own partial reveals (`api_key_preview`, `redacted_value`), dropped outright. */
-const SECRET_PREVIEW_KEY = /(?:_preview|^redacted_value)$/i;
 const ENV_FIELDS = [
   "is_set",
   "description",
@@ -162,18 +167,6 @@ const ENV_FIELDS = [
 // platform but the API server is pinned to no MCP servers.
 const T3_TOOLS_SERVER = "t3-code";
 const T3_TOOLS_ENV_KEY = "MCP_T3_CODE_API_KEY";
-/** What a Hermes run needs to start, watch and steer T3 coworkers. */
-const T3_TOOLS = [
-  "t3_project_list",
-  "t3_project_read",
-  "t3_thread_launch",
-  "t3_thread_list",
-  "t3_thread_read",
-  "t3_thread_wait",
-  "t3_thread_send",
-  "t3_thread_interrupt",
-  "orchestrator_capabilities",
-];
 /** Hermes's platforms other than the API server, with the toolset each gets by default. */
 const NON_API_PLATFORMS: Readonly<Record<string, string>> = {
   cli: "hermes-cli",
@@ -263,41 +256,6 @@ const parseT3ToolsRestore = (text: string): T3ToolsRestore | undefined => {
   }
 };
 
-/** Replaces each non-empty secret-named string with a placeholder, at any depth. */
-const redactSecrets = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(redactSecrets);
-  if (!isRecord(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([key, child]) =>
-      SECRET_PREVIEW_KEY.test(key)
-        ? []
-        : [
-            [
-              key,
-              SECRET_KEY.test(key) && typeof child === "string" && child.length > 0
-                ? REDACTED
-                : redactSecrets(child),
-            ],
-          ],
-    ),
-  );
-};
-
-/** Puts the stored value back wherever a save sends the placeholder unchanged. */
-const restoreSecrets = (incoming: unknown, current: unknown): unknown => {
-  if (incoming === REDACTED) return current;
-  if (Array.isArray(incoming)) {
-    return incoming.map((child, index) =>
-      restoreSecrets(child, Array.isArray(current) ? current[index] : undefined),
-    );
-  }
-  if (!isRecord(incoming)) return incoming;
-  const base = isRecord(current) ? current : {};
-  return Object.fromEntries(
-    Object.entries(incoming).map(([key, child]) => [key, restoreSecrets(child, base[key])]),
-  );
-};
-
 /**
  * `/api/env` minus anything that could carry a value: whether each key is set,
  * and its labels. Hermes marks a set key by a non-empty `redacted_value`.
@@ -365,10 +323,17 @@ const make = Effect.gen(function* () {
       readonly thread_id: string;
       readonly native_id: string | null;
       readonly archived_at: string | null;
+      readonly last_run: string | null;
     }>`
       SELECT p.thread_id AS thread_id,
         json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id,
-        t.archived_at AS archived_at
+        t.archived_at AS archived_at,
+        (
+          SELECT r.ordinal || ':' || r.status FROM orchestration_v2_projection_runs r
+          WHERE r.thread_id = t.thread_id
+          ORDER BY r.ordinal DESC
+          LIMIT 1
+        ) AS last_run
       FROM orchestration_v2_projection_provider_threads p
       JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
       WHERE json_valid(p.payload_json)
@@ -377,12 +342,16 @@ const make = Effect.gen(function* () {
         AND t.deleted_at IS NULL
     `.pipe(
       Effect.map((rows) => {
-        const byNativeId = new Map<string, { threadId: ThreadId; archived: boolean }>();
+        const byNativeId = new Map<
+          string,
+          { threadId: ThreadId; archived: boolean; lastRun: string | null }
+        >();
         for (const row of rows) {
           if (typeof row.native_id !== "string") continue;
           byNativeId.set(row.native_id, {
             threadId: ThreadId.make(row.thread_id),
             archived: row.archived_at !== null,
+            lastRun: row.last_run,
           });
         }
         return byNativeId;
@@ -445,12 +414,134 @@ const make = Effect.gen(function* () {
     });
   });
 
+  /**
+   * What Hermes lists for one instance and "Load more" depth: the top-level
+   * walk, then the subagent walk, both inside one deadline. The top level is
+   * the list, so missing the deadline there fails it; the subagent walk gets
+   * what time is left, and running out costs only the nesting.
+   */
+  const fetchListing = Effect.fn("HermesSessions.fetchListing")(function* (
+    instanceId: ProviderInstanceId,
+    extra: number,
+  ) {
+    const connection = yield* connectionOf(instanceId);
+    const startedAt = yield* Clock.currentTimeMillis;
+    const cutoff = startedAt - HERMES_SESSIONS_WINDOW_MS;
+    const olderAllowed = extra * HERMES_SESSIONS_PAGE;
+    // Hermes lists by last activity, newest first, with every pin back-filled
+    // onto each page; the window and "Load more" decide where to stop.
+    const topLevel = Effect.gen(function* () {
+      const byId = new Map<string, HermesApi.HermesSession>();
+      // Each listed row's id, by itself and by its compression chain's root.
+      const listedIdOf = new Map<string, string>();
+      let older = 0;
+      let hasMore = false;
+      let oldestListed = cutoff;
+      pages: for (let page = 0; page < MAX_LIST_PAGES; page++) {
+        const result = yield* HermesApi.listSessions(connection, {
+          limit: LIST_PAGE_SIZE,
+          offset: page * LIST_PAGE_SIZE,
+        }).pipe(Effect.mapError(fromApi));
+        for (const session of result.sessions) {
+          if (byId.has(session.id)) continue;
+          const lastActiveAt = toMs(session.lastActive);
+          if (!session.pinned && lastActiveAt < cutoff) {
+            if (older >= olderAllowed) {
+              hasMore = true;
+              break pages;
+            }
+            older++;
+            oldestListed = Math.min(oldestListed, lastActiveAt);
+          }
+          byId.set(session.id, session);
+          listedIdOf.set(session.id, session.id);
+          if (session.lineageRootId !== null) listedIdOf.set(session.lineageRootId, session.id);
+        }
+        if (!result.hasMore) break;
+        if (page === MAX_LIST_PAGES - 1) hasMore = true;
+      }
+      return { byId, listedIdOf, hasMore, oldestListed };
+    });
+    const { byId, listedIdOf, hasMore, oldestListed } = yield* topLevel.pipe(
+      Effect.timeoutOrElse({
+        duration: Duration.millis(LIST_DEADLINE_MS),
+        orElse: () =>
+          Effect.fail(
+            new HermesSessionsError({
+              message: `Hermes did not list its sessions within ${LIST_DEADLINE_MS / 1000} seconds.`,
+            }),
+          ),
+      }),
+    );
+    const left = startedAt + LIST_DEADLINE_MS - (yield* Clock.currentTimeMillis);
+    // Subagents reach back as far as the listed rows do. Failing or running out
+    // of time to read them costs only the nesting, never the list.
+    const subagents =
+      left <= 0
+        ? []
+        : yield* subagentsUnder(connection, listedIdOf, hasMore ? oldestListed : 0).pipe(
+            Effect.timeoutOrElse({
+              duration: Duration.millis(left),
+              orElse: () =>
+                Effect.logWarning("Hermes subagents ran past the list deadline").pipe(
+                  Effect.as([]),
+                ),
+            }),
+            Effect.catch((error) =>
+              Effect.logWarning("Hermes subagents unavailable", error).pipe(Effect.as([])),
+            ),
+          );
+    return { sessions: [...byId.values()], subagents, hasMore };
+  });
+
+  // Each sidebar, window focus and Hermes thread status change asks for the
+  // list, and every client asks on its own. Asks for the same listing while
+  // one is in flight share it, and a finished one serves for a few seconds.
+  // The key carries the instance's bound threads and their latest run, so a
+  // T3 turn starting or ending on this instance always reads Hermes afresh
+  // while other instances keep their entry. Failures are not kept.
+  const listings = yield* Cache.makeWith(
+    (key: string) => {
+      const [instanceId = "", extra = "0"] = key.split("\u0000");
+      return fetchListing(ProviderInstanceId.make(instanceId), Number(extra));
+    },
+    {
+      capacity: 64,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? LIST_CACHE_TTL : Duration.zero),
+    },
+  );
+
+  const listingKey = (
+    input: HermesSessionsListInput,
+    apiUrl: string,
+    bound: ReadonlyMap<string, { readonly archived: boolean; readonly lastRun: string | null }>,
+  ) => {
+    const threads = [...bound]
+      .map(([sessionId, thread]) => `${sessionId}:${thread.archived}:${thread.lastRun ?? ""}`)
+      .sort()
+      .join("\n");
+    const fingerprint = createHash("sha256").update(threads).digest("base64url");
+    return [input.instanceId, input.extra, apiUrl, fingerprint].join("\u0000");
+  };
+
+  /** Drops an instance's listings after T3 changed its sessions in Hermes. */
+  const forgetListings = (instanceId: ProviderInstanceId) =>
+    Cache.keys(listings).pipe(
+      Effect.flatMap((keys) =>
+        Effect.forEach(
+          [...keys].filter((key) => key.startsWith(`${instanceId}\u0000`)),
+          (key) => Cache.invalidate(listings, key),
+          { discard: true },
+        ),
+      ),
+    );
+
   const list: HermesSessions["Service"]["list"] = Effect.fn("HermesSessions.list")(
     function* (input) {
       const connection = yield* connectionOf(input.instanceId);
       const bound = yield* boundThreads(input.instanceId);
-      const cutoff = Date.now() - HERMES_SESSIONS_WINDOW_MS;
-      const olderAllowed = input.extra * HERMES_SESSIONS_PAGE;
+      const listing = yield* Cache.get(listings, listingKey(input, connection.apiUrl, bound));
+      // Bindings are read fresh each time, so a cached listing never shows a stale thread.
       const summaryOf = (session: HermesApi.HermesSession): HermesSessionSummary => {
         const thread = bound.get(session.id);
         return {
@@ -465,51 +556,9 @@ const make = Effect.gen(function* () {
           threadId: thread === undefined || thread.archived ? null : thread.threadId,
         };
       };
-      const byId = new Map<string, HermesSessionSummary>();
-      // Each listed row's id, by itself and by its compression chain's root.
-      const listedIdOf = new Map<string, string>();
-      let older = 0;
-      let hasMore = false;
-      let oldestListed = cutoff;
-      // Hermes lists by last activity, newest first, with every pin back-filled
-      // onto each page; the window and "Load more" decide where to stop.
-      pages: for (let page = 0; page < MAX_LIST_PAGES; page++) {
-        const result = yield* HermesApi.listSessions(connection, {
-          limit: LIST_PAGE_SIZE,
-          offset: page * LIST_PAGE_SIZE,
-        }).pipe(Effect.mapError(fromApi));
-        for (const session of result.sessions) {
-          if (byId.has(session.id)) continue;
-          const summary = summaryOf(session);
-          if (!session.pinned && summary.lastActiveAt < cutoff) {
-            if (older >= olderAllowed) {
-              hasMore = true;
-              break pages;
-            }
-            older++;
-            oldestListed = Math.min(oldestListed, summary.lastActiveAt);
-          }
-          byId.set(session.id, summary);
-          listedIdOf.set(session.id, session.id);
-          if (session.lineageRootId !== null) listedIdOf.set(session.lineageRootId, session.id);
-        }
-        if (!result.hasMore) break;
-        if (page === MAX_LIST_PAGES - 1) hasMore = true;
-      }
-      // Subagents reach back as far as the listed rows do. Failing to read them
-      // costs only the nesting, never the list.
-      const subagents = yield* subagentsUnder(
-        connection,
-        listedIdOf,
-        hasMore ? oldestListed : 0,
-      ).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("Hermes subagents unavailable", error).pipe(Effect.as([])),
-        ),
-      );
       const sessions = [
-        ...byId.values(),
-        ...subagents.map(({ session, parentSessionId }) => ({
+        ...listing.sessions.map(summaryOf),
+        ...listing.subagents.map(({ session, parentSessionId }) => ({
           ...summaryOf(session),
           parentSessionId,
         })),
@@ -517,7 +566,7 @@ const make = Effect.gen(function* () {
         (left, right) =>
           Number(right.pinned) - Number(left.pinned) || right.lastActiveAt - left.lastActiveAt,
       );
-      return { sessions, hasMore };
+      return { sessions, hasMore: listing.hasMore };
     },
   );
 
@@ -983,45 +1032,51 @@ const make = Effect.gen(function* () {
           }),
       );
     },
+    (effect, input: HermesSessionsUpdateInput) =>
+      effect.pipe(Effect.ensuring(forgetListings(input.instanceId))),
   );
 
   const deleteSessions: HermesSessions["Service"]["deleteSessions"] = Effect.fn(
     "HermesSessions.deleteSessions",
-  )(function* (input) {
-    const connection = yield* connectionOf(input.instanceId);
-    const bound = yield* boundThreads(input.instanceId);
-    return yield* batch(
-      input.sessionIds,
-      (id) => id,
-      (id) =>
-        Effect.gen(function* () {
-          yield* HermesApi.deleteSession(connection, id).pipe(
-            // Already gone in Hermes; the T3 side still goes.
-            Effect.catchIf(
-              (error) => error.status === 404,
-              () => Effect.void,
-            ),
-            Effect.mapError((error) =>
-              error.status === 409
-                ? new HermesSessionsError({
-                    message: "Hermes is mid-turn in this session. Stop it, then delete.",
-                  })
-                : fromApi(error),
-            ),
-          );
-          yield* archive.remove(input.instanceId, id);
-          const thread = bound.get(id);
-          if (thread === undefined) return;
-          yield* orchestrator
-            .dispatch({
-              type: "thread.delete",
-              commandId: yield* commandId("delete"),
-              threadId: thread.threadId,
-            })
-            .pipe(Effect.mapError(failed("Deleted in Hermes, but not the T3 thread.")));
-        }),
-    );
-  });
+  )(
+    function* (input) {
+      const connection = yield* connectionOf(input.instanceId);
+      const bound = yield* boundThreads(input.instanceId);
+      return yield* batch(
+        input.sessionIds,
+        (id) => id,
+        (id) =>
+          Effect.gen(function* () {
+            yield* HermesApi.deleteSession(connection, id).pipe(
+              // Already gone in Hermes; the T3 side still goes.
+              Effect.catchIf(
+                (error) => error.status === 404,
+                () => Effect.void,
+              ),
+              Effect.mapError((error) =>
+                error.status === 409
+                  ? new HermesSessionsError({
+                      message: "Hermes is mid-turn in this session. Stop it, then delete.",
+                    })
+                  : fromApi(error),
+              ),
+            );
+            yield* archive.remove(input.instanceId, id);
+            const thread = bound.get(id);
+            if (thread === undefined) return;
+            yield* orchestrator
+              .dispatch({
+                type: "thread.delete",
+                commandId: yield* commandId("delete"),
+                threadId: thread.threadId,
+              })
+              .pipe(Effect.mapError(failed("Deleted in Hermes, but not the T3 thread.")));
+          }),
+      );
+    },
+    (effect, input: HermesSessionsDeleteInput) =>
+      effect.pipe(Effect.ensuring(forgetListings(input.instanceId))),
+  );
 
   const listArchived: HermesSessions["Service"]["listArchived"] = archive.list.pipe(
     Effect.map((sessions) => ({ sessions })),
@@ -1042,6 +1097,8 @@ const make = Effect.gen(function* () {
       yield* archive.remove(input.instanceId, input.sessionId);
       return {};
     },
+    (effect, input: HermesSessionsUnarchiveInput) =>
+      effect.pipe(Effect.ensuring(forgetListings(input.instanceId))),
   );
 
   const dashboard: HermesSessions["Service"]["dashboard"] = Effect.fn("HermesSessions.dashboard")(
@@ -1062,11 +1119,22 @@ const make = Effect.gen(function* () {
         // unchanged keeps the stored secret instead of overwriting it.
         const current = yield* request("GET");
         const stored = isRecord(current) && isRecord(current.config) ? current.config : current;
-        const body = { ...input.body, config: restoreSecrets(input.body.config, stored) };
-        return { body: redactSecrets(yield* request("PUT", body)) };
+        const unresolved: Array<string> = [];
+        const config = restoreSecrets(input.body.config, stored, unresolved);
+        if (unresolved.length > 0) {
+          return yield* new HermesSessionsError({
+            message: `Re-enter the hidden value in ${unresolved.join(", ")}: it was edited around the placeholder.`,
+          });
+        }
+        return { body: redactSecrets(yield* request("PUT", { ...input.body, config })) };
       }
       return { body: redactSecrets(yield* request(input.method, input.body)) };
     },
+    // The dashboard can rename, pin or delete sessions too.
+    (effect, input: HermesDashboardInput) =>
+      input.method === "GET"
+        ? effect
+        : effect.pipe(Effect.ensuring(forgetListings(input.instanceId))),
   );
 
   /**
@@ -1201,7 +1269,7 @@ const make = Effect.gen(function* () {
         bearer_token: key,
       });
       yield* call("PUT", "/api/config", {
-        config: { mcp_servers: { [T3_TOOLS_SERVER]: { tools: { include: T3_TOOLS } } } },
+        config: { mcp_servers: { [T3_TOOLS_SERVER]: { tools: { include: HERMES_T3_TOOLS } } } },
       });
       return yield* restartGateway;
     },

@@ -5,6 +5,7 @@
  * global: Discord, cron and the CLI see every change made here. Fork add-on:
  * Hermes provider.
  */
+import { useAtomValue } from "@effect/atom-react";
 import type {
   AdvertisedEndpoint,
   EnvironmentId,
@@ -89,6 +90,13 @@ function DashboardPendingRow(props: {
   );
 }
 
+const NEEDS_MANAGE_ACCESS = "Needs provider management access on this connection.";
+
+/** Stands in for a dashboard section the connection may not reach, so it never loads. */
+function NeedsManageAccessRow(props: { readonly title: string }) {
+  return <SettingsRow title={props.title} description={NEEDS_MANAGE_ACCESS} />;
+}
+
 export function HermesSettingsSection(props: {
   readonly environmentId: EnvironmentId;
   readonly instanceId: ProviderInstanceId;
@@ -107,6 +115,8 @@ export function HermesSettingsSection(props: {
 }) {
   const target = { environmentId: props.environmentId, instanceId: props.instanceId };
   const id = `provider-instance-${props.instanceId}-hermes`;
+  const mayUseDashboard = useAtomValue(hermesDashboard.permissionAtom(props.environmentId));
+  const maySetT3Tools = useAtomValue(hermesT3Tools.permissionAtom(props.environmentId));
   const t3Tools = isRecord(props.config) && props.config.t3Tools === true;
   const t3ToolsUrl =
     isRecord(props.config) && typeof props.config.t3ToolsUrl === "string"
@@ -125,24 +135,41 @@ export function HermesSettingsSection(props: {
           title="T3 tools"
           summary={t3Tools ? "On · API server only" : "Off"}
         >
-          <HermesT3Tools target={target} enabled={t3Tools} url={t3ToolsUrl} />
+          <HermesT3Tools
+            target={target}
+            enabled={t3Tools}
+            url={t3ToolsUrl}
+            canChange={maySetT3Tools}
+          />
         </FoldedSettingsSection>
         <FoldedSettingsSection
           id={`${id}-config`}
           title="Hermes config"
           summary="Global: Discord, cron and the CLI use it too"
         >
-          <HermesConfigForm target={target} />
+          {mayUseDashboard ? (
+            <HermesConfigForm target={target} />
+          ) : (
+            <NeedsManageAccessRow title="Hermes config" />
+          )}
         </FoldedSettingsSection>
         <FoldedSettingsSection id={`${id}-keys`} title="Hermes keys" summary="Write-only">
-          <HermesKeys target={target} />
+          {mayUseDashboard ? (
+            <HermesKeys target={target} />
+          ) : (
+            <NeedsManageAccessRow title="Hermes keys" />
+          )}
         </FoldedSettingsSection>
         <FoldedSettingsSection
           id={`${id}-endpoints`}
           title="Custom endpoints"
           summary="OpenAI-compatible gateways"
         >
-          <HermesEndpoints target={target} />
+          {mayUseDashboard ? (
+            <HermesEndpoints target={target} />
+          ) : (
+            <NeedsManageAccessRow title="Custom endpoints" />
+          )}
         </FoldedSettingsSection>
       </div>
     </>
@@ -180,6 +207,7 @@ function HermesT3Tools(props: {
   readonly target: Target;
   readonly enabled: boolean;
   readonly url: string;
+  readonly canChange: boolean;
 }) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const isPrimary = props.target.environmentId === primaryEnvironmentId;
@@ -220,7 +248,11 @@ function HermesT3Tools(props: {
   return (
     <SettingsRow
       title="T3 tools"
-      description="Lets Hermes start and steer T3 coworker threads while one of its T3 threads runs a turn. Only Hermes's API server gets them."
+      description={
+        props.canChange
+          ? "Lets Hermes start and steer T3 coworker threads while one of its T3 threads runs a turn. Only Hermes's API server gets them."
+          : NEEDS_MANAGE_ACCESS
+      }
       control={
         <div className="flex items-center gap-2">
           <Input
@@ -229,14 +261,14 @@ function HermesT3Tools(props: {
             placeholder="https://<mac>.ts.net/mcp"
             aria-label="T3 address Hermes uses"
             spellCheck={false}
-            disabled={props.enabled || busy}
+            disabled={!props.canChange || props.enabled || busy}
             value={url}
             onChange={(event) => setDraft(event.target.value)}
           />
           <Switch
             aria-label="T3 tools"
             checked={props.enabled}
-            disabled={busy || (!props.enabled && !isHttpUrl(url))}
+            disabled={!props.canChange || busy || (!props.enabled && !isHttpUrl(url))}
             onCheckedChange={(checked) => void toggle(checked)}
           />
         </div>

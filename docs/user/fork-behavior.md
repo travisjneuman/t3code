@@ -28,6 +28,16 @@ If **Update everything** cannot start a server's update, for example because tha
 already updating or its connection dropped, the server is listed as failed and **Retry** offers it
 again, instead of being counted as updated.
 
+Each server reports where it installs releases from: fork releases, upstream releases, or a custom
+mirror set with `T3CODE_RELEASE_BASE_URL`, which must use `https://`. **Settings → Connections**
+shows it with the version and channel on every host row, and the row's tooltip adds when the
+server started. **Update everything** and **Update all** update only fork hosts and list the
+others with the reason; a host's own update action still works but asks first. A server too old to
+report its source counts as unknown: update it once from its row. If the release check fails,
+Connections shows **Couldn't check fork releases** with the reason, such as the GitHub rate limit
+or being offline, and a **Retry**. A host's **Backups…** menu item lists the backups the host
+tooling keeps and the version each would restore; restoring stays a host-side step.
+
 The native mobile client's release check works differently: it uses the connected server's channel
 and the first matching non-draft release in the release listing, not the web/desktop version cap
 or version sorting. It offers that release only if it is newer than the server. Mobile updates do
@@ -74,11 +84,40 @@ several machines. A thread's branch, when it has one, sits at the bottom left.
 ## Subagents sit under their thread
 
 A thread that started subagents, through `delegate_task` or the provider's own subagent tool, shows
-an arrow and a count at its bottom left in the sidebar, wherever the thread sits: Active, Working,
-Snoozed or Settled. Click it to list its subagents as single lines under the thread, and again to
-hide them; they start hidden. The first three are listed, and **Show more** lists the rest. They
-stay there after they finish. Hover one for its provider, model and status; open it to review its
-work, or right-click it to archive or delete it.
+an arrow and a count of all its subagents, nested ones included, at its bottom left in the
+sidebar, wherever the thread sits: Active, Working, Snoozed or Settled. Click it to list its
+subagents as single lines under the thread, newest first at every level, and again to collapse
+them. Collapsed, the thread still lists the subagents that are running and the one you have open,
+like the Other Agents and Hermes shelves; one shown without its parent is not indented. Expanded,
+the first three are listed, plus any that are running or open, and **Show more** lists the rest.
+They stay there after they finish. Hover one for its provider, model and status; open it to
+review its work, or right-click it to archive or delete it.
+
+The thread details **Lineage** section lists every subagent below the thread too, not only the
+ones it started directly, each indented under the agent that started it, newest first. A tree
+stays together: while anything in it is working it stays in the main list, and only fully
+finished trees move under **Previous agents**.
+
+## Other Agents across machines
+
+The Other Agents shelf lists each machine's 60 newest sessions. When a machine has more, the
+**Earlier** header shows "60 of N"; expand **Earlier** and choose **Browse older** to load the
+next 60. Nothing older loads until you ask. When more than one machine is connected, each session
+row and every Other Agents search result, in the sidebar and the command palette, names its
+machine.
+
+If a machine doesn't answer a search, because it timed out, dropped its connection or runs an
+older server, the results header says how many were searched, such as "Other Agents (12) ·
+searched 2 of 3 hosts", and its tooltip names the one that didn't answer. With no matches it reads
+"No matches · Studio didn't answer", so a missing machine is never mistaken for no matches.
+
+## Actions a connection can't run are hidden
+
+A connection paired with limited access, for example without operate or provider management
+access, hides the fork's actions the server would refuse instead of letting them fail: continuing,
+archiving, handing back or opening Other Agents sessions, Hermes session and settings changes,
+**Save to notes**, comparisons, and releasing provider sessions before an update. Where a whole
+settings section is unavailable, it says which access it needs.
 
 ## Codex can show hidden models
 

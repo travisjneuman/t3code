@@ -155,7 +155,11 @@ import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
   useHostUpdateTarget, // Fork add-on: host releases.
   useHostVersionMismatch, // Fork add-on: host releases.
   useRefreshHostUpdateTarget, // Fork add-on: host releases.
+  useHostReleaseCheck, // Fork add-on: row facts.
 } from "~/host-release/hostRelease"; // Fork add-on: host releases.
+import { hostRowSubtitle, hostRowTooltipFacts } from "~/host-release/hostRowFacts"; // Fork add-on: row facts.
+import { HostBackupsDialog } from "~/host-release/HostBackupsDialog"; // Fork add-on: host backups.
+import { HostReleaseCheckNotice } from "~/host-release/HostReleaseCheckNotice"; // Fork add-on: release check.
 import { useUiStateStore } from "~/uiStateStore";
 import {
   resolveServerConfigVersionMismatch,
@@ -1529,6 +1533,9 @@ function SavedBackendListRow({
     },
   });
   const versionMismatch = useHostVersionMismatch(environment.serverConfig); // Fork add-on: host releases.
+  const releaseCheck = useHostReleaseCheck(); // Fork add-on: row facts.
+  const hostEnvironment = environment.serverConfig?.environment; // Fork add-on: row facts.
+  const [backupsOpen, setBackupsOpen] = useState(false); // Fork add-on: host backups.
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -1568,7 +1575,7 @@ function SavedBackendListRow({
   const subtitleText = [
     environmentTransportLabel(environment, connectedTarget),
     resumingServerUpdate ? "Restarting" : status.text,
-    enabled && versionMismatch ? serverVersion : null,
+    enabled && serverVersion ? hostRowSubtitle(serverVersion, hostEnvironment) : null, // Fork add-on: row facts.
   ]
     .filter((value): value is string => value !== null)
     .join(" · ");
@@ -1589,7 +1596,7 @@ function SavedBackendListRow({
     versionMismatch
       ? `\nUpdate available: ${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
       : ""
-  }`;
+  }${hostRowTooltipFacts(hostEnvironment, releaseCheck)}`; // Fork add-on: row facts.
 
   return (
     <EnvironmentRow
@@ -1766,12 +1773,26 @@ function SavedBackendListRow({
           {errorTraceId ? (
             <MenuItem onClick={() => copyTraceId(errorTraceId)}>Copy trace ID</MenuItem>
           ) : null}
+          {
+            isConnected && hostEnvironment?.capabilities.hostBackups === true ? ( // Fork add-on: host backups.
+              <MenuItem onClick={() => setBackupsOpen(true)}>Backups…</MenuItem> // Fork add-on
+            ) : null /* Fork add-on */
+          }
           <MenuSeparator />
           <MenuItem variant="destructive" onClick={() => onRemove(environment)}>
             {isRemoving ? "Removing…" : "Remove from this device…"}
           </MenuItem>
         </MenuPopup>
       </Menu>
+      {
+        backupsOpen ? ( // Fork add-on: host backups.
+          <HostBackupsDialog // Fork add-on
+            environmentId={environmentId} // Fork add-on
+            serverLabel={environment.label} // Fork add-on
+            onClose={() => setBackupsOpen(false)} // Fork add-on
+          /> // Fork add-on
+        ) : null /* Fork add-on */
+      }
     </EnvironmentRow>
   );
 }
@@ -3939,6 +3960,7 @@ export function ConnectionsSettings() {
           </div>
         }
       >
+        {listedEnvironments.length > 0 ? <HostReleaseCheckNotice /> : null /* Fork add-on */}
         {listedEnvironments.map((environment) => (
           <SavedBackendListRow
             key={environment.environmentId}

@@ -22,6 +22,49 @@ touches upstream files, so the fork is shaped like a plug-in rather than a patch
   upstream feature behaves, say so in [`fork-behavior.md`](../user/fork-behavior.md), not in the
   upstream guide.
 
+## Hook modules for large fork blocks
+
+A large fork feature inside an upstream adapter or component lives in a fork-only module beside
+the file, and the upstream file keeps one marked hook per touch point: an import, an optional
+interface field, a union member, a spread into an object, or one factory call. `ClaudeAdapterV2.ts`
+and `CodexAdapterV2.ts` build session details through `claudeInsightsHooks.ts` and
+`codexInsightsHooks.ts`; `ModelPickerContent.tsx` gets all its Hermes state from one
+`useHermesModelPickerSections` call. Hook modules import adapter types with `import type` only and
+take adapter-private values (the provider constant, query refs, error constructors) as arguments,
+so there is no runtime import cycle. When a fork attribute would make the formatter rewrap an
+upstream JSX element near the column limit, select the element from fork CSS by structure instead.
+
+The Lineage panel's nesting follows the same shape: upstream's relationship shells stop at direct
+children, so [`lineageTree.ts`](../../apps/web/src/subagents/lineageTree.ts) adds its own selector
+for every live subagent below the thread and nests the rows into whole trees after upstream sorts
+them into sections. Workflow members are skipped because their workflow row lists them.
+
+## RPC scopes
+
+Each fork RPC group declares the scope of every method in its own `*_RPC_SCOPES` map, which the
+server spreads into `RPC_REQUIRED_SCOPES` through `apps/server/src/auth/forkRpcScopes.ts`; its
+`satisfies Record<WsRpcMethod, …>` means a fork method cannot compile without one. Fork mutations
+are also listed in
+[`forkClientRpcScopes.ts`](../../packages/contracts/src/forkClientRpcScopes.ts), spread into
+upstream's `CLIENT_GUARDED_RPC_SCOPES` by one marked line. That gives their
+`createEnvironmentRpcCommand` a `permissionAtom`, so a restricted connection hides what the server
+would refuse. Guarded methods can be called only through a command, never through raw `request`
+or a query family. Reads stay unguarded, as upstream's do. A new fork mutation gets the same scope
+in both maps.
+
+## Host release source and backups
+
+The descriptor's `releaseSource` comes from the build's release repository plus the
+`T3CODE_RELEASE_BASE_URL` override (`cliReleaseSourceOf`). It is display and gating data only; a
+server always installs from its own base. Bulk update gating is in
+`host-release/hostReleaseSource.ts`, and the single-update warning reads the live config at click
+time (`hostReleaseGuard.ts`), so every `ServerUpdateAction` caller gets it without new props. The
+HTTPS mirror check is the one function `cliReleaseBaseUrlProblem`, called by `t3 update`,
+self-update, boot-service install and the SSH runner script; release downloads are capped at
+768 MB, counted as they stream whenever the declared length can't bound the body.
+`hostBackups.list` is a read under `diagnostics:read`, because backup names and versions describe
+the host the way process diagnostics do; it runs only while its dialog is open.
+
 ## Marker exceptions
 
 - JSON: `package.json`, `apps/server/package.json`, `apps/web/package.json`,

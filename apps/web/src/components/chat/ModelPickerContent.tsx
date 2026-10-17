@@ -63,7 +63,6 @@ import {
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 import { HermesModelGroupRow } from "../../hermes/HermesModelGroupRow"; // Fork add-on: Hermes provider.
-import { hermesModelGroupKeys } from "../../hermes/hermesModelGroups"; // Fork add-on: Hermes provider.
 import { useHermesModelPickerSections } from "../../hermes/useHermesModelPickerSections"; // Fork add-on: Hermes provider.
 
 type ModelPickerItem = {
@@ -677,22 +676,19 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     };
   })();
 
-  const { hermesSections, expandedHermesGroups, toggleHermesGroup, showHermesModelProvider } = // Fork add-on
-    /* Fork add-on */ useHermesModelPickerSections({
-      activeDriverKind: activeEntry?.driverKind, // Fork add-on: Hermes provider.
-      activeInstanceId: props.activeInstanceId, // Fork add-on: Hermes provider.
-      activeModelSlug, // Fork add-on: Hermes provider.
-      selectedInstanceId, // Fork add-on: Hermes provider.
-      selectedDriverKind: // Fork add-on
-        selectedInstanceId === "favorites" // Fork add-on
-          ? undefined // Fork add-on
-          : entryByInstanceId.get(selectedInstanceId)?.driverKind, // Fork add-on: Hermes provider.
-      isSearching, // Fork add-on: Hermes provider.
-      filteredModels, // Fork add-on: Hermes provider.
-      modelListRef, // Fork add-on: Hermes provider.
-    }); // Fork add-on: Hermes provider.
+  /* Fork add-on */ const hermes = useHermesModelPickerSections({
+    activeDriverKind: activeEntry?.driverKind, // Fork add-on
+    activeInstanceId: props.activeInstanceId, // Fork add-on
+    activeModelSlug, // Fork add-on
+    selectedInstanceId, // Fork add-on
+    entryByInstanceId, // Fork add-on
+    isSearching, // Fork add-on
+    filteredModels, // Fork add-on
+    flatModels, // Fork add-on
+    modelListRef, // Fork add-on
+  }); // Fork add-on: Hermes provider.
   const visibleModels = (() => {
-    if (hermesSections) return hermesSections.visibleModels; // Fork add-on: Hermes provider.
+    if (hermes.sections) return hermes.sections.visibleModels; // Fork add-on: Hermes provider.
     if (!legacySection) {
       return filteredModels;
     }
@@ -739,10 +735,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         .filter((model) => model.isLegacy)
         .map((model) => modelPickerLegacySectionKey(model.instanceId)),
     ),
-    ...hermesModelGroupKeys(flatModels), // Fork add-on: Hermes provider.
+    ...hermes.groupKeys, // Fork add-on: Hermes provider.
   ])();
   const filteredItemKeys = ((): string[] => {
-    if (hermesSections) return [...hermesSections.itemKeys]; // Fork add-on: Hermes provider.
+    if (hermes.sections) return [...hermes.sections.itemKeys]; // Fork add-on: Hermes provider.
     const modelKeys = visibleModels.map((model) =>
       modelPickerModelKey(model.instanceId, model.slug),
     );
@@ -769,7 +765,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     modelJumpLabelByKey,
     activeModelKey,
     selectedModelKeySet,
-    expandedHermesGroups, // Fork add-on: Hermes provider.
+    expandedHermesGroups: hermes.expandedGroups, // Fork add-on: Hermes provider.
   };
 
   const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -872,7 +868,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               toggleLegacySection(legacyInstanceId);
               return;
             }
-            if (toggleHermesGroup(modelKey)) return; // Fork add-on: Hermes provider.
+            if (hermes.toggleGroup(modelKey)) return; // Fork add-on: Hermes provider.
             const model = parseModelPickerModelKey(modelKey);
             if (model) {
               handleModelSelect(
@@ -937,7 +933,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     toggleLegacySection(legacyInstanceId);
                     return;
                   }
-                  if (toggleHermesGroup(highlightedModelKeyRef.current)) return; // Fork add-on: Hermes provider.
+                  if (hermes.toggleGroup(highlightedModelKeyRef.current)) return; // Fork add-on: Hermes provider.
                   const model = parseModelPickerModelKey(highlightedModelKeyRef.current);
                   if (model) {
                     handleModelSelect(model.slug, model.instanceId, e.shiftKey);
@@ -979,7 +975,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     </ComboboxItem>
                   );
                 }
-                const hermesGroup = hermesSections?.groups.find((group) => group.key === modelKey); // Fork add-on: Hermes provider.
+                const hermesGroup = hermes.groupFor(modelKey); // Fork add-on: Hermes provider.
                 if (hermesGroup) return <HermesModelGroupRow index={index} group={hermesGroup} />; // Fork add-on: Hermes provider.
                 const model = filteredModelByKey.get(modelKey);
                 if (!model) {
@@ -1008,7 +1004,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                         : modelKey === activeModelKey
                     }
                     showSelection={selectedModelKeys !== undefined}
-                    showProvider={showHermesModelProvider(model)} // Fork add-on: Hermes provider.
+                    showProvider={hermes.showProvider(model)} // Fork add-on: Hermes provider.
                     preferShortName={!isLocked}
                     useTriggerLabel={false}
                     showNewBadge={model.badge === "new"}

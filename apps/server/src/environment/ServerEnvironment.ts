@@ -23,6 +23,7 @@ import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import { resolveServerEnvironmentLabel } from "./ServerEnvironmentLabel.ts";
 import { detectServerEnvironmentMachineKind } from "./ServerEnvironmentMachine.ts";
+import { readServerReleaseFacts } from "./ServerReleaseFacts.ts"; // Fork add-on: update source and start time.
 
 export class ServerEnvironmentIdPersistenceError extends Schema.TaggedError<ServerEnvironmentIdPersistenceError>()(
   "ServerEnvironmentIdPersistenceError",
@@ -205,6 +206,7 @@ export const make = Effect.gen(function* () {
   const desktopAppUpdate =
     serverSelfUpdate === "desktop-managed" && serverConfig.desktopTelemetryControlFd !== undefined;
 
+  const releaseFacts = yield* readServerReleaseFacts; // Fork add-on: update source and start time.
   const descriptor: ExecutionEnvironmentDescriptor = {
     environmentId,
     label,
@@ -215,6 +217,7 @@ export const make = Effect.gen(function* () {
     },
     serverVersion: packageJson.version,
     orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
+    ...releaseFacts, // Fork add-on: update source and start time.
     capabilities: {
       repositoryIdentity: true,
       connectionProbe: true,
@@ -264,6 +267,7 @@ export const make = Effect.gen(function* () {
         : {}),
       ...(desktopAppUpdate ? { desktopAppUpdate: true } : {}),
       serverBrowser: true,
+      hostBackups: true, // Fork add-on: host backups.
     },
   };
 

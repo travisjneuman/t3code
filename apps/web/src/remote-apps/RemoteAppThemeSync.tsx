@@ -331,33 +331,61 @@ export function RemoteAppThemeSync() {
     };
 
     sync();
+    let watchingSidebar = false;
     let observedSidebar: HTMLElement | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let pendingDiscoveryFrame: number | null = null;
     const collapseObserver = new MutationObserver(sync);
+    // Removing or replacing the sidebar always changes the direct children of
+    // one of its ancestors, so watching each ancestor's own children (never a
+    // subtree) sees it go without hearing every chat repaint.
+    const placementObserver = new MutationObserver(() => observeSidebar());
+    // With no sidebar mounted (before the app shell, or the mobile sheet
+    // closed) there is no ancestor to watch, so the body subtree stands in,
+    // checked at most once a frame, until one appears.
+    const discoveryObserver = new MutationObserver(() => {
+      if (pendingDiscoveryFrame !== null) return;
+      if (typeof window.requestAnimationFrame !== "function") {
+        observeSidebar();
+        return;
+      }
+      pendingDiscoveryFrame = window.requestAnimationFrame(() => {
+        pendingDiscoveryFrame = null;
+        observeSidebar();
+      });
+    });
     const observeSidebar = () => {
+      if (disposed) return;
       const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
-      if (sidebar === observedSidebar) return;
+      if (watchingSidebar && sidebar === observedSidebar) return;
+      watchingSidebar = true;
+      const replaced = sidebar !== observedSidebar;
       resizeObserver?.disconnect();
       collapseObserver.disconnect();
+      placementObserver.disconnect();
+      discoveryObserver.disconnect();
       observedSidebar = sidebar;
       if (sidebar === null) {
         resizeObserver = null;
-        return;
+        discoveryObserver.observe(document.body, { childList: true, subtree: true });
+      } else {
+        resizeObserver = new ResizeObserver(sync);
+        resizeObserver.observe(sidebar);
+        const stateHolder = sidebarStateOf(sidebar);
+        if (stateHolder !== null) {
+          collapseObserver.observe(stateHolder, {
+            attributes: true,
+            attributeFilter: ["data-state"],
+          });
+        }
+        for (let node = sidebar.parentElement; node !== null; node = node.parentElement) {
+          placementObserver.observe(node, { childList: true });
+        }
       }
-      resizeObserver = new ResizeObserver(sync);
-      resizeObserver.observe(sidebar);
-      const stateHolder = sidebarStateOf(sidebar);
-      if (stateHolder !== null) {
-        collapseObserver.observe(stateHolder, {
-          attributes: true,
-          attributeFilter: ["data-state"],
-        });
-      }
-      sync();
+      // A sidebar that went away reports no width.
+      if (replaced) sync();
     };
 
-    const mutationObserver = new MutationObserver(observeSidebar);
-    mutationObserver.observe(document.body, { childList: true, subtree: true });
     const themeObserver = new MutationObserver(sync);
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -371,14 +399,17 @@ export function RemoteAppThemeSync() {
       // Invalidate work queued by this effect before a later theme/surface
       // snapshot starts its own synchronization.
       syncSequenceRef.current += 1;
-      mutationObserver.disconnect();
       themeObserver.disconnect();
       resizeObserver?.disconnect();
       collapseObserver.disconnect();
-      if (pendingThemeFrame !== null && typeof window.cancelAnimationFrame === "function") {
-        window.cancelAnimationFrame(pendingThemeFrame);
+      placementObserver.disconnect();
+      discoveryObserver.disconnect();
+      if (typeof window.cancelAnimationFrame === "function") {
+        if (pendingThemeFrame !== null) window.cancelAnimationFrame(pendingThemeFrame);
+        if (pendingDiscoveryFrame !== null) window.cancelAnimationFrame(pendingDiscoveryFrame);
       }
       pendingThemeFrame = null;
+      pendingDiscoveryFrame = null;
       window.removeEventListener(THEME_CHANGE_EVENT, syncAfterThemePaint);
       window.removeEventListener("resize", sync);
     };

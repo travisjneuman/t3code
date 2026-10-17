@@ -27,10 +27,38 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import type * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import * as ServerSettings from "../serverSettings.ts";
 
+/**
+ * The T3 tools Hermes may call. The `t3-code` MCP server config lists only
+ * these, and `refuseUnboundRequest` refuses any other tool at call time, so a
+ * Hermes that ignores or loses its `tools.include` still can't reach the rest
+ * of the orchestration tools its thread scope would otherwise allow.
+ */
+export const HERMES_T3_TOOLS = [
+  "t3_project_list",
+  "t3_project_read",
+  "t3_thread_launch",
+  "t3_thread_list",
+  "t3_thread_read",
+  "t3_thread_wait",
+  "t3_thread_send",
+  "t3_thread_interrupt",
+  "orchestrator_capabilities",
+] as const;
+
+const ALLOWED_TOOLS: ReadonlySet<string> = new Set(HERMES_T3_TOOLS);
+
+/** What the bridge gates on a request; `unbound` is why every call is refused. */
+export interface HermesBridgeRefusal {
+  readonly unbound?: string;
+}
+
 export interface HermesBridgeCaller {
   readonly scope: McpInvocationContext.McpInvocationScope;
-  /** Why tool calls are refused; absent when the scope acts as a running thread. */
-  readonly refusal?: string;
+  /**
+   * Always set by `resolve`, so the MCP auth hook (which skips the gate only
+   * when this is absent) checks every bridged request against the allowlist.
+   */
+  readonly refusal?: HermesBridgeRefusal;
 }
 
 export class HermesMcpBridge extends Context.Service<
@@ -119,6 +147,7 @@ const make = Effect.gen(function* () {
             },
             client: undefined,
           },
+          refusal: {},
         };
       }
       // Unbound: Hermes may still connect and list tools; every call is refused.
@@ -131,10 +160,12 @@ const make = Effect.gen(function* () {
           thread: undefined,
           client: undefined,
         },
-        refusal:
-          threads.length === 0
-            ? `T3 tools work only while a ${match.agentName} thread in T3 is running a turn.`
-            : `Several ${match.agentName} threads are running in T3, so T3 can't tell which one is calling. Wait until only one is running.`,
+        refusal: {
+          unbound:
+            threads.length === 0
+              ? `T3 tools work only while a ${match.agentName} thread in T3 is running a turn.`
+              : `Several ${match.agentName} threads are running in T3, so T3 can't tell which one is calling. Wait until only one is running.`,
+        },
       };
     },
   );
@@ -157,37 +188,66 @@ const OPEN_METHODS: ReadonlySet<string> = new Set([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+type Verdict =
+  | { readonly kind: "pass" }
+  | { readonly kind: "tool"; readonly reason: string }
+  | { readonly kind: "request"; readonly reason: string };
+
+const PASS: Verdict = { kind: "pass" };
+
+/** Whether one JSON-RPC message may reach the MCP server, and if not, how it is refused. */
+const verdictOf = (message: unknown, refusal: HermesBridgeRefusal): Verdict => {
+  // Unparseable bodies and JSON-RPC responses pass; the MCP server handles them.
+  if (!isRecord(message) || typeof message.method !== "string") return PASS;
+  const method = message.method;
+  if (OPEN_METHODS.has(method) || method.startsWith("notifications/")) return PASS;
+  if (refusal.unbound !== undefined) {
+    return method === "tools/call"
+      ? { kind: "tool", reason: refusal.unbound }
+      : { kind: "request", reason: refusal.unbound };
+  }
+  if (method !== "tools/call") return PASS;
+  const name = isRecord(message.params) ? message.params.name : undefined;
+  if (typeof name === "string" && ALLOWED_TOOLS.has(name)) return PASS;
+  const label = typeof name === "string" ? `"${name}"` : "That tool";
+  return { kind: "tool", reason: `${label} is not one of the T3 tools Hermes may call.` };
+};
+
 /**
- * The response for an unbound caller's request, or undefined to let it
+ * The response that refuses a bridged request, or undefined to let it
  * through. Hermes connects and lists tools when its gateway starts, long
- * before any T3 thread runs, so those pass; a tool call gets the refusal as
- * a tool error the agent can read, and anything else that would act gets a
- * JSON-RPC error.
+ * before any T3 thread runs, so those always pass. An unbound caller's tool
+ * call gets its refusal as a tool error the agent can read, and anything else
+ * that would act gets a JSON-RPC error. A bound caller may call only
+ * `HERMES_T3_TOOLS`. A batch is refused whole when any message in it would be.
  */
 export const refuseUnboundRequest = Effect.fn("HermesMcpBridge.refuseUnboundRequest")(function* (
   request: HttpServerRequest.HttpServerRequest,
-  refusal: string,
+  refusal: HermesBridgeRefusal,
 ) {
   if (request.method !== "POST") return undefined;
   const body = yield* request.json.pipe(Effect.orElseSucceed(() => undefined));
   if (Array.isArray(body)) {
+    const refused = body
+      .map((message) => verdictOf(message, refusal))
+      .find((verdict) => verdict.kind !== "pass");
+    if (refused === undefined || refused.kind === "pass") return undefined;
     return HttpServerResponse.jsonUnsafe({
       jsonrpc: "2.0",
       id: null,
-      error: { code: -32600, message: refusal },
+      error: { code: -32600, message: refused.reason },
     });
   }
-  // Unparseable bodies and JSON-RPC responses pass; the MCP server handles them.
-  if (!isRecord(body) || typeof body.method !== "string") return undefined;
-  if (OPEN_METHODS.has(body.method) || body.method.startsWith("notifications/")) return undefined;
-  const id = body.id ?? null;
+  const verdict = verdictOf(body, refusal);
+  if (verdict.kind === "pass") return undefined;
+  const id = isRecord(body) ? (body.id ?? null) : null;
   return HttpServerResponse.jsonUnsafe(
-    body.method === "tools/call"
+    verdict.kind === "tool"
       ? {
           jsonrpc: "2.0",
           id,
-          result: { content: [{ type: "text", text: refusal }], isError: true },
+          result: { content: [{ type: "text", text: verdict.reason }], isError: true },
         }
-      : { jsonrpc: "2.0", id, error: { code: -32600, message: refusal } },
+      : { jsonrpc: "2.0", id, error: { code: -32600, message: verdict.reason } },
   );
 });

@@ -367,6 +367,23 @@ export const statMtimeMs = (
     return Option.match(info.mtime, { onNone: () => 0, onSome: (date) => date.getTime() });
   }).pipe(Effect.orElseSucceed(() => null));
 
+/** Size and mtime together, for a cache keyed on both; null when unreadable. */
+export const statSizeMtime = (
+  path: string,
+): Effect.Effect<
+  { readonly size: number; readonly mtimeMs: number } | null,
+  never,
+  FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const info = yield* fs.stat(path);
+    return {
+      size: Number(info.size),
+      mtimeMs: Option.match(info.mtime, { onNone: () => 0, onSome: (date) => date.getTime() }),
+    };
+  }).pipe(Effect.orElseSucceed(() => null));
+
 /** Whether a process with this pid exists; signal 0 checks without sending anything. */
 export const isProcessAlive = (pid: unknown): boolean => {
   if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return false;

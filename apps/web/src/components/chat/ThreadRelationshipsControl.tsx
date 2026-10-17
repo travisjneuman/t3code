@@ -64,6 +64,11 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { AgentElapsed } from "./AgentElapsed";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
 import { ThreadLineageWorkflowRow } from "./ThreadLineageWorkflowRow";
+import {
+  lineageIndentStyle,
+  nestSubagentLineage,
+  useSubagentDescendantShells,
+} from "../../subagents/lineageTree"; // Fork add-on: nested lineage
 
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -160,7 +165,7 @@ function ThreadLineageGroup(props: {
 function relationshipLabel(edge: ThreadRelationshipEdge, currentThreadId: ThreadId) {
   if (edge.kind === "transfer") return "Context transfer";
   if (edge.kind === "subagent") {
-    return edge.sourceThreadId === currentThreadId ? "Subagent" : "Parent agent";
+    return edge.targetThreadId === currentThreadId ? "Parent agent" : "Subagent"; // Fork add-on: nested lineage
   }
   return edge.sourceThreadId === currentThreadId ? "Fork" : "Parent thread";
 }
@@ -212,6 +217,7 @@ export function ThreadRelationshipsPanel(props: {
   const projection = useThreadProjection(ref)?.projection ?? null;
   const providersByEnvironment = useEnvironmentProviders();
   const relationshipShells = useThreadRelationshipShells(ref);
+  const descendantShells = useSubagentDescendantShells(ref); // Fork add-on: nested lineage
   const allProjects = useProjects();
   const archived = useArchivedThreadSnapshots([props.environmentId]);
   const navigate = useNavigate();
@@ -258,6 +264,7 @@ export function ThreadRelationshipsPanel(props: {
   );
   const shells: ReadonlyArray<OrchestrationV2ThreadShell> = [
     ...relationshipShells,
+    ...descendantShells, // Fork add-on: nested lineage
     ...(archivedShells ?? []),
   ];
   const graph = deriveThreadRelationshipGraph({ threads: shells, projection });
@@ -296,15 +303,16 @@ export function ThreadRelationshipsPanel(props: {
       ? "previous"
       : "active";
   });
+  const lineage = nestSubagentLineage(graph, projection, props.threadId, active, previous); // Fork add-on: nested lineage
   const groups = [
     { id: "related", label: null, rows: related, expanded: true },
-    { id: "active", label: null, rows: active, expanded: true },
-    { id: "previous", label: "Previous agents", rows: previous, expanded: false },
+    { id: "active", label: null, rows: lineage.active, expanded: true }, // Fork add-on: nested lineage
+    { id: "previous", label: "Previous agents", rows: lineage.previous, expanded: false }, // Fork add-on: nested lineage
   ];
   const runningCount =
     (projection?.subagents.filter(
       (agent) => agent.childThreadId === null && agent.status === "running",
-    ).length ?? 0) + active.filter(({ edge }) => edge.status === "running").length;
+    ).length ?? 0) + lineage.active.filter(({ edge }) => edge.status === "running").length; // Fork add-on: nested lineage
 
   if (relationshipRows.length === 0 && runningCount === 0) {
     return null;
@@ -413,7 +421,7 @@ export function ThreadRelationshipsPanel(props: {
       {groups.map((group) => (
         <ThreadLineageGroup key={`${scopedThreadKey(ref)}:${group.id}`} {...group}>
           {(visibleRows) =>
-            visibleRows.map(({ threadId, edge }) => {
+            visibleRows.map(({ threadId, edge, depth /* Fork add-on: nested lineage */ }) => {
               const node = graph.nodes.get(threadId);
               const isSubagent = edge.kind === "subagent";
               const isMergeTarget = threadId === mergeTargetThreadId;
@@ -572,7 +580,11 @@ export function ThreadRelationshipsPanel(props: {
                 );
               }
               return (
-                <li key={threadId} className="group relative flex h-8 items-center rounded-lg">
+                <li
+                  key={threadId}
+                  style={lineageIndentStyle(depth) /* Fork add-on: nested lineage */}
+                  className="group relative flex h-8 items-center rounded-lg"
+                >
                   {isMergeTarget ? (
                     <div className={THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS}>
                       <Tooltip>

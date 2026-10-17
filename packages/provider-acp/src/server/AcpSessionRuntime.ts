@@ -32,6 +32,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { signalProcessGroup } from "@t3tools/provider-core/server/processGroup";
 import { appendAcpStderrTail, sanitizeAcpStderrExcerpt } from "./stderr.ts";
+import { windowsTaskkillTreeExited } from "./windowsTaskkillExit.ts"; // Fork add-on: windows taskkill partial success
 import {
   collectSessionConfigOptionValues,
   decideToolCallUpdateEmission,
@@ -1058,6 +1059,7 @@ export const terminateWindowsProcessTreeWithTaskkill = (
       const output = yield* Fiber.join(outputFiber);
       // A missing leader cannot prove that inherited descendants exited.
       if (windowsTaskkillResultIsSuccess(exitCode, output)) return;
+      if (yield* windowsTaskkillTreeExited(pid, output).pipe(withWallClock)) return; // Fork add-on: windows taskkill partial success
       const trimmedOutput = output.trim();
       return yield* new AcpProcessGroupTerminationError({
         detail: `taskkill exited ${exitCode} for ACP process tree ${pid}`,

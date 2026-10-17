@@ -13,6 +13,7 @@ import {
   threadRuntimeIsActive,
 } from "@t3tools/client-runtime/state/models";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { arrayElementsEqual } from "@t3tools/client-runtime/state/entities";
 import {
   type ContextMenuItem,
   type EnvironmentId,
@@ -23,6 +24,7 @@ import {
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import { CircleDashedIcon, MinusIcon, PinIcon, PlusIcon } from "lucide-react";
 import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
@@ -46,9 +48,11 @@ import {
   AGENT_MORE_BUTTON_CLASS,
 } from "../sidebar-compact/agentLines";
 import { readLocalApi } from "../localApi";
-import { useThreadShells, waitForThreadShell } from "../state/entities";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { waitForThreadShell } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import { environmentServerConfigsAtom } from "../state/server";
+import { environmentThreadShells } from "../state/threads";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
@@ -121,8 +125,111 @@ function targetsFromKey(key: string): HermesTarget[] {
       });
 }
 
+/**
+ * The rows whose connection may run `command`, reading each environment's grant
+ * once. Menus read this when they open, so rows stay free of permission atoms.
+ */
+function permittedRows(
+  rows: ReadonlyArray<HermesRow>,
+  command: { readonly permissionAtom: (environmentId: EnvironmentId) => Atom.Atom<boolean> },
+): HermesRow[] {
+  const granted = new Map<EnvironmentId, boolean>();
+  return rows.filter((row) => {
+    let allowed = granted.get(row.environmentId);
+    if (allowed === undefined) {
+      allowed = appAtomRegistry.get(command.permissionAtom(row.environmentId));
+      granted.set(row.environmentId, allowed);
+    }
+    return allowed;
+  });
+}
+
+/** What the last applied listing run asked for, per instance thread signature. */
+interface LastListing {
+  readonly targetsKey: string;
+  readonly connectedKey: string;
+  readonly extra: number;
+  readonly refreshNonce: number;
+  readonly signatures: ReadonlyMap<string, string>;
+}
+
+// Ids never hold control characters, so this splits a target key from its threads.
+const SIGNATURE_SEPARATOR = "\u0001";
+
+function parseSignatures(signature: string): ReadonlyMap<string, string> {
+  const signatures = new Map<string, string>();
+  for (const line of signature === "" ? [] : signature.split("\n")) {
+    const at = line.indexOf(SIGNATURE_SEPARATOR);
+    signatures.set(line.slice(0, at), line.slice(at + 1));
+  }
+  return signatures;
+}
+
 function preventMouseFocus(event: MouseEvent) {
   event.preventDefault();
+}
+
+/** Exact for rows and session summaries, whose fields are all scalars or kept references. */
+function sameFields<T extends object>(left: T, right: T): boolean {
+  const keys = Object.keys(left) as Array<keyof T>;
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
+}
+
+/**
+ * The unarchived top-level threads of the Hermes instances in `targetsKey`.
+ * It keeps the previous array while none of them changed, so updates to other
+ * threads do not re-render the shelf.
+ */
+const hermesThreadsAtom = Atom.family((targetsKey: string) => {
+  const wanted = new Set(targetsKey === "" ? [] : targetsKey.split("\n"));
+  let previous: ReadonlyArray<EnvironmentThreadShell> = [];
+  return Atom.make((get) => {
+    const next = get(environmentThreadShells.navigationThreadShellsAtom).filter((thread) =>
+      wanted.has(
+        targetKey({ environmentId: thread.environmentId, instanceId: thread.providerInstanceId }),
+      ),
+    );
+    if (arrayElementsEqual(previous, next)) return previous;
+    previous = next;
+    return next;
+  }).pipe(Atom.withLabel(`hermes-sidebar-threads:${targetsKey}`));
+});
+
+/**
+ * A fresh listing that reuses the previous summary objects it repeats, and the
+ * previous listing when nothing changed, so a refetch re-renders only the rows
+ * whose sessions moved.
+ */
+function keepListed(previous: Listed | undefined, next: Listed): Listed {
+  if (previous === undefined) return next;
+  const before = new Map(previous.sessions.map((session) => [session.id, session]));
+  const sessions = next.sessions.map((session) => {
+    const kept = before.get(session.id);
+    return kept !== undefined && sameFields(kept, session) ? kept : session;
+  });
+  return previous.hasMore === next.hasMore && arrayElementsEqual(previous.sessions, sessions)
+    ? previous
+    : { sessions, hasMore: next.hasMore };
+}
+
+/**
+ * Hands back the previous row object for each row whose fields are unchanged,
+ * and the previous array when every row is, so memoized lines skip rendering.
+ * Reuse only ever swaps in an equal value, so a render React throws away
+ * leaves nothing stale behind.
+ */
+function createRowKeeper() {
+  let previous: ReadonlyArray<HermesRow> = [];
+  return (next: ReadonlyArray<HermesRow>): ReadonlyArray<HermesRow> => {
+    const before = new Map(previous.map((row) => [row.key, row]));
+    const rows = next.map((row) => {
+      const kept = before.get(row.key);
+      return kept !== undefined && sameFields(kept, row) ? kept : row;
+    });
+    if (arrayElementsEqual(previous, rows)) return previous;
+    previous = rows;
+    return rows;
+  };
 }
 
 function mergeRows(
@@ -214,11 +321,12 @@ function nestRows(rows: ReadonlyArray<HermesRow>): HermesRow[] {
 export function HermesSidebarSection() {
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const { environments } = useEnvironments();
-  const allThreads = useThreadShells();
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
   const [extra, setExtra] = useState(0);
   const [listed, setListed] = useState<ReadonlyMap<string, Listed>>(new Map());
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [keepRows] = useState(createRowKeeper);
+  const lastListingRef = useRef<LastListing | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const selectionAnchor = useRef<string | null>(null);
   // Rows whose session is being opened. The ref turns away a repeat click at
@@ -263,6 +371,7 @@ export function HermesSidebarSection() {
     return keys.join("\n");
   })();
   const targets = targetsFromKey(targetsKey);
+  const hermesThreads = useAtomValue(hermesThreadsAtom(targetsKey));
 
   // Listing waits for the environment's socket; asking earlier only fails with "not connected".
   const connectedKey = environments
@@ -282,15 +391,11 @@ export function HermesSidebarSection() {
 
   const threadsByTarget = (() => {
     const byTarget = new Map<string, EnvironmentThreadShell[]>();
-    const wanted = new Set(targets.map(targetKey));
-    for (const thread of allThreads) {
-      if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent")
-        continue;
+    for (const thread of hermesThreads) {
       const key = targetKey({
         environmentId: thread.environmentId,
         instanceId: thread.providerInstanceId,
       });
-      if (!wanted.has(key)) continue;
       const list = byTarget.get(key) ?? [];
       list.push(thread);
       byTarget.set(key, list);
@@ -298,17 +403,39 @@ export function HermesSidebarSection() {
     return byTarget;
   })();
 
-  // A Hermes thread appearing, going or finishing a turn changes what Hermes lists.
-  const threadsSignature = [...threadsByTarget.values()]
-    .flat()
-    .map((thread) => `${thread.id}:${thread.runtime?.status ?? "idle"}`)
-    .join(",");
+  // A Hermes thread appearing, going or finishing a turn changes what Hermes
+  // lists, per instance, so one thread's turn relists only its own instance.
+  const threadsSignature = targets
+    .map((target) => {
+      const key = targetKey(target);
+      const threads = (threadsByTarget.get(key) ?? [])
+        .map((thread) => `${thread.id}:${thread.runtime?.status ?? "idle"}`)
+        .join(",");
+      return `${key}${SIGNATURE_SEPARATOR}${threads}`;
+    })
+    .join("\n");
 
   useEffect(() => {
+    const signatures = parseSignatures(threadsSignature);
+    const last = lastListingRef.current;
+    // Focus, Refresh, Load more and target or connection changes list every
+    // instance; a thread change alone lists only the instances it touched.
+    const threadsOnlySignatures =
+      last !== null &&
+      last.targetsKey === targetsKey &&
+      last.connectedKey === connectedKey &&
+      last.extra === extra &&
+      last.refreshNonce === refreshNonce
+        ? last.signatures
+        : null;
     const connected = new Set(connectedKey.split("\n"));
-    const ready = targetsFromKey(targetsKey).filter((target) =>
-      connected.has(target.environmentId),
-    );
+    const ready = targetsFromKey(targetsKey).filter((target) => {
+      if (!connected.has(target.environmentId)) return false;
+      const key = targetKey(target);
+      return (
+        threadsOnlySignatures === null || threadsOnlySignatures.get(key) !== signatures.get(key)
+      );
+    });
     if (ready.length === 0) return;
     let cancelled = false;
     void Promise.all(
@@ -323,10 +450,32 @@ export function HermesSidebarSection() {
       }),
     ).then((results) => {
       if (cancelled) return;
+      // Recorded only once applied, so a run cut short is compared against
+      // again. A failed instance drops its signature and is retried next time.
+      const listedSignatures = new Map<string, string>(threadsOnlySignatures ?? []);
+      for (const [key, result] of results) {
+        const signature = signatures.get(key);
+        if (result === null || signature === undefined) listedSignatures.delete(key);
+        else listedSignatures.set(key, signature);
+      }
+      lastListingRef.current = {
+        targetsKey,
+        connectedKey,
+        extra,
+        refreshNonce,
+        signatures: listedSignatures,
+      };
+      // Unchanged listings keep the previous state, so React skips the render.
       setListed((previous) => {
-        const next = new Map(previous);
-        for (const [key, result] of results) if (result !== null) next.set(key, result);
-        return next;
+        let next: Map<string, Listed> | null = null;
+        for (const [key, result] of results) {
+          if (result === null) continue;
+          const kept = keepListed(previous.get(key), result);
+          if (kept === previous.get(key)) continue;
+          next ??= new Map(previous);
+          next.set(key, kept);
+        }
+        return next ?? previous;
       });
     });
     return () => {
@@ -341,14 +490,16 @@ export function HermesSidebarSection() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  const rows = nestRows(
-    targets.flatMap((target) =>
-      mergeRows(
-        target,
-        listed.get(targetKey(target)),
-        threadsByTarget.get(targetKey(target)) ?? [],
-        activeThreadKey,
-        now,
+  const rows = keepRows(
+    nestRows(
+      targets.flatMap((target) =>
+        mergeRows(
+          target,
+          listed.get(targetKey(target)),
+          threadsByTarget.get(targetKey(target)) ?? [],
+          activeThreadKey,
+          now,
+        ),
       ),
     ),
   );
@@ -384,6 +535,7 @@ export function HermesSidebarSection() {
    */
   const syncRow = async (row: HermesRow) => {
     if (row.thread === null || row.session === null) return;
+    if (permittedRows([row], hermesSessionsContinue).length === 0) return;
     const result = await runHermesQuietly(hermesSessionsContinue, row.environmentId, {
       instanceId: row.instanceId,
       sessionId: row.session.id,
@@ -400,6 +552,14 @@ export function HermesSidebarSection() {
       return;
     }
     if (row.session === null || openingRef.current.has(row.key)) return;
+    if (permittedRows([row], hermesSessionsContinue).length === 0) {
+      toastManager.add({
+        type: "info",
+        title: "Cannot open this Hermes session",
+        description: "Needs operate access on this connection.",
+      });
+      return;
+    }
     openingRef.current.add(row.key);
     setOpening(new Set(openingRef.current));
     try {
@@ -540,8 +700,23 @@ export function HermesSidebarSection() {
     const suffix = count > 1 ? ` (${count})` : "";
     const anyRunning = subject.some((candidate) => candidate.running);
     const items: Array<ContextMenuItem<MenuAction>> = [];
-    const unopened = subject.filter((candidate) => candidate.thread === null);
-    if (count === 1 || unopened.length > 0) {
+    // Hermes calls show only where the connection may make them; Open and Copy need none.
+    const unopened = permittedRows(
+      subject.filter((candidate) => candidate.thread === null),
+      hermesSessionsContinue,
+    );
+    const updatable = permittedRows(withSession, hermesSessionsUpdate);
+    const deletable = permittedRows(withSession, hermesSessionsDelete);
+    const updatableKeys = new Set(updatable.map((candidate) => candidate.key));
+    const deletableKeys = new Set(deletable.map((candidate) => candidate.key));
+    // A thread Hermes has not listed yet is archived or deleted in T3 alone.
+    const archivable = subject.filter(
+      (candidate) => candidate.session === null || updatableKeys.has(candidate.key),
+    );
+    const removable = subject.filter(
+      (candidate) => candidate.session === null || deletableKeys.has(candidate.key),
+    );
+    if ((count === 1 && row.thread !== null) || unopened.length > 0) {
       items.push({
         id: "continue",
         label: count === 1 && row.thread !== null ? "Open" : `Continue in T3${suffix}`,
@@ -552,29 +727,36 @@ export function HermesSidebarSection() {
     if (count === 1 && row.thread === null && row.session !== null) {
       items.push({ id: "details", label: "Details" });
     }
-    if (withSession.length > 0) {
-      const allPinned = withSession.every((candidate) => candidate.pinned);
+    if (updatable.length > 0) {
+      const allPinned = updatable.every((candidate) => candidate.pinned);
       items.push({
         id: allPinned ? "unpin" : "pin",
         label: `${allPinned ? "Unpin" : "Pin"}${suffix}`,
         icon: allPinned ? "pin-off" : "pin",
       });
+    }
+    if (withSession.length > 0) {
       items.push({ id: "copy-session-id", label: "Copy session ID", icon: "hash" });
     }
-    items.push({
-      id: "archive",
-      label: `Archive${suffix}`,
-      icon: "archive",
-      separatorBefore: true,
-      disabled: anyRunning,
-    });
-    items.push({
-      id: "delete",
-      label: `Delete${suffix}`,
-      icon: "trash",
-      destructive: true,
-      disabled: anyRunning,
-    });
+    if (archivable.length > 0) {
+      items.push({
+        id: "archive",
+        label: `Archive${suffix}`,
+        icon: "archive",
+        separatorBefore: true,
+        disabled: anyRunning,
+      });
+    }
+    if (removable.length > 0) {
+      items.push({
+        id: "delete",
+        label: `Delete${suffix}`,
+        icon: "trash",
+        destructive: true,
+        disabled: anyRunning,
+        separatorBefore: archivable.length === 0,
+      });
+    }
 
     const clicked = await api.contextMenu.show(items, position);
     switch (clicked) {
@@ -598,13 +780,13 @@ export function HermesSidebarSection() {
         return;
       case "pin":
       case "unpin":
-        await updateSessions(withSession, { pinned: clicked === "pin" }, clicked);
+        await updateSessions(updatable, { pinned: clicked === "pin" }, clicked);
         break;
       case "archive":
-        await archiveRows(subject);
+        await archiveRows(archivable);
         break;
       case "delete":
-        await deleteRows(subject);
+        await deleteRows(removable);
         break;
       case "copy-session-id":
         copyToClipboard(withSession.map((candidate) => candidate.session!.id).join("\n"), {

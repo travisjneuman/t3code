@@ -105,10 +105,19 @@ in T3, which binds an ordinary thread to that same session.
   90-day window
   ([`sessionHistory.ts`](../../apps/server/src/external-sessions/sessionHistory.ts)) and keeps
   only files named after the session id. The match is registered like a discovered session, so
-  the existing watchers keep it current and it can be continued. The list still shows 3 days.
+  the existing watchers keep it current and it can be continued. The list still covers 14 days.
+- **The live list is cut at 60; older rows are paged on request.** `ExternalSessionListResult.total`
+  counts every listable session, so clients show "60 of N". `externalSessions.listOlder` is a
+  read-only request outside the live subscription. Its `{updatedAt, key}` cursor pages over the last
+  published order: newest first, ties by key, at whole milliseconds so a cursor read back from the
+  wire sorts where its session does. Loaded pages are client-only and static, and are dropped when
+  their host's cut ends.
 - **The transcript stream follows bytes, not files.** A session stream opens with the newest
   messages from at most 8 MB of the transcript's tail, then reads only the bytes appended after
-  that. Messages are upserted by id, so a streamed reply grows in place.
+  that. Messages are upserted by id, so a streamed reply grows in place. Each event is bounded on
+  the wire: a snapshot holds at most 200 messages and 4 MiB, an append at most 100 messages and
+  1 MiB per frame. A burst of more than 200 new messages becomes a replacement snapshot marked
+  `truncated`, so nothing is dropped without the client knowing.
 - **T3's own sessions are excluded.** The first two items below are `ownedSessionIds`, which
   session search reads too. That covers:
   - the native id of every provider thread on a live T3 thread, which covers threads T3 started

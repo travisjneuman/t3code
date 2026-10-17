@@ -33,6 +33,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   release: "externalSessions.release",
   openInOrigin: "externalSessions.openInOrigin",
   insights: "externalSessions.insights",
+  listOlder: "externalSessions.listOlder",
 } as const;
 
 /** The streaming methods, for the client's subscription tag union. */
@@ -110,11 +111,37 @@ export type ExternalSessionSummary = typeof ExternalSessionSummary.Type;
 export const ExternalSessionListInput = Schema.Struct({});
 export type ExternalSessionListInput = typeof ExternalSessionListInput.Type;
 
-/** Newest first. The server sends a full list on subscribe and after every change. */
+/**
+ * Newest first. The server sends a full list on subscribe and after every change.
+ * The list is cut to its newest sessions; `total` counts every listable session
+ * before the cut, so `total > sessions.length` means older ones can be paged
+ * in with `listOlder`. Absent from servers that predate it.
+ */
 export const ExternalSessionListResult = Schema.Struct({
   sessions: Schema.Array(ExternalSessionSummary),
+  total: Schema.optional(NonNegativeInt),
 });
 export type ExternalSessionListResult = typeof ExternalSessionListResult.Type;
+
+/**
+ * One page of the sessions the live list cut, read once rather than streamed.
+ * `before` is the last session already shown (its `updatedAt` and `key`); the
+ * page holds the sessions after it in list order, newest first.
+ */
+export const ExternalSessionListOlderInput = Schema.Struct({
+  before: Schema.Struct({
+    updatedAt: Schema.String,
+    key: TrimmedNonEmptyString,
+  }),
+});
+export type ExternalSessionListOlderInput = typeof ExternalSessionListOlderInput.Type;
+
+export const ExternalSessionListOlderResult = Schema.Struct({
+  sessions: Schema.Array(ExternalSessionSummary),
+  /** More sessions follow this page. */
+  more: Schema.Boolean,
+});
+export type ExternalSessionListOlderResult = typeof ExternalSessionListOlderResult.Type;
 
 export const ExternalSessionMessageRole = Schema.Literals(["user", "assistant", "tool"]);
 export type ExternalSessionMessageRole = typeof ExternalSessionMessageRole.Type;
@@ -484,6 +511,12 @@ export const ExternalSessionsInsightsRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS
   error: ExternalSessionRpcError,
 });
 
+export const ExternalSessionsListOlderRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.listOlder, {
+  payload: ExternalSessionListOlderInput,
+  success: ExternalSessionListOlderResult,
+  error: ExternalSessionRpcError,
+});
+
 export const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
   {
@@ -507,6 +540,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsReleaseRpc,
   ExternalSessionsOpenInOriginRpc,
   ExternalSessionsInsightsRpc,
+  ExternalSessionsListOlderRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -522,4 +556,5 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.release]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.insights]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.listOlder]: AuthOrchestrationReadScope,
 } as const;

@@ -39,6 +39,7 @@ export function ArchivedHermesSessions(props: {
   const agentName = names.size === 1 ? ([...names][0] ?? "Hermes") : "Hermes";
   const [sessions, setSessions] = useState<ReadonlyArray<HermesArchivedSession>>([]);
   const [pending, setPending] = useState<string | null>(null);
+  const mayUnarchive = useAtomValue(hermesSessionsUnarchive.permissionAtom(environmentId));
 
   const load = useStableCallback(async () => {
     const result = await runHermes(
@@ -90,17 +91,19 @@ export function ArchivedHermesSessions(props: {
             </span>
           }
           control={
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="shrink-0"
-              disabled={pending !== null}
-              onClick={() => void unarchive(session)}
-            >
-              <ArchiveX className="size-3.5" />
-              <span>Unarchive</span>
-            </Button>
+            mayUnarchive ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="shrink-0"
+                disabled={pending !== null}
+                onClick={() => void unarchive(session)}
+              >
+                <ArchiveX className="size-3.5" />
+                <span>Unarchive</span>
+              </Button>
+            ) : null
           }
         />
       ))}

@@ -2,6 +2,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   CLI_RELEASE_BASE_URL_ENV,
   CLI_RELEASE_CHANNELS,
+  cliReleaseBaseUrlProblem, // Fork add-on: HTTPS-only release mirrors.
   cliReleaseIndexPageUrl,
   cliReleaseChannelOf,
   newestCliReleaseVersion,
@@ -313,6 +314,9 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   const environment = yield* HostProcess.Environment;
   const httpClient = yield* HttpClient.HttpClient;
   const service = yield* BootService.BootService;
+
+  const mirrorProblem = cliReleaseBaseUrlProblem(environment[CLI_RELEASE_BASE_URL_ENV]); // Fork add-on: HTTPS-only release mirrors.
+  if (mirrorProblem) return yield* new CliUpdateError({ reason: mirrorProblem }); // Fork add-on
 
   const currentVersion = packageJson.version;
   const channel = input.channel ?? cliReleaseChannelOf(currentVersion);

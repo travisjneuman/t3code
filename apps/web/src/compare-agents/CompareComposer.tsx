@@ -61,7 +61,14 @@ import {
   sortProviderInstanceEntries,
 } from "../providerInstances";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
-import { reviewSwap, sendFollowUp, stopComparison } from "./compareAgents";
+import {
+  compareFollowUpPermissionAtom,
+  compareReviewSwapPermissionAtom,
+  compareStopPermissionAtom,
+  reviewSwap,
+  sendFollowUp,
+  stopComparison,
+} from "./compareAgents";
 
 /** An environment's settings, providers, and their instance entries as the pickers list them. */
 export function useCompareProviders(environmentId: EnvironmentId) {
@@ -124,6 +131,8 @@ const ROUND_ACTION_CLASS =
 
 type Pending = "swap" | "stop" | "follow-up" | null;
 
+const NEEDS_OPERATE = "Needs operate access on this connection.";
+
 export function CompareComposer(props: {
   environmentId: EnvironmentId;
   pairId: string;
@@ -144,6 +153,9 @@ export function CompareComposer(props: {
   const [interactionChoice, setInteractionChoice] = useState<ProviderInteractionMode | null>(null);
   const [runtimeChoice, setRuntimeChoice] = useState<RuntimeMode | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+  const mayFollowUp = useAtomValue(compareFollowUpPermissionAtom(environmentId));
+  const maySwap = useAtomValue(compareReviewSwapPermissionAtom(environmentId));
+  const mayStop = useAtomValue(compareStopPermissionAtom(environmentId));
 
   const leftModel = leftChoice ?? left?.thread.modelSelection ?? null;
   const rightModel = rightChoice ?? right?.thread.modelSelection ?? null;
@@ -177,6 +189,7 @@ export function CompareComposer(props: {
 
   const working = isWorking(left) || isWorking(right);
   const canSend =
+    mayFollowUp &&
     !working &&
     pending === null &&
     text.trim() !== "" &&
@@ -184,7 +197,7 @@ export function CompareComposer(props: {
     right !== null &&
     leftModel !== null &&
     rightModel !== null;
-  const canSwap = !working && pending === null && props.finished;
+  const canSwap = maySwap && !working && pending === null && props.finished;
 
   const run = async (kind: NonNullable<Pending>, action: () => Promise<boolean>) => {
     setPending(kind);
@@ -378,11 +391,13 @@ export function CompareComposer(props: {
                         </span>
                       </TooltipTrigger>
                       <TooltipPopup side="top">
-                        {working
-                          ? "Waiting for both agents to finish."
-                          : props.finished
-                            ? "Send each agent the other's newest answer and ask it to compare and improve."
-                            : "Needs a finished answer from both agents."}
+                        {!maySwap
+                          ? NEEDS_OPERATE
+                          : working
+                            ? "Waiting for both agents to finish."
+                            : props.finished
+                              ? "Send each agent the other's newest answer and ask it to compare and improve."
+                              : "Needs a finished answer from both agents."}
                       </TooltipPopup>
                     </Tooltip>
                     {working ? (
@@ -395,7 +410,7 @@ export function CompareComposer(props: {
                                 ROUND_ACTION_CLASS,
                                 "bg-destructive/90 text-white shadow-destructive/24 hover:bg-destructive",
                               )}
-                              disabled={pending !== null}
+                              disabled={!mayStop || pending !== null}
                               onClick={() =>
                                 void run("stop", () => stopComparison(environmentId, pairId))
                               }
@@ -417,7 +432,7 @@ export function CompareComposer(props: {
                             </svg>
                           )}
                         </TooltipTrigger>
-                        <TooltipPopup>Stop both</TooltipPopup>
+                        <TooltipPopup>{mayStop ? "Stop both" : NEEDS_OPERATE}</TooltipPopup>
                       </Tooltip>
                     ) : (
                       <Tooltip>
@@ -455,7 +470,9 @@ export function CompareComposer(props: {
                             </svg>
                           )}
                         </TooltipTrigger>
-                        <TooltipPopup>Send to both (Ctrl/⌘ Enter)</TooltipPopup>
+                        <TooltipPopup>
+                          {mayFollowUp ? "Send to both (Ctrl/⌘ Enter)" : NEEDS_OPERATE}
+                        </TooltipPopup>
                       </Tooltip>
                     )}
                   </div>

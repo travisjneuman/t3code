@@ -432,6 +432,8 @@ function resolveComposerBlockState(input: {
   loaded: boolean;
   error: string | null;
   connected: boolean;
+  /** This connection's grants allow continuing sessions. */
+  canContinue: boolean;
   continueError: string | null;
 }): ComposerBlockState {
   const { summary } = input;
@@ -458,6 +460,9 @@ function resolveComposerBlockState(input: {
     blockedReason = message;
   } else if (unsupported !== null) {
     message = EXTERNAL_SESSION_UNSUPPORTED_MESSAGES[unsupported];
+    blockedReason = message;
+  } else if (!input.canContinue) {
+    message = "This connection can't continue sessions.";
     blockedReason = message;
   } else if (!input.hasMessages) {
     message = "No messages yet.";
@@ -496,6 +501,7 @@ function ExternalSessionComposerBlock(props: {
   const branches = details?.gitBranches ?? [];
   const navigate = useNavigate();
   const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
+  const canContinue = useAtomValue(externalSessionContinue.permissionAtom(environmentId));
   const [continuing, setContinuing] = useState(false);
   const [continueError, setContinueError] = useState<string | null>(null);
 
@@ -534,6 +540,7 @@ function ExternalSessionComposerBlock(props: {
     loaded: props.loaded,
     error: props.error,
     connected: props.connected,
+    canContinue,
     continueError,
   });
   const continueTooltip = continuing
@@ -689,9 +696,10 @@ function OriginChip(props: {
   const { environmentId, sessionKey, summary } = props;
   const label = externalSessionOriginLabel(summary);
   const originIsLocal = useAtomValue(externalSessionOriginIsLocalAtom(environmentId));
+  const canOpen = useAtomValue(externalSessionOpenInOrigin.permissionAtom(environmentId));
   const runOpen = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
   const handleOpen = async () => {
-    if (!originIsLocal) return;
+    if (!originIsLocal || !canOpen) return;
     const result = await runOpen({ environmentId, input: { key: sessionKey } });
     if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
     const failure = squashAtomCommandFailure(result);
@@ -701,7 +709,7 @@ function OriginChip(props: {
       description: failure instanceof Error ? failure.message : "An error occurred.",
     });
   };
-  if (!originIsLocal || !externalSessionOpensInOrigin(summary)) {
+  if (!originIsLocal || !canOpen || !externalSessionOpensInOrigin(summary)) {
     return <SessionChip tooltip={`Session from ${label}`}>{label}</SessionChip>;
   }
   return (

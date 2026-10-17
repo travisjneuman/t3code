@@ -24,6 +24,7 @@ import {
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
 import { queueDesktopInstallWhileBusy } from "../../maintenance-queue/desktopGate"; // Fork add-on: maintenance queue.
 import { useRefreshHostUpdateTarget } from "../../host-release/hostRelease"; // Fork add-on: host releases.
+import { hostReleaseCheckFailureNotice, useHostReleaseCheck } from "../../host-release/hostRelease"; // Fork add-on: release check states.
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -225,6 +226,7 @@ function SidebarUpdateControl() {
     state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
   const refreshHost = useRefreshHostUpdateTarget(); // Fork add-on: host releases.
+  const hostCheckNotice = hostReleaseCheckFailureNotice(useHostReleaseCheck()); // Fork add-on: release check states.
   const runsEverything = everything.hasUpdates && !isDownloading;
   const run = useUpdateEverythingRun();
   const isRunningEverything = run !== null;
@@ -248,7 +250,7 @@ function SidebarUpdateControl() {
         : "Update available"
       : showCheckIcon
         ? "Checking for updates…"
-        : "Check for updates";
+        : (hostCheckNotice ?? "Check for updates"); // Fork add-on: release check states.
   const disabled = showCheckIcon
     ? true
     : runsEverything

@@ -68,6 +68,7 @@ export * from "./compareAgents.ts"; // Fork add-on: compare agents.
 export * from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
 export * from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
 export * from "./threadExchanges.ts"; // Fork add-on: save to notes, compare agents.
+export * from "./hostBackups.ts"; // Fork add-on: host backups.
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";

@@ -53,7 +53,8 @@ const originName = (environmentId: EnvironmentId, threadId: ThreadId): string | 
 
 /**
  * Puts a continued thread's ways back first: "Hand back to <agent>" while the
- * thread is set to another agent, and always "Move back to Other Agents".
+ * thread is set to another agent, and "Move back to Other Agents", each where
+ * this connection may run it.
  */
 export const withHandBackMenuItem = <T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
@@ -62,11 +63,18 @@ export const withHandBackMenuItem = <T extends string>(
   const origin = continuedThreadOriginInstanceId(thread.id);
   if (origin === null) return items;
   const added: Array<ContextMenuItem<HandBackMenuId>> = [];
-  if (thread.modelSelection.instanceId !== origin) {
+  // Read at menu time; each shows only where this connection's grants allow it.
+  if (
+    thread.modelSelection.instanceId !== origin &&
+    appAtomRegistry.get(externalSessionHandBack.permissionAtom(thread.environmentId))
+  ) {
     const name = originName(thread.environmentId, thread.id) ?? origin;
     added.push({ id: "hand-back", label: `Hand back to ${name}`, icon: "undo-2" });
   }
-  added.push({ id: "move-back", label: "Move back to Other Agents", icon: "archive" });
+  if (appAtomRegistry.get(externalSessionRelease.permissionAtom(thread.environmentId))) {
+    added.push({ id: "move-back", label: "Move back to Other Agents", icon: "archive" });
+  }
+  if (added.length === 0) return items;
   const [first, ...rest] = items;
   return first === undefined ? added : [...added, { ...first, separatorBefore: true }, ...rest];
 };

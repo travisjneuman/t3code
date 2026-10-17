@@ -130,6 +130,7 @@ function ArchivedSessionRow(props: {
 }) {
   const { environmentId, session } = props;
   const runUnarchive = useAtomCommand(externalSessionUnarchive, { reportFailure: false });
+  const canUnarchive = useAtomValue(externalSessionUnarchive.permissionAtom(environmentId));
   const [pending, setPending] = useState(false);
   const productName =
     PROVIDER_DISPLAY_NAMES[session.driver] ?? formatProviderDriverKindLabel(session.driver);
@@ -186,7 +187,7 @@ function ArchivedSessionRow(props: {
       control={
         inClaudeDesktop ? (
           <span className="shrink-0 text-muted-foreground text-xs">Unarchive it in Claude</span>
-        ) : (
+        ) : !canUnarchive ? null : (
           <Button
             type="button"
             variant="outline"

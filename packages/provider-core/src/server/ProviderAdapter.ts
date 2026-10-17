@@ -541,9 +541,10 @@ export interface ProviderAdapterV2SessionInsights /* Fork add-on */ {
   readonly contextBreakdown?: (input: /* Fork add-on */ {
     readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on
   }) => Effect.Effect<SessionContextBreakdown | null, ProviderAdapterV2Error>; // Fork add-on
+  /** Fork add-on: Null when the session has no live query to ask. */
   readonly mcpServers?: (input: /* Fork add-on */ {
     readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on
-  }) => Effect.Effect<ReadonlyArray<SessionMcpServer>, ProviderAdapterV2Error>; // Fork add-on
+  }) => Effect.Effect<ReadonlyArray<SessionMcpServer> | null, ProviderAdapterV2Error>; // Fork add-on
 } // Fork add-on
 
 export type ProviderAdapterV2SubagentOutcome = {

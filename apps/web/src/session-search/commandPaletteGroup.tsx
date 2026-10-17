@@ -12,7 +12,7 @@ import type { CommandPaletteGroup } from "../components/CommandPalette.logic";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { formatRelativeTimeLabel } from "../timestampFormat";
-import { useSessionSearch } from "./atoms";
+import { failedHostsSummary, useSessionSearch } from "./atoms";
 
 function folderName(cwd: string | null): string | null {
   if (cwd === null) return null;
@@ -32,9 +32,14 @@ export function useSessionSearchPaletteGroup(query: string): CommandPaletteGroup
   const now = Date.parse(`${nowMinute}:00Z`);
   if (search.entries.length === 0) return null;
   const trimmed = query.trim();
+  const label = search.complete ? "Other Agents" : "Other Agents (partial)";
   return {
     value: "other-agents-search",
-    label: search.complete ? "Other Agents" : "Other Agents (partial)",
+    // The palette has no tooltip, so failed hosts are named inline.
+    label:
+      search.failedHostLabels.length === 0
+        ? label
+        : `${label} · ${failedHostsSummary(search.failedHostLabels)}`,
     items: search.entries.map(({ environmentId, environmentLabel, hit }) => {
       const title = externalSessionTitle(hit);
       const product =

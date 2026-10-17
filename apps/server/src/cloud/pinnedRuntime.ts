@@ -19,6 +19,7 @@ import {
 } from "@t3tools/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
+import * as PinnedRuntimeGuards from "./pinnedRuntimeGuards.ts"; // Fork add-on: download size cap.
 
 const PINNED_RUNTIME_DIR = "runtime";
 const PINNED_RUNTIME_INSTALL_TIMEOUT = Duration.minutes(10);
@@ -119,18 +120,21 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
   step: string,
   onProgress?: (progress: PinnedRuntimeProgress) => void,
 ) {
+  const errorStep = (cause: unknown) => PinnedRuntimeGuards.releaseAssetErrorStep(step, cause); // Fork add-on: download size cap.
   // The install lock is held for the whole transaction, so a stalled download
   // must fail rather than block every other caller.
   return yield* httpClient.execute(HttpClientRequest.get(url)).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap(
       Effect.fn(function* (response) {
-        if (onProgress === undefined) return new Uint8Array(yield* response.arrayBuffer);
+        yield* PinnedRuntimeGuards.checkReleaseAssetLength(response); // Fork add-on: download size cap.
+        if (onProgress === undefined) return yield* PinnedRuntimeGuards.readReleaseAsset(response); // Fork add-on
         const length = Number(response.headers["content-length"]);
         const total = Number.isFinite(length) && length > 0 ? length : undefined;
         let received = 0;
         onProgress({ stage: "download", received, total });
         const chunks = yield* response.stream.pipe(
+          Stream.tap(PinnedRuntimeGuards.releaseAssetByteCap()), // Fork add-on: download size cap.
           Stream.tap((chunk) =>
             Effect.sync(() => {
               received += chunk.byteLength;
@@ -151,7 +155,7 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
         return bytes;
       }),
     ),
-    Effect.mapError((cause) => new PinnedRuntimeInstallError({ step, cause })),
+    Effect.mapError((cause) => new PinnedRuntimeInstallError({ step: errorStep(cause), cause })), // Fork add-on
     Effect.timeoutOrElse({
       duration: PINNED_RUNTIME_INSTALL_TIMEOUT,
       orElse: () => Effect.fail(new PinnedRuntimeInstallError({ step: `${step} (timed out)` })),

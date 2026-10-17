@@ -1,11 +1,8 @@
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
-/* Fork add-on */ import {
-  sessionInsightText, // Fork add-on
-  sessionMcpServer, // Fork add-on
-} from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
-import * as CodexSessionInsights from "./codexSessionInsights.ts"; // Fork add-on: session details.
+import * as CodexInsightsHooks from "./codexInsightsHooks.ts"; // Fork add-on: session details.
+import type { CodexTokenUsage } from "./codexSessionInsights.ts"; // Fork add-on: session details.
 import {
   mcpToolPresentation,
   type McpToolPresentation,
@@ -73,7 +70,6 @@ import type {
   ProviderInstanceId,
   RuntimeMode,
   RuntimeRequestId,
-  SessionMcpServer, // Fork add-on: session details.
   ThreadId,
 } from "@t3tools/contracts";
 import * as CodexClient from "effect-codex-app-server/client";
@@ -853,50 +849,6 @@ function getNativeThreadId(providerThread: OrchestrationV2ProviderThread) {
     return nativeThreadId;
   });
 }
-
-type CodexMcpServerStatus = CodexSchema.V2ListMcpServerStatusResponse__McpServerStatus; // Fork add-on
-
-/* Fork add-on */ function codexMcpServerStatus(
-  server: CodexMcpServerStatus /* Fork add-on */,
-): SessionMcpServer["status"] /* Fork add-on */ {
-  switch (server.runtimeStatus /* Fork add-on */) {
-    case "connected": // Fork add-on
-      return "connected"; // Fork add-on
-    case "notStarted": // Fork add-on
-    case "starting": // Fork add-on
-      return "pending"; // Fork add-on
-    case "authenticationRequired": // Fork add-on
-      return "needs-auth"; // Fork add-on
-    case "failed": // Fork add-on
-    case "cancelled": // Fork add-on
-      return "failed"; // Fork add-on
-    case "disabled": // Fork add-on
-      return "disabled"; // Fork add-on
-    case null: // Fork add-on
-    case undefined: // Fork add-on
-      // Fork add-on: Older app servers report no runtime status; infer it from what the
-      // listing did include.
-      if (server.authStatus === "notLoggedIn") return "needs-auth"; // Fork add-on
-      if (sessionInsightText(server.toolsError) !== undefined) return "failed"; // Fork add-on
-      return Object.keys(server.tools).length > 0 ? "connected" : "pending"; // Fork add-on
-  } // Fork add-on
-} // Fork add-on
-
-/* Fork add-on */ function codexSessionMcpServer(
-  server: CodexMcpServerStatus /* Fork add-on */,
-): SessionMcpServer | undefined /* Fork add-on */ {
-  const toolsError = sessionInsightText(server.toolsError); // Fork add-on
-  /* Fork add-on */ return sessionMcpServer({
-    name: server.name, // Fork add-on
-    status: codexMcpServerStatus(server), // Fork add-on
-    error: toolsError, // Fork add-on
-    version: server.serverInfo?.version, // Fork add-on
-    ...(toolsError === undefined ? { toolCount: Object.keys(server.tools).length } : {}), // Fork add-on
-  }); // Fork add-on
-} // Fork add-on
-
-/** Fork add-on: Pages a session's MCP server listing may span before the rest is dropped. */
-const CODEX_MCP_SERVER_STATUS_MAX_PAGES = 10; // Fork add-on
 
 function providerThreadFromCodexThread(input: {
   readonly appThreadId: ThreadId | null;
@@ -1863,7 +1815,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         );
         const activeTurns = yield* Ref.make(new Map<string, ActiveCodexTurnContext>());
         const turnTokenUsageByThread = new Map<string, CodexTurnTokenUsageState>();
-        const insightsTokenUsage = new Map<string, CodexSessionInsights.CodexTokenUsage>(); // Fork add-on: session details.
+        const insightsTokenUsage = new Map<string, CodexTokenUsage>(); // Fork add-on: session details.
         const usageStateForThread = (nativeThreadId: string) => {
           let state = turnTokenUsageByThread.get(nativeThreadId);
           if (!state) {
@@ -6467,72 +6419,14 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return { contents: response.contents };
             }).pipe(Effect.mapError(mcpAppsError("Codex MCP resource read failed."))),
         };
-        const sessionInsights: ProviderAdapter.ProviderAdapterV2SessionInsights /* Fork add-on */ =
-          /* Fork add-on */ {
-            // Fork add-on: Totals against the model window, with the session folder's skills.
-            contextBreakdown: ({ providerThread } /* Fork add-on */) =>
-              /* Fork add-on */ Effect.gen(function* () {
-                const threadId = yield* getNativeThreadId(providerThread); // Fork add-on
-                const cwd = input.runtimePolicy.cwd ?? undefined; // Fork add-on
-                const skills = // Fork add-on
-                  cwd === undefined // Fork add-on
-                    ? [] // Fork add-on
-                    : /* Fork add-on */ yield* ensureInitialized.pipe(
-                        Effect.andThen(client.request("skills/list", { cwds: [cwd] })), // Fork add-on
-                        /* Fork add-on */ Effect.map(
-                          (response) => CodexSessionInsights.codexSkillContributors(response, cwd), // Fork add-on
-                        ), // Fork add-on
-                        // Fork add-on: Skills are an enrichment; the totals stand without them.
-                        Effect.orElseSucceed(() => []), // Fork add-on
-                      ); // Fork add-on
-                /* Fork add-on */ return CodexSessionInsights.codexContextBreakdown({
-                  tokenUsage: insightsTokenUsage.get(threadId), // Fork add-on
-                  providerThread, // Fork add-on
-                  skills, // Fork add-on
-                }); // Fork add-on
-              }), // Fork add-on
-            mcpServers: ({ providerThread } /* Fork add-on */) =>
-              /* Fork add-on */ Effect.gen(function* () {
-                const threadId = yield* getNativeThreadId(providerThread); // Fork add-on
-                yield* ensureInitialized; // Fork add-on
-                const servers: Array<SessionMcpServer> = []; // Fork add-on
-                let cursor: string | undefined; // Fork add-on
-                /* Fork add-on */ for (
-                  let page = 0; // Fork add-on
-                  page < CODEX_MCP_SERVER_STATUS_MAX_PAGES; // Fork add-on
-                  page++ /* Fork add-on */
-                ) /* Fork add-on */ {
-                  const response /* Fork add-on */ = yield* client.request("mcpServerStatus/list", {
-                    threadId, // Fork add-on
-                    detail: "toolsAndAuthOnly", // Fork add-on
-                    ...(cursor === undefined ? {} : { cursor }), // Fork add-on
-                  }); // Fork add-on
-                  for (const entry of response.data /* Fork add-on */) {
-                    const server = codexSessionMcpServer(entry); // Fork add-on
-                    if (server !== undefined) servers.push(server); // Fork add-on
-                  } // Fork add-on
-                  cursor = response.nextCursor ?? undefined; // Fork add-on
-                  if (cursor === undefined) break; // Fork add-on
-                } // Fork add-on
-                // Fork add-on: Installed connectors run behind Codex's apps runtime, so each
-                // enabled one gets its own row; they are an enrichment.
-                const apps /* Fork add-on */ = yield* client
-                  .request("app/installed", { threadId }) // Fork add-on
-                  /* Fork add-on */ .pipe(
-                    Effect.map((response) => response.apps), // Fork add-on
-                    Effect.orElseSucceed(() => []), // Fork add-on
-                  ); // Fork add-on
-                for (const app of apps /* Fork add-on */) {
-                  if (!app.enabled) continue; // Fork add-on
-                  const server /* Fork add-on */ = sessionMcpServer({
-                    name: app.runtimeName ?? app.id, // Fork add-on
-                    status: app.callable ? "connected" : "configured", // Fork add-on
-                  }); // Fork add-on
-                  if (server !== undefined) servers.push(server); // Fork add-on
-                } // Fork add-on
-                return servers; // Fork add-on
-              }).pipe(Effect.mapError(mcpAppsError("Failed to list Codex MCP servers."))), // Fork add-on
-          }; // Fork add-on
+        /* Fork add-on */ const sessionInsights = CodexInsightsHooks.makeSessionInsights({
+          client, // Fork add-on
+          ensureInitialized, // Fork add-on
+          getNativeThreadId, // Fork add-on
+          cwd: input.runtimePolicy.cwd, // Fork add-on
+          tokenUsage: insightsTokenUsage, // Fork add-on
+          mcpServersError: mcpAppsError("Failed to list Codex MCP servers."), // Fork add-on
+        }); // Fork add-on: session details.
 
         const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,

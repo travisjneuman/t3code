@@ -73,7 +73,7 @@ import { useEnvironments } from "../state/environments";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
-import { startComparison } from "./compareAgents";
+import { compareStartPermissionAtom, startComparison } from "./compareAgents";
 import { CompareComposer, useCompareProviders } from "./CompareComposer";
 import { type ComparePair, comparePromptOf, groupComparePairs } from "./comparePairs";
 import { startCompareRename, stopCompareRename, useCompareRenameStore } from "./compareRenameStore";
@@ -402,6 +402,7 @@ function CompareSetup(props: {
   const [leftChoice, setLeftChoice] = useState<ModelSelection | null>(props.initialLeft);
   const [rightChoice, setRightChoice] = useState<ModelSelection | null>(null);
   const [starting, setStarting] = useState(false);
+  const mayStart = useAtomValue(compareStartPermissionAtom(environmentId));
 
   // Anything but a listed project (No project, the Scratch project itself) means No project.
   const project =
@@ -411,7 +412,7 @@ function CompareSetup(props: {
   const left = leftChoice ?? leftDefault;
   const right = rightChoice ?? otherDefaultModel(entries, left);
   const hasPlace = project !== null || scratchRoot !== null;
-  const canStart = !starting && hasPlace && prompt.trim() !== "" && !!left && !!right;
+  const canStart = mayStart && !starting && hasPlace && prompt.trim() !== "" && !!left && !!right;
 
   const start = async () => {
     if (!canStart || !left || !right) return;
@@ -510,6 +511,11 @@ function CompareSetup(props: {
           {starting ? <Spinner /> : null}
           Start comparison
         </Button>
+        {mayStart ? null : (
+          <span className="text-xs text-muted-foreground">
+            Needs operate access on this connection.
+          </span>
+        )}
       </div>
     </div>
   );

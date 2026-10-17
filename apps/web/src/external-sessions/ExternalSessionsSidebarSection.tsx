@@ -10,11 +10,13 @@ import {
   externalSessionUnsupportedReason,
   type ContextMenuItem,
   type EditorId,
+  type EnvironmentId,
+  type ExternalSessionSummary,
 } from "@t3tools/contracts";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon } from "lucide-react";
-import { memo, useEffect, useRef, type MouseEvent } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
@@ -32,7 +34,11 @@ import {
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { cn } from "../lib/utils";
-import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
+import {
+  AGENT_LINE_CLASS,
+  AGENT_LINE_ICON_CLASS,
+  AGENT_MORE_BUTTON_CLASS,
+} from "../sidebar-compact/agentLines";
 import { readLocalApi } from "../localApi";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { waitForThreadShell } from "../state/entities";
@@ -46,6 +52,9 @@ import {
   externalSessionArchive,
   externalSessionContinue,
   externalSessionEntriesAtom,
+  externalSessionHostLabelsAtom,
+  externalSessionListCutsAtom,
+  externalSessionListOlder,
   externalSessionOpenInOrigin,
   externalSessionOriginIsLocalAtom,
   externalSessionOriginLabel,
@@ -54,6 +63,7 @@ import {
   LIVENESS_LABEL,
   shortModelLabel,
   type ExternalSessionEntry,
+  type ExternalSessionListCut,
 } from "./atoms";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
@@ -106,6 +116,50 @@ function firstWithOpen(
   return open === undefined ? shown : [...shown, open];
 }
 
+/** A host's sessions past its live list's cut, paged in by Browse older. */
+interface OlderPages {
+  /** In the server's list order, newest first. */
+  readonly entries: ReadonlyArray<ExternalSessionEntry>;
+  readonly more: boolean;
+  readonly loading: boolean;
+}
+
+const NO_OLDER_PAGES: ReadonlyMap<EnvironmentId, OlderPages> = new Map();
+
+function updatedAtMs(entry: ExternalSessionEntry): number {
+  const parsed = Date.parse(entry.session.updatedAt);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * The live entries plus the paged-in older ones they do not already hold,
+ * newest first. A session that ran again since its page was read is live.
+ */
+function withOlderEntries(
+  entries: ReadonlyArray<ExternalSessionEntry>,
+  older: ReadonlyArray<ExternalSessionEntry>,
+): ReadonlyArray<ExternalSessionEntry> {
+  if (older.length === 0) return entries;
+  const seen = new Set(entries.map((entry) => rowKey(entry.environmentId, entry.session.key)));
+  const extra = older.filter((entry) => {
+    const key = rowKey(entry.environmentId, entry.session.key);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (extra.length === 0) return entries;
+  const merged = [...entries, ...extra];
+  const timeByEntry = new Map(merged.map((entry) => [entry, updatedAtMs(entry)] as const));
+  // Stable, so one host's equal times keep its server order.
+  return merged.sort((left, right) => (timeByEntry.get(right) ?? 0) - (timeByEntry.get(left) ?? 0));
+}
+
+/** "60 of 214", prefixed with the host while more than one is connected. */
+function cutLabel(cut: ExternalSessionListCut, shown: number): string {
+  const count = `${shown} of ${cut.total}`;
+  return cut.environmentLabel === null ? count : `${cut.environmentLabel} ${count}`;
+}
+
 /** The provider's own session id: the key is `<driver>:<session id>`. */
 function nativeSessionId(sessionKey: string): string {
   return sessionKey.slice(sessionKey.indexOf(":") + 1);
@@ -131,7 +185,9 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
  * sessions. Renders nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
-  const entries = useAtomValue(externalSessionEntriesAtom);
+  const liveEntries = useAtomValue(externalSessionEntriesAtom);
+  const cuts = useAtomValue(externalSessionListCutsAtom);
+  const [olderPages, setOlderPages] = useState(NO_OLDER_PAGES);
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
   const [earlierExpanded, setEarlierExpanded] = useLocalStorage(
     EARLIER_EXPANDED_STORAGE_KEY,
@@ -145,6 +201,7 @@ export function ExternalSessionsSidebarSection() {
   const runArchive = useAtomCommand(externalSessionArchive, { reportFailure: false });
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const runOpenInOrigin = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
+  const runListOlder = useAtomCommand(externalSessionListOlder, { reportFailure: false });
   const activeKey = useParams({
     strict: false,
     select: (params) =>
@@ -162,6 +219,25 @@ export function ExternalSessionsSidebarSection() {
         description: error instanceof Error ? error.message : "An error occurred.",
       }),
   });
+
+  // Pages belong to a cut: they go when their host disconnects or stops being cut.
+  useEffect(() => {
+    setOlderPages((current) => {
+      if (current.size === 0) return current;
+      const cutHosts = new Set(cuts.map((cut) => cut.environmentId));
+      if ([...current.keys()].every((environmentId) => cutHosts.has(environmentId))) {
+        return current;
+      }
+      return new Map([...current].filter(([environmentId]) => cutHosts.has(environmentId)));
+    });
+  }, [cuts]);
+
+  const shownOlder = cuts.flatMap((cut) => olderPages.get(cut.environmentId)?.entries ?? []);
+  const entries = withOlderEntries(liveEntries, shownOlder);
+  const shownByHost = new Map<EnvironmentId, number>();
+  for (const entry of entries) {
+    shownByHost.set(entry.environmentId, (shownByHost.get(entry.environmentId) ?? 0) + 1);
+  }
 
   // `nowMinute` is the UTC minute ("YYYY-MM-DDTHH:mm"); its ticks move sessions
   // from Recent to Earlier as they age. Entries come newest first.
@@ -182,15 +258,16 @@ export function ExternalSessionsSidebarSection() {
   // (aged out, or on an environment not yet connected) are dropped.
   const legacyMigrated = useRef(false);
   useEffect(() => {
-    if (legacyMigrated.current || entries.length === 0) return;
+    if (legacyMigrated.current || liveEntries.length === 0) return;
     legacyMigrated.current = true;
     const hidden = takeLegacyHiddenKeys();
     if (hidden === null) return;
-    for (const { environmentId, session } of entries) {
+    for (const { environmentId, session } of liveEntries) {
       if (!hidden.has(rowKey(environmentId, session.key))) continue;
+      if (!appAtomRegistry.get(externalSessionArchive.permissionAtom(environmentId))) continue;
       void runArchive({ environmentId, input: { key: session.key } });
     }
-  }, [entries, runArchive]);
+  }, [liveEntries, runArchive]);
 
   const toggleExpanded = () => setExpanded((value) => !value);
   const toggleEarlier = () => setEarlierExpanded((value) => !value);
@@ -198,8 +275,69 @@ export function ExternalSessionsSidebarSection() {
     if (isMobile) setOpenMobile(false);
   };
 
+  // A paged-in row is not live, so one that left the list is removed here.
+  const dropOlder = (entry: ExternalSessionEntry) =>
+    setOlderPages((current) => {
+      const pages = current.get(entry.environmentId);
+      if (pages === undefined) return current;
+      const kept = pages.entries.filter(({ session }) => session.key !== entry.session.key);
+      if (kept.length === pages.entries.length) return current;
+      return new Map(current).set(entry.environmentId, { ...pages, entries: kept });
+    });
+
+  // The cursor is the last session already shown: the live tail, then each page's last.
+  const browseOlder = async (cut: ExternalSessionListCut) => {
+    const { environmentId } = cut;
+    const pages = olderPages.get(environmentId);
+    if (pages?.loading === true) return;
+    const last =
+      pages?.entries.at(-1) ??
+      liveEntries.findLast((entry) => entry.environmentId === environmentId);
+    if (last === undefined) return;
+    const before = { updatedAt: last.session.updatedAt, key: last.session.key };
+    setOlderPages((current) =>
+      new Map(current).set(environmentId, {
+        entries: current.get(environmentId)?.entries ?? [],
+        more: true,
+        loading: true,
+      }),
+    );
+    const result = await runListOlder({ environmentId, input: { before } });
+    const environmentLabel =
+      appAtomRegistry.get(externalSessionHostLabelsAtom)?.get(environmentId) ?? null;
+    setOlderPages((current) => {
+      const held = current.get(environmentId);
+      // Dropped meanwhile: the cut ended or the host went away.
+      if (held === undefined) return current;
+      if (result._tag === "Failure") {
+        return new Map(current).set(environmentId, { ...held, loading: false });
+      }
+      const page = result.value.sessions.map(
+        (session: ExternalSessionSummary): ExternalSessionEntry => ({
+          environmentId,
+          environmentLabel,
+          session,
+        }),
+      );
+      return new Map(current).set(environmentId, {
+        entries: [...held.entries, ...page],
+        more: result.value.more,
+        loading: false,
+      });
+    });
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const failure = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: "Could not load older sessions",
+        description: failure instanceof Error ? failure.message : "An error occurred.",
+      });
+    }
+  };
+
   const continueInT3 = async (entry: ExternalSessionEntry) => {
     const { environmentId, session } = entry;
+    if (!appAtomRegistry.get(externalSessionContinue.permissionAtom(environmentId))) return;
     const result = await runContinue({ environmentId, input: { key: session.key } });
     if (result._tag === "Failure") {
       if (isAtomCommandInterrupted(result)) return;
@@ -212,6 +350,7 @@ export function ExternalSessionsSidebarSection() {
       });
       return;
     }
+    dropOlder(entry);
     const threadRef = scopeThreadRef(environmentId, result.value.threadId);
     // The thread route treats a thread missing from the shell as gone.
     if (!(await waitForThreadShell(threadRef))) {
@@ -245,6 +384,9 @@ export function ExternalSessionsSidebarSection() {
 
   const openInOrigin = async (entry: ExternalSessionEntry) => {
     if (!appAtomRegistry.get(externalSessionOriginIsLocalAtom(entry.environmentId))) return;
+    if (!appAtomRegistry.get(externalSessionOpenInOrigin.permissionAtom(entry.environmentId))) {
+      return;
+    }
     const result = await runOpenInOrigin({
       environmentId: entry.environmentId,
       input: { key: entry.session.key },
@@ -260,6 +402,7 @@ export function ExternalSessionsSidebarSection() {
 
   // The row leaves the list on the server's next push; an open session's view stays put.
   const archiveSession = async (entry: ExternalSessionEntry) => {
+    if (!appAtomRegistry.get(externalSessionArchive.permissionAtom(entry.environmentId))) return;
     const result = await runArchive({
       environmentId: entry.environmentId,
       input: { key: entry.session.key },
@@ -272,7 +415,9 @@ export function ExternalSessionsSidebarSection() {
         title: "Could not archive session",
         description: failure instanceof Error ? failure.message : "An error occurred.",
       });
+      return;
     }
+    dropOlder(entry);
   };
 
   const showArchived = async () => {
@@ -288,8 +433,14 @@ export function ExternalSessionsSidebarSection() {
     const config = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId));
     const editors = config?.availableEditors ?? [];
     const otherEditors = editors.filter((id) => id !== "file-manager");
+    // Each action shows only where this connection's grants allow it.
+    const canContinue = appAtomRegistry.get(externalSessionContinue.permissionAtom(environmentId));
+    const canOpenInOrigin = appAtomRegistry.get(
+      externalSessionOpenInOrigin.permissionAtom(environmentId),
+    );
+    const canArchive = appAtomRegistry.get(externalSessionArchive.permissionAtom(environmentId));
     const items: Array<ContextMenuItem<RowMenuAction>> = [];
-    if (externalSessionUnsupportedReason(session) === null) {
+    if (externalSessionUnsupportedReason(session) === null && canContinue) {
       items.push({
         id: "continue",
         label: "Continue in T3",
@@ -299,6 +450,7 @@ export function ExternalSessionsSidebarSection() {
       });
     }
     if (
+      canOpenInOrigin &&
       externalSessionOpensInOrigin(session) &&
       appAtomRegistry.get(externalSessionOriginIsLocalAtom(environmentId))
     ) {
@@ -326,14 +478,16 @@ export function ExternalSessionsSidebarSection() {
         });
       }
     }
-    items.push({
-      id: "archive",
-      label: "Archive",
-      icon: "archive",
-      separatorBefore: true,
-      // It may be in use in the other app right now.
-      disabled: session.liveness === "running",
-    });
+    if (canArchive) {
+      items.push({
+        id: "archive",
+        label: "Archive",
+        icon: "archive",
+        separatorBefore: true,
+        // It may be in use in the other app right now.
+        disabled: session.liveness === "running",
+      });
+    }
 
     const clicked = await api.contextMenu.show(items, position);
     switch (clicked) {
@@ -386,6 +540,12 @@ export function ExternalSessionsSidebarSection() {
 
   if (entries.length === 0) return null;
   const activeCount = bands.active.length;
+  const cutText =
+    cuts.length === 0
+      ? null
+      : cuts
+          .map((cut) => cutLabel(cut, Math.min(shownByHost.get(cut.environmentId) ?? 0, cut.total)))
+          .join(" · ");
   const rowProps = {
     activeKey,
     nowMinute,
@@ -426,13 +586,20 @@ export function ExternalSessionsSidebarSection() {
         {expanded ? (
           <>
             <ExternalSessionRows entries={bands.recent} {...rowProps} />
-            {bands.earlier.length > 0 ? (
+            {bands.earlier.length > 0 || cuts.length > 0 ? (
               <div role="group" aria-label="Earlier">
                 <div className="mr-0.5 ml-2.5 h-8">
                   <CollapsibleSectionHeader
                     expanded={earlierExpanded}
                     onClick={toggleEarlier}
                     onMouseDown={preventMouseFocus}
+                    accessory={
+                      cutText === null ? null : (
+                        <span title={cutText} className="min-w-0 truncate tabular-nums">
+                          {cutText}
+                        </span>
+                      )
+                    }
                   >
                     {`Earlier (${bands.earlier.length})`}
                   </CollapsibleSectionHeader>
@@ -441,6 +608,31 @@ export function ExternalSessionsSidebarSection() {
                   entries={firstWithOpen(bands.earlier, earlierExpanded ? Infinity : 0, activeKey)}
                   {...rowProps}
                 />
+                {earlierExpanded
+                  ? cuts.map((cut) => {
+                      const pages = olderPages.get(cut.environmentId);
+                      const shown = shownByHost.get(cut.environmentId) ?? 0;
+                      if (pages?.more === false || shown >= cut.total) return null;
+                      return (
+                        <button
+                          key={cut.environmentId}
+                          type="button"
+                          disabled={pages?.loading === true}
+                          onClick={() => void browseOlder(cut)}
+                          onMouseDown={preventMouseFocus}
+                          className={AGENT_MORE_BUTTON_CLASS}
+                        >
+                          <span className="min-w-0 truncate">
+                            {pages?.loading === true
+                              ? "Loading older…"
+                              : cut.environmentLabel === null
+                                ? "Browse older"
+                                : `Browse older on ${cut.environmentLabel}`}
+                          </span>
+                        </button>
+                      );
+                    })
+                  : null}
               </div>
             ) : null}
           </>
@@ -536,12 +728,13 @@ function compactTimeLabel(iso: string, nowMinute: string): string {
 }
 
 /** What a screen reader hears for a session row. */
-function sessionRowLabel(session: ExternalSessionEntry["session"]): string {
+function sessionRowLabel({ environmentLabel, session }: ExternalSessionEntry): string {
   return [
     externalSessionTitle(session),
     externalSessionOriginLabel(session),
     cwdBasename(session.cwd),
     shortModelLabel(session.model),
+    environmentLabel,
     LIVENESS_LABEL[session.liveness],
   ]
     .filter((part): part is string => part !== null && part.length > 0)
@@ -549,9 +742,9 @@ function sessionRowLabel(session: ExternalSessionEntry["session"]): string {
 }
 
 /**
- * One external session on a single line: harness icon, title, then its age or
- * a running spinner. Sessions that are not running or idle recede the way
- * settled threads do; the hover card holds the folder, model and machine.
+ * One external session on a single line: harness icon, title, its host while
+ * more than one is connected, then its age or a running spinner. Sessions that
+ * are not running or idle recede the way settled threads do; the hover card holds the folder, model and machine.
  * `nowMinute` only exists to refresh the age once a minute; the other props
  * keep their identity across unrelated pushes.
  */
@@ -562,7 +755,7 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
   onNavigate: () => void;
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
-  const { environmentId, session } = props.entry;
+  const { environmentId, environmentLabel, session } = props.entry;
   const running = session.liveness === "running";
   return (
     <li className="list-none">
@@ -572,7 +765,7 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
             <Link
               to="/external/$environmentId/$sessionKey"
               params={{ environmentId, sessionKey: session.key }}
-              aria-label={sessionRowLabel(session)}
+              aria-label={sessionRowLabel(props.entry)}
               aria-current={props.isActive ? "page" : undefined}
               onClick={props.onNavigate}
               onContextMenu={(event) => {
@@ -598,6 +791,11 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
             iconClassName="size-3"
           />
           <span className="min-w-0 flex-1 truncate">{externalSessionTitle(session)}</span>
+          {environmentLabel !== null ? (
+            <span className="max-w-20 shrink-0 truncate text-secondary-label">
+              {environmentLabel}
+            </span>
+          ) : null}
           {running ? (
             <CircleDashedIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-info")} />
           ) : (

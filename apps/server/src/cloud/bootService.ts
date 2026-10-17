@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
+import { releaseMirrorCheckStep, rotateBootServiceLog } from "./bootServiceGuards.ts"; // Fork add-on: mirror check, bounded log.
 import { currentRuntimePaths, syncCurrentRuntime } from "./currentRuntime.ts"; // Fork add-on: fixed runtime/current path.
 import {
   ensurePinnedRuntimeInstalled,
@@ -606,6 +607,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
 
   const logFailure = (error: { readonly message: string }) =>
     DateTime.now.pipe(
+      Effect.tap(() => rotateBootServiceLog(fs, logPath)), // Fork add-on: bounded service log.
       Effect.flatMap((now) =>
         fs.writeFileString(logPath, `${DateTime.formatIso(now)} ${error.message}\n`, { flag: "a" }),
       ),
@@ -717,6 +719,9 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     yield* fs
       .makeDirectory(input.logsDir, { recursive: true })
       .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
+    yield* rotateBootServiceLog(fs, logPath); // Fork add-on: bounded service log.
+    const mirrorStep = releaseMirrorCheckStep(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
+    if (mirrorStep) return yield* new BootServiceCommandError({ step: mirrorStep }); // Fork add-on
 
     if (manager.kind === "systemd") {
       yield* requireSystemdPrerequisites.pipe(Effect.tapError(logFailure));

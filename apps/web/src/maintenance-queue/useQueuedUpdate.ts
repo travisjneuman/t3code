@@ -71,6 +71,10 @@ async function releaseLocalProviderSessions(job: QueuedUpdate): Promise<boolean>
     environmentPresentations.presentationAtom(job.environmentId),
   );
   if (presentation === null || !isThisMachine(presentation.entry.target)) return false;
+  // Without the grant the server refuses the call; skip it, which is the same unknown-is-idle.
+  if (!appAtomRegistry.get(maintenanceReleaseProviderSessions.permissionAtom(job.environmentId))) {
+    return false;
+  }
   const config = appAtomRegistry.get(serverEnvironment.configValueAtom(job.environmentId));
   const instanceIds = jobInstanceIds(job, config) ?? [];
   // A server without this RPC, or one that fails or never answers, closes

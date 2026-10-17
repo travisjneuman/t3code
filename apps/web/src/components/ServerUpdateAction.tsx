@@ -27,6 +27,7 @@ import { serverEnvironment, updateOutdatedServer } from "~/state/server";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useQueuedServerUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
+import { confirmHostReleaseSource, forkHostsOnly } from "~/host-release/hostReleaseGuard"; // Fork add-on: release source.
 import { manualServerUpdateCommand } from "~/versionSkew";
 import { Button } from "./ui/button";
 import { toastManager } from "./ui/toast";
@@ -139,7 +140,8 @@ export function ServerUpdatesAction({
     pending.current = true;
     setIsPending(true);
     await settlePromise(async () => {
-      const available = eligible.filter(
+      const available = forkHostsOnly(eligible).filter(
+        // Fork add-on: release source.
         (target) => !pendingUpdateEnvironmentIds.has(target.environmentId),
       );
       const desktopTargets = available.filter((target) => target.selfUpdate === "desktop-managed");
@@ -254,6 +256,7 @@ export function ServerUpdateAction({
     ) {
       return;
     }
+    if (!(await confirmHostReleaseSource({ environmentId, serverLabel, targetVersion }))) return; // Fork add-on: release source.
     if (isDesktopAppUpdate) {
       const confirmed =
         (await requestConfirmDialog(

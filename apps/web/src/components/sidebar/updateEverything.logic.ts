@@ -9,6 +9,7 @@ import {
   supportsServerUpdateThreadContinuation,
 } from "~/versionSkew";
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
+import { hostReleaseSourceOf, nonForkBulkSkipReason } from "~/host-release/hostReleaseSource"; // Fork add-on: release source.
 
 export interface UpdateEverythingMachine {
   readonly environmentId: EnvironmentId;
@@ -95,6 +96,12 @@ export function collectServerUpdateTargets(
       skip("already updating");
       continue;
     }
+    const sourceSkip = nonForkBulkSkipReason(hostReleaseSourceOf(config.environment)); // Fork add-on: release source.
+    if (sourceSkip !== undefined) {
+      // Fork add-on
+      skip(sourceSkip); // Fork add-on
+      continue; // Fork add-on
+    } // Fork add-on
     const selfUpdate = resolveServerSelfUpdateCapability(config);
     const desktopAppUpdate = supportsDesktopAppUpdate(config);
     if (selfUpdate === null) {

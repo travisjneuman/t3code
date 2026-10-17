@@ -68,13 +68,13 @@ checkout and T3 home.
 Run the coordinator from the fork checkout on the Mac:
 
 ```sh
-node scripts/tjn-hosts.ts release
-node scripts/tjn-hosts.ts release --build-host <name>
+node scripts/tjn-hosts.ts release [--dry-run]
+node scripts/tjn-hosts.ts release --build-host <name> [--dry-run]
 node scripts/tjn-hosts.ts status
-node scripts/tjn-hosts.ts prune <host> --confirm-idle
-node scripts/tjn-hosts.ts prune --all --confirm-idle
-node scripts/tjn-hosts.ts rollback <host> --confirm-idle
-node scripts/tjn-hosts.ts rollback <host> --to <version> --confirm-idle
+node scripts/tjn-hosts.ts prune <host> --confirm-idle [--dry-run]
+node scripts/tjn-hosts.ts prune --all --confirm-idle [--dry-run]
+node scripts/tjn-hosts.ts rollback <host> --confirm-idle [--dry-run]
+node scripts/tjn-hosts.ts rollback <host> --to <version> --confirm-idle [--dry-run]
 ```
 
 Use `--build-host` to select a configured builder explicitly for its platform; the other platform
@@ -256,7 +256,7 @@ a cold backup and prefer a newer release instead.
 ## Exit status and interrupted work
 
 The coordinator uses `0` for success, `1` for command or I/O failure, `2` for usage errors, `3` for
-preflight refusal, and `4` when maintenance or publication may be partial. These codes describe the
+preflight refusal or a locked host, and `4` when maintenance or publication may be partial. These codes describe the
 coordinator; the standalone archive builder reports failures as `1`.
 
 On `4`, do not blindly rerun. Inspect `status`, the affected service state and launcher, retained
@@ -264,3 +264,17 @@ backups, published releases and named version caches as applicable. A service ma
 publication may have succeeded without finishing retention, or only some selected hosts may have
 completed maintenance. No automatic repair is attempted. Establish what completed before choosing
 recovery; a database restore still needs the owner's go.
+
+`release`, `prune` and `rollback` accept `--dry-run`: it runs the same read-only preflight, then
+prints every step a real run would take on each host (the exact git and gh commands, the host
+request, and each stop, backup, fill, start and delete) and exits without changing anything,
+taking a lock or needing `--confirm-idle`.
+
+A real run locks every host it covers (`release` locks all configured hosts) under
+`~/Library/Application Support/t3code-fork/host-runs/locks/` and records each completed phase per
+host in a JSON journal under `host-runs/journal/`; the newest 20 are kept. A second run against a
+locked host exits `3` and names the holder's command, PID and start time. A failed run's message
+ends with the journal report: what completed per host, where it stopped, and whether each host is
+safe to rerun. `status` lists held locks and unfinished runs under `hostRuns`. A lock left by a
+crashed run is cleared automatically only when no changing step was in progress; otherwise inspect
+`status` and remove the named lock file deliberately. In-app Update does not take this lock.

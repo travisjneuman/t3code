@@ -29,6 +29,7 @@ import {
   scanLinesBackward,
   sessionDetails,
   statMtimeMs,
+  statSizeMtime,
   toolLine,
 } from "./ExternalSessionSource.ts";
 import {
@@ -139,15 +140,26 @@ export const makeCodexSource = (): ExternalSessionSource => {
   const sessions = NodePath.join(home, "sessions");
   const index = NodePath.join(home, "session_index.jsonl");
 
+  // Every summary asks for a name, so the index tail is parsed once per change
+  // to the file rather than once per session. One entry, bounded by INDEX_BYTES.
+  let names: { size: number; mtimeMs: number; byId: Map<string, string> } | null = null;
   const threadName = (id: string) =>
-    Effect.map(readLines(index, { fromEnd: true, maxBytes: INDEX_BYTES }), (slice) => {
-      let name: string | null = null;
-      for (const line of slice?.lines ?? []) {
-        if (!line.includes(id)) continue;
-        const record = parseJsonObject(line);
-        if (record?.id === id) name = asString(record.thread_name) ?? name;
+    Effect.gen(function* () {
+      const stat = yield* statSizeMtime(index);
+      if (stat === null) return null;
+      if (names === null || names.size !== stat.size || names.mtimeMs !== stat.mtimeMs) {
+        const slice = yield* readLines(index, { fromEnd: true, maxBytes: INDEX_BYTES });
+        const byId = new Map<string, string>();
+        for (const line of slice?.lines ?? []) {
+          const record = parseJsonObject(line);
+          const recordId = asString(record?.id);
+          const name = asString(record?.thread_name);
+          // A later record without a name keeps the earlier name.
+          if (recordId !== null && name !== null) byId.set(recordId, name);
+        }
+        names = { size: slice?.size ?? stat.size, mtimeMs: slice?.mtimeMs ?? stat.mtimeMs, byId };
       }
-      return name;
+      return names.byId.get(id) ?? null;
     });
 
   // A rollout's head never changes once its first prompt is written.

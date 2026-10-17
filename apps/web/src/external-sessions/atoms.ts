@@ -47,7 +47,7 @@ interface ExternalSessionTranscript {
 /** One sidebar row: a session plus the environment it was read from. */
 export interface ExternalSessionEntry {
   readonly environmentId: EnvironmentId;
-  /** Set only when more than one environment reports sessions. */
+  /** The host's label, set only while more than one environment is connected. */
   readonly environmentLabel: string | null;
   readonly session: ExternalSessionSummary;
 }
@@ -230,7 +230,7 @@ function reduceExternalSessionTranscript(
     case "snapshot":
       return capTranscript({
         summary: event.summary,
-        messages: event.messages,
+        messages: reuseMessages(state?.messages ?? [], event.messages),
         truncated: event.truncated,
       });
     case "summary":
@@ -283,6 +283,22 @@ function upsertMessages(
     }
   }
   return next ?? current;
+}
+
+/**
+ * A replacing snapshot (a reconnect, or a burst the server sent whole) keeps
+ * the held objects of messages it did not change.
+ */
+function reuseMessages(
+  current: ReadonlyArray<ExternalSessionMessage>,
+  incoming: ReadonlyArray<ExternalSessionMessage>,
+): ReadonlyArray<ExternalSessionMessage> {
+  if (current.length === 0) return incoming;
+  const byId = new Map(current.map((message) => [message.id, message] as const));
+  return incoming.map((message) => {
+    const held = byId.get(message.id);
+    return held !== undefined && messagesEqual(held, message) ? held : message;
+  });
 }
 
 function messagesEqual(left: ExternalSessionMessage, right: ExternalSessionMessage): boolean {
@@ -338,6 +354,77 @@ function updatedAtMs(entry: ExternalSessionEntry): number {
 }
 
 /**
+ * Each connected host's label while more than one is connected, so a row can
+ * say which machine it is on even when only one of them has sessions.
+ */
+export const externalSessionHostLabelsAtom = Atom.make(
+  (get): ReadonlyMap<EnvironmentId, string> | null => {
+    if (get(environmentSummaries.connectedEnvironmentIdsAtom).length <= 1) return null;
+    return new Map(
+      get(environmentSummaries.identitiesAtom).map(
+        (identity) => [identity.environmentId, identity.label] as const,
+      ),
+    );
+  },
+).pipe(Atom.withLabel("external-sessions:host-labels"));
+
+/** A host whose live list holds only its newest `listed` of `total` sessions. */
+export interface ExternalSessionListCut {
+  readonly environmentId: EnvironmentId;
+  readonly environmentLabel: string | null;
+  readonly listed: number;
+  readonly total: number;
+}
+
+const EMPTY_CUTS: ReadonlyArray<ExternalSessionListCut> = [];
+
+/**
+ * Connected hosts whose list was cut, in connection order. Servers that do
+ * not send `total` never appear. Unchanged, it returns the previous array.
+ */
+export const externalSessionListCutsAtom = Atom.make((get) => {
+  const labels = get(externalSessionHostLabelsAtom);
+  const next: Array<ExternalSessionListCut> = [];
+  for (const environmentId of get(environmentSummaries.connectedEnvironmentIdsAtom)) {
+    const list = Option.getOrNull(
+      AsyncResult.value(get(externalSessionList({ environmentId, input: {} }))),
+    );
+    if (list?.total === undefined || list.total <= list.sessions.length) continue;
+    next.push({
+      environmentId,
+      environmentLabel: labels?.get(environmentId) ?? null,
+      listed: list.sessions.length,
+      total: list.total,
+    });
+  }
+  if (next.length === 0) return EMPTY_CUTS;
+  const previous = Option.getOrNull(get.self<ReadonlyArray<ExternalSessionListCut>>());
+  return previous !== null &&
+    previous.length === next.length &&
+    next.every((cut, index) => {
+      const prior = previous[index];
+      return (
+        prior !== undefined &&
+        prior.environmentId === cut.environmentId &&
+        prior.environmentLabel === cut.environmentLabel &&
+        prior.listed === cut.listed &&
+        prior.total === cut.total
+      );
+    })
+    ? previous
+    : next;
+}).pipe(Atom.withLabel("external-sessions:list-cuts"));
+
+/**
+ * One page of a host's sessions past its live list's cut, read on request
+ * (Browse older). Not live: the shelf holds the pages until the host's cut ends.
+ */
+export const externalSessionListOlder = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:list-older",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.listOlder,
+});
+
+/**
  * Sessions from every connected environment, newest first. Unchanged entries
  * keep their identity and an unchanged list returns the previous array, so a
  * list push that touches one session re-renders one row.
@@ -358,13 +445,7 @@ export const externalSessionEntriesAtom = Atom.make((get) => {
   }
 
   const multipleEnvironments = sources.length > 1;
-  const labels = multipleEnvironments
-    ? new Map(
-        get(environmentSummaries.identitiesAtom).map(
-          (identity) => [identity.environmentId, identity.label] as const,
-        ),
-      )
-    : null;
+  const labels = get(externalSessionHostLabelsAtom);
   const previous = Option.getOrNull(get.self<ReadonlyArray<ExternalSessionEntry>>());
   const previousByKey = new Map(
     (previous ?? EMPTY_ENTRIES).map(

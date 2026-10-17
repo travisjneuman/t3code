@@ -17,9 +17,11 @@ export function useHermesModelPickerSections<
   activeInstanceId: ProviderInstanceId;
   activeModelSlug: string;
   selectedInstanceId: ProviderInstanceId | "favorites";
-  selectedDriverKind: ProviderDriverKind | undefined;
+  entryByInstanceId: ReadonlyMap<ProviderInstanceId, { readonly driverKind: ProviderDriverKind }>;
   isSearching: boolean;
   filteredModels: ReadonlyArray<T>;
+  /** Every model in the picker, for the combobox's full item list. */
+  flatModels: Parameters<typeof HermesGroups.hermesModelGroupKeys>[0];
   modelListRef: RefObject<LegendListRef | null>;
 }) {
   const [expandedHermesGroups, setExpandedHermesGroups] = useState(() =>
@@ -29,10 +31,14 @@ export function useHermesModelPickerSections<
       input.activeModelSlug,
     ),
   );
+  const selectedDriverKind =
+    input.selectedInstanceId === "favorites"
+      ? undefined
+      : input.entryByInstanceId.get(input.selectedInstanceId)?.driverKind;
   const hermesSections =
     input.isSearching ||
     input.selectedInstanceId === "favorites" ||
-    !HermesGroups.isHermesDriver(input.selectedDriverKind)
+    !HermesGroups.isHermesDriver(selectedDriverKind)
       ? null
       : HermesGroups.buildHermesModelSections(
           input.filteredModels,
@@ -66,5 +72,13 @@ export function useHermesModelPickerSections<
     hermesSections === null ||
     HermesGroups.hermesModelGroupKeyOf(model.instanceId, model.slug) === null;
 
-  return { hermesSections, expandedHermesGroups, toggleHermesGroup, showHermesModelProvider };
+  return {
+    sections: hermesSections,
+    expandedGroups: expandedHermesGroups,
+    groupKeys: HermesGroups.hermesModelGroupKeys(input.flatModels),
+    groupFor: (key: string) => hermesSections?.groups.find((group) => group.key === key),
+    /** True when `key` is a group header, which it opened or closed instead of selecting. */
+    toggleGroup: toggleHermesGroup,
+    showProvider: showHermesModelProvider,
+  };
 }

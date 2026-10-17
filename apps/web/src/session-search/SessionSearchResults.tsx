@@ -14,7 +14,7 @@ import { externalSessionTitle } from "../external-sessions/atoms";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { formatRelativeTimeLabel } from "../timestampFormat";
-import { type SessionSearchEntry, useSessionSearch } from "./atoms";
+import { failedHostsSummary, type SessionSearchEntry, useSessionSearch } from "./atoms";
 
 const SOURCE_LABEL = {
   user: "You:",
@@ -41,7 +41,8 @@ function compactTimeLabel(iso: string, nowMinute: string): string {
 
 /**
  * Renders nothing until a search returns sessions, so the thread results
- * above stay the whole view for a query no other agent matches.
+ * above stay the whole view for a query no other agent matches, unless a
+ * host failed to answer, since its matches would otherwise vanish silently.
  */
 export function SessionSearchResults(props: { query: string }) {
   const search = useSessionSearch(props.query);
@@ -52,8 +53,24 @@ export function SessionSearchResults(props: { query: string }) {
     if (isMobile) setOpenMobile(false);
   };
 
-  if (search.entries.length === 0) return null;
+  const failedHosts =
+    search.failedHostLabels.length > 0 ? failedHostsSummary(search.failedHostLabels) : null;
 
+  if (search.entries.length === 0) {
+    // While another host may still match, "No matches" would be premature.
+    if (failedHosts === null || search.isPending) return null;
+    return (
+      <p role="status" className="mx-0.5 mt-2 px-2 text-xs text-sidebar-muted-foreground/60">
+        {search.answeredHosts === 0 ? "Other Agents not searched" : "No matches"} · {failedHosts}
+      </p>
+    );
+  }
+
+  const count = `Other Agents (${search.entries.length})`;
+  const heading =
+    failedHosts === null
+      ? count
+      : `${count} · searched ${search.answeredHosts} of ${search.searchedHosts} hosts`;
   const status = search.isPending ? "Searching…" : search.complete ? null : "Partial";
   return (
     <section aria-label="Other Agents search results" className="mt-2">
@@ -61,6 +78,7 @@ export function SessionSearchResults(props: { query: string }) {
         <CollapsibleSectionHeader
           expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
+          title={failedHosts ?? undefined}
           accessory={
             status === null ? null : (
               <span
@@ -77,7 +95,7 @@ export function SessionSearchResults(props: { query: string }) {
             )
           }
         >
-          {`Other Agents (${search.entries.length})`}
+          {heading}
         </CollapsibleSectionHeader>
       </div>
       {expanded ? (

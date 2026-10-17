@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import {
   EnvironmentId,
   ForwardCompatibleOptional,
+  IsoDateTime, // Fork add-on: server start time.
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
@@ -149,8 +150,12 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       "server"`) and streams them over `/api/preview-stream`. Clients
       without a local browser runtime open server tabs here. */
   serverBrowser: Schema.optionalKey(Schema.Boolean),
+  hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers hostBackups.list.
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
+
+export const ServerReleaseSource = Schema.Literals(["fork", "upstream", "custom"]); // Fork add-on: update source.
+export type ServerReleaseSource = typeof ServerReleaseSource.Type; // Fork add-on: update source.
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,
@@ -158,6 +163,8 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   platform: ExecutionEnvironmentPlatform,
   serverVersion: TrimmedNonEmptyString,
   orchestrationProtocolVersion: Schema.optionalKey(Schema.Int),
+  releaseSource: ForwardCompatibleOptional(ServerReleaseSource), // Fork add-on: absent means unknown.
+  startedAt: Schema.optionalKey(IsoDateTime), // Fork add-on: server start time.
   capabilities: ExecutionEnvironmentCapabilities,
 });
 export type ExecutionEnvironmentDescriptor = typeof ExecutionEnvironmentDescriptor.Type;

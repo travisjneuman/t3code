@@ -16,7 +16,7 @@ import {
 
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { normalizeClaudeTurnTokenUsage } from "../../provider/ClaudeTurnTokenUsage.ts";
-import { claudeContextBreakdown, claudeMcpServers } from "./claudeSessionInsights.ts"; // Fork add-on: session details.
+import * as ClaudeInsightsHooks from "./claudeInsightsHooks.ts"; // Fork add-on: session details.
 import {
   type CanUseTool,
   forkSession as forkClaudeSession,
@@ -24,7 +24,6 @@ import {
   type ForkSessionOptions,
   type ForkSessionResult,
   getSubagentMessages,
-  type McpServerStatus, // Fork add-on: session details.
   query,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
@@ -36,7 +35,6 @@ import {
   type SpawnedProcess as ClaudeSpawnedProcess,
   type SDKAssistantMessage,
   type SDKAPIRetryMessage,
-  type SDKControlGetContextUsageResponse, // Fork add-on: session details.
   type SDKMessage,
   type SDKRateLimitInfo,
   type SDKResultMessage,
@@ -425,16 +423,8 @@ export interface ClaudeAgentSdkQuerySession {
   readonly backgroundTasks: (
     toolUseId: string,
   ) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
-  /** Fork add-on: The /context breakdown of the live session. Optional so test fakes can omit it. */
-  readonly getContextUsage?: /* Fork add-on */ Effect.Effect<
-    SDKControlGetContextUsageResponse, // Fork add-on
-    ClaudeAgentSdkQueryRunnerError // Fork add-on
-  >; // Fork add-on
-  /** Fork add-on: The live session's MCP servers. Optional so test fakes can omit it. */
-  readonly mcpServerStatus?: /* Fork add-on */ Effect.Effect<
-    ReadonlyArray<McpServerStatus>, // Fork add-on
-    ClaudeAgentSdkQueryRunnerError // Fork add-on
-  >; // Fork add-on
+  readonly getContextUsage?: ClaudeInsightsHooks.ContextUsageRequest; // Fork add-on: session details.
+  readonly mcpServerStatus?: ClaudeInsightsHooks.McpServerStatusRequest; // Fork add-on: session details.
   readonly interrupt: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly close: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
 }
@@ -595,22 +585,7 @@ export type ClaudeAgentSdkProtocolLogEvent =
         readonly taskId: string;
       };
     }
-  | /* Fork add-on */ {
-      readonly direction: "outgoing"; // Fork add-on
-      readonly stage: "decoded"; // Fork add-on
-      readonly payload: /* Fork add-on */ {
-        readonly type: "query.get_context_usage"; // Fork add-on
-        readonly detail: "summary"; // Fork add-on
-      }; // Fork add-on
-    } // Fork add-on
-  | /* Fork add-on */ {
-      readonly direction: "outgoing"; // Fork add-on
-      readonly stage: "decoded"; // Fork add-on
-      readonly payload: /* Fork add-on */ {
-        readonly type: "query.mcp_server_status"; // Fork add-on
-        readonly count: number; // Fork add-on
-      }; // Fork add-on
-    } // Fork add-on
+  | ClaudeInsightsHooks.ProtocolLogEvent // Fork add-on: session details.
   | {
       readonly direction: "outgoing";
       readonly stage: "decoded";
@@ -960,36 +935,7 @@ export const layerQueryRunner: Layer.Layer<
                 }),
               ),
             ),
-          getContextUsage: /* Fork add-on */ Effect.tryPromise({
-            try: () => queryRuntime.getContextUsage({ detail: "summary" }), // Fork add-on
-            catch: (cause) => queryRunnerError(cause, "getContextUsage"), // Fork add-on
-          }) // Fork add-on
-            /* Fork add-on */ .pipe(
-              /* Fork add-on */ Effect.tap(
-                (/* Fork add-on */) =>
-                  /* Fork add-on */ logProtocolEvent({
-                    direction: "outgoing", // Fork add-on
-                    stage: "decoded", // Fork add-on
-                    payload: { type: "query.get_context_usage", detail: "summary" }, // Fork add-on
-                  }), // Fork add-on
-              ), // Fork add-on
-            ), // Fork add-on
-          // Fork add-on: The status rows carry each server's config, headers included, so
-          // only the count is logged.
-          mcpServerStatus: /* Fork add-on */ Effect.tryPromise({
-            try: () => queryRuntime.mcpServerStatus(), // Fork add-on
-            catch: (cause) => queryRunnerError(cause, "mcpServerStatus"), // Fork add-on
-          }) // Fork add-on
-            /* Fork add-on */ .pipe(
-              /* Fork add-on */ Effect.tap(
-                (servers /* Fork add-on */) =>
-                  /* Fork add-on */ logProtocolEvent({
-                    direction: "outgoing", // Fork add-on
-                    stage: "decoded", // Fork add-on
-                    payload: { type: "query.mcp_server_status", count: servers.length }, // Fork add-on
-                  }), // Fork add-on
-              ), // Fork add-on
-            ), // Fork add-on
+          ...ClaudeInsightsHooks.queryRequests(queryRuntime, queryRunnerError, logProtocolEvent), // Fork add-on: session details.
           interrupt: Effect.tryPromise({
             try: () => queryRuntime.interrupt(),
             catch: (cause) => queryRunnerError(cause, "interrupt"),
@@ -8794,33 +8740,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         });
         yield* Effect.addFinalizer(() => closeSession());
 
-        // Fork add-on: Session insights read only the query running this provider thread;
-        // a stopped or replaced query has nothing current to report.
-        const liveInsightsQuery /* Fork add-on */ = (
-          providerThread: OrchestrationV2ProviderThread /* Fork add-on */,
-        ) /* Fork add-on */ =>
-          /* Fork add-on */ Effect.gen(function* () {
-            const liveQuery = yield* Ref.get(queryContext); // Fork add-on
-            /* Fork add-on */ if (
-              liveQuery === null || // Fork add-on
-              liveQuery.stopping || // Fork add-on
-              liveQuery.nativeThreadId !== providerThread.nativeThreadRef?.nativeId // Fork add-on
-            ) /* Fork add-on */ {
-              /* Fork add-on */ return yield* new ProviderAdapter.ProviderAdapterProtocolError({
-                driver: CLAUDE_PROVIDER, // Fork add-on
-                detail: "No live Claude query belongs to this provider thread", // Fork add-on
-              }); // Fork add-on
-            } // Fork add-on
-            return liveQuery.query; // Fork add-on
-          }); // Fork add-on
-        const insightsRequestError /* Fork add-on */ =
-          (detail: string /* Fork add-on */) => (cause: ClaudeAgentSdkQueryRunnerError) =>
-            /* Fork add-on */ new ProviderAdapter.ProviderAdapterProtocolError({
-              driver: CLAUDE_PROVIDER, // Fork add-on
-              detail, // Fork add-on
-              cause, // Fork add-on
-            }); // Fork add-on
-
         const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,
           driver: CLAUDE_PROVIDER,
@@ -8954,33 +8873,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ),
               );
             }),
-          sessionInsights: /* Fork add-on */ {
-            contextBreakdown: ({ providerThread } /* Fork add-on */) =>
-              /* Fork add-on */ Effect.gen(function* () {
-                const liveQuery = yield* liveInsightsQuery(providerThread); // Fork add-on
-                if (liveQuery.getContextUsage === undefined /* Fork add-on */) {
-                  return null; // Fork add-on
-                } // Fork add-on
-                const usage /* Fork add-on */ = yield* liveQuery.getContextUsage.pipe(
-                  Effect.mapError(insightsRequestError("Context usage request failed")), // Fork add-on
-                ); // Fork add-on
-                return claudeContextBreakdown(usage); // Fork add-on
-              }), // Fork add-on
-            mcpServers: ({ providerThread } /* Fork add-on */) =>
-              /* Fork add-on */ Effect.gen(function* () {
-                const liveQuery = yield* liveInsightsQuery(providerThread); // Fork add-on
-                if (liveQuery.mcpServerStatus === undefined /* Fork add-on */) {
-                  /* Fork add-on */ return yield* new ProviderAdapter.ProviderAdapterProtocolError({
-                    driver: CLAUDE_PROVIDER, // Fork add-on
-                    detail: "Claude query does not report MCP server status", // Fork add-on
-                  }); // Fork add-on
-                } // Fork add-on
-                const servers /* Fork add-on */ = yield* liveQuery.mcpServerStatus.pipe(
-                  Effect.mapError(insightsRequestError("MCP server status request failed")), // Fork add-on
-                ); // Fork add-on
-                return claudeMcpServers(servers); // Fork add-on
-              }), // Fork add-on
-          }, // Fork add-on
+          sessionInsights: ClaudeInsightsHooks.makeSessionInsights(CLAUDE_PROVIDER, queryContext), // Fork add-on: session details.
           interruptTurn,
           stopSubagent: Effect.fn("ClaudeAdapterV2.stopSubagent")(function* (input) {
             const existing = yield* Ref.get(queryContext);

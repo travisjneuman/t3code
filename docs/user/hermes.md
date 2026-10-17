@@ -99,7 +99,9 @@ Kilo's gateway shows only its free models, which need no key.
 With the dashboard filled in, the Hermes Agent card in **Settings › Providers** also shows:
 
 - **Hermes config**: every Hermes setting, by category, with search. This is Hermes's global
-  config, so changes also apply to its chat platforms, cron jobs and CLI.
+  config, so changes also apply to its chat platforms, cron jobs and CLI. Hidden values show as
+  `••••••`: leave one as is to keep the stored value, or replace it completely. Editing text
+  around it makes the save fail and asks you to enter that value again.
 - **Hermes keys**: set, replace or remove Hermes's environment keys. Values are write-only: T3
   only shows whether a key is set.
 - **Custom endpoints**: add an OpenAI-compatible endpoint, make one the default, or remove it.
@@ -109,7 +111,8 @@ With the dashboard filled in, the Hermes Agent card in **Settings › Providers*
 With **T3 tools** on, Hermes can start T3 coworker threads (Codex, Claude, Grok and the rest) in
 any of your T3 projects, wait for them, read them and message them. Each coworker is its own
 thread in its project, and Hermes links to it in its reply. A coworker that runs on Hermes itself
-lands in the Scratch project, like every Hermes thread.
+lands in the Scratch project, like every Hermes thread. Hermes can call only these project and
+thread tools; T3 refuses any other T3 tool even if Hermes's own config is changed to include it.
 
 To turn it on, open **Settings › Providers › Hermes Agent › T3 tools**, check the T3 address
 Hermes will use and flip the switch. The address must end in `/mcp` and be reachable from Hermes's

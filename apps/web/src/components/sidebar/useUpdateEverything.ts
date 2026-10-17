@@ -4,6 +4,7 @@ import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
 import { collectHostUpdateTargets, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on: host releases.
+import { useHostReleaseCheck } from "~/host-release/hostRelease"; // Fork add-on: release check states.
 import { skippedAsFailed } from "~/host-release/hostRelease"; // Fork add-on: skipped updates stay retryable.
 import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { useEnvironments } from "~/state/environments";
@@ -39,6 +40,7 @@ export type ReportLocalUpdateError = (title: string, description: string) => voi
 
 export function useUpdateEverything(localUpdateVersion: string | null) {
   const targetVersion = useHostUpdateTarget(); // Fork add-on: host releases.
+  const hostReleaseCheck = useHostReleaseCheck(); // Fork add-on: release check states.
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));
@@ -56,7 +58,7 @@ export function useUpdateEverything(localUpdateVersion: string | null) {
     updateState: updateStates[index]!,
   }));
   // Fork add-on: host releases: remote servers move to the newest published fork release.
-  const hostTargets = collectHostUpdateTargets(machines, targetVersion); // Fork add-on
+  const hostTargets = collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck); // Fork add-on
   const { targets: behindServers, skipped: unreachable } = hostTargets; // Fork add-on
   // A desktop-managed server installs from its own app's update feed, so only
   // servers that download t3 from npm wait for npm to publish the version.

@@ -45,7 +45,10 @@ export const withForkThreadMenuItems = <T extends string>(
   thread: Parameters<typeof withHandBackMenuItem>[1],
 ): ReadonlyArray<ContextMenuItem<T | ForkThreadMenuId>> =>
   withCompareMenuItem(
-    withHandBackMenuItem(withSaveToNotesMenuItem(withExportMenuItem(items)), thread),
+    withHandBackMenuItem(
+      withSaveToNotesMenuItem(withExportMenuItem(items), thread.environmentId),
+      thread,
+    ),
     thread,
   );
 
