@@ -38,11 +38,11 @@ threads and restarts. See [Session details](session-details.md#open-them).
 
 ## Subagents sit under their thread
 
-Subagents a thread started, through `delegate_task` or the provider's own subagent tool, appear as
-single lines under that thread in the sidebar, wherever the thread sits: Active, Working, Snoozed
-or Settled. They stay there after they finish. Hover one for its provider, model and status; open
-it to review its work, or right-click it to archive or delete it. Choose the **subagents** line
-under a thread to hide all of its subagents, and again to show them all.
+A thread that started subagents, through `delegate_task` or the provider's own subagent tool, shows
+an arrow and a count at its bottom left in the sidebar, wherever the thread sits: Active, Working,
+Snoozed or Settled. Click it to list all of its subagents as single lines under the thread, and
+again to hide them; they start hidden. They stay there after they finish. Hover one for its
+provider, model and status; open it to review its work, or right-click it to archive or delete it.
 
 ## Codex can show hidden models
 

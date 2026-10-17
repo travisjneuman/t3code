@@ -147,7 +147,8 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
-import { useSidebarSubagents } from "../subagents/SidebarSubagentRows"; // Fork add-on: nested subagents.
+// Fork add-on: nested subagents.
+import { SubagentToggle, useSidebarSubagents } from "../subagents/SidebarSubagentRows";
 import {
   useEnvironmentIdentities,
   useConnectedEnvironmentIds,
@@ -1494,6 +1495,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   snoozeSupported: boolean;
   pinningSupported: boolean;
   isPinned: boolean;
+  subagentCount: number; // Fork add-on: nested subagents.
   sortable?: SortableThreadRowBag | undefined;
   dropVerb: SidebarDropVerb | null;
   dragOverPinned: boolean;
@@ -2060,6 +2062,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             >
               {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
             </span>
+            {/* Fork add-on: nested subagents. */}
+            <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
             {draftIndicator}
             {title}
             {pinIndicator}
@@ -2388,6 +2392,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               data-fork-card-part="meta"
               className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs"
             >
+              {/* Fork add-on: nested subagents. */}
+              <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
               {thread.branch ? (
                 <>
                   <ThreadWorktreeIndicator thread={thread} />
@@ -4800,6 +4806,8 @@ export default function Sidebar() {
                                 .threadPinning === true
                             }
                             isPinned={thread.pinnedAt != null}
+                            // Fork add-on: nested subagents.
+                            subagentCount={forkSubagents.count(threadKey)}
                             sortable={sortable}
                             dropVerb={
                               dragState?.activeKey === threadKey
