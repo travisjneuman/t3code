@@ -11,7 +11,7 @@ export const installForkIpcHandlers = Effect.fn("desktop.ipc.installForkHandlers
   ipc: DesktopIpc.DesktopIpc["Service"],
 ) {
   yield* ipc.handle(confirm);
-  for (const sourceSyncMethod of LocalSourceIpc.methods) {
+  for (const sourceSyncMethod of yield* LocalSourceIpc.makeMethods) {
     yield* ipc.handle(sourceSyncMethod);
   }
   for (const remoteAppMethod of RemoteAppIpc.methods) {

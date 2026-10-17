@@ -3,6 +3,7 @@
 // and contract types, never Effect services.
 import type {
   DesktopBridge,
+  DesktopSourceSyncProgress,
   DesktopUpdateGateState,
   RemoteAppDownloadCapture,
   RemoteAppPanelNavigated,
@@ -74,6 +75,22 @@ function isRemoteAppDownloadCapture(value: unknown): value is RemoteAppDownloadC
   );
 }
 
+function isDesktopSourceSyncProgress(value: unknown): value is DesktopSourceSyncProgress {
+  if (typeof value !== "object" || value === null) return false;
+  const progress = value as Partial<DesktopSourceSyncProgress>;
+  return (
+    (progress.phase === "fetching" ||
+      progress.phase === "merging" ||
+      progress.phase === "resolving" ||
+      progress.phase === "checking" ||
+      progress.phase === "repairing" ||
+      progress.phase === "committing" ||
+      progress.phase === "pushing") &&
+    (progress.conflictCount === undefined ||
+      (Number.isSafeInteger(progress.conflictCount) && progress.conflictCount >= 0))
+  );
+}
+
 function isDesktopUpdateGateState(value: unknown): value is DesktopUpdateGateState {
   if (typeof value !== "object" || value === null) return false;
   const queuedAt = (value as Partial<DesktopUpdateGateState>).queuedAt;
@@ -86,6 +103,22 @@ export function makeForkDesktopBridge(ipcRenderer: Electron.IpcRenderer): ForkDe
     sourceSync: {
       isEnabled: () => ipcRenderer.invoke(IpcChannels.SOURCE_SYNC_ENABLED_CHANNEL),
       sync: () => ipcRenderer.invoke(IpcChannels.SOURCE_SYNC_CHANNEL),
+      getProgress: async () => {
+        const progress: unknown = await ipcRenderer.invoke(
+          IpcChannels.SOURCE_SYNC_PROGRESS_GET_CHANNEL,
+        );
+        if (progress === null || isDesktopSourceSyncProgress(progress)) return progress;
+        throw new Error("Invalid source sync progress snapshot");
+      },
+      onProgress: (listener) => {
+        const wrappedListener = (_event: Electron.IpcRendererEvent, progress: unknown) => {
+          if (progress === null || isDesktopSourceSyncProgress(progress)) listener(progress);
+        };
+        ipcRenderer.on(IpcChannels.SOURCE_SYNC_PROGRESS_CHANNEL, wrappedListener);
+        return () => {
+          ipcRenderer.removeListener(IpcChannels.SOURCE_SYNC_PROGRESS_CHANNEL, wrappedListener);
+        };
+      },
     },
     updateGate: {
       reportBusySessions: (count) =>

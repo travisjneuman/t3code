@@ -1,5 +1,6 @@
+import type { DesktopSourceSyncProgress } from "@t3tools/contracts";
 import { GitMergeIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Spinner } from "../components/ui/spinner";
 import { SidebarMenuItem } from "../components/ui/sidebar";
@@ -15,14 +16,61 @@ export function SidebarSourceSyncButton() {
   return isElectron && window.desktopBridge?.sourceSync ? <SidebarSourceSyncControl /> : null;
 }
 
+function describeProgress(progress: DesktopSourceSyncProgress): string {
+  switch (progress.phase) {
+    case "fetching":
+      return "Fetching official T3 Code…";
+    case "merging":
+      return "Merging official T3 Code…";
+    case "resolving":
+      return progress.conflictCount === undefined
+        ? "Resolving conflicts with Claude…"
+        : `Resolving ${progress.conflictCount} conflict${progress.conflictCount === 1 ? "" : "s"} with Claude…`;
+    case "checking":
+      return "Checking fork add-ons…";
+    case "repairing":
+      return "Repairing fork add-ons with Claude…";
+    case "committing":
+      return "Committing the upstream merge…";
+    case "pushing":
+      return "Pushing the fork…";
+  }
+}
+
 function SidebarSourceSyncControl() {
   const state = useDesktopUpdateState();
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [progress, setProgress] = useState<DesktopSourceSyncProgress | null>(null);
+  const isSyncing = isPending || progress !== null;
 
-  const handleSync = useCallback(() => {
+  useEffect(() => {
+    const sourceSync = window.desktopBridge?.sourceSync;
+    let disposed = false;
+    let receivedEvent = false;
+    const snapshot = sourceSync?.getProgress?.();
+    const unsubscribe = sourceSync?.onProgress?.((next) => {
+      receivedEvent = true;
+      if (!disposed) setProgress(next);
+    });
+    // Subscribe while the snapshot is in flight; never let an older snapshot
+    // overwrite a phase (or completion) already received from the main process.
+    void snapshot
+      ?.then((next) => {
+        if (!disposed && !receivedEvent) setProgress(next);
+      })
+      .catch(() => {
+        // Older shells may not expose the snapshot channel; keep listening for events.
+      });
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const handleSync = () => {
     const sourceSync = window.desktopBridge?.sourceSync;
     if (!sourceSync || isSyncing) return;
-    setIsSyncing(true);
+    setIsPending(true);
     void sourceSync
       .sync()
       .then((result) => {
@@ -43,12 +91,16 @@ function SidebarSourceSyncControl() {
           }),
         );
       })
-      .finally(() => setIsSyncing(false));
-  }, [isSyncing]);
+      .finally(() => setIsPending(false));
+  };
 
   if (state?.sourceUpdate !== true) return null;
 
-  const label = isSyncing ? "Syncing with official T3 Code…" : "Sync fork with official T3 Code";
+  const label = progress
+    ? describeProgress(progress)
+    : isSyncing
+      ? "Syncing with official T3 Code…"
+      : "Sync fork with official T3 Code";
 
   return (
     <SidebarMenuItem className="ml-auto shrink-0" data-source-sync="">

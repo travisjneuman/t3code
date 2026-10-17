@@ -1,4 +1,5 @@
-import { UPSTREAM_SYNC_PROMPT_PREFIX } from "@t3tools/contracts";
+import { UPSTREAM_SYNC_PROMPT_PREFIX, type DesktopSourceSyncProgress } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -17,6 +18,7 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 
 const COMMAND_OUTPUT_LIMIT = 16_000;
+const MARKER_REPORT_OUTPUT_LIMIT = 1_048_576;
 const LOCAL_UPDATE_HELPER_PATH = "local-source-update-helper.sh";
 // Holds at most one build: cleared before each build, after a failed build, and by the install helper.
 const SOURCE_UPDATE_BUILDS_DIR = "source-updates";
@@ -37,7 +39,8 @@ export const FORK_MARKER = "Fork add-on";
 const MERGE_AGENT_RULES = [
   `${UPSTREAM_SYNC_PROMPT_PREFIX} (${UPSTREAM_REPOSITORY}) into this fork.`,
   "Keep upstream's text and code everywhere; never revert or reword an upstream change.",
-  `The fork changes upstream files only through lines that contain the text "${FORK_MARKER}", or code directly under a comment line that does; keep every one of them, adapted to upstream's current names and shapes.`,
+  `Every fork line in an upstream file carries "${FORK_MARKER}" on that line, not on a separate comment above a block. Preserve each fork behavior, not obsolete upstream scaffolding.`,
+  `Leave no unexplained marked-line loss: move markers with moved code, and report obsolete marked lines instead of recreating removed scaffolding. Never add markers to lines that do not carry fork behavior.`,
   "Fork features live in fork-owned files. The fork's identity lives in apps/desktop/src/remote-apps/RemoteAppDistribution.ts and packages/shared/src/branding.ts.",
   "Where upstream renamed or moved code a fork add-on uses, update the add-on and every reference to the moved module or renamed identifier, not just the first.",
   "Change only what the task needs.",
@@ -141,8 +144,17 @@ export class LocalSourceUpdates extends Context.Service<
   }
 >()("@t3tools/desktop/updates/LocalSourceUpdates") {}
 
+/** The IPC boundary supplies this callback only for an interactive source sync. */
+export const SourceSyncProgress = Context.Reference<
+  (progress: DesktopSourceSyncProgress) => Effect.Effect<void>
+>("@t3tools/desktop/updates/SourceSyncProgress", { defaultValue: () => () => Effect.void });
+
+const reportProgress = (progress: DesktopSourceSyncProgress) =>
+  Effect.flatMap(SourceSyncProgress, (report) => report(progress));
+
 interface CommandResult {
   readonly stdout: string;
+  readonly stdoutTruncated: boolean;
   readonly stderr: string;
   readonly exitCode: number;
 }
@@ -287,31 +299,112 @@ export interface LostForkMarkers {
   readonly found: number;
 }
 
-const sumCounts = (counts: ReadonlyMap<string, number>): number =>
-  Array.from(counts.values()).reduce((total, count) => total + count, 0);
-
-/**
- * Files that hold fewer fork markers after the merge than before. A deleted
- * file only counts when its markers did not reappear elsewhere.
- */
+/** Marker deficits requiring explanation, including every marked line in deleted files. */
 export function findLostForkMarkers(
   before: ReadonlyMap<string, number>,
   after: ReadonlyMap<string, number>,
   changes: MergeChanges,
 ): ReadonlyArray<LostForkMarkers> {
   const lost: Array<LostForkMarkers> = [];
-  const removed: Array<LostForkMarkers> = [];
   for (const [path, expected] of before) {
     if (changes.deleted.has(path)) {
-      removed.push({ path, currentPath: null, expected, found: 0 });
+      lost.push({ path, currentPath: null, expected, found: 0 });
       continue;
     }
     const currentPath = changes.renamed.get(path) ?? path;
     const found = after.get(currentPath) ?? 0;
     if (found < expected) lost.push({ path, currentPath, expected, found });
   }
-  if (removed.length > 0 && sumCounts(after) < sumCounts(before)) lost.push(...removed);
   return lost;
+}
+
+const ForkMarkerDisposition = Schema.Union([
+  Schema.Struct({
+    path: Schema.String,
+    line: Schema.Number,
+    status: Schema.Literal("moved"),
+    destination: Schema.String,
+    reason: Schema.String,
+  }),
+  Schema.Struct({
+    path: Schema.String,
+    line: Schema.Number,
+    status: Schema.Literal("obsolete"),
+    reason: Schema.String,
+  }),
+]);
+type ForkMarkerDisposition = typeof ForkMarkerDisposition.Type;
+const decodeMarkerDispositions = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ dispositions: Schema.Array(ForkMarkerDisposition) })),
+);
+
+function parseMarkerDispositions(stdout: string): ReadonlyArray<ForkMarkerDisposition> {
+  // Do not fall back to an earlier block if the final JSON fence is malformed or truncated.
+  const opening = Array.from(stdout.matchAll(/^```json[ \t]*\r?$/gmu)).at(-1);
+  if (!opening) return [];
+  const body = stdout.slice(opening.index + opening[0].length);
+  const closing = /^```[ \t]*\r?$/mu.exec(body);
+  if (!closing) return [];
+  const decoded = decodeMarkerDispositions(body.slice(0, closing.index).trim());
+  return Option.isSome(decoded) ? decoded.value.dispositions : [];
+}
+
+function accountForMarkerLoss(
+  dispositions: ReadonlyArray<ForkMarkerDisposition>,
+  originals: ReadonlyMap<string, ReadonlySet<number>>,
+  before: ReadonlyMap<string, number>,
+  after: ReadonlyMap<string, number>,
+  lost: ReadonlyArray<LostForkMarkers>,
+  changes: MergeChanges,
+) {
+  const headPaths = new Map(Array.from(changes.renamed, ([head, current]) => [current, head]));
+  const accepted: Array<ForkMarkerDisposition> = [];
+  const credited = new Map<string, number>();
+  const spent = new Map<string, number>();
+  const occurrences = new Map<string, number>();
+  const keyOf = (entry: ForkMarkerDisposition) => JSON.stringify([entry.path, entry.line]);
+  for (const entry of dispositions) {
+    const key = keyOf(entry);
+    occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+  }
+  for (const entry of dispositions) {
+    const deficit = lost.find((item) => item.path === entry.path);
+    const credit = credited.get(entry.path) ?? 0;
+    if (
+      !deficit ||
+      credit >= deficit.expected - deficit.found ||
+      !originals.get(entry.path)?.has(entry.line) ||
+      occurrences.get(keyOf(entry)) !== 1 ||
+      entry.reason.trim().length === 0
+    ) {
+      continue;
+    }
+    if (entry.status === "moved") {
+      // `after` comes from git grep of current files: a surplus also proves the destination exists.
+      const headPath = headPaths.get(entry.destination) ?? entry.destination;
+      const surplus = (after.get(entry.destination) ?? 0) - (before.get(headPath) ?? 0);
+      const used = spent.get(entry.destination) ?? 0;
+      if (entry.destination === deficit.currentPath || surplus <= used) continue;
+      spent.set(entry.destination, used + 1);
+    }
+    credited.set(entry.path, credit + 1);
+    accepted.push({ ...entry, reason: entry.reason.trim() });
+  }
+  return {
+    accepted,
+    unexplained: lost.filter(
+      (entry) => entry.found + (credited.get(entry.path) ?? 0) < entry.expected,
+    ),
+  };
+}
+
+function mergeCommitMessage(message: string, dispositions: ReadonlyArray<ForkMarkerDisposition>) {
+  if (dispositions.length === 0) return message;
+  const lines = dispositions.map(
+    (entry) =>
+      `- ${entry.path}:${entry.line} ${entry.status}${entry.status === "moved" ? ` -> ${entry.destination}` : ""}: ${entry.reason}`,
+  );
+  return `${message}\n\nFork add-on markers accounted for:\n${lines.join("\n")}`;
 }
 
 /** The line of `git push` output that says why it failed. */
@@ -412,7 +505,7 @@ export const make = Effect.gen(function* () {
     readonly command: string;
     readonly args: ReadonlyArray<string>;
     readonly cwd: string;
-    /** Characters of stdout/stderr kept (from the end). File reads pass Infinity. */
+    /** Characters of stdout kept (from the end). File reads pass Infinity. */
     readonly outputLimit?: number;
   }): Effect.fn.Return<CommandResult, LocalSourceUpdateError> {
     const outputLimit = input.outputLimit ?? COMMAND_OUTPUT_LIMIT;
@@ -438,8 +531,11 @@ export const make = Effect.gen(function* () {
             handle.stdout.pipe(
               Stream.decodeText(),
               Stream.runFold(
-                () => "",
-                (all, chunk) => tailOutput(all + chunk, outputLimit),
+                () => ({ text: "", truncated: false }),
+                (all, chunk) => ({
+                  text: tailOutput(all.text + chunk, outputLimit),
+                  truncated: all.truncated || all.text.length + chunk.length > outputLimit,
+                }),
               ),
             ),
             handle.stderr.pipe(
@@ -453,7 +549,12 @@ export const make = Effect.gen(function* () {
           ],
           { concurrency: "unbounded" },
         );
-        return { stdout, stderr, exitCode: Number(exitCode) } satisfies CommandResult;
+        return {
+          stdout: stdout.text,
+          stdoutTruncated: stdout.truncated,
+          stderr,
+          exitCode: Number(exitCode),
+        } satisfies CommandResult;
       }),
     ).pipe(
       Effect.mapError((cause) =>
@@ -586,6 +687,7 @@ export const make = Effect.gen(function* () {
     // whole fetch on them ("would clobber existing tag"). Version tags never
     // move, so one that would is still refused rather than clobbered. No
     // --prune: with a tag refspec it would delete fork-local v* tags.
+    yield* reportProgress({ phase: "fetching" });
     yield* gitChecked("fetch", [
       "fetch",
       "--no-tags",
@@ -690,13 +792,23 @@ export const make = Effect.gen(function* () {
   // hooks (such as one that commits at session end) would commit its edits and
   // the build's version stamp before the build passes. The build remains the
   // gate, and nothing is committed before it passes.
-  const runMergeAgent = (repo: string, task: string) =>
-    runCommand({
+  const runMergeAgent = Effect.fn("desktop.localSourceUpdates.runMergeAgent")(function* (
+    repo: string,
+    phase: "resolving" | "repairing" | "build-repair",
+    task: string,
+  ) {
+    const startedAt = yield* Clock.currentTimeMillis;
+    yield* Effect.annotateCurrentSpan({ phase, exitCode: null });
+    const model = process.env.T3CODE_MERGE_AGENT_MODEL?.trim();
+    const effort = process.env.T3CODE_MERGE_AGENT_EFFORT?.trim();
+    return yield* runCommand({
       operation: "merge",
       command: "claude",
       args: [
         "-p",
         `${MERGE_AGENT_RULES}\n\n${task}`,
+        ...(model ? ["--model", model] : []),
+        ...(effort ? ["--effort", effort] : []),
         "--setting-sources",
         "project,local",
         "--permission-mode",
@@ -713,21 +825,53 @@ export const make = Effect.gen(function* () {
         "Glob",
       ],
       cwd: repo,
+      outputLimit: phase === "repairing" ? MARKER_REPORT_OUTPUT_LIMIT : COMMAND_OUTPUT_LIMIT,
     }).pipe(
       Effect.timeoutOrElse({
         duration: MERGE_AGENT_TIMEOUT,
-        orElse: () => makeError("merge", "the merge agent did not finish in time"),
+        orElse: () =>
+          Effect.annotateCurrentSpan({ timedOut: true }).pipe(
+            Effect.andThen(
+              makeError(
+                "merge",
+                `the Claude merge agent timed out after ${MERGE_AGENT_TIMEOUT} during ${phase}; no further agent pass will run`,
+              ),
+            ),
+          ),
       }),
-      Effect.asVoid,
+      Effect.flatMap((result) =>
+        Effect.annotateCurrentSpan({ exitCode: result.exitCode }).pipe(
+          Effect.andThen(
+            result.exitCode !== 0
+              ? makeError(
+                  "merge",
+                  `the Claude merge agent exited with code ${result.exitCode} during ${phase}; no further agent pass will run`,
+                )
+              : phase === "repairing" && result.stdoutTruncated
+                ? makeError("merge", "the merge agent's disposition report was too large to read")
+                : Effect.succeed(result.stdout),
+          ),
+        ),
+      ),
+      Effect.ensuring(
+        Clock.currentTimeMillis.pipe(
+          Effect.flatMap((finishedAt) =>
+            Effect.annotateCurrentSpan({ durationMs: finishedAt - startedAt }),
+          ),
+        ),
+      ),
     );
+  });
 
   /** Hands conflicts to the agent and returns the paths it left unresolved. */
   const resolveWithAgent = Effect.fn("desktop.localSourceUpdates.resolveWithAgent")(function* (
     repo: string,
     paths: ReadonlyArray<string>,
   ): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
+    yield* reportProgress({ phase: "resolving", conflictCount: paths.length });
     yield* runMergeAgent(
       repo,
+      "resolving",
       `These files still have merge conflicts: ${paths.join(", ")}. Resolve every conflict so no file contains conflict markers.`,
     );
     const left: Array<string> = [];
@@ -766,15 +910,47 @@ export const make = Effect.gen(function* () {
     return conflicted.length > 0 && agent ? yield* resolveWithAgent(repo, conflicted) : conflicted;
   });
 
-  // Counts fork markers per file in HEAD, or in the working tree when `tree` is omitted.
+  const attributableUntrackedPaths = Effect.fn(
+    "desktop.localSourceUpdates.attributableUntrackedPaths",
+  )(function* (repo: string, dispositions: ReadonlyArray<ForkMarkerDisposition> = []) {
+    const result = yield* gitMerge(repo, ["ls-files", "--others", "--exclude-standard", "-z"]);
+    const paths = result.stdout.split("\0").filter((path) => path.length > 0);
+    const destinations = new Set(
+      dispositions.flatMap((entry) => (entry.status === "moved" ? [entry.destination] : [])),
+    );
+    const unrelated = paths.filter((path) => !destinations.has(path));
+    if (unrelated.length > 0) {
+      return yield* makeError(
+        "merge",
+        `unattributed untracked files were left untouched; refusing to stage or commit them: ${describePaths(unrelated.map((path) => JSON.stringify(path)))}`,
+        new Error("unattributed untracked files"),
+        repo,
+      );
+    }
+    return paths;
+  });
+
+  // Counts working-tree contents, not the index; new move destinations need explicit inclusion.
   const countForkMarkers = Effect.fn("desktop.localSourceUpdates.countForkMarkers")(function* (
     repo: string,
     tree?: "HEAD",
+    includeUntracked = false,
   ): Effect.fn.Return<ReadonlyMap<string, number>, LocalSourceUpdateError> {
     const result = yield* runCommand({
       operation: "merge",
       command: "git",
-      args: ["grep", "-c", "-z", "-I", "-F", "-e", FORK_MARKER, ...(tree ? [tree] : []), "--"],
+      args: [
+        "grep",
+        "-c",
+        "-z",
+        "-I",
+        "-F",
+        ...(includeUntracked ? ["--untracked", "--exclude-standard"] : []),
+        "-e",
+        FORK_MARKER,
+        ...(tree ? [tree] : []),
+        "--",
+      ],
       cwd: repo,
       outputLimit: Number.POSITIVE_INFINITY,
     });
@@ -791,76 +967,134 @@ export const make = Effect.gen(function* () {
     return parseMarkerCounts(result.stdout, tree ? `${tree}:` : "");
   });
 
-  const findLostMarkers = (repo: string, before: ReadonlyMap<string, number>) =>
+  const findLostMarkers = (
+    repo: string,
+    before: ReadonlyMap<string, number>,
+    includeUntracked = false,
+  ) =>
     Effect.all([
-      countForkMarkers(repo),
+      countForkMarkers(repo, undefined, includeUntracked),
       gitMerge(repo, ["diff", "--cached", "-M", "--name-status", "-z", "HEAD"]),
     ]).pipe(
-      Effect.map(([after, changes]) =>
-        findLostForkMarkers(before, after, parseNameStatus(changes.stdout)),
-      ),
+      Effect.map(([after, result]) => {
+        const changes = parseNameStatus(result.stdout);
+        return { after, changes, lost: findLostForkMarkers(before, after, changes) };
+      }),
     );
 
-  /**
-   * Fork changes to upstream files are the lines marked `Fork add-on`, so a file
-   * that holds fewer of them after the merge lost a fork hook. The agent gets one
-   * pass at restoring the exact lines; whatever is still missing fails the merge.
-   */
+  /** One repair pass must restore or explicitly account for every detected marked-line loss. */
   const checkForkMarkers = Effect.fn("desktop.localSourceUpdates.checkForkMarkers")(function* (
     repo: string,
     label: string,
     before: ReadonlyMap<string, number>,
     agent: boolean,
-  ): Effect.fn.Return<void, LocalSourceUpdateError> {
-    const lost = yield* findLostMarkers(repo, before);
-    if (lost.length === 0) return;
+  ): Effect.fn.Return<ReadonlyArray<ForkMarkerDisposition>, LocalSourceUpdateError> {
+    yield* reportProgress({ phase: "checking" });
+    const { lost } = yield* findLostMarkers(repo, before);
+    if (lost.length === 0) return [];
     if (!agent) {
       return yield* makeError(
         "merge",
-        `merging ${label} dropped ${FORK_MARKER} lines from ${describeLostMarkers(lost)}, so the merge was aborted. Sync fork with official T3 Code restores them with the merge agent.`,
+        `merging ${label} dropped ${FORK_MARKER} lines from ${describeLostMarkers(lost)}. Sync fork with official T3 Code accounts for them with the merge agent.`,
         new Error("fork markers lost"),
         repo,
       );
     }
+    const originals = new Map<string, ReadonlySet<number>>();
     const sections = yield* Effect.forEach(lost, (entry) =>
-      runCommand({
-        operation: "merge",
-        command: "git",
-        args: ["grep", "-n", "-F", "-e", FORK_MARKER, "HEAD", "--", entry.path],
-        cwd: repo,
-      }).pipe(
+      gitMerge(repo, ["grep", "-n", "-F", "-e", FORK_MARKER, "HEAD", "--", entry.path]).pipe(
         Effect.map((result) => {
+          const prefix = `HEAD:${entry.path}:`;
+          originals.set(
+            entry.path,
+            new Set(
+              result.stdout.split("\n").flatMap((line) => {
+                if (!line.startsWith(prefix)) return [];
+                const number = Number(line.slice(prefix.length).split(":", 1)[0]);
+                return Number.isSafeInteger(number) && number > 0 ? [number] : [];
+              }),
+            ),
+          );
           const target = entry.currentPath
             ? `${entry.currentPath} (now ${entry.found} of ${entry.expected} marked lines)`
-            : `${entry.path} (deleted by the merge; restore its marked lines where that code now lives)`;
-          return `${target}. Marked lines before the merge, as HEAD:path:line:text:\n${result.stdout.trim()}`;
+            : `${entry.path} (deleted by the merge; account for every original marked line with a moved or obsolete disposition, even if other files gained markers)`;
+          return `${target}. Original marked lines (HEAD:path:line:text):\n${result.stdout.trim()}`;
         }),
       ),
     );
-    yield* runMergeAgent(
+    yield* reportProgress({ phase: "repairing" });
+    const stdout = yield* runMergeAgent(
       repo,
-      `The merge dropped fork add-on lines. Restore every marked line listed below in the merged file, adapted to upstream's current code, keeping the "${FORK_MARKER}" text on each restored line or on a comment line directly above the block.\n\n${sections.join("\n\n")}`,
+      "repairing",
+      `Repair the fork behaviors below in upstream's current form. For listed original lines you do not restore in place, explain moves or obsolescence; never fake markers. End your final response with one fenced json block: {"dispositions":[{"path":"<HEAD path>","line":<HEAD line number>,"status":"moved"|"obsolete","destination":"<current path, moved only>","reason":"<one sentence>"}]}. Include only unrestored lines. A moved line needs a real destination with a new marker; obsolete lines need a reason.\n\n${sections.join("\n\n")}`,
     );
-    yield* gitMerge(repo, ["add", "-A"]);
-    const stillLost = yield* findLostMarkers(repo, before);
-    if (stillLost.length > 0) {
+    yield* gitMerge(repo, ["add", "-u"]);
+    yield* reportProgress({ phase: "checking" });
+    const { after, changes, lost: stillLost } = yield* findLostMarkers(repo, before, true);
+    const { accepted, unexplained } = accountForMarkerLoss(
+      parseMarkerDispositions(stdout),
+      originals,
+      before,
+      after,
+      stillLost,
+      changes,
+    );
+    const movedPaths = yield* attributableUntrackedPaths(repo, accepted);
+    if (unexplained.length > 0) {
       return yield* makeError(
         "merge",
-        `merging ${label} dropped ${FORK_MARKER} lines the merge agent could not restore, so the merge was aborted. Merge ${label} into main by hand, push it, then try again. Files: ${describeLostMarkers(stillLost)}`,
+        `merging ${label} dropped ${FORK_MARKER} lines the merge agent could not restore or account for. Merge ${label} into main by hand, push it, then try again. Files: ${describeLostMarkers(unexplained)}`,
         new Error("fork markers lost"),
         repo,
       );
     }
+    for (const path of movedPaths) {
+      yield* gitMerge(repo, ["--literal-pathspecs", "add", "--", path]);
+    }
+    return accepted;
   });
 
   const abortMerge = (repo: string) =>
-    runCommand({ operation: "merge", command: "git", args: ["merge", "--abort"], cwd: repo }).pipe(
-      Effect.ignore,
+    Effect.gen(function* () {
+      const head = yield* runCommand({
+        operation: "merge",
+        command: "git",
+        args: ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+        cwd: repo,
+      });
+      // A failed merge command may not have opened a merge at all.
+      if (head.exitCode !== 0 && head.exitCode !== 1) {
+        return yield* makeError("merge", `could not determine merge state: ${trimOutput(head)}`);
+      }
+      // Staging here could make abort discard unrelated edits made while the agent ran.
+      if (head.exitCode === 0) yield* gitMerge(repo, ["merge", "--abort"]);
+      const status = yield* gitMerge(repo, ["status", "--porcelain=v1", "--untracked-files=all"]);
+      return status.stdout.trim();
+    }).pipe(
+      Effect.mapError((error) =>
+        makeError(
+          "merge",
+          `cleanup failed; the checkout was left mid-merge or its merge state could not be confirmed. Finish or abort it by hand. ${error.detail}`,
+          error,
+          repo,
+        ),
+      ),
+      Effect.uninterruptible,
     );
+
+  const failAfterCleanup = (cause: Cause.Cause<LocalSourceUpdateError>, leftovers: string) => {
+    if (!leftovers) return Effect.failCause(cause);
+    const failure = Cause.findErrorOption(cause);
+    return makeError(
+      Option.isSome(failure) ? failure.value.operation : "merge",
+      `${Option.isSome(failure) ? failure.value.detail : Cause.pretty(cause)}\nleft in the checkout:\n${leftovers}`,
+      cause,
+    );
+  };
 
   /**
    * Merges `target` without committing, settles conflicts (the agent unless
-   * `agent` is false), and checks that no fork add-on line was dropped. Fails
+   * `agent` is false), and checks for unexplained fork marker loss. Fails
    * with the merge still open; callers abort it.
    */
   const mergeUpstream = Effect.fn("desktop.localSourceUpdates.mergeUpstream")(function* (
@@ -869,7 +1103,8 @@ export const make = Effect.gen(function* () {
     label: string,
     message: string,
     agent = true,
-  ): Effect.fn.Return<void, LocalSourceUpdateError> {
+  ): Effect.fn.Return<ReadonlyArray<ForkMarkerDisposition>, LocalSourceUpdateError> {
+    yield* reportProgress({ phase: "merging" });
     const markersBefore = yield* countForkMarkers(repo, "HEAD");
     // --no-commit leaves the merge open so a failed resolution or build can
     // still be undone with `git merge --abort`.
@@ -899,13 +1134,13 @@ export const make = Effect.gen(function* () {
       if (unresolved.length > 0) {
         return yield* makeError(
           "merge",
-          `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically, so the merge was aborted. ${agent ? `Merge ${label} into main by hand, push it, then try again.` : "Sync fork with official T3 Code resolves them with the merge agent."} Conflicted: ${describePaths(unresolved)}`,
+          `merging ${label} left ${unresolved.length} conflict${unresolved.length === 1 ? "" : "s"} that could not be resolved automatically. ${agent ? `Merge ${label} into main by hand, push it, then try again.` : "Sync fork with official T3 Code resolves them with the merge agent."} Conflicted: ${describePaths(unresolved)}`,
           new Error(output),
           repo,
         );
       }
     }
-    yield* checkForkMarkers(repo, label, markersBefore, agent);
+    return yield* checkForkMarkers(repo, label, markersBefore, agent);
   });
 
   // Only the working tree is stamped; restoring from the index keeps a pending
@@ -949,6 +1184,7 @@ export const make = Effect.gen(function* () {
   // Pushes only to origin, never to upstream. A failed push never fails the
   // sync or build: the merge stands locally and the result says why it was skipped.
   const pushFork = Effect.fn("desktop.localSourceUpdates.pushFork")(function* (repo: string) {
+    yield* reportProgress({ phase: "pushing" });
     const result = yield* runCommand({
       operation: "push",
       command: "git",
@@ -956,7 +1192,12 @@ export const make = Effect.gen(function* () {
       cwd: repo,
     }).pipe(
       Effect.catchTag("LocalSourceUpdateError", (error) =>
-        Effect.succeed<CommandResult>({ stdout: "", stderr: error.message, exitCode: -1 }),
+        Effect.succeed<CommandResult>({
+          stdout: "",
+          stdoutTruncated: false,
+          stderr: error.message,
+          exitCode: -1,
+        }),
       ),
     );
     if (result.exitCode === 0) {
@@ -1002,27 +1243,41 @@ export const make = Effect.gen(function* () {
       Effect.andThen(fileSystem.remove(buildsDir, { recursive: true, force: true })),
       Effect.ignore,
     );
-    // Without a merge to abort, uncommitted agent build fixes are stashed so the
-    // checkout stays clean for the next attempt.
+    // Without a merge to abort, stash tracked fixes only: new files may belong to another writer.
     const restoreCheckout = merging
       ? abortMerge(repo)
-      : runCommand({
+      : runChecked({
           operation: "build",
           command: "git",
-          args: [
-            "stash",
-            "push",
-            "--include-untracked",
-            "-m",
-            "local source update: unbuilt fixes",
-          ],
+          args: ["stash", "push", "-m", "local source update: unbuilt fixes"],
           cwd: repo,
-        }).pipe(Effect.ignore);
+        }).pipe(
+          Effect.mapError((error) =>
+            makeError(
+              "build",
+              `cleanup failed; unbuilt edits could not be stashed and the checkout may still be dirty. Preserve or stash them by hand. ${error.detail}`,
+              error,
+              repo,
+            ),
+          ),
+          Effect.andThen(
+            gitMerge(repo, ["status", "--porcelain=v1", "--untracked-files=all"]).pipe(
+              Effect.map((result) => result.stdout.trim()),
+            ),
+          ),
+          Effect.uninterruptible,
+        );
     const built = yield* Effect.gen(function* () {
-      if (merging) {
-        // The peeled commit is merged (not the tag) so it matches what inspect counted.
-        yield* mergeUpstream(repo, inspection.upstreamCommit, inspection.upstreamTag, mergeMessage);
-      }
+      const markersBeforeBuild = yield* countForkMarkers(repo, "HEAD");
+      // The peeled commit is merged (not the tag) so it matches what inspect counted.
+      const dispositions = merging
+        ? yield* mergeUpstream(
+            repo,
+            inspection.upstreamCommit,
+            inspection.upstreamTag,
+            mergeMessage,
+          )
+        : [];
       const timestamp = yield* Clock.currentTimeMillis;
       // A new build supersedes any earlier one that was never installed.
       yield* removeBuilds;
@@ -1071,6 +1326,7 @@ export const make = Effect.gen(function* () {
           // Upstream reshaped code the fork builds on; give the agent one pass at it.
           yield* runMergeAgent(
             repo,
+            "build-repair",
             `The merged checkout no longer builds. Fix the code so it builds again. Build output (tail):\n${trimOutput(firstBuild)}`,
           );
           yield* runChecked({ operation: "build", command: "vp", args: buildArgs, cwd: repo });
@@ -1080,7 +1336,31 @@ export const make = Effect.gen(function* () {
       // Records the merge result (or, without a merge, the regenerated lockfile
       // and agent fixes); the author comes from the repo config. Hooks are
       // skipped so the formatter does not rewrite upstream files.
-      yield* runChecked({ operation: "merge", command: "git", args: ["add", "-A"], cwd: repo });
+      yield* attributableUntrackedPaths(repo);
+      yield* gitMerge(repo, ["add", "-u"]);
+      // A build repair must not invalidate a move's destination or introduce new marker loss.
+      // These original identities were already validated by the one marker-repair pass.
+      const accountedOriginals = new Map<string, Set<number>>();
+      for (const entry of dispositions) {
+        const lines = accountedOriginals.get(entry.path) ?? new Set<number>();
+        lines.add(entry.line);
+        accountedOriginals.set(entry.path, lines);
+      }
+      const { after, changes, lost } = yield* findLostMarkers(repo, markersBeforeBuild);
+      const finalAccounting = accountForMarkerLoss(
+        dispositions,
+        accountedOriginals,
+        markersBeforeBuild,
+        after,
+        lost,
+        changes,
+      );
+      if (finalAccounting.unexplained.length > 0) {
+        return yield* makeError(
+          "build",
+          `the build left unexplained ${FORK_MARKER} losses. Files: ${describeLostMarkers(finalAccounting.unexplained)}`,
+        );
+      }
       if (merging || (yield* hasStagedChanges(repo))) {
         yield* runChecked({
           operation: "merge",
@@ -1091,7 +1371,7 @@ export const make = Effect.gen(function* () {
             "--no-edit",
             "-m",
             merging
-              ? mergeMessage
+              ? mergeCommitMessage(mergeMessage, dispositions)
               : `fix(desktop): build upstream nightly ${inspection.upstreamTag}`,
           ],
           cwd: repo,
@@ -1099,10 +1379,12 @@ export const make = Effect.gen(function* () {
       }
       return { applicationBundlePath };
     }).pipe(
-      // Nothing is committed until the build succeeds, so any failure or
-      // interruption before the commit still restores the checkout.
+      // Preserve the original failure, adding any checkout leftovers after cleanup.
       Effect.catchCause((cause) =>
-        restoreCheckout.pipe(Effect.andThen(removeBuilds), Effect.andThen(Effect.failCause(cause))),
+        restoreCheckout.pipe(
+          Effect.ensuring(removeBuilds),
+          Effect.flatMap((leftovers) => failAfterCleanup(cause, leftovers)),
+        ),
       ),
     );
     const push = yield* pushFork(repo);
@@ -1150,13 +1432,20 @@ export const make = Effect.gen(function* () {
         : `upstream nightly ${inspection.upstreamTag}`;
       const message = `chore(sync): merge ${label}`;
       yield* Effect.gen(function* () {
-        yield* mergeUpstream(repo, target, label, message, agent);
-        yield* git(["commit", "--no-verify", "--no-edit", "-m", message]);
+        const dispositions = yield* mergeUpstream(repo, target, label, message, agent);
+        yield* reportProgress({ phase: "committing" });
+        yield* git([
+          "commit",
+          "--no-verify",
+          "--no-edit",
+          "-m",
+          mergeCommitMessage(message, dispositions),
+        ]);
       }).pipe(
         Effect.catchCause((cause) =>
           abortMerge(repo).pipe(
-            Effect.andThen(agent ? Effect.void : Ref.set(autoSyncBlockedRef, target)),
-            Effect.andThen(Effect.failCause(cause)),
+            Effect.tap(() => (agent ? Effect.void : Ref.set(autoSyncBlockedRef, target))),
+            Effect.flatMap((leftovers) => failAfterCleanup(cause, leftovers)),
           ),
         ),
       );

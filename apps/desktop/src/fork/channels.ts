@@ -7,6 +7,8 @@ export const CONFIRM_DIALOG_CHANNEL = "desktop:confirm-dialog";
 // Local source builds: merge upstream into the source checkout.
 export const SOURCE_SYNC_CHANNEL = "desktop:update-sync-source";
 export const SOURCE_SYNC_ENABLED_CHANNEL = "desktop:source-sync-enabled";
+export const SOURCE_SYNC_PROGRESS_CHANNEL = "desktop:source-sync-progress";
+export const SOURCE_SYNC_PROGRESS_GET_CHANNEL = "desktop:source-sync-progress-get";
 
 // Remote apps.
 export const REMOTE_APP_GET_STATE_CHANNEL = "remote-app:get-state";

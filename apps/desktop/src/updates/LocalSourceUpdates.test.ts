@@ -103,10 +103,12 @@ describe("local source desktop updates", () => {
     assert.deepStrictEqual(findLostForkMarkers(before, before, noChanges), []);
   });
 
-  it("reports a deleted file only when its markers did not move elsewhere", () => {
+  it("reports a deleted file's markers even when other files gained markers", () => {
     const before = new Map([["gone.ts", 2]]);
     const changes = { renamed: new Map<string, string>(), deleted: new Set(["gone.ts"]) };
-    assert.deepStrictEqual(findLostForkMarkers(before, new Map([["moved.ts", 2]]), changes), []);
+    assert.deepStrictEqual(findLostForkMarkers(before, new Map([["moved.ts", 2]]), changes), [
+      { path: "gone.ts", currentPath: null, expected: 2, found: 0 },
+    ]);
     assert.deepStrictEqual(findLostForkMarkers(before, new Map(), changes), [
       { path: "gone.ts", currentPath: null, expected: 2, found: 0 },
     ]);

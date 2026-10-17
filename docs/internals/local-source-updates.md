@@ -36,9 +36,27 @@ version label and `--build-version` (tag without the leading `v`).
 ## Merge, build, then commit
 
 The merge runs with `--no-ff --no-commit`. Nothing is committed until the build
-succeeds, so every failure before that point (unresolvable conflicts, build failure,
-interruption) ends in `git merge --abort` and leaves the checkout as it was. Only
-after the commit is the build remembered and `origin HEAD:main` pushed.
+succeeds. Failures before that point (unresolvable conflicts, build failure,
+interruption) attempt `git merge --abort` without staging edits during cleanup:
+that could discard unrelated work created while the agent ran. Cleanup checks Git's
+exit status; failure reports manual recovery with Git's output. After a successful
+abort, any remaining modified or untracked paths are reported as "left in the checkout"
+rather than removed or claimed clean. Only after the commit is the build remembered
+and `origin HEAD:main` pushed.
+
+Post-repair and build-finalization staging uses `git add -u`, never blanket staging
+of untracked files. Conflict resolutions still stage only their explicit paths, and
+files added by Git's merge are already in the index. The only additional new files
+allowed are exact destinations of accepted `moved` dispositions: repair accounting
+reads their working-tree markers before explicitly staging those literal paths.
+Any other non-ignored untracked files at these staging points fail the operation
+with a bounded path list and are left untouched. This also refuses genuinely new
+build-repair files that were not already accepted and staged during marker repair.
+Both repair and finalization failures use the same abort-and-report cleanup above;
+finalization happens after the temporary release version has been restored. If abort
+fails, the merge is left for manual recovery, not claimed clean. The initial clean-tree
+check and in-process lock do not detect concurrent edits to tracked files; those edits
+can still be staged, committed, or affected by cleanup. Avoid other writers during a run.
 
 The push is best-effort and goes only to `origin`, which must not be upstream. Whoever
 builds the fork may have no write access to it, so a failed push never fails the
@@ -52,9 +70,18 @@ and pushes, with the same conflict handling but no build gate. Update then has t
 triggers: the fork is behind the newest nightly, or the fork already contains it
 (merged by a sync) while the running app's version is older. The second case
 builds without merging and commits only what the build changed (lockfile, agent
-fixes); on failure those edits are stashed so the checkout stays clean. Sync and
-update share one lock because both rewrite the checkout, and the exported `inspect`
-takes it too, so an update check never reads the checkout mid-merge.
+fixes); on failure tracked edits are stashed, while untracked files remain untouched
+and are reported as checkout leftovers. A failed stash is surfaced as a checkout
+that may still be dirty and needs manual recovery. Sync and update share one lock
+because both rewrite the checkout, and the exported `inspect` takes it too, so an
+update check never reads the checkout mid-merge.
+
+The sidebar button's tooltip and accessible label show the current phase: fetching,
+merging, resolving conflicts with Claude (including the conflict count), checking
+fork add-ons, repairing, committing, and pushing. The main process owns progress;
+a fork IPC snapshot plus events keep reloaded and additional windows in sync.
+Concurrent interactive requests join one in-flight result, with one completion
+clear per operation. Older desktop shells retain the generic syncing label.
 
 `ForkDesktopUpdates` also runs `autoSyncSource` a minute after startup and every 30
 minutes, then rechecks for updates; it never builds. It merges only the newest
@@ -78,12 +105,43 @@ reshaped something the fork imports), go to a headless `claude -p` run in the
 checkout. It is limited to file tools (no Bash, git, or network), told to keep
 both upstream changes and fork additions, and capped at 20 minutes. A path that
 still has conflict markers afterwards aborts the update; a build fix gets one agent
-pass and one rebuild. Files that lost `Fork add-on` lines in the merge also get one
-agent pass ([fork add-ons](./fork-add-ons.md#marker-check-during-upstream-sync)). The
-build stays the gate: nothing is committed or pushed
-unless it passes, and the merge commit skips hooks so the formatter cannot rewrite
-upstream files. It needs the Claude CLI installed and signed in where the desktop
-app can find it on `PATH`.
+pass and one rebuild. A non-zero agent exit or timeout stops the operation immediately,
+without another repair pass. Agent spans record the phase, elapsed milliseconds,
+and exit code (null when no exit code was obtained), not prompts or subprocess output.
+
+Files that lost `Fork add-on` lines in the merge also get one agent pass
+([fork add-ons](./fork-add-ons.md#marker-check-during-upstream-sync)). Preserve fork
+behavior, not obsolete upstream scaffolding: every fork line keeps its marker inline,
+and markers move with moved code. Never add markers to lines without fork behavior.
+The rule is **no unexplained marked-line loss**. The repair agent receives the
+original `HEAD:path:line:text` lines for files with deficits and ends
+with a fenced JSON `dispositions` list for lines not restored in place. Each entry
+names an original path and line, `moved` or `obsolete`, and a reason; moves also name
+the current destination. Only the last JSON fence is parsed; missing or malformed
+output gives no credit. Repair stdout is bounded to 1,048,576 characters; truncation
+fails explicitly rather than silently losing the report. Duplicate or unlisted
+originals are rejected. Moves must spend a real destination's surplus over HEAD once
+per marker, resolving renamed destinations to their original HEAD paths; a destination
+with its own deficit has no surplus. Obsolete lines need a non-empty reason.
+Valid dispositions cover only their source file's remaining
+deficit and are recorded in both sync and build-gated merge commit bodies. The build
+path rechecks the accepted explanations after build repairs, without another marker
+agent pass. Renames are followed; every marked line in a deleted file needs a validated
+move or obsolescence explanation, even when unrelated files gained markers. Unexplained
+losses still abort. Counts and agent explanations detect possible loss; they do not
+prove behavior is preserved.
+
+For a source update with a build, nothing is committed or pushed unless the build
+passes; sidebar sync has no build gate. The merge commit skips hooks so the formatter
+cannot rewrite upstream files. The Claude CLI must be installed and signed in where
+the desktop app can find it on `PATH`. Optional environment overrides in that app's
+environment apply to each conflict, marker-repair, and build-repair agent run:
+
+- `T3CODE_MERGE_AGENT_MODEL` passes `--model <model>`.
+- `T3CODE_MERGE_AGENT_EFFORT` passes `--effort <level>`; the CLI help lists `low`,
+  `medium`, `high`, `xhigh`, and `max` (support depends on the installed CLI/model).
+
+Unset or blank values add no flag, preserving the CLI's existing defaults.
 
 ## Guards and installation
 
