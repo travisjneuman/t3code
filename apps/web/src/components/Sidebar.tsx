@@ -299,6 +299,8 @@ import {
 } from "../forkThreadMenu";
 import { THREAD_CARD_LAYOUT } from "../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
 import "../sidebar-compact/threadCardLayout.css"; // Fork add-on: compact sidebar cards.
+// Fork add-on: compact sidebar cards.
+import { AGENT_LINE_ICON_CLASS, AGENT_MORE_BUTTON_CLASS } from "../sidebar-compact/agentLines";
 
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map();
 // Collapsed shelves share one empty list so a route change alone does not
@@ -2027,6 +2029,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   if (variant === "slim") {
     return (
       <li
+        data-fork-slim-row={THREAD_CARD_LAYOUT} // Fork add-on: compact sidebar cards.
         data-thread-item={threadKey}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
@@ -2045,6 +2048,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 aria-label={accessibility.label}
                 aria-current={accessibility.current}
                 data-testid="sidebar-row-slim"
+                data-fork-card-part="slim" // Fork add-on: compact sidebar cards.
                 aria-busy={isRegeneratingTitle || undefined}
                 className={cn(rowSurfaceClassName, "flex h-9 items-center gap-2.5 px-2.5")}
                 onClick={handleClick}
@@ -2062,7 +2066,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
               )}
             >
-              {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
+              {/* Fork add-on: compact sidebar cards. */}
+              {props.project ? <ProjectFavicon project={props.project} className="size-3" /> : null}
             </span>
             {/* Fork add-on: nested subagents. */}
             <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
@@ -5050,9 +5055,10 @@ export default function Sidebar() {
                         <button
                           type="button"
                           onClick={showMoreSettled}
-                          className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                          className={AGENT_MORE_BUTTON_CLASS} // Fork add-on: compact sidebar cards.
                         >
-                          <PlusIcon aria-hidden className="size-4 shrink-0" />
+                          {/* Fork add-on: compact sidebar cards. */}
+                          <PlusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
                           Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
                         </button>
                       </li>
