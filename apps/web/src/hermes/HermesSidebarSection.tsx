@@ -39,6 +39,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { cn } from "../lib/utils";
+import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
 import { readLocalApi } from "../localApi";
 import { useThreadShells, waitForThreadShell } from "../state/entities";
 import { useEnvironments } from "../state/environments";
@@ -63,7 +64,7 @@ import {
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:hermes-expanded";
 const MORE_BUTTON_CLASS =
-  "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
+  "flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-(--sidebar-row-content-inset) text-left text-[11px] text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
 
 type MenuAction =
   | "continue"
@@ -801,7 +802,8 @@ const HermesLine = memo(function HermesLine(props: {
   const source = row.session?.source;
   const status = row.running ? "Running" : props.isOpening ? "Opening" : null;
   const className = cn(
-    "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-(--sidebar-row-content-inset) text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+    AGENT_LINE_CLASS,
+    "px-(--sidebar-row-content-inset)",
     props.isActive || props.isSelected
       ? "bg-sidebar-row-active text-sidebar-foreground"
       : row.thread === null
@@ -813,13 +815,13 @@ const HermesLine = memo(function HermesLine(props: {
       <ProviderInstanceIcon
         driverKind={HERMES_DRIVER}
         displayName="Hermes"
-        className="size-3.5 shrink-0"
-        iconClassName="size-3.5"
+        className={AGENT_LINE_ICON_CLASS}
+        iconClassName="size-3"
       />
       <span className="min-w-0 flex-1 truncate">{row.title}</span>
       {status !== null ? (
         <span aria-hidden title={status} className="flex shrink-0">
-          <CircleDashedIcon className="size-3.5 text-info" />
+          <CircleDashedIcon className="size-3 text-info" />
         </span>
       ) : (
         <>
@@ -846,7 +848,7 @@ const HermesLine = memo(function HermesLine(props: {
     className,
   };
   return (
-    <li className={cn("list-none py-px", props.isNested && "pl-4")}>
+    <li className={cn("list-none", props.isNested && "pl-3")}>
       {row.thread !== null ? (
         <Link
           to="/$environmentId/$threadId"
