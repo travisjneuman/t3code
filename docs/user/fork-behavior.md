@@ -36,6 +36,12 @@ In the thread details card, choose a section's title, such as **Automations** or
 collapse it to its heading, and again to expand it. Each section remembers its state across
 threads and restarts. See [Session details](session-details.md#open-them).
 
+## Thread cards name their machine
+
+Every thread card in the sidebar names the machine the thread runs on, the one picked in **Run
+on**, even when the thread is in a project, since one project can live on several machines. A
+thread's branch, when it has one, follows the machine.
+
 ## Subagents sit under their thread
 
 A thread that started subagents, through `delegate_task` or the provider's own subagent tool, shows

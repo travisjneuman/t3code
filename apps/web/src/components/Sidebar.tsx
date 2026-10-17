@@ -1697,7 +1697,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     : thread.modelSelection.model;
 
   const isRemote = thread.environmentId !== props.currentEnvironmentId;
-  const showsScratchMachine = !thread.branch && props.scratchMachineLabel !== null;
+  // Fork add-on: every card names the machine its thread runs on, since one
+  // project can live on several machines.
+  const showsScratchMachine = props.environmentLabel !== null;
 
   const detailsTooltip = (
     <SidebarThreadTooltip
@@ -2394,22 +2396,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             >
               {/* Fork add-on: nested subagents. */}
               <SubagentToggle threadKey={threadKey} count={props.subagentCount} />
-              {thread.branch ? (
-                <>
-                  <ThreadWorktreeIndicator thread={thread} />
-                  <span className="flex min-w-0 flex-1 text-muted-foreground/40">
-                    <MiddleTruncate value={thread.branch} showTitle={false} />
-                  </span>
-                </>
-              ) : showsScratchMachine ? (
+              {/* Fork add-on: the machine first, then the branch when there is one. */}
+              {showsScratchMachine ? (
                 <>
                   <EnvironmentMachineIcon
                     aria-hidden
                     kind={props.environmentMachine}
                     className="size-3 shrink-0 text-muted-foreground/40"
                   />
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground/40">
-                    {props.scratchMachineLabel}
+                  <span className="min-w-0 truncate text-muted-foreground/40">
+                    {props.environmentLabel}
+                  </span>
+                </>
+              ) : null}
+              {thread.branch ? (
+                <>
+                  <ThreadWorktreeIndicator thread={thread} />
+                  <span className="flex min-w-0 flex-1 text-muted-foreground/40">
+                    <MiddleTruncate value={thread.branch} showTitle={false} />
                   </span>
                 </>
               ) : (
