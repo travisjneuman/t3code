@@ -64,11 +64,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { AgentElapsed } from "./AgentElapsed";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
 import { ThreadLineageWorkflowRow } from "./ThreadLineageWorkflowRow";
-import {
-  lineageIndentStyle,
-  nestSubagentLineage,
-  useSubagentDescendantShells,
-} from "../../subagents/lineageTree"; // Fork add-on: nested lineage
+import { lineageIndentStyle, nestSubagentLineage } from "../../subagents/lineageTree"; // Fork add-on: nested lineage
+import { useSubagentDescendantShells } from "../../subagents/lineageTree"; // Fork add-on: nested lineage
 
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";

@@ -97,8 +97,7 @@ export function collectServerUpdateTargets(
       continue;
     }
     const sourceSkip = nonForkBulkSkipReason(hostReleaseSourceOf(config.environment)); // Fork add-on: release source.
-    if (sourceSkip !== undefined) {
-      // Fork add-on
+    if (sourceSkip !== undefined /* Fork add-on */) {
       skip(sourceSkip); // Fork add-on
       continue; // Fork add-on
     } // Fork add-on

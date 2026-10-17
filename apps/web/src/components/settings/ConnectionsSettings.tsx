@@ -1773,26 +1773,22 @@ function SavedBackendListRow({
           {errorTraceId ? (
             <MenuItem onClick={() => copyTraceId(errorTraceId)}>Copy trace ID</MenuItem>
           ) : null}
-          {
-            isConnected && hostEnvironment?.capabilities.hostBackups === true ? ( // Fork add-on: host backups.
-              <MenuItem onClick={() => setBackupsOpen(true)}>Backups…</MenuItem> // Fork add-on
-            ) : null /* Fork add-on */
-          }
+          {isConnected && hostEnvironment?.capabilities.hostBackups === true ? ( // Fork add-on: host backups.
+            <MenuItem onClick={() => setBackupsOpen(true)}>Backups…</MenuItem> // Fork add-on
+          ) : /* Fork add-on */ null}
           <MenuSeparator />
           <MenuItem variant="destructive" onClick={() => onRemove(environment)}>
             {isRemoving ? "Removing…" : "Remove from this device…"}
           </MenuItem>
         </MenuPopup>
       </Menu>
-      {
-        backupsOpen ? ( // Fork add-on: host backups.
-          <HostBackupsDialog // Fork add-on
-            environmentId={environmentId} // Fork add-on
-            serverLabel={environment.label} // Fork add-on
-            onClose={() => setBackupsOpen(false)} // Fork add-on
-          /> // Fork add-on
-        ) : null /* Fork add-on */
-      }
+      {backupsOpen ? ( // Fork add-on: host backups.
+        <HostBackupsDialog // Fork add-on
+          environmentId={environmentId} // Fork add-on
+          serverLabel={environment.label} // Fork add-on
+          onClose={() => setBackupsOpen(false)} // Fork add-on
+        /> // Fork add-on
+      ) : /* Fork add-on */ null}
     </EnvironmentRow>
   );
 }

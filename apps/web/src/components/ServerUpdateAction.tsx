@@ -140,8 +140,7 @@ export function ServerUpdatesAction({
     pending.current = true;
     setIsPending(true);
     await settlePromise(async () => {
-      const available = forkHostsOnly(eligible).filter(
-        // Fork add-on: release source.
+      const available = forkHostsOnly(eligible /* Fork add-on: release source. */).filter(
         (target) => !pendingUpdateEnvironmentIds.has(target.environmentId),
       );
       const desktopTargets = available.filter((target) => target.selfUpdate === "desktop-managed");
