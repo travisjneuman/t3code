@@ -162,6 +162,20 @@ An SSH-tunnel install requesting a version absent from fork releases fails with 
 archive**. Publish the missing fork archive; do not silently fall back to upstream. Explicit
 rollback recovery is a separate operation, not an installation fallback.
 
+## Fixed executable path
+
+Host services run `<T3 home>/runtime/current/t3.exe` on Windows and `<T3 home>/runtime/current/t3`
+on Linux, so Windows Firewall rules and VPN split-tunnel exclusions that match an exact executable
+keep working across updates. `runtime/current` holds hard links to the active version directory and
+uses no extra disk. The launcher points it at the version it is about to start, while no server
+runs: on updates, automatic trial rollbacks and restarts. The launcher's own replaced image waits in
+`runtime/.current-retired` until it has exited.
+
+An in-app update never rewrites the service file. A host whose service file still names
+`runtime/versions/<version>` moves to the fixed path on its first `prune` or `rollback` after it runs
+a release with this launcher; earlier, only the launcher process would move. `status` reports the
+launcher directory, and `launcherVersion` is the version `runtime/current` holds.
+
 ## Pruning and safe service stops
 
 Only prune or roll back an idle host; both commands require `--confirm-idle`. That flag is the
@@ -173,11 +187,11 @@ does not skip unreachable hosts.
 
 Pruning takes a fresh cold backup of the current version while the service is stopped, even if a
 same-version backup already exists. It includes `statev2.sqlite`, any WAL/SHM sidecars, service state,
-the service file and a checksum receipt. It repoints the service file to the active version's
-launcher, restarts and confirms that version is running before deleting other version directories
-and all older backups. Successful pruning keeps exactly one installed version and that one fresh
-backup. Never delete a directory still named by the service file, even if its launcher currently
-starts a newer server. The retained backup is a current-version recovery point, not a pre-migration
+the service file and a checksum receipt. It fills `runtime/current` with the active version, points
+the service file at its launcher, restarts and confirms that version is running before deleting
+other version directories and all older backups. Successful pruning keeps exactly one installed
+version and that one fresh backup. Never delete a directory still named by an older service file,
+even if its launcher currently starts a newer server. The retained backup is a current-version recovery point, not a pre-migration
 snapshot. A rollback keeps a backup of the newer version it left; prune refuses before stopping
 anything while such a backup exists, so remove it deliberately once the rollback is settled.
 
@@ -220,8 +234,8 @@ is a separate manual recovery requiring the owner's go: identify a compatible pr
 recovery point, stop the service, and accept the loss of changes made after that backup. Never run
 older code against a post-migration backup. After pruning past a migrating release, fix forward.
 
-An allowed rollback keeps the current database, takes a fresh stopped backup, repoints the launcher
-and changes `activeVersion` in `runtime/service-state.json`, clearing the old update record. It also
+An allowed rollback keeps the current database, takes a fresh stopped backup, fills
+`runtime/current` with the target version and changes `activeVersion` in `runtime/service-state.json`, clearing the old update record. It also
 removes a recognized standalone fork `T3CODE_RELEASE_BASE_URL` line from the service file, so an
 upstream runtime's discovery and downloads agree. A nonstandard override line refuses before
 downloading a missing runtime or stopping rather than being guessed at. Service rewrite checks,
@@ -230,7 +244,8 @@ confirms the target version after restarting; the Mac app is unaffected.
 
 An emergency same-version reinstall is manual: with explicit operator approval, stop the service,
 move the installed version directory aside, extract the replacement archive with its
-`.install-complete` marker, and start again. This bypasses the launcher's trial protection; preserve
+`.install-complete` marker, delete `runtime/current/.install-complete` so the launcher relinks the
+replacement, and start again. This bypasses the launcher's trial protection; preserve
 a cold backup and prefer a newer release instead.
 
 ## Exit status and interrupted work

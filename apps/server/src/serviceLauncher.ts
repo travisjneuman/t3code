@@ -29,6 +29,7 @@ import {
   SERVICE_RESTART_PENDING_FILE,
   SERVICE_STOP_MARKER_FILE,
 } from "./cloud/serviceProtocol.ts";
+import { syncCurrentRuntime } from "./cloud/currentRuntime.ts"; // Fork add-on: fixed runtime/current path.
 
 const HANDOFF_DELAY_MS = 2_000;
 /**
@@ -575,12 +576,13 @@ export class Launcher {
     }
     if (this.#stopping) return;
     const paths = runtimePaths(this.#baseDir, version);
+    const entryPath = await syncCurrentRuntime(this.#baseDir, version); // Fork add-on: fixed runtime/current path.
     const context: ServiceLauncherContext = {
       protocol: SERVICE_LAUNCHER_PROTOCOL,
       childVersion: version,
       ...(update === undefined ? {} : { update }),
     };
-    const spawnArguments = runtimeSpawnArguments(paths);
+    const spawnArguments = runtimeSpawnArguments({ ...paths, entryPath }); // Fork add-on: fixed runtime/current path.
     const child = NodeChildProcess.spawn(spawnArguments.command, spawnArguments.args, {
       env: { ...process.env, [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context) },
       stdio: ["inherit", "inherit", "inherit", "ipc"],

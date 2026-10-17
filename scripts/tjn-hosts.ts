@@ -218,13 +218,22 @@ async function remoteSource() {
     new URL("../packages/shared/src/semver.ts", import.meta.url),
     "utf8",
   );
-  const sharedImport = 'import { compareSemverVersions } from "@t3tools/shared/semver";';
-  requireState(
-    source.includes(sharedImport),
-    "Remote payload shared-semver import changed; refusing an incomplete payload.",
+  const currentRuntime = await fs.readFile(
+    new URL("../apps/server/src/cloud/currentRuntime.ts", import.meta.url),
+    "utf8",
   );
-  // Ship the exact shared implementation: remote preflight must also work before dependencies are installed.
-  return `${semver}\n${source.replace(sharedImport, "")}\ntry {
+  const sharedImport = 'import { compareSemverVersions } from "@t3tools/shared/semver";';
+  const currentRuntimeImport = `import {
+  currentRuntimePaths,
+  syncCurrentRuntime,
+} from "../../../apps/server/src/cloud/currentRuntime.ts";`;
+  requireState(
+    source.includes(sharedImport) && source.includes(currentRuntimeImport),
+    "Remote payload shared imports changed; refusing an incomplete payload.",
+  );
+  // Ship the exact shared implementations: remote preflight must also work before dependencies are
+  // installed, and runtime/current must be laid out exactly as the service launcher lays it out.
+  return `${semver}\n${currentRuntime}\n${source.replace(sharedImport, "").replace(currentRuntimeImport, "")}\ntry {
   const request = JSON.parse(Buffer.from(process.argv[2], 'base64').toString('utf8'));
   const result = await runHost(request);
   console.log(JSON.stringify(result));

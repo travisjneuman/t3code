@@ -7,6 +7,10 @@ import * as path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { compareSemverVersions } from "@t3tools/shared/semver";
+import {
+  currentRuntimePaths,
+  syncCurrentRuntime,
+} from "../../../apps/server/src/cloud/currentRuntime.ts";
 
 export interface Host {
   ssh: string;
@@ -264,6 +268,11 @@ const versionsPath = (host: Host) => path.join(host.t3Home, "runtime", "versions
 const backupRoot = (host: Host) => path.join(host.t3Home, "backups");
 const executable = (host: Host, v: string) =>
   path.join(versionsPath(host), version(v), host.os === "win32" ? "t3.exe" : "t3");
+// The service runs `runtime/current`, a fixed path that OS rules keyed on the exact
+// executable (Proton split tunneling) can name. Older service files name a version directory.
+const currentRuntime = (host: Host) => currentRuntimePaths(host.t3Home, host.os);
+const samePath = (host: Host, a: string, b: string) =>
+  host.os === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 async function installed(host: Host, v: string) {
   await realDirectory(path.join(versionsPath(host), version(v)));
   await plainFile(executable(host, v));
@@ -316,14 +325,26 @@ function launcher(contents: string, host: Host) {
   );
   const match = matches[0]!;
   const entry = match[1] ?? match[2]!;
+  if (samePath(host, path.normalize(entry), currentRuntime(host).entryPath)) {
+    return { entry, version: undefined };
+  }
   const v = version(path.basename(path.dirname(entry)));
-  const same = (a: string, b: string) =>
-    host.os === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
   requireState(
-    same(path.normalize(entry), executable(host, v)),
-    "Service launcher is outside the configured versions directory.",
+    samePath(host, path.normalize(entry), executable(host, v)),
+    "Service launcher is outside the configured runtime directory.",
   );
   return { entry, version: v };
+}
+async function launcherVersion(host: Host, named: ReturnType<typeof launcher>) {
+  if (named.version !== undefined) {
+    return named.version;
+  }
+  const sentinel = currentRuntime(host).sentinelPath;
+  requireState(
+    await exists(sentinel),
+    "runtime/current is incomplete; the service cannot start from it.",
+  );
+  return version((await fs.readFile(sentinel, "utf8")).trim());
 }
 async function names(dir: string): Promise<string[]> {
   if (!(await exists(dir))) {
@@ -358,7 +379,7 @@ async function inspect(host: Host): Promise<Snapshot> {
     serviceStatus: await serviceStatus(host),
     serviceFileSha256: createHash("sha256").update(file).digest("hex"),
     versions: await names(versionsPath(host)),
-    launcherVersion: named.version,
+    launcherVersion: await launcherVersion(host, named),
     launcherDirectory: path.dirname(named.entry),
     releaseBaseUrlSet: /^\s*(?:set\s+"?|Environment="?)T3CODE_RELEASE_BASE_URL=/im.test(file),
     backups,
@@ -439,13 +460,21 @@ async function stop(host: Host, before: Snapshot & { runtime: Runtime }) {
       "--value",
     ]);
     requireState(fragment === host.service.file, "systemd loaded a different service file.");
+    const launcherExe = (await fs.readlink(`/proc/${mainPid}/exe`)).replace(/ \(deleted\)$/, "");
+    const current = currentRuntime(host);
     requireState(
-      (await fs.readlink(`/proc/${mainPid}/exe`)) === executable(host, before.launcherVersion),
+      launcherExe === executable(host, before.launcherVersion) ||
+        (path.normalize(before.launcherDirectory) === current.currentDir &&
+          // A remote update moves the running launcher's image aside until its next start.
+          (launcherExe === current.entryPath ||
+            launcherExe.startsWith(current.retiredDir + path.sep))),
       "systemd MainPID is not the configured launcher.",
     );
+    const runtimeExe = await fs.readlink(`/proc/${before.runtime.pid}/exe`);
     requireState(
-      (await fs.readlink(`/proc/${before.runtime.pid}/exe`)) ===
-        executable(host, before.state.activeVersion),
+      runtimeExe === executable(host, before.state.activeVersion) ||
+        (runtimeExe === current.entryPath &&
+          (await fs.readFile(current.sentinelPath, "utf8")).trim() === before.state.activeVersion),
       "Runtime PID is not the active executable.",
     );
     const stat = await fs.readFile(`/proc/${before.runtime.pid}/stat`, "utf8");
@@ -458,7 +487,7 @@ async function stop(host: Host, before: Snapshot & { runtime: Runtime }) {
     // Never search for processes by name: the only root is the persisted server PID.
     const script = `
 $server = Get-CimInstance Win32_Process -Filter "ProcessId = ${before.runtime.pid}"
-if (!$server -or $server.ExecutablePath -ine ${psQuote(executable(host, before.state.activeVersion))}) {
+if (!$server -or ($server.ExecutablePath -ine ${psQuote(executable(host, before.state.activeVersion))} -and $server.ExecutablePath -ine ${psQuote(currentRuntime(host).entryPath)})) {
   throw 'Runtime PID does not own the expected executable'
 }
 if ($server.CreationDate -gt [datetime]${psQuote(before.runtime.startedAt)}) {
@@ -723,7 +752,7 @@ async function backup(host: Host, before: Snapshot) {
 async function rewrittenService(host: Host, target: string, upstream: boolean) {
   const old = await fs.readFile(host.service.file, "utf8");
   const named = launcher(old, host);
-  const nextEntry = executable(host, target);
+  const nextEntry = currentRuntime(host).entryPath;
   requireState(
     !/["%$!\r\n]/.test(nextEntry),
     "Launcher path contains unsupported service-file metacharacters.",
@@ -749,7 +778,10 @@ async function rewrittenService(host: Host, target: string, upstream: boolean) {
       })
       .join("");
   }
-  requireState(launcher(next, host).version === target, "Rewritten service launcher is ambiguous.");
+  requireState(
+    launcher(next, host).version === undefined,
+    "Rewritten service launcher is ambiguous.",
+  );
   return next;
 }
 async function downloadUpstream(host: Host, target: string) {
@@ -956,6 +988,9 @@ async function maintain(request: Request) {
     await unchangedAfterStop(host, before);
     const keptBackup = await backup(host, before);
     await unchangedAfterStop(host, before);
+    // Nothing runs from runtime/current while the service is stopped. Filled before the
+    // service file names it, so a failure here leaves the old file still startable.
+    await syncCurrentRuntime(host.t3Home, target, host.os);
     // A crash mid-write must leave the old or new service file, never a truncated one.
     const nextService = `${host.service.file}.host-maintenance`;
     const serviceMode = (await fs.stat(host.service.file)).mode & 0o777;

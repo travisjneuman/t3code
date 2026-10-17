@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
+import { currentRuntimePaths, syncCurrentRuntime } from "./currentRuntime.ts"; // Fork add-on: fixed runtime/current path.
 import {
   ensurePinnedRuntimeInstalled,
   pinnedRuntimeCommand,
@@ -570,6 +571,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   const statePath = path.join(input.baseDir, "runtime", SERVICE_STATE_FILE);
   const restartPendingPath = path.join(input.baseDir, "runtime", SERVICE_RESTART_PENDING_FILE);
   const runtimePaths = pinnedRuntimePaths(path, input.baseDir, input.cliVersion, platform);
+  const currentRuntime = currentRuntimePaths(input.baseDir, platform); // Fork add-on: fixed runtime/current path.
   const writeDurably = (filePath: string, contents: string) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -590,7 +592,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       }),
     ).pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
   const plan: BootServicePlan = {
-    program: [runtimePaths.entryPath, "__service-launcher"],
+    program: [currentRuntime.entryPath, "__service-launcher"], // Fork add-on: fixed runtime/current path.
     baseDir: input.baseDir,
     logPath,
     unitPath,
@@ -840,6 +842,16 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           return yield* new BootServiceUpdatePendingError();
         }
       }
+      // Fork add-on: the unit runs `runtime/current`, so it must exist before the unit names it.
+      // A service left running keeps its copy; its launcher moves it to the new version on its
+      // next start.
+      const replaceCurrent = start || !installed; // Fork add-on
+      if (replaceCurrent || !(yield* fs.exists(currentRuntime.sentinelPath)) /* Fork add-on */) {
+        /* Fork add-on */ yield* Effect.tryPromise({
+          try: () => syncCurrentRuntime(input.baseDir, input.cliVersion, platform), // Fork add-on
+          catch: (cause) => new BootServiceInstallError({ cause }), // Fork add-on
+        }); // Fork add-on
+      } // Fork add-on
       yield* writeDurably(unitPath, manager.render(plan));
 
       if (start) {
@@ -965,6 +977,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       fs.readFileString(runtimePaths.sentinelPath).pipe(Effect.option),
       fs.readFileString(statePath).pipe(Effect.option),
     ]);
+    const currentEntryExists = yield* fs.exists(currentRuntime.entryPath); // Fork add-on
     const state = Option.isSome(stateText) ? parseServiceState(stateText.value) : undefined;
     const installedVersion = Option.isSome(stateText)
       ? serviceStateActiveVersion(stateText.value)
@@ -987,6 +1000,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         problems.length === 0 &&
         normalizeUnit(unit) === normalizeUnit(detectedManager.render(plan)) &&
         runtimeEntryExists &&
+        currentEntryExists && // Fork add-on
         Option.isSome(runtimeSentinel) &&
         runtimeSentinel.value.trim() === input.cliVersion &&
         state?.activeVersion === input.cliVersion &&

@@ -38,6 +38,13 @@ providers. It asks for confirmation before installing, but skips the standard si
 active-session check. The desktop app can still hold the restart while sessions are busy. Use
 the standard sidebar's **Update everything** for coordinated updates.
 
+## Host services keep one executable path
+
+A background service runs `~/.t3/runtime/current/t3` (`t3.exe` on Windows), and that path stays
+the same across updates and rollbacks. Point firewall rules and VPN split-tunnel exclusions that
+match an exact program at it. `t3 update` or `t3 service install` moves a service installed by
+an older version to this path; an update started from the app does not rewrite the service.
+
 ## Tailscale HTTPS needs HTTPS certificates
 
 [Tailscale HTTPS](remote-access.md#tailscale-https) needs **HTTPS Certificates** turned on for your
