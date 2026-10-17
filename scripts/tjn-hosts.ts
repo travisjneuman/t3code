@@ -182,7 +182,7 @@ function currentRelease(list: Release[]) {
 
 function remoteCommand(host: Host, request: Request) {
   const payload = Buffer.from(JSON.stringify(request)).toString("base64");
-  const argv = [...host.node, "--input-type=module-types", "-", payload];
+  const argv = [...host.node, "--input-type=module-typescript", "-", payload];
   let command: string;
   if (host.os === "win32") {
     const env = Object.entries(host.env)
