@@ -105,7 +105,11 @@ export const powershellArgs = (script: string) => [
   "-NoProfile",
   "-NonInteractive",
   "-EncodedCommand",
-  Buffer.from(`$ErrorActionPreference='Stop'\n${script}`, "utf16le").toString("base64"),
+  // With redirected output, Windows PowerShell serializes progress records as CLIXML into stderr.
+  Buffer.from(
+    `$ErrorActionPreference='Stop'\n$ProgressPreference='SilentlyContinue'\n${script}`,
+    "utf16le",
+  ).toString("base64"),
 ];
 
 export async function run(
@@ -1050,7 +1054,10 @@ async function build(request: Request) {
   } finally {
     await file.close();
   }
-  const result: unknown = JSON.parse(tail.trim().split(/\r?\n/).at(-1)!);
+  // The log interleaves the shell's stderr, which can still follow the builder's final line.
+  const line = tail.split(/\r?\n/).findLast((entry) => entry.startsWith('{"archive":'));
+  requireState(line !== undefined, "Builder did not emit its final archive/hash JSON.");
+  const result: unknown = JSON.parse(line);
   requireState(
     record(result) &&
       typeof result.archive === "string" &&
