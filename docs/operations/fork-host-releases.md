@@ -171,10 +171,15 @@ uses no extra disk. The launcher points it at the version it is about to start, 
 runs: on updates, automatic trial rollbacks and restarts. The launcher's own replaced image waits in
 `runtime/.current-retired` until it has exited.
 
-An in-app update never rewrites the service file. A host whose service file still names
-`runtime/versions/<version>` moves to the fixed path on its first `prune` or `rollback` after it runs
-a release with this launcher; earlier, only the launcher process would move. `status` reports the
-launcher directory, and `launcherVersion` is the version `runtime/current` holds.
+An in-app update replaces the server but never the launcher or the service file. A host whose
+service file still names `runtime/versions/<version>` moves on its own: the first updated server
+started by that launcher rewrites the `.cmd` launcher line (padded to the same length, because cmd
+resumes a running script at a byte offset) or the unit's `ExecStart` (then `daemon-reload`), and
+exits once. The supervisor restarts the launcher from `runtime/current`, so the update costs one
+extra restart. `runtime/.current-move-attempt` records the version that tried, so a supervisor that
+still starts the old launcher costs one restart rather than a loop; `prune` and `rollback` also
+migrate. `status` reports the launcher directory, and `launcherVersion` is the version
+`runtime/current` holds.
 
 ## Pruning and safe service stops
 

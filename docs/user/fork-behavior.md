@@ -42,8 +42,8 @@ the standard sidebar's **Update everything** for coordinated updates.
 
 A background service runs `~/.t3/runtime/current/t3` (`t3.exe` on Windows), and that path stays
 the same across updates and rollbacks. Point firewall rules and VPN split-tunnel exclusions that
-match an exact program at it. `t3 update` or `t3 service install` moves a service installed by
-an older version to this path; an update started from the app does not rewrite the service.
+match an exact program at it. A service installed by an older version moves to this path by
+itself on its next update, including one started from the app; T3 restarts one extra time then.
 
 ## Tailscale HTTPS needs HTTPS certificates
 
