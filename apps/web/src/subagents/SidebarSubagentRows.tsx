@@ -2,8 +2,8 @@
  * Subagents (delegate_task children and provider-native subagents) nested
  * under their top-level thread's sidebar row, one line each, in whichever
  * section that row sits. They stay after they finish so they can be reviewed,
- * archived or deleted; each parent shows all of them or none. Fork add-on:
- * nested subagents.
+ * archived or deleted. A toggle on the parent's row shows all of them or none;
+ * none is the default. Fork add-on: nested subagents.
  */
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
@@ -20,14 +20,13 @@ import {
 import type { ContextMenuItem, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, ClockIcon, CpuIcon } from "lucide-react";
-import { memo, useMemo, type MouseEvent, type ReactNode } from "react";
+import { ChevronRightIcon, CircleDashedIcon, ClockIcon, CpuIcon } from "lucide-react";
+import { memo, useMemo, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
-import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
 import { toastManager } from "../components/ui/toast";
-import { Tooltip, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { shortModelLabel } from "../external-sessions/atoms";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -41,9 +40,9 @@ import type { ProviderInstanceEntry } from "../providerInstances";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 
-/** Parents whose subagents are folded away; every other parent shows all of them. */
-const COLLAPSED_STORAGE_KEY = "t3code:sidebar:subagents-collapsed";
-const CollapsedKeysSchema = Schema.Array(Schema.String);
+/** Parents whose subagents are shown; every other parent hides them. */
+const EXPANDED_STORAGE_KEY = "t3code:sidebar:subagents-expanded";
+const ExpandedKeysSchema = Schema.Array(Schema.String);
 const NO_KEYS: ReadonlyArray<string> = [];
 /** Deeper subagents than this indent no further. */
 const MAX_INDENT_DEPTH = 3;
@@ -107,18 +106,23 @@ function groupSubagents(
 const NO_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map();
 
 /**
- * Called once by the sidebar. `render(parentKey)` is the subagent block that
- * goes right after that thread's row: one node, or none when it has no
- * subagents.
+ * Called once by the sidebar. `count(parentKey)` feeds that row's toggle;
+ * `render(parentKey)` is the subagent block that goes right after the row:
+ * one node, or none when they are hidden. Hidden, only the subagent being
+ * viewed stays visible.
  */
 export function useSidebarSubagents(input: {
   threads: ReadonlyArray<EnvironmentThreadShell>;
   activeThreadKey: string | null;
   providerEntriesByEnvironment: ReadonlyMap<string, ReadonlyMap<string, ProviderInstanceEntry>>;
   onOpen: (threadRef: ScopedThreadRef) => void;
-}): { readonly render: (parentKey: string) => ReactNode[] } {
+}): {
+  readonly count: (parentKey: string) => number;
+  readonly render: (parentKey: string) => ReactNode[];
+} {
   const { threads } = input;
   const groups = useMemo(() => groupSubagents(threads), [threads]);
+  const [expandedKeys] = useLocalStorage(EXPANDED_STORAGE_KEY, NO_KEYS, ExpandedKeysSchema);
   const nowMinute = useNowMinute();
   const { archiveThread, deleteThread } = useThreadActions();
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
@@ -198,15 +202,20 @@ export function useSidebarSubagents(input: {
     },
   );
 
+  const count = (parentKey: string) => groups.get(parentKey)?.length ?? 0;
+
   const render = (parentKey: string): ReactNode[] => {
     const subagents = groups.get(parentKey);
     if (subagents === undefined) return [];
-    const environmentId = subagents[0]!.thread.environmentId;
+    const visible = expandedKeys.includes(parentKey)
+      ? subagents
+      : subagents.filter((entry) => entry.key === input.activeThreadKey);
+    if (visible.length === 0) return [];
+    const environmentId = visible[0]!.thread.environmentId;
     return [
       <SidebarSubagentRows
         key={`${parentKey}:subagents`}
-        parentKey={parentKey}
-        subagents={subagents}
+        subagents={visible}
         activeThreadKey={input.activeThreadKey}
         providerEntryByInstanceId={
           input.providerEntriesByEnvironment.get(environmentId) ?? NO_PROVIDER_ENTRIES
@@ -218,7 +227,59 @@ export function useSidebarSubagents(input: {
     ];
   };
 
-  return { render };
+  return { count, render };
+}
+
+/** The row's show/hide switch for its subagents; nothing when it has none. */
+export function SubagentToggle(props: { threadKey: string; count: number }) {
+  return props.count > 0 ? <SubagentToggleButton {...props} /> : null;
+}
+
+function SubagentToggleButton(props: { threadKey: string; count: number }) {
+  const [expandedKeys, setExpandedKeys] = useLocalStorage(
+    EXPANDED_STORAGE_KEY,
+    NO_KEYS,
+    ExpandedKeysSchema,
+  );
+  const expanded = expandedKeys.includes(props.threadKey);
+  const label = `${expanded ? "Hide" : "Show"} ${props.count} ${
+    props.count === 1 ? "subagent" : "subagents"
+  }`;
+  // The row underneath opens, renames and drags on these; the toggle is not part of that.
+  const stop = (event: SyntheticEvent) => event.stopPropagation();
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            aria-expanded={expanded}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setExpandedKeys((keys) =>
+                keys.includes(props.threadKey)
+                  ? keys.filter((key) => key !== props.threadKey)
+                  : [...keys, props.threadKey],
+              );
+            }}
+            onPointerDown={stop}
+            onDoubleClick={stop}
+            onKeyDown={stop}
+            className={cn(
+              "-ms-1 inline-flex h-3.5 shrink-0 cursor-pointer items-center gap-0.5 rounded-sm px-1 text-[11px] leading-none tabular-nums outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              expanded ? "text-foreground/80" : "text-muted-foreground",
+            )}
+          />
+        }
+      >
+        <ChevronRightIcon aria-hidden className={cn("size-3", expanded && "rotate-90")} />
+        {props.count}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{label}</TooltipPopup>
+    </Tooltip>
+  );
 }
 
 /** Matches the thread rows' short relative time: "5m", "now". */
@@ -244,12 +305,8 @@ function statusLabel(thread: EnvironmentThreadShell): string {
   }
 }
 
-/**
- * A top-level thread's subagents: a fold header, then one line per subagent.
- * Folded, only the subagent being viewed stays visible.
- */
+/** A top-level thread's visible subagents, one line each. */
 function SidebarSubagentRows(props: {
-  parentKey: string;
   subagents: ReadonlyArray<SidebarSubagent>;
   activeThreadKey: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
@@ -261,57 +318,27 @@ function SidebarSubagentRows(props: {
     open: (threadRef: ScopedThreadRef) => void,
   ) => void;
 }) {
-  const [collapsedKeys, setCollapsedKeys] = useLocalStorage(
-    COLLAPSED_STORAGE_KEY,
-    NO_KEYS,
-    CollapsedKeysSchema,
-  );
-  const expanded = !collapsedKeys.includes(props.parentKey);
-  const running = props.subagents.filter((entry) => threadRuntimeIsActive(entry.thread.runtime));
-  const visible = expanded
-    ? props.subagents
-    : props.subagents.filter((entry) => entry.key === props.activeThreadKey);
-  const toggle = () =>
-    setCollapsedKeys((keys) =>
-      keys.includes(props.parentKey)
-        ? keys.filter((key) => key !== props.parentKey)
-        : [...keys, props.parentKey],
-    );
-  const count = props.subagents.length;
-  const label = `${count} ${count === 1 ? "subagent" : "subagents"}${
-    running.length > 0 ? ` · ${running.length} working` : ""
-  }`;
   return (
     <li role="presentation" className="list-none ps-4">
       <TooltipProvider delay={150} closeDelay={0} timeout={400}>
-        <CollapsibleSectionHeader
-          expanded={expanded}
-          tone={running.length > 0 ? "info" : "muted"}
-          onClick={toggle}
-          onMouseDown={(event) => event.preventDefault()}
-        >
-          {label}
-        </CollapsibleSectionHeader>
-        {visible.length > 0 ? (
-          <ul role="presentation" className="flex flex-col">
-            {visible.map((entry) => (
-              <SubagentLine
-                key={entry.key}
-                entry={entry}
-                isActive={entry.key === props.activeThreadKey}
-                providerEntry={
-                  props.providerEntryByInstanceId.get(
-                    entry.thread.runtime?.providerInstanceId ??
-                      entry.thread.modelSelection.instanceId,
-                  ) ?? null
-                }
-                nowMinute={props.nowMinute}
-                onOpen={props.onOpen}
-                onContextMenu={props.onContextMenu}
-              />
-            ))}
-          </ul>
-        ) : null}
+        <ul role="presentation" className="flex flex-col">
+          {props.subagents.map((entry) => (
+            <SubagentLine
+              key={entry.key}
+              entry={entry}
+              isActive={entry.key === props.activeThreadKey}
+              providerEntry={
+                props.providerEntryByInstanceId.get(
+                  entry.thread.runtime?.providerInstanceId ??
+                    entry.thread.modelSelection.instanceId,
+                ) ?? null
+              }
+              nowMinute={props.nowMinute}
+              onOpen={props.onOpen}
+              onContextMenu={props.onContextMenu}
+            />
+          ))}
+        </ul>
       </TooltipProvider>
     </li>
   );
