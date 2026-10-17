@@ -4,7 +4,7 @@ import {
   REMOTE_APP_PARTITIONS,
   type RemoteAppSite,
 } from "@t3tools/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useBrowserSurfaceStore } from "~/browser/browserSurfaceStore";
@@ -148,9 +148,9 @@ function PanelWebview(props: {
   );
   const [attached, setAttached] = useState(false);
   const webviewRef = useRef<PanelWebviewElement | null>(null);
-  const setWebviewRef = useCallback((node: HTMLElement | null) => {
+  const setWebviewRef = (node: HTMLElement | null) => {
     webviewRef.current = node as PanelWebviewElement | null;
-  }, []);
+  };
   // Hidden while the window shows a web app full size: that is the same app's other page.
   const shown = surfaceActive && presentation.visible && presentation.rect !== null;
 

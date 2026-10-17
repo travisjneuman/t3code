@@ -10,7 +10,7 @@ import type {
   ProviderInstanceId,
   SessionRecord,
 } from "@t3tools/contracts";
-import { memo, useMemo } from "react";
+import { memo } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import {
@@ -82,10 +82,7 @@ function HermesSessionDetailsContent(props: { readonly target: HermesSessionDeta
   );
   const insights = query.data;
   const record = insights?.session;
-  const view = useMemo(
-    () => hermesSessionView(target.session, target.agentName, record),
-    [target.session, target.agentName, record],
-  );
+  const view = hermesSessionView(target.session, target.agentName, record);
   return (
     <div data-thread-session-details>
       <SessionSummarySection view={view} separated={false} />

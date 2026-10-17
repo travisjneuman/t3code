@@ -20,7 +20,7 @@ import {
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronDownIcon } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
 import { ExpandedImageDialog } from "../components/chat/ExpandedImageDialog";
@@ -33,15 +33,15 @@ import { Button } from "../components/ui/button";
 import { Spinner } from "../components/ui/spinner";
 import { useDiffPanelStore } from "../diffPanelStore";
 import { useTimelineLiveFollow } from "../forkTimelineLiveFollow";
+import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { useRightPanelStore } from "../rightPanelStore";
 import {
   derivePhase,
   deriveActiveWorkStartedAt,
-  deriveTimelineEntriesFromVisibleTurnItemsWithState,
   isLatestRunSettled,
-  type TimelineEntriesProjection,
+  type TimelineEntriesInput,
 } from "../session-logic";
 import {
   useProjects,
@@ -51,15 +51,13 @@ import {
 } from "../state/entities";
 import { buildThreadRouteParams } from "../threadRoutes";
 
+const EMPTY_OPTIMISTIC_MESSAGES: TimelineEntriesInput["optimisticMessages"] = [];
 const noop = () => {};
 const noopAsync = async () => {};
 
 export function CompareThreadColumn(props: { environmentId: EnvironmentId; threadId: ThreadId }) {
   const { environmentId, threadId } = props;
-  const threadRef = useMemo(
-    () => scopeThreadRef(environmentId, threadId),
-    [environmentId, threadId],
-  );
+  const threadRef = scopeThreadRef(environmentId, threadId);
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const { timestampFormat } = useEnvironmentSettings(environmentId);
@@ -68,43 +66,19 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
   const visibleTurnItems = useThreadVisibleTurnItems(threadRef);
 
   // The previous projection lets unchanged rows keep their identity, as in ChatView.
-  const timelineProjectionRef = useRef<{
-    readonly threadKey: string;
-    readonly projection: TimelineEntriesProjection;
-  } | null>(null);
   const threadKey = `${environmentId}:${threadId}`;
-  const timelineEntries = useMemo(() => {
-    const previous = timelineProjectionRef.current;
-    const next = deriveTimelineEntriesFromVisibleTurnItemsWithState(
-      {
-        visibleTurnItems,
-        optimisticMessages: [],
-        ...(projection === null
-          ? {}
-          : { attempts: projection.attempts, nodes: projection.nodes, plans: projection.plans }),
-      },
-      previous?.threadKey === threadKey ? previous.projection : null,
-    );
-    timelineProjectionRef.current = { threadKey, projection: next };
-    return next.entries;
-  }, [projection, threadKey, visibleTurnItems]);
+  const timelineEntries = useIncrementalTimelineEntries(threadKey, {
+    visibleTurnItems,
+    optimisticMessages: EMPTY_OPTIMISTIC_MESSAGES,
+    ...(projection === null
+      ? {}
+      : { attempts: projection.attempts, nodes: projection.nodes, plans: projection.plans }),
+  });
 
-  const latestRun = useMemo(
-    () => (projection === null ? null : deriveLatestThreadRun(projection)),
-    [projection],
-  );
-  const activityRun = useMemo(
-    () => (projection === null ? null : deriveThreadActivityRun(projection)),
-    [projection],
-  );
-  const runtime = useMemo(
-    () => (projection === null ? null : deriveThreadRuntime(projection)),
-    [projection],
-  );
-  const runlessWorkStartedAt = useMemo(
-    () => (projection === null ? null : deriveRunlessWorkStartedAt(projection)),
-    [projection],
-  );
+  const latestRun = projection === null ? null : deriveLatestThreadRun(projection);
+  const activityRun = projection === null ? null : deriveThreadActivityRun(projection);
+  const runtime = projection === null ? null : deriveThreadRuntime(projection);
+  const runlessWorkStartedAt = projection === null ? null : deriveRunlessWorkStartedAt(projection);
   const isWorking = derivePhase(runtime) === "running" || runlessWorkStartedAt !== null;
   const activeTurnInProgress = isWorking || !isLatestRunSettled(latestRun, runtime);
   const activeWorkStartedAt =
@@ -122,22 +96,16 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
   } = useTimelineLiveFollow(hasEntries);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
 
-  const openThread = useCallback(
-    (target: ThreadId) =>
-      void navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(environmentId, target)),
-      }),
-    [environmentId, navigate],
-  );
-  const onOpenTurnDiff = useCallback(
-    (runId: RunId, filePath?: string) => {
-      useDiffPanelStore.getState().selectTurn(threadRef, runId, filePath);
-      useRightPanelStore.getState().open(threadRef, "diff");
-      openThread(threadId);
-    },
-    [openThread, threadId, threadRef],
-  );
+  const openThread = (target: ThreadId) =>
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(scopeThreadRef(environmentId, target)),
+    });
+  const onOpenTurnDiff = (runId: RunId, filePath?: string) => {
+    useDiffPanelStore.getState().selectTurn(threadRef, runId, filePath);
+    useRightPanelStore.getState().open(threadRef, "diff");
+    openThread(threadId);
+  };
 
   if (projection === null) {
     return <p className="p-4 text-sm text-muted-foreground">Loading this side…</p>;

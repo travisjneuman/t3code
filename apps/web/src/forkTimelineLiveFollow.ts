@@ -8,7 +8,9 @@
  */
 import { type LegendListRef } from "@legendapp/list/react";
 import { Debouncer } from "@tanstack/react-pacer";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { useStableCallback } from "./hooks/useStableCallback";
 
 const SCROLL_KEYS = new Set(["ArrowUp", "PageUp", "Home"]);
 
@@ -24,44 +26,38 @@ export function useTimelineLiveFollow(hasEntries: boolean) {
     () => new Debouncer(() => setShowScrollToEnd(true), { wait: 150 }),
   );
   useEffect(() => () => showPillDebouncer.cancel(), [showPillDebouncer]);
-  const setFollow = useCallback((follow: boolean) => {
+  const setFollow = (follow: boolean) => {
     liveFollowRef.current = follow;
     setLiveFollowEnabled(follow);
-  }, []);
-  const hidePill = useCallback(() => {
+  };
+  const hidePill = () => {
     showPillDebouncer.cancel();
     setShowScrollToEnd(false);
-  }, [showPillDebouncer]);
-  const stopFollowing = useCallback(() => {
+  };
+  const stopFollowing = useStableCallback(() => {
     if (!liveFollowRef.current) return;
     setFollow(false);
     if (!isAtEndRef.current) showPillDebouncer.maybeExecute();
-  }, [setFollow, showPillDebouncer]);
-  const scrollToEnd = useCallback(
-    (animated: boolean) => {
+  });
+  const scrollToEnd = (animated: boolean) => {
+    setFollow(true);
+    hidePill();
+    requestAnimationFrame(() => {
+      void listRef.current?.scrollToEnd?.({ animated });
+    });
+  };
+  const onIsAtEndChange = (isAtEnd: boolean) => {
+    isAtEndRef.current = isAtEnd;
+    if (isAtEnd) {
       setFollow(true);
       hidePill();
-      requestAnimationFrame(() => {
-        void listRef.current?.scrollToEnd?.({ animated });
-      });
-    },
-    [hidePill, setFollow],
-  );
-  const onIsAtEndChange = useCallback(
-    (isAtEnd: boolean) => {
-      isAtEndRef.current = isAtEnd;
-      if (isAtEnd) {
-        setFollow(true);
-        hidePill();
-      } else if (liveFollowRef.current) {
-        // Streamed growth briefly leaves the end before the follow catches up.
-        hidePill();
-      } else {
-        showPillDebouncer.maybeExecute();
-      }
-    },
-    [hidePill, setFollow, showPillDebouncer],
-  );
+    } else if (liveFollowRef.current) {
+      // Streamed growth briefly leaves the end before the follow catches up.
+      hidePill();
+    } else {
+      showPillDebouncer.maybeExecute();
+    }
+  };
 
   // Gestures that move the view away from the end stop following. The list
   // mounts once there are rows, so attach then, retrying a few frames.

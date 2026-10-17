@@ -26,7 +26,6 @@ import { formatModelSlugName } from "@t3tools/shared/model";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { useMemo } from "react";
 
 import { sessionRecordFrom } from "../components/chat/sessionInsights.logic";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -151,10 +150,7 @@ const externalSessionInsights = createEnvironmentRpcQueryAtomFamily(connectionAt
 });
 
 export function useExternalSessionInsights(environmentId: EnvironmentId, key: string) {
-  const atom = useMemo(
-    () => externalSessionInsights({ environmentId, input: { key } }),
-    [environmentId, key],
-  );
+  const atom = externalSessionInsights({ environmentId, input: { key } });
   return useEnvironmentQuery(atom);
 }
 

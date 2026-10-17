@@ -25,15 +25,7 @@ import {
   GitBranchIcon,
   PlayIcon,
 } from "lucide-react";
-import {
-  type ReactNode,
-  type RefObject,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
@@ -60,6 +52,7 @@ import { isElectron } from "../env";
 import { useTimelineLiveFollow } from "../forkTimelineLiveFollow";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { useTheme } from "../hooks/useTheme";
 import { formatContextWindowTokens } from "../lib/contextWindow";
 import { cn } from "../lib/utils";
@@ -110,16 +103,7 @@ const SESSION_CHIP_CLASS_NAME =
 const noop = () => {};
 const noopAsync = async () => {};
 
-/**
- * Timeline entries per message object. The transcript reducer keeps a
- * message's object until its content changes, so entries keep their identity
- * and the timeline's row memoization holds across appends.
- */
-const entryByMessage = new WeakMap<ExternalSessionMessage, TimelineEntry>();
-
 function toTimelineEntry(message: ExternalSessionMessage): TimelineEntry {
-  const cached = entryByMessage.get(message);
-  if (cached !== undefined) return cached;
   const id = `external:${message.id}`;
   let entry: TimelineEntry;
   if (message.role === "tool") {
@@ -154,16 +138,34 @@ function toTimelineEntry(message: ExternalSessionMessage): TimelineEntry {
       },
     };
   }
-  entryByMessage.set(message, entry);
   return entry;
 }
 
-/** While the session runs, its last reply is still being written. */
-function toTimelineEntries(
+/**
+ * The transcript reducer preserves unchanged messages. Retain their entries
+ * in render state, so appends preserve row identity without mutating a shared cache.
+ */
+function useSessionTimelineEntries(
   messages: ReadonlyArray<ExternalSessionMessage>,
   running: boolean,
 ): ReadonlyArray<TimelineEntry> {
-  const entries = messages.map(toTimelineEntry);
+  const [projection, setProjection] = useState(() => ({
+    messages,
+    entries: messages.map(toTimelineEntry),
+  }));
+  let current = projection;
+  if (projection.messages !== messages) {
+    const previous = new Map(
+      projection.messages.map((message, index) => [message, projection.entries[index]] as const),
+    );
+    current = {
+      messages,
+      entries: messages.map((message) => previous.get(message) ?? toTimelineEntry(message)),
+    };
+    setProjection(current);
+  }
+  // While the session runs, its last reply is still being written.
+  const entries = [...current.entries];
   const last = entries.at(-1);
   if (running && last?.kind === "message" && last.message.role === "assistant") {
     entries[entries.length - 1] = { ...last, message: { ...last.message, streaming: true } };
@@ -180,10 +182,7 @@ function toTimelineEntries(
  */
 export function ExternalSessionView(props: { environmentId: EnvironmentId; sessionKey: string }) {
   const { environmentId, sessionKey } = props;
-  const atom = useMemo(
-    () => externalSessionTranscript({ environmentId, input: { key: sessionKey } }),
-    [environmentId, sessionKey],
-  );
+  const atom = externalSessionTranscript({ environmentId, input: { key: sessionKey } });
   const { data, error, refresh } = useEnvironmentQuery(atom);
   const connected = useConnectedEnvironmentIds().includes(environmentId);
   const { resolvedTheme } = useTheme();
@@ -192,7 +191,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
   const summary = data?.summary ?? null;
   const messages = data?.messages ?? EMPTY_MESSAGES;
   const running = summary?.liveness === "running";
-  const timelineEntries = useMemo(() => toTimelineEntries(messages, running), [messages, running]);
+  const timelineEntries = useSessionTimelineEntries(messages, running);
   const activeTurnStartedAt = running
     ? (messages.findLast((message) => message.role === "user")?.createdAt ?? null)
     : null;
@@ -211,10 +210,13 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
   // The docked block floats over the timeline; keep the end clear of it.
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null);
   const [overlayHeight, setOverlayHeight] = useState(0);
+  const measureOverlayOnAttach = useStableCallback((element: HTMLDivElement | null) => {
+    setOverlayElement(element);
+    if (element !== null) setOverlayHeight(Math.round(element.offsetHeight));
+  });
   useLayoutEffect(() => {
     if (overlayElement === null) return;
     const update = () => setOverlayHeight(Math.round(overlayElement.offsetHeight));
-    update();
     const observer = new ResizeObserver(update);
     observer.observe(overlayElement);
     return () => observer.disconnect();
@@ -293,7 +295,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
               </div>
               {/* ChatView's docked composer overlay, lane, stack and surface. */}
               <div
-                ref={setOverlayElement}
+                ref={measureOverlayOnAttach}
                 data-chat-composer-overlay="true"
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               >
@@ -497,7 +499,7 @@ function ExternalSessionComposerBlock(props: {
   const [continuing, setContinuing] = useState(false);
   const [continueError, setContinueError] = useState<string | null>(null);
 
-  const handleContinue = useCallback(async () => {
+  const handleContinue = async () => {
     setContinuing(true);
     setContinueError(null);
     const result = await runContinue({ environmentId, input: { key: sessionKey } });
@@ -524,7 +526,7 @@ function ExternalSessionComposerBlock(props: {
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(threadRef),
     });
-  }, [environmentId, navigate, runContinue, sessionKey]);
+  };
 
   const { message, tone, blockedReason } = resolveComposerBlockState({
     summary,
@@ -688,7 +690,7 @@ function OriginChip(props: {
   const label = externalSessionOriginLabel(summary);
   const originIsLocal = useAtomValue(externalSessionOriginIsLocalAtom(environmentId));
   const runOpen = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
-  const handleOpen = useCallback(async () => {
+  const handleOpen = async () => {
     if (!originIsLocal) return;
     const result = await runOpen({ environmentId, input: { key: sessionKey } });
     if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
@@ -698,7 +700,7 @@ function OriginChip(props: {
       title: `Failed to open ${label}`,
       description: failure instanceof Error ? failure.message : "An error occurred.",
     });
-  }, [environmentId, label, originIsLocal, runOpen, sessionKey]);
+  };
   if (!originIsLocal || !externalSessionOpensInOrigin(summary)) {
     return <SessionChip tooltip={`Session from ${label}`}>{label}</SessionChip>;
   }

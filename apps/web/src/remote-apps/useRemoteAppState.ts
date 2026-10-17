@@ -1,5 +1,5 @@
 import type { DesktopRemoteAppBridge, RemoteAppSite, RemoteAppState } from "@t3tools/contracts";
-import { useMemo, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 import {
   DEFAULT_REMOTE_APP_STATE,
@@ -145,7 +145,7 @@ export function useRemoteAppSiteTextSize(site: RemoteAppSite): number {
 export function useRemoteAppState(): RemoteAppContextValue {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const bridge = readBridge();
-  return useMemo(() => ({ state, bridge, ...actions }), [bridge, state]);
+  return { state, bridge, ...actions };
 }
 
 /** Only the desktop window's active surface, for components that re-render on nothing else. */

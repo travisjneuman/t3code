@@ -25,7 +25,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { CircleDashedIcon, MinusIcon, PinIcon, PlusIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
@@ -37,6 +37,7 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useScratchProject } from "../hooks/useScratchProject";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { cn } from "../lib/utils";
 import {
@@ -108,6 +109,18 @@ type MenuPosition = { readonly x: number; readonly y: number };
 
 const targetKey = (target: HermesTarget) => `${target.environmentId}\u0000${target.instanceId}`;
 
+function targetsFromKey(key: string): HermesTarget[] {
+  return key === ""
+    ? []
+    : key.split("\n").map((entry) => {
+        const [environmentId, instanceId] = entry.split("\u0000");
+        return {
+          environmentId: environmentId as EnvironmentId,
+          instanceId: instanceId as ProviderInstanceId,
+        };
+      });
+}
+
 function preventMouseFocus(event: MouseEvent) {
   event.preventDefault();
 }
@@ -117,6 +130,7 @@ function mergeRows(
   listed: Listed | undefined,
   threads: ReadonlyArray<EnvironmentThreadShell>,
   activeThreadKey: string | null,
+  now: number,
 ): HermesRow[] {
   const byThreadId = new Map(threads.map((thread) => [thread.id as string, thread]));
   const rows: HermesRow[] = [];
@@ -147,7 +161,7 @@ function mergeRows(
       session.pinned || session.parentSessionId !== undefined
         ? oldest
         : Math.min(oldest, session.lastActiveAt),
-    Date.now() - HERMES_SESSIONS_WINDOW_MS,
+    now - HERMES_SESSIONS_WINDOW_MS,
   );
   const floor = listed === undefined || listed.hasMore ? oldestListed : 0;
   for (const thread of threads) {
@@ -213,8 +227,9 @@ export function HermesSidebarSection() {
   const [opening, setOpening] = useState<ReadonlySet<string>>(new Set());
   // The session whose details card is open, for a row T3 has not opened.
   const [detailsTarget, setDetailsTarget] = useState<HermesSessionDetailsTarget | null>(null);
-  const closeDetails = useCallback(() => setDetailsTarget(null), []);
+  const closeDetails = () => setDetailsTarget(null);
   const nowMinute = useNowMinute();
+  const now = Date.parse(`${nowMinute}:00Z`);
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
   const { openScratchProject } = useScratchProject();
@@ -238,7 +253,7 @@ export function HermesSidebarSection() {
   });
 
   // Keyed by string so provider status pushes do not refetch the list.
-  const targetsKey = useMemo(() => {
+  const targetsKey = (() => {
     const keys: string[] = [];
     for (const [environmentId, config] of serverConfigs) {
       for (const instanceId of hermesInstanceIds(config)) {
@@ -246,42 +261,26 @@ export function HermesSidebarSection() {
       }
     }
     return keys.join("\n");
-  }, [serverConfigs]);
-  const targets = useMemo<HermesTarget[]>(
-    () =>
-      targetsKey === ""
-        ? []
-        : targetsKey.split("\n").map((key) => {
-            const [environmentId, instanceId] = key.split("\u0000");
-            return {
-              environmentId: environmentId as EnvironmentId,
-              instanceId: instanceId as ProviderInstanceId,
-            };
-          }),
-    [targetsKey],
-  );
+  })();
+  const targets = targetsFromKey(targetsKey);
 
   // Listing waits for the environment's socket; asking earlier only fails with "not connected".
-  const connectedKey = useMemo(
-    () =>
-      environments
-        .filter((environment) => environment.connection.phase === "connected")
-        .map((environment) => environment.environmentId)
-        .join("\n"),
-    [environments],
-  );
+  const connectedKey = environments
+    .filter((environment) => environment.connection.phase === "connected")
+    .map((environment) => environment.environmentId)
+    .join("\n");
 
   // One agent name, or "Hermes" when instances disagree.
-  const sectionName = useMemo(() => {
+  const sectionName = (() => {
     const names = new Set(
       targets.map((target) =>
         hermesAgentName(serverConfigs.get(target.environmentId)?.settings, target.instanceId),
       ),
     );
     return names.size === 1 ? ([...names][0] ?? "Hermes") : "Hermes";
-  }, [serverConfigs, targets]);
+  })();
 
-  const threadsByTarget = useMemo(() => {
+  const threadsByTarget = (() => {
     const byTarget = new Map<string, EnvironmentThreadShell[]>();
     const wanted = new Set(targets.map(targetKey));
     for (const thread of allThreads) {
@@ -297,21 +296,19 @@ export function HermesSidebarSection() {
       byTarget.set(key, list);
     }
     return byTarget;
-  }, [allThreads, targets]);
+  })();
 
   // A Hermes thread appearing, going or finishing a turn changes what Hermes lists.
-  const threadsSignature = useMemo(
-    () =>
-      [...threadsByTarget.values()]
-        .flat()
-        .map((thread) => `${thread.id}:${thread.runtime?.status ?? "idle"}`)
-        .join(","),
-    [threadsByTarget],
-  );
+  const threadsSignature = [...threadsByTarget.values()]
+    .flat()
+    .map((thread) => `${thread.id}:${thread.runtime?.status ?? "idle"}`)
+    .join(",");
 
   useEffect(() => {
     const connected = new Set(connectedKey.split("\n"));
-    const ready = targets.filter((target) => connected.has(target.environmentId));
+    const ready = targetsFromKey(targetsKey).filter((target) =>
+      connected.has(target.environmentId),
+    );
     if (ready.length === 0) return;
     let cancelled = false;
     void Promise.all(
@@ -335,7 +332,7 @@ export function HermesSidebarSection() {
     return () => {
       cancelled = true;
     };
-  }, [targets, connectedKey, extra, refreshNonce, threadsSignature]);
+  }, [targetsKey, connectedKey, extra, refreshNonce, threadsSignature]);
 
   // Sessions from Discord or cron move while T3 is in the background.
   useEffect(() => {
@@ -344,36 +341,27 @@ export function HermesSidebarSection() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  const rows = useMemo(
-    () =>
-      nestRows(
-        targets.flatMap((target) =>
-          mergeRows(
-            target,
-            listed.get(targetKey(target)),
-            threadsByTarget.get(targetKey(target)) ?? [],
-            activeThreadKey,
-          ),
-        ),
+  const rows = nestRows(
+    targets.flatMap((target) =>
+      mergeRows(
+        target,
+        listed.get(targetKey(target)),
+        threadsByTarget.get(targetKey(target)) ?? [],
+        activeThreadKey,
+        now,
       ),
-    [targets, listed, threadsByTarget, activeThreadKey],
+    ),
   );
   const hasMore = targets.some((target) => listed.get(targetKey(target))?.hasMore === true);
 
   // Collapsed, the shelf still lists running sessions, like Other Agents.
-  const visibleRows = useMemo(
-    () => (expanded ? rows : rows.filter((row) => row.running)),
-    [expanded, rows],
-  );
+  const visibleRows = expanded ? rows : rows.filter((row) => row.running);
   // Collapsed, a running subagent may show without its parent; it is not indented then.
-  const visibleKeys = useMemo(() => new Set(visibleRows.map((row) => row.key)), [visibleRows]);
-  // Shift-click ranges and multi-row actions cover only the rows on screen.
-  const rowsRef = useRef(visibleRows);
-  rowsRef.current = visibleRows;
-  const refresh = useCallback(() => setRefreshNonce((value) => value + 1), []);
-  const closeMobileSidebar = useCallback(() => {
+  const visibleKeys = new Set(visibleRows.map((row) => row.key));
+  const refresh = () => setRefreshNonce((value) => value + 1);
+  const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
-  }, [isMobile, setOpenMobile]);
+  };
 
   const openThread = async (environmentId: EnvironmentId, threadId: string) => {
     const threadRef = scopeThreadRef(environmentId, threadId as EnvironmentThreadShell["id"]);
@@ -545,7 +533,7 @@ export function HermesSidebarSection() {
     const api = readLocalApi();
     if (api === undefined) return;
     const subject = selected.has(row.key)
-      ? rowsRef.current.filter((candidate) => selected.has(candidate.key))
+      ? visibleRows.filter((candidate) => selected.has(candidate.key))
       : [row];
     const withSession = subject.filter((candidate) => candidate.session !== null);
     const count = subject.length;
@@ -631,48 +619,43 @@ export function HermesSidebarSection() {
   };
 
   // Rows are memoized, so they get stable callbacks that run the latest handlers.
-  const handlers = useRef({ showRowMenu, continueRow, syncRow });
-  handlers.current = { showRowMenu, continueRow, syncRow };
-  const handleContextMenu = useCallback(
+  const handleContextMenu = useStableCallback(
     (row: HermesRow, position: MenuPosition, anchor: Element) => {
-      void handlers.current.showRowMenu(row, position, anchor);
+      void showRowMenu(row, position, anchor);
     },
-    [],
   );
-  const handleClick = useCallback(
-    (row: HermesRow, event: MouseEvent) => {
-      if (event.metaKey || event.ctrlKey) {
-        event.preventDefault();
-        setSelected((previous) => {
-          const next = new Set(previous);
-          if (next.has(row.key)) next.delete(row.key);
-          else next.add(row.key);
-          return next;
-        });
-        selectionAnchor.current = row.key;
-        return;
-      }
-      if (event.shiftKey) {
-        event.preventDefault();
-        const keys = rowsRef.current.map((candidate) => candidate.key);
-        const from = keys.indexOf(selectionAnchor.current ?? row.key);
-        const to = keys.indexOf(row.key);
-        const [start, end] = from <= to ? [from, to] : [to, from];
-        setSelected(new Set(keys.slice(Math.max(start, 0), end + 1)));
-        return;
-      }
-      setSelected(new Set());
+  const handleClick = useStableCallback((row: HermesRow, event: MouseEvent) => {
+    if (event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      setSelected((previous) => {
+        const next = new Set(previous);
+        if (next.has(row.key)) next.delete(row.key);
+        else next.add(row.key);
+        return next;
+      });
       selectionAnchor.current = row.key;
-      if (row.thread === null) {
-        event.preventDefault();
-        void handlers.current.continueRow(row);
-      } else {
-        closeMobileSidebar();
-        void handlers.current.syncRow(row);
-      }
-    },
-    [closeMobileSidebar],
-  );
+      return;
+    }
+    if (event.shiftKey) {
+      event.preventDefault();
+      // Shift-click ranges cover only the rows on screen.
+      const keys = visibleRows.map((candidate) => candidate.key);
+      const from = keys.indexOf(selectionAnchor.current ?? row.key);
+      const to = keys.indexOf(row.key);
+      const [start, end] = from <= to ? [from, to] : [to, from];
+      setSelected(new Set(keys.slice(Math.max(start, 0), end + 1)));
+      return;
+    }
+    setSelected(new Set());
+    selectionAnchor.current = row.key;
+    if (row.thread === null) {
+      event.preventDefault();
+      void continueRow(row);
+    } else {
+      closeMobileSidebar();
+      void syncRow(row);
+    }
+  });
 
   const handleHeaderContextMenu = async (event: MouseEvent) => {
     const api = readLocalApi();
@@ -777,8 +760,8 @@ export function HermesSidebarSection() {
 }
 
 /** Matches the thread rows' short relative time: "5m", "now". */
-function compactTimeLabel(ms: number): string {
-  const label = formatRelativeTimeLabel(new Date(ms).toISOString());
+function compactTimeLabel(ms: number, nowMinute: string): string {
+  const label = formatRelativeTimeLabel(new Date(ms).toISOString(), Date.parse(`${nowMinute}:00Z`));
   if (label === "just now") return "now";
   return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
@@ -829,7 +812,7 @@ const HermesLine = memo(function HermesLine(props: {
         <>
           {row.pinned ? <PinIcon aria-label="Pinned" className="size-3 shrink-0" /> : null}
           <span className="shrink-0 tabular-nums text-secondary-label">
-            {compactTimeLabel(row.lastActiveAt)}
+            {compactTimeLabel(row.lastActiveAt, props.nowMinute)}
           </span>
         </>
       )}

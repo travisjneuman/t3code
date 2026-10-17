@@ -9,7 +9,6 @@ import { type EnvironmentId, PROVIDER_DISPLAY_NAMES, type ThreadId } from "@t3to
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { MonitorUpIcon } from "lucide-react";
-import { useMemo } from "react";
 
 import type { ComposerBannerStackItem } from "../components/chat/ComposerBannerStack";
 import { formatProviderDriverKindLabel } from "../providerModels";
@@ -53,19 +52,15 @@ export function useRunningElsewhereBanner(
   const agent = useAtomValue(
     runningElsewhereAgentAtom(`${environmentId}${KEY_SEPARATOR}${threadId}`),
   );
-  return useMemo<ReadonlyArray<ComposerBannerStackItem>>(
-    () =>
-      agent === null
-        ? items
-        : [
-            ...items,
-            {
-              id: `external-session-running-elsewhere:${threadId}`,
-              variant: "warning",
-              icon: <MonitorUpIcon />,
-              title: `Running in ${agent} outside T3 — wait for it to finish before sending here.`,
-            },
-          ],
-    [agent, items, threadId],
-  );
+  return agent === null
+    ? items
+    : [
+        ...items,
+        {
+          id: `external-session-running-elsewhere:${threadId}`,
+          variant: "warning",
+          icon: <MonitorUpIcon />,
+          title: `Running in ${agent} outside T3 — wait for it to finish before sending here.`,
+        },
+      ];
 }

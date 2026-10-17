@@ -29,14 +29,7 @@ import {
   MinusIcon,
   PlusIcon,
 } from "lucide-react";
-import {
-  memo,
-  useMemo,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-  type SyntheticEvent,
-} from "react";
+import { memo, useState, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
@@ -148,7 +141,7 @@ export function useSidebarSubagents(input: {
   readonly render: (parentKey: string) => ReactNode[];
 } {
   const { threads } = input;
-  const groups = useMemo(() => groupSubagents(threads), [threads]);
+  const groups = groupSubagents(threads);
   const [expandedKeys] = useLocalStorage(EXPANDED_STORAGE_KEY, NO_KEYS, ExpandedKeysSchema);
   const nowMinute = useNowMinute();
   const { archiveThread, deleteThread } = useThreadActions();
@@ -312,8 +305,8 @@ function SubagentToggleButton(props: { threadKey: string; count: number }) {
 }
 
 /** Matches the thread rows' short relative time: "5m", "now". */
-function compactTimeLabel(iso: string): string {
-  const label = formatRelativeTimeLabel(iso);
+function compactTimeLabel(iso: string, now: number): string {
+  const label = formatRelativeTimeLabel(iso, now);
   if (label === "just now") return "now";
   return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
@@ -426,6 +419,7 @@ const SubagentLine = memo(function SubagentLine(props: {
   ) => void;
 }) {
   const { thread, depth } = props.entry;
+  const now = Date.parse(`${props.nowMinute}:00Z`);
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const running = threadRuntimeIsActive(thread.runtime);
   const status = statusLabel(thread);
@@ -493,7 +487,7 @@ const SubagentLine = memo(function SubagentLine(props: {
                 <CircleAlertIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-error")} />
               ) : null}
               <span className="shrink-0 tabular-nums text-secondary-label">
-                {compactTimeLabel(thread.updatedAt)}
+                {compactTimeLabel(thread.updatedAt, now)}
               </span>
             </>
           )}
@@ -512,7 +506,7 @@ const SubagentLine = memo(function SubagentLine(props: {
               <div className="min-w-0 truncate text-foreground/75">
                 {running
                   ? status
-                  : `${status} · last active ${formatRelativeTimeLabel(thread.updatedAt)}`}
+                  : `${status} · last active ${formatRelativeTimeLabel(thread.updatedAt, now)}`}
               </div>
             </div>
           </ThreadHoverCard>

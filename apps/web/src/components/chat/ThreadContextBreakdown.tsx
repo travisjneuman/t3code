@@ -1,6 +1,6 @@
 import type { SessionContextBreakdown } from "@t3tools/contracts";
 import { Minimize2Icon } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
@@ -38,10 +38,7 @@ export const ThreadContextBreakdown = memo(function ThreadContextBreakdown(props
 }) {
   const { insights, contextWindow } = props;
   const context = insights?.context ?? null;
-  const view = useMemo(
-    () => (context === null ? null : deriveContextBreakdownView(context)),
-    [context],
-  );
+  const view = context === null ? null : deriveContextBreakdownView(context);
   if (context === null && contextWindow === null && props.error === null) return null;
 
   // Counted by the app from stored text rather than reported by the provider.
@@ -276,23 +273,20 @@ interface ContributorListItem {
 
 function ContextContributorLists(props: { readonly context: SessionContextBreakdown }) {
   const { context } = props;
-  const lists = useMemo(
-    () => [
-      {
-        title: "MCP tools",
-        items: groupContributorsBySource(context.mcpTools).map((group) => ({
-          key: group.source ?? "",
-          label: group.source ?? "Other",
-          detail: `${group.count} ${group.count === 1 ? "tool" : "tools"}`,
-          tokens: group.tokens,
-        })),
-      },
-      { title: "Memory files", items: contributorItems(context.memoryFiles) },
-      { title: "Skills", items: contributorItems(context.skills) },
-      { title: "Custom agents", items: contributorItems(context.agents) },
-    ],
-    [context],
-  );
+  const lists = [
+    {
+      title: "MCP tools",
+      items: groupContributorsBySource(context.mcpTools).map((group) => ({
+        key: group.source ?? "",
+        label: group.source ?? "Other",
+        detail: `${group.count} ${group.count === 1 ? "tool" : "tools"}`,
+        tokens: group.tokens,
+      })),
+    },
+    { title: "Memory files", items: contributorItems(context.memoryFiles) },
+    { title: "Skills", items: contributorItems(context.skills) },
+    { title: "Custom agents", items: contributorItems(context.agents) },
+  ];
   return (
     <div className="flex flex-col pt-1">
       {lists.map((list) =>

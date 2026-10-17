@@ -5,11 +5,13 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, HermesArchivedSession } from "@t3tools/contracts";
 import { ArchiveX } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { SettingsRow, SettingsSection } from "../components/settings/settingsLayout";
 import { Button } from "../components/ui/button";
+import { useNowMinute } from "../hooks/useNowMinute";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { environmentServerConfigsAtom } from "../state/server";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
@@ -26,6 +28,8 @@ export function ArchivedHermesSessions(props: {
   readonly environmentLabel: string | null;
 }) {
   const { environmentId } = props;
+  const nowMinute = useNowMinute();
+  const now = Date.parse(`${nowMinute}:00Z`);
   const config = useAtomValue(environmentServerConfigsAtom).get(environmentId);
   const instanceIds = hermesInstanceIds(config);
   const hasHermes = instanceIds.length > 0;
@@ -36,7 +40,7 @@ export function ArchivedHermesSessions(props: {
   const [sessions, setSessions] = useState<ReadonlyArray<HermesArchivedSession>>([]);
   const [pending, setPending] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useStableCallback(async () => {
     const result = await runHermes(
       hermesSessionsListArchived,
       environmentId,
@@ -44,11 +48,11 @@ export function ArchivedHermesSessions(props: {
       "Could not list archived Hermes sessions",
     );
     if (result !== null) setSessions(result.sessions);
-  }, [environmentId]);
+  });
 
   useEffect(() => {
     if (hasHermes) void load();
-  }, [hasHermes, load]);
+  }, [environmentId, hasHermes, load]);
 
   if (!hasHermes || sessions.length === 0) return null;
 
@@ -82,7 +86,7 @@ export function ArchivedHermesSessions(props: {
                 className="size-3.5 shrink-0"
                 iconClassName="size-3.5"
               />
-              <span>{`Archived ${formatRelativeTimeLabel(session.archivedAt)}`}</span>
+              <span>{`Archived ${formatRelativeTimeLabel(session.archivedAt, now)}`}</span>
             </span>
           }
           control={

@@ -1,7 +1,7 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { type ReactNode, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { PanelLayoutControls } from "../components/chat/PanelLayoutControls";
@@ -97,10 +97,7 @@ export function useExternalSessionPanel(environmentId: EnvironmentId): {
   const detailsOpen = useRightPanelStore((state) =>
     selectThreadPanelOpen(state.threadPanelVisibilityByThreadKey, ref, detailsPresentation),
   );
-  const details = useMemo(
-    () => ({ handle: detailsHandle, onPresentationChange: setDetailsPresentation }),
-    [detailsHandle],
-  );
+  const details = { handle: detailsHandle, onPresentationChange: setDetailsPresentation };
   const toggleDetails = () =>
     useRightPanelStore.getState().toggleThreadPanel(ref, detailsPresentation);
   const toggleDetailsFromShortcut = useEffectEvent((event: KeyboardEvent) => {
@@ -108,14 +105,11 @@ export function useExternalSessionPanel(environmentId: EnvironmentId): {
     event.stopPropagation();
     if (!event.repeat) toggleDetails();
   });
-  const presenceValue = useMemo(
-    () => ({
-      activeSurface:
-        panelState.surfaces.find((surface) => surface.id === panelState.activeSurfaceId) ?? null,
-      surfaces: panelState.surfaces,
-    }),
-    [panelState.activeSurfaceId, panelState.surfaces],
-  );
+  const presenceValue = {
+    activeSurface:
+      panelState.surfaces.find((surface) => surface.id === panelState.activeSurfaceId) ?? null,
+    surfaces: panelState.surfaces,
+  };
   const presence = usePanelPresence(open, presenceValue, animationsActive, PANEL_KEY, durationMs);
   const renderedSurface = presence.value?.activeSurface ?? null;
 

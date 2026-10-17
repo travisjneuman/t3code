@@ -24,7 +24,7 @@ import {
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { ArrowLeftRightIcon, FileIcon, PaperclipIcon, XIcon } from "lucide-react";
-import { type ClipboardEvent, type DragEvent, useMemo, useRef, useState } from "react";
+import { type ClipboardEvent, type DragEvent, useRef, useState } from "react";
 
 import {
   getStartedThreadModelChangeBlockReason,
@@ -68,12 +68,8 @@ export function useCompareProviders(environmentId: EnvironmentId) {
   const settings = useEnvironmentSettings(environmentId);
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
-  const entries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
-      ),
-    [providers, settings],
+  const entries = sortProviderInstanceEntries(
+    applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
   );
   return { settings, providers, entries };
 }
@@ -558,21 +554,14 @@ function SideModel(props: {
   onChange: (selection: ModelSelection) => void;
 }) {
   const { projection, selection, entries, providers, settings, onChange } = props;
-  const modelOptions = useMemo(
-    () =>
-      getCustomModelOptionsByInstance(
-        settings,
-        providers,
-        selection?.instanceId ?? null,
-        selection?.model ?? null,
-      ),
-    [settings, providers, selection?.instanceId, selection?.model],
+  const modelOptions = getCustomModelOptionsByInstance(
+    settings,
+    providers,
+    selection?.instanceId ?? null,
+    selection?.model ?? null,
   );
-  const handoff = useMemo(() => threadSupportsProviderHandoff(projection), [projection]);
-  const runtime = useMemo(
-    () => (projection === null ? null : deriveThreadRuntime(projection)),
-    [projection],
-  );
+  const handoff = threadSupportsProviderHandoff(projection);
+  const runtime = projection === null ? null : deriveThreadRuntime(projection);
   const entry = entries.find((candidate) => candidate.instanceId === selection?.instanceId);
   if (projection === null || selection === null || entry === undefined) {
     return <span className="px-1">{props.label}: loading…</span>;

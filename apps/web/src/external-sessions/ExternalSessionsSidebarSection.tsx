@@ -14,7 +14,7 @@ import {
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { CircleDashedIcon, ClockIcon, FolderIcon, MonitorIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, type MouseEvent } from "react";
+import { memo, useEffect, useRef, type MouseEvent } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../components/ThreadHoverCard";
@@ -30,6 +30,7 @@ import {
   useLocalStorage,
 } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { cn } from "../lib/utils";
 import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
 import { readLocalApi } from "../localApi";
@@ -164,18 +165,17 @@ export function ExternalSessionsSidebarSection() {
 
   // `nowMinute` is the UTC minute ("YYYY-MM-DDTHH:mm"); its ticks move sessions
   // from Recent to Earlier as they age. Entries come newest first.
-  const bands = useMemo(() => {
-    const now = Date.parse(`${nowMinute}Z`);
-    const active: Array<ExternalSessionEntry> = [];
-    const recent: Array<ExternalSessionEntry> = [];
-    const earlier: Array<ExternalSessionEntry> = [];
-    for (const entry of entries) {
-      if (entry.session.liveness === "running") active.push(entry);
-      else if (now - Date.parse(entry.session.updatedAt) < RECENT_MS) recent.push(entry);
-      else earlier.push(entry);
-    }
-    return { active, recent, earlier };
-  }, [entries, nowMinute]);
+  const now = Date.parse(`${nowMinute}Z`);
+  const bands = {
+    active: [] as Array<ExternalSessionEntry>,
+    recent: [] as Array<ExternalSessionEntry>,
+    earlier: [] as Array<ExternalSessionEntry>,
+  };
+  for (const entry of entries) {
+    if (entry.session.liveness === "running") bands.active.push(entry);
+    else if (now - Date.parse(entry.session.updatedAt) < RECENT_MS) bands.recent.push(entry);
+    else bands.earlier.push(entry);
+  }
 
   // Sessions hidden in this browser before archive existed are archived, once,
   // on the first non-empty list. Keys of sessions not listed then
@@ -192,14 +192,11 @@ export function ExternalSessionsSidebarSection() {
     }
   }, [entries, runArchive]);
 
-  const toggleExpanded = useCallback(() => setExpanded((value) => !value), [setExpanded]);
-  const toggleEarlier = useCallback(
-    () => setEarlierExpanded((value) => !value),
-    [setEarlierExpanded],
-  );
-  const closeMobileSidebar = useCallback(() => {
+  const toggleExpanded = () => setExpanded((value) => !value);
+  const toggleEarlier = () => setEarlierExpanded((value) => !value);
+  const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
-  }, [isMobile, setOpenMobile]);
+  };
 
   const continueInT3 = async (entry: ExternalSessionEntry) => {
     const { environmentId, session } = entry;
@@ -370,13 +367,10 @@ export function ExternalSessionsSidebarSection() {
   };
 
   // Rows are memoized, so they get one stable callback that runs the latest menu.
-  const showRowMenuRef = useRef(showRowMenu);
-  showRowMenuRef.current = showRowMenu;
-  const handleRowContextMenu = useCallback(
+  const handleRowContextMenu = useStableCallback(
     (entry: ExternalSessionEntry, position: MenuPosition) => {
-      void showRowMenuRef.current(entry, position);
+      void showRowMenu(entry, position);
     },
-    [],
   );
 
   const handleHeaderContextMenu = async (event: MouseEvent) => {
@@ -484,11 +478,12 @@ function ExternalSessionRows(props: {
 }
 
 /** The thread rows' hover card, for a session: where it runs, its folder and how recently it moved. */
-function ExternalSessionHoverCard(props: { entry: ExternalSessionEntry }) {
+function ExternalSessionHoverCard(props: { entry: ExternalSessionEntry; nowMinute: string }) {
   const { environmentLabel, session } = props.entry;
   const model = shortModelLabel(session.model);
   const origin = externalSessionOriginLabel(session);
-  const lastActive = `Last active ${formatRelativeTimeLabel(session.updatedAt)}`;
+  const now = Date.parse(`${props.nowMinute}Z`);
+  const lastActive = `Last active ${formatRelativeTimeLabel(session.updatedAt, now)}`;
   const activity =
     session.liveness === "running"
       ? LIVENESS_LABEL.running
@@ -534,8 +529,8 @@ function ExternalSessionHoverCard(props: { entry: ExternalSessionEntry }) {
 }
 
 /** Matches the standard thread rows' short relative time: "5m", "now". */
-function compactTimeLabel(iso: string): string {
-  const label = formatRelativeTimeLabel(iso);
+function compactTimeLabel(iso: string, nowMinute: string): string {
+  const label = formatRelativeTimeLabel(iso, Date.parse(`${nowMinute}Z`));
   if (label === "just now") return "now";
   return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
@@ -607,11 +602,11 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
             <CircleDashedIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-info")} />
           ) : (
             <span className="shrink-0 tabular-nums text-secondary-label">
-              {compactTimeLabel(session.updatedAt)}
+              {compactTimeLabel(session.updatedAt, props.nowMinute)}
             </span>
           )}
         </TooltipTrigger>
-        <ExternalSessionHoverCard entry={props.entry} />
+        <ExternalSessionHoverCard entry={props.entry} nowMinute={props.nowMinute} />
       </Tooltip>
     </li>
   );

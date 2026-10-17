@@ -12,7 +12,7 @@ import type {
   ProviderInstanceId,
   ServerProviderModel,
 } from "@t3tools/contracts";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { FoldedSettingsSection } from "../components/settings/FoldedSettingsSection";
 import { SettingsRow } from "../components/settings/settingsLayout";
@@ -27,6 +27,7 @@ import {
 } from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
 import { toastManager } from "../components/ui/toast";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { ensureLocalApi } from "../localApi";
 import { desktopNetworkAccessStateAtom } from "../state/desktopNetworkAccess";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -104,10 +105,7 @@ export function HermesSettingsSection(props: {
   readonly readOnly: boolean;
   readonly canWritePreferences: boolean;
 }) {
-  const target = useMemo(
-    () => ({ environmentId: props.environmentId, instanceId: props.instanceId }),
-    [props.environmentId, props.instanceId],
-  );
+  const target = { environmentId: props.environmentId, instanceId: props.instanceId };
   const id = `provider-instance-${props.instanceId}-hermes`;
   const t3Tools = isRecord(props.config) && props.config.t3Tools === true;
   const t3ToolsUrl =
@@ -312,7 +310,7 @@ function HermesConfigForm(props: { readonly target: Target }) {
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useStableCallback(async () => {
     const [schemaBody, configBody] = await Promise.all([
       dashboard(
         props.target,
@@ -363,11 +361,11 @@ function HermesConfigForm(props: { readonly target: Target }) {
     setCategory((current) => current ?? categories[0] ?? null);
     setChanges(new Map());
     setDrafts(new Map());
-  }, [props.target]);
+  });
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, props.target.environmentId, props.target.instanceId]);
 
   if (schema === null) {
     return (
@@ -528,7 +526,7 @@ function HermesKeys(props: { readonly target: Target }) {
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useStableCallback(async () => {
     const body = await dashboard(props.target, "GET", "/api/env", "Could not load Hermes keys");
     if (!isRecord(body)) {
       setFailed(true);
@@ -559,11 +557,11 @@ function HermesKeys(props: { readonly target: Target }) {
             Number(right.isSet) - Number(left.isSet) || left.name.localeCompare(right.name),
         ),
     );
-  }, [props.target]);
+  });
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, props.target.environmentId, props.target.instanceId]);
 
   const setKey = async (name: string, value: string) => {
     if (value === "") return;
@@ -745,7 +743,7 @@ function HermesEndpoints(props: { readonly target: Target }) {
   const [draft, setDraft] = useState(EMPTY_ENDPOINT_DRAFT);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useStableCallback(async () => {
     const body = await dashboard(
       props.target,
       "GET",
@@ -774,11 +772,11 @@ function HermesEndpoints(props: { readonly target: Target }) {
           : [],
       ),
     );
-  }, [props.target]);
+  });
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, props.target.environmentId, props.target.instanceId]);
 
   const run = async (
     method: HermesDashboardInput["method"],

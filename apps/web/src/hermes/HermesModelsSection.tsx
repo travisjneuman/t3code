@@ -13,12 +13,13 @@ import {
   type ServerProviderModel,
 } from "@t3tools/contracts";
 import { ChevronRightIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { SettingsSection } from "../components/settings/settingsLayout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { cn } from "../lib/utils";
 import { hermesModelProvider, hermesSessionsProviders, runHermes } from "./hermesSessions";
 
@@ -53,7 +54,7 @@ export function HermesModelsSection(props: {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [filter, setFilter] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useStableCallback(async () => {
     setLoading(true);
     const result = await runHermes(
       hermesSessionsProviders,
@@ -63,15 +64,15 @@ export function HermesModelsSection(props: {
     );
     setLoading(false);
     if (result !== null) setProviders(result.providers);
-  }, [target]);
+  });
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, target.environmentId, target.instanceId]);
 
   const hiddenProviders = new Set(props.hiddenProviders);
   const hiddenModels = new Set(props.hiddenModels);
-  const modelsByProvider = useMemo(() => {
+  const modelsByProvider = (() => {
     const out = new Map<string, ServerProviderModel[]>();
     for (const model of props.models) {
       const slug = hermesModelProvider(model.slug);
@@ -81,7 +82,7 @@ export function HermesModelsSection(props: {
       else out.set(slug, [model]);
     }
     return out;
-  }, [props.models]);
+  })();
 
   // A provider the user hid is still listed, so it can be shown again.
   const isUsable = (provider: HermesProviderSummary) =>

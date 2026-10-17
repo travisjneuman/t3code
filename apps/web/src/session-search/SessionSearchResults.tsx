@@ -5,7 +5,7 @@
  */
 import { PROVIDER_DISPLAY_NAMES, type SessionSearchSnippet } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
-import { memo, useCallback, useState } from "react";
+import { memo, useState } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
@@ -33,8 +33,8 @@ function folderName(cwd: string | null): string | null {
 }
 
 /** Matches the standard thread rows' short relative time: "5m", "now". */
-function compactTimeLabel(iso: string): string {
-  const label = formatRelativeTimeLabel(iso);
+function compactTimeLabel(iso: string, nowMinute: string): string {
+  const label = formatRelativeTimeLabel(iso, Date.parse(`${nowMinute}:00Z`));
   if (label === "just now") return "now";
   return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
@@ -48,9 +48,9 @@ export function SessionSearchResults(props: { query: string }) {
   const [expanded, setExpanded] = useState(true);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
-  const closeMobileSidebar = useCallback(() => {
+  const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
-  }, [isMobile, setOpenMobile]);
+  };
 
   if (search.entries.length === 0) return null;
 
@@ -146,7 +146,7 @@ const SessionSearchRow = memo(function SessionSearchRow(props: {
               {title}
             </span>
             <span className="ml-auto shrink-0 text-xs tabular-nums text-secondary-label">
-              {compactTimeLabel(hit.updatedAt)}
+              {compactTimeLabel(hit.updatedAt, props.nowMinute)}
             </span>
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-secondary-label">

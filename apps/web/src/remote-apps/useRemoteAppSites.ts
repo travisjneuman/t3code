@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { REMOTE_APP_SITES, RemoteAppSiteSchema, type RemoteAppSite } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { useCallback, useMemo } from "react";
 
 import {
   getLocalStorageItem,
@@ -30,14 +29,11 @@ const ALL_SITES: ReadonlyArray<RemoteAppSite> = REMOTE_APP_SITES;
 
 function useRemoteAppSiteList(storageKey: string) {
   const [sites, setSites] = useLocalStorage(storageKey, NO_SITES, SiteListSchema);
-  const setSiteListed = useCallback(
-    (site: RemoteAppSite, listed: boolean) =>
-      setSites((current) => {
-        const others = current.filter((candidate) => candidate !== site);
-        return listed ? [...others, site] : others;
-      }),
-    [setSites],
-  );
+  const setSiteListed = (site: RemoteAppSite, listed: boolean) =>
+    setSites((current) => {
+      const others = current.filter((candidate) => candidate !== site);
+      return listed ? [...others, site] : others;
+    });
   return [sites, setSiteListed] as const;
 }
 
@@ -69,9 +65,11 @@ const migrateLegacyBackgroundLoad = () => {
   }
 };
 
+// Migrate before any hook reads its first storage snapshot, without writing during render.
+if (typeof window !== "undefined") migrateLegacyBackgroundLoad();
+
 /** The sites the user keeps from loading in the background before their first activation. */
 export function useBackgroundDisabledRemoteAppSites() {
-  migrateLegacyBackgroundLoad();
   const [backgroundDisabledSites, setSiteBackgroundDisabled] = useRemoteAppSiteList(
     BACKGROUND_DISABLED_SITES_STORAGE_KEY,
   );
@@ -103,9 +101,6 @@ export function useAvailableRemoteAppSites() {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const { hiddenSites } = useHiddenRemoteAppSites();
   const { enabledStandaloneSites } = useEnabledStandaloneRemoteAppSites();
-  const sites = useMemo(
-    () => resolveAvailableRemoteAppSites(providers, hiddenSites, enabledStandaloneSites),
-    [enabledStandaloneSites, hiddenSites, providers],
-  );
+  const sites = resolveAvailableRemoteAppSites(providers, hiddenSites, enabledStandaloneSites);
   return { sites, loaded };
 }

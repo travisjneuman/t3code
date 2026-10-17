@@ -1,6 +1,6 @@
 import type { EnvironmentId, RunId, ScopedThreadRef } from "@t3tools/contracts";
 import { FileDiffIcon, MinusIcon, PlusIcon } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { cn } from "../../lib/utils";
@@ -79,7 +79,7 @@ export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
 }) {
   const { outputs } = props;
   const [showAll, setShowAll] = useState(false);
-  const changes = useMemo(() => sumOutputChanges(outputs), [outputs]);
+  const changes = sumOutputChanges(outputs);
   if (outputs.length === 0) return null;
 
   const capped = outputs.length > OUTPUTS_INITIAL_COUNT;

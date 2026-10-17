@@ -22,7 +22,6 @@ import {
   type ServerConfig,
   type ServerSettings,
 } from "@t3tools/contracts";
-import { useMemo } from "react";
 
 import { toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -91,10 +90,7 @@ export function useHermesSessionInsights(
   instanceId: ProviderInstanceId,
   sessionId: string,
 ) {
-  const atom = useMemo(
-    () => hermesSessionInsights({ environmentId, input: { instanceId, sessionId } }),
-    [environmentId, instanceId, sessionId],
-  );
+  const atom = hermesSessionInsights({ environmentId, input: { instanceId, sessionId } });
   return useEnvironmentQuery(atom);
 }
 

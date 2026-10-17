@@ -20,8 +20,8 @@ import {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { useCallback } from "react";
 
+import { useStableCallback } from "../hooks/useStableCallback";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "../state/presentation";
 import { serverEnvironment } from "../state/server";
@@ -109,10 +109,8 @@ function useQueuedCommand<W extends ProviderUpdateRequest | ServerUpdateRequest,
   toJob: (value: W, now: number) => QueuedUpdate,
 ): (value: W) => Promise<AtomCommandResult<A, E>> {
   const run = useAtomCommand(command, { reportFailure: false });
-  return useCallback(
-    async (value: W) =>
-      (await holdUpdateIfBusy(toJob(value, Date.now()))) ? queuedResult<A, E>() : run(value),
-    [run, toJob],
+  return useStableCallback(async (value: W) =>
+    (await holdUpdateIfBusy(toJob(value, Date.now()))) ? queuedResult<A, E>() : run(value),
   );
 }
 

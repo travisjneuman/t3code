@@ -5,7 +5,6 @@
  */
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Columns2Icon } from "lucide-react";
-import { useCallback } from "react";
 
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../components/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
@@ -20,7 +19,7 @@ export function CompareAgentsSidebarItem() {
   const { isMobile, setOpenMobile } = useSidebar();
   const isActive = useLocation({ select: (location) => location.pathname.startsWith("/compare/") });
 
-  const open = useCallback(() => {
+  const open = () => {
     if (environmentId === null) return;
     if (isMobile) setOpenMobile(false);
     void navigate({
@@ -28,7 +27,7 @@ export function CompareAgentsSidebarItem() {
       params: { environmentId },
       search: {},
     });
-  }, [environmentId, isMobile, navigate, setOpenMobile]);
+  };
 
   if (environmentId === null) return null;
 

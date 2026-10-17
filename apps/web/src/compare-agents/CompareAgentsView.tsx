@@ -26,9 +26,7 @@ import {
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -59,6 +57,7 @@ import {
 } from "../components/WorkspaceBreadcrumb";
 import { isElectron } from "../env";
 import { useEnvironmentSettings } from "../hooks/useSettings";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
@@ -94,10 +93,8 @@ export function CompareAgentsView(props: {
 }) {
   const { environmentId, pairId } = props;
   const navigate = useNavigate();
-  const goToStart = useCallback(
-    () => void navigate({ to: "/compare/$environmentId", params: { environmentId }, search: {} }),
-    [environmentId, navigate],
-  );
+  const goToStart = () =>
+    void navigate({ to: "/compare/$environmentId", params: { environmentId }, search: {} });
   // The comparison being renamed, in the header or its list row. It belongs
   // to the page it started on; leaving that page drops it, like ChatHeader's rename.
   const renamingPairId = useCompareRenameStore((state) =>
@@ -109,24 +106,15 @@ export function CompareAgentsView(props: {
     },
     [pairId],
   );
-  const startRename = useCallback(
-    (renamedPairId: string) => startCompareRename(renamedPairId, pairId),
-    [pairId],
-  );
+  const startRename = (renamedPairId: string) => startCompareRename(renamedPairId, pairId);
   const renameComparison = useRenameComparison(environmentId);
-  const finishRename = useCallback(
-    (renamedPairId: string, name: string | null) => {
-      stopCompareRename();
-      if (name !== null) renameComparison(renamedPairId, name);
-    },
-    [renameComparison],
-  );
-  const leaveIfOpen = useCallback(
-    (removedPairId: string) => {
-      if (removedPairId === pairId) goToStart();
-    },
-    [goToStart, pairId],
-  );
+  const finishRename = (renamedPairId: string, name: string | null) => {
+    stopCompareRename();
+    if (name !== null) renameComparison(renamedPairId, name);
+  };
+  const leaveIfOpen = (removedPairId: string) => {
+    if (removedPairId === pairId) goToStart();
+  };
   const { openMenu, openArchivedMenu } = useComparePairMenu({
     environmentId,
     onStartRename: startRename,
@@ -221,42 +209,36 @@ function ComparePairTitle(props: {
   const { environmentId, pairId, onOpenMenu, onStartRename } = props;
   const titleButtonRef = useRef<HTMLButtonElement | null>(null);
   const menuTimerRef = useRef<number | null>(null);
-  const cancelPendingMenu = useCallback(() => {
+  const cancelPendingMenu = useStableCallback(() => {
     if (menuTimerRef.current === null) return;
     clearTimeout(menuTimerRef.current);
     menuTimerRef.current = null;
-  }, []);
+  });
   useEffect(() => cancelPendingMenu, [cancelPendingMenu, pairId]);
-  const openMenuNow = useCallback(() => {
+  const openMenuNow = () => {
     cancelPendingMenu();
     if (titleButtonRef.current !== null) onOpenMenu(pairId, belowElement(titleButtonRef.current));
-  }, [cancelPendingMenu, onOpenMenu, pairId]);
-  const openMenuFromTitle = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      if (isTrailingDoubleClick(event.detail)) return;
-      // Keyboard, the chevron and the web menu (which a dblclick can close)
-      // open at once; the native menu waits so it can't swallow a second click.
-      const clickedChevron =
-        (event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null;
-      if (event.detail === 0 || clickedChevron || window.desktopBridge === undefined) {
-        openMenuNow();
-        return;
-      }
-      cancelPendingMenu();
-      menuTimerRef.current = window.setTimeout(openMenuNow, TITLE_MENU_OPEN_DELAY_MS);
-    },
-    [cancelPendingMenu, openMenuNow],
-  );
-  const renameFromTitle = useCallback(
-    (event: ReactMouseEvent) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      if ((event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null) return;
-      cancelPendingMenu();
-      void readLocalApi()?.contextMenu.close();
-      onStartRename(pairId);
-    },
-    [cancelPendingMenu, onStartRename, pairId],
-  );
+  };
+  const openMenuFromTitle = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (isTrailingDoubleClick(event.detail)) return;
+    // Keyboard, the chevron and the web menu (which a dblclick can close)
+    // open at once; the native menu waits so it can't swallow a second click.
+    const clickedChevron =
+      (event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null;
+    if (event.detail === 0 || clickedChevron || window.desktopBridge === undefined) {
+      openMenuNow();
+      return;
+    }
+    cancelPendingMenu();
+    menuTimerRef.current = window.setTimeout(openMenuNow, TITLE_MENU_OPEN_DELAY_MS);
+  };
+  const renameFromTitle = (event: ReactMouseEvent) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if ((event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null) return;
+    cancelPendingMenu();
+    void readLocalApi()?.contextMenu.close();
+    onStartRename(pairId);
+  };
   const [leftId, rightId] = compareThreadIds(pairId);
   const left = useThreadShell(scopeThreadRef(environmentId, leftId));
   const right = useThreadShell(scopeThreadRef(environmentId, rightId));
@@ -411,13 +393,8 @@ function CompareSetup(props: {
     environment?.connection.phase,
     environment?.serverConfig,
   );
-  const projects = useMemo(
-    () =>
-      allProjects.filter(
-        (project) =>
-          project.environmentId === environmentId && !isScratchProject(project, scratchRoot),
-      ),
-    [allProjects, environmentId, scratchRoot],
+  const projects = allProjects.filter(
+    (project) => project.environmentId === environmentId && !isScratchProject(project, scratchRoot),
   );
   const { settings, entries } = useCompareProviders(environmentId);
   const [projectId, setProjectId] = useState(props.initialProjectId ?? NO_PROJECT);
@@ -545,13 +522,9 @@ function EarlierComparisons(props: {
   onFinishRename: FinishRename;
 }) {
   const shells = useThreadShells();
-  const pairs = useMemo(
-    () =>
-      groupComparePairs(
-        shells.filter((shell) => shell.archivedAt === null),
-        props.environmentId,
-      ),
-    [shells, props.environmentId],
+  const pairs = groupComparePairs(
+    shells.filter((shell) => shell.archivedAt === null),
+    props.environmentId,
   );
   if (pairs.length === 0) return null;
   return (
@@ -601,17 +574,13 @@ function ArchivedComparisonList(props: {
   environmentId: EnvironmentId;
   onOpenMenu: (pair: ComparePair, position: { x: number; y: number }) => void;
 }) {
-  const environmentIds = useMemo(() => [props.environmentId], [props.environmentId]);
+  const environmentIds = [props.environmentId];
   const { snapshots, error, isLoading } = useArchivedThreadSnapshots(environmentIds);
-  const pairs = useMemo(
-    () =>
-      groupComparePairs(
-        snapshots.flatMap(({ environmentId, snapshot }) =>
-          snapshot.threads.map((thread) => presentThreadShell(environmentId, thread)),
-        ),
-        props.environmentId,
-      ),
-    [snapshots, props.environmentId],
+  const pairs = groupComparePairs(
+    snapshots.flatMap(({ environmentId, snapshot }) =>
+      snapshot.threads.map((thread) => presentThreadShell(environmentId, thread)),
+    ),
+    props.environmentId,
   );
   if (error !== null) {
     return <p className="px-3 text-sm text-destructive-foreground">{error}</p>;
@@ -721,15 +690,11 @@ function ModelField(props: {
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(props.environmentId)) ??
     EMPTY_SERVER_PROVIDERS;
-  const modelOptions = useMemo(
-    () =>
-      getCustomModelOptionsByInstance(
-        settings,
-        providers,
-        selection?.instanceId ?? null,
-        selection?.model ?? null,
-      ),
-    [settings, providers, selection?.instanceId, selection?.model],
+  const modelOptions = getCustomModelOptionsByInstance(
+    settings,
+    providers,
+    selection?.instanceId ?? null,
+    selection?.model ?? null,
   );
   const entry = entries.find((candidate) => candidate.instanceId === selection?.instanceId);
   if (selection === null || entry === undefined) {

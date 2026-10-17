@@ -21,7 +21,6 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { useCallback } from "react";
 
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { resolveSnoozePresets } from "../components/Sidebar.snooze";
@@ -129,33 +128,27 @@ export function useComparePairRemoval() {
   const { archiveThread, deleteThread } = useThreadActions();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
-  const archivePair = useCallback(
-    async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
-      if (confirmThreadArchive && !(await confirmed(`Archive comparison "${prompt}"?`, false))) {
-        return false;
-      }
-      return onBothSides(refs, "Failed to archive comparison", (ref) => archiveThread(ref));
-    },
-    [archiveThread, confirmThreadArchive],
-  );
-  const deletePair = useCallback(
-    async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
-      if (
-        confirmThreadDelete &&
-        !(await confirmed(
-          [
-            `Delete comparison "${prompt}"?`,
-            "Both threads and their conversation history are removed for good.",
-          ].join("\n"),
-          true,
-        ))
-      ) {
-        return false;
-      }
-      return onBothSides(refs, "Failed to delete comparison", deleteThread);
-    },
-    [confirmThreadDelete, deleteThread],
-  );
+  const archivePair = async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
+    if (confirmThreadArchive && !(await confirmed(`Archive comparison "${prompt}"?`, false))) {
+      return false;
+    }
+    return onBothSides(refs, "Failed to archive comparison", (ref) => archiveThread(ref));
+  };
+  const deletePair = async (refs: ReadonlyArray<ScopedThreadRef>, prompt: string) => {
+    if (
+      confirmThreadDelete &&
+      !(await confirmed(
+        [
+          `Delete comparison "${prompt}"?`,
+          "Both threads and their conversation history are removed for good.",
+        ].join("\n"),
+        true,
+      ))
+    ) {
+      return false;
+    }
+    return onBothSides(refs, "Failed to delete comparison", deleteThread);
+  };
   return { archivePair, deletePair };
 }
 
@@ -164,36 +157,33 @@ export function useRenameComparison(environmentId: EnvironmentId) {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
-  return useCallback(
-    (pairId: string, name: string) => {
-      const trimmed = name.trim();
-      if (trimmed === "") {
-        toastManager.add({ type: "warning", title: "Comparison name cannot be empty" });
-        return;
-      }
-      const sides = pairRefs(environmentId, pairId).flatMap((ref) => {
-        const shell = readThreadShell(ref);
-        return shell === null ? [] : [{ ref, title: shell.title }];
-      });
-      if (sides.every((side) => comparePromptOf(side.title) === trimmed)) return;
-      void (async () => {
-        for (const side of sides) {
-          const result = await updateThreadMetadata({
-            environmentId,
-            input: {
-              threadId: side.ref.threadId,
-              title: renamedCompareTitle(side.title, trimmed),
-            },
-          });
-          if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-            failureToast("Failed to rename comparison", squashAtomCommandFailure(result));
-            return;
-          }
+  return (pairId: string, name: string) => {
+    const trimmed = name.trim();
+    if (trimmed === "") {
+      toastManager.add({ type: "warning", title: "Comparison name cannot be empty" });
+      return;
+    }
+    const sides = pairRefs(environmentId, pairId).flatMap((ref) => {
+      const shell = readThreadShell(ref);
+      return shell === null ? [] : [{ ref, title: shell.title }];
+    });
+    if (sides.every((side) => comparePromptOf(side.title) === trimmed)) return;
+    void (async () => {
+      for (const side of sides) {
+        const result = await updateThreadMetadata({
+          environmentId,
+          input: {
+            threadId: side.ref.threadId,
+            title: renamedCompareTitle(side.title, trimmed),
+          },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          failureToast("Failed to rename comparison", squashAtomCommandFailure(result));
+          return;
         }
-      })();
-    },
-    [environmentId, updateThreadMetadata],
-  );
+      }
+    })();
+  };
 }
 
 export function useComparePairMenu(input: {
@@ -218,143 +208,121 @@ export function useComparePairMenu(input: {
   const router = useRouter();
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
 
-  const openMenu = useCallback(
-    (pairId: string, position: { x: number; y: number }) => {
-      void (async () => {
-        const api = readLocalApi();
-        if (!api) return;
-        const pair = readComparePairSides(environmentId, pairId);
-        if (pair === null) return;
-        const { sides, lead, prompt } = pair;
-        const refs = sides.map((side) => side.ref);
-        const now = new Date();
-        const supports = {
-          settlement: readEnvironmentSupportsSettlement(environmentId),
-          autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(environmentId),
-          snooze: readEnvironmentSupportsSnooze(environmentId),
-          pinning: readEnvironmentSupportsPinning(environmentId),
-          titleRegeneration: false,
-        };
-        const snoozePresets = resolveSnoozePresets(now, timestampFormat);
-        const items = buildThreadActionMenuItems({
-          branch: null,
-          projectFilter: null,
-          isPinned: lead.pinnedAt != null,
-          isSettled: supports.settlement && lead.settledOverride === "settled",
-          autoSettleEnabled: lead.autoSettleDisabledAt == null,
-          isSnoozed: supports.snooze && effectiveSnoozed(lead, { now: now.toISOString() }),
-          canSnoozeNow: sides.every((side) => canSnooze(side.shell, { now: now.toISOString() })),
-          isRegeneratingTitle: false,
-          isRunning: sides.some((side) => !threadRuntimeCanArchive(side.shell.runtime)),
-          supports,
-          snoozePresets,
-        });
-        const clicked = await settlePromise(() =>
-          api.contextMenu.show(forPair(withForkThreadMenuItems(items, lead)), position),
+  const openMenu = (pairId: string, position: { x: number; y: number }) => {
+    void (async () => {
+      const api = readLocalApi();
+      if (!api) return;
+      const pair = readComparePairSides(environmentId, pairId);
+      if (pair === null) return;
+      const { sides, lead, prompt } = pair;
+      const refs = sides.map((side) => side.ref);
+      const now = new Date();
+      const supports = {
+        settlement: readEnvironmentSupportsSettlement(environmentId),
+        autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(environmentId),
+        snooze: readEnvironmentSupportsSnooze(environmentId),
+        pinning: readEnvironmentSupportsPinning(environmentId),
+        titleRegeneration: false,
+      };
+      const snoozePresets = resolveSnoozePresets(now, timestampFormat);
+      const items = buildThreadActionMenuItems({
+        branch: null,
+        projectFilter: null,
+        isPinned: lead.pinnedAt != null,
+        isSettled: supports.settlement && lead.settledOverride === "settled",
+        autoSettleEnabled: lead.autoSettleDisabledAt == null,
+        isSnoozed: supports.snooze && effectiveSnoozed(lead, { now: now.toISOString() }),
+        canSnoozeNow: sides.every((side) => canSnooze(side.shell, { now: now.toISOString() })),
+        isRegeneratingTitle: false,
+        isRunning: sides.some((side) => !threadRuntimeCanArchive(side.shell.runtime)),
+        supports,
+        snoozePresets,
+      });
+      const clicked = await settlePromise(() =>
+        api.contextMenu.show(forPair(withForkThreadMenuItems(items, lead)), position),
+      );
+      if (clicked._tag === "Failure" || clicked.value === null) return;
+      if (isForkThreadMenuId(clicked.value)) {
+        const menuId = clicked.value;
+        for (const ref of refs) await runForkThreadMenuItem(ref, menuId, router);
+        return;
+      }
+      const action: ThreadActionMenuId = clicked.value;
+      if (action.startsWith("snooze:")) {
+        const preset =
+          action === "snooze:custom"
+            ? await requestCustomSnooze()
+            : snoozePresets.find((candidate) => `snooze:${candidate.id}` === action);
+        if (!preset) return;
+        await onBothSides(refs, "Failed to snooze comparison", (ref) =>
+          snoozeThread(ref, preset.snoozedUntil),
         );
-        if (clicked._tag === "Failure" || clicked.value === null) return;
-        if (isForkThreadMenuId(clicked.value)) {
-          const menuId = clicked.value;
-          for (const ref of refs) await runForkThreadMenuItem(ref, menuId, router);
+        return;
+      }
+      switch (action) {
+        case "pin":
+          await onBothSides(refs, "Failed to pin comparison", (ref) => pinThread(ref));
           return;
-        }
-        const action: ThreadActionMenuId = clicked.value;
-        if (action.startsWith("snooze:")) {
-          const preset =
-            action === "snooze:custom"
-              ? await requestCustomSnooze()
-              : snoozePresets.find((candidate) => `snooze:${candidate.id}` === action);
-          if (!preset) return;
-          await onBothSides(refs, "Failed to snooze comparison", (ref) =>
-            snoozeThread(ref, preset.snoozedUntil),
+        case "unpin":
+          await onBothSides(refs, "Failed to unpin comparison", unpinThread);
+          return;
+        case "settle":
+          await onBothSides(refs, "Failed to settle comparison", settleThread);
+          return;
+        case "unsettle":
+          await onBothSides(refs, "Failed to un-settle comparison", unsettleThread);
+          return;
+        case "unsnooze":
+          await onBothSides(refs, "Failed to wake comparison", unsnoozeThread);
+          return;
+        case "auto-settle:enabled":
+        case "auto-settle:disabled":
+          await onBothSides(refs, "Failed to update auto-settle", (ref) =>
+            setThreadAutoSettle(ref, action === "auto-settle:enabled"),
           );
           return;
-        }
-        switch (action) {
-          case "pin":
-            await onBothSides(refs, "Failed to pin comparison", (ref) => pinThread(ref));
-            return;
-          case "unpin":
-            await onBothSides(refs, "Failed to unpin comparison", unpinThread);
-            return;
-          case "settle":
-            await onBothSides(refs, "Failed to settle comparison", settleThread);
-            return;
-          case "unsettle":
-            await onBothSides(refs, "Failed to un-settle comparison", unsettleThread);
-            return;
-          case "unsnooze":
-            await onBothSides(refs, "Failed to wake comparison", unsnoozeThread);
-            return;
-          case "auto-settle:enabled":
-          case "auto-settle:disabled":
-            await onBothSides(refs, "Failed to update auto-settle", (ref) =>
-              setThreadAutoSettle(ref, action === "auto-settle:enabled"),
-            );
-            return;
-          case "rename":
-            onStartRename(pairId);
-            return;
-          case "mark-unread":
-            for (const ref of refs) markThreadUnread(ref);
-            return;
-          case "archive":
-            if (await archivePair(refs, prompt)) onRemoved(pairId);
-            return;
-          case "delete":
-            if (await deletePair(refs, prompt)) onRemoved(pairId);
-            return;
-          default:
-            return;
-        }
-      })();
-    },
-    [
-      archivePair,
-      deletePair,
-      environmentId,
-      markThreadUnread,
-      onRemoved,
-      onStartRename,
-      pinThread,
-      router,
-      setThreadAutoSettle,
-      settleThread,
-      snoozeThread,
-      timestampFormat,
-      unpinThread,
-      unsettleThread,
-      unsnoozeThread,
-    ],
-  );
+        case "rename":
+          onStartRename(pairId);
+          return;
+        case "mark-unread":
+          for (const ref of refs) markThreadUnread(ref);
+          return;
+        case "archive":
+          if (await archivePair(refs, prompt)) onRemoved(pairId);
+          return;
+        case "delete":
+          if (await deletePair(refs, prompt)) onRemoved(pairId);
+          return;
+        default:
+          return;
+      }
+    })();
+  };
 
-  const openArchivedMenu = useCallback(
-    (pair: ComparePair, position: { x: number; y: number }) => {
-      void (async () => {
-        const api = readLocalApi();
-        if (!api) return;
-        const clicked = await settlePromise(() =>
-          api.contextMenu.show<"unarchive" | "delete">(
-            [
-              { id: "unarchive", label: "Unarchive comparison", icon: "archive" },
-              { id: "delete", label: "Delete comparison", icon: "trash", destructive: true },
-            ],
-            position,
-          ),
-        );
-        if (clicked._tag === "Failure" || clicked.value === null) return;
-        // Only the archived sides: a side still in the thread list stays put.
-        const refs = pair.threads.map((thread) => scopeThreadRef(thread.environmentId, thread.id));
-        // Both actions refresh the archived list themselves.
-        if (clicked.value === "unarchive") {
-          await onBothSides(refs, "Failed to unarchive comparison", (ref) => unarchiveThread(ref));
-        } else {
-          await deletePair(refs, pair.prompt);
-        }
-      })();
-    },
-    [deletePair, unarchiveThread],
-  );
+  const openArchivedMenu = (pair: ComparePair, position: { x: number; y: number }) => {
+    void (async () => {
+      const api = readLocalApi();
+      if (!api) return;
+      const clicked = await settlePromise(() =>
+        api.contextMenu.show<"unarchive" | "delete">(
+          [
+            { id: "unarchive", label: "Unarchive comparison", icon: "archive" },
+            { id: "delete", label: "Delete comparison", icon: "trash", destructive: true },
+          ],
+          position,
+        ),
+      );
+      if (clicked._tag === "Failure" || clicked.value === null) return;
+      // Only the archived sides: a side still in the thread list stays put.
+      const refs = pair.threads.map((thread) => scopeThreadRef(thread.environmentId, thread.id));
+      // Both actions refresh the archived list themselves.
+      if (clicked.value === "unarchive") {
+        await onBothSides(refs, "Failed to unarchive comparison", (ref) => unarchiveThread(ref));
+      } else {
+        await deletePair(refs, pair.prompt);
+      }
+    })();
+  };
 
   return { openMenu, openArchivedMenu };
 }

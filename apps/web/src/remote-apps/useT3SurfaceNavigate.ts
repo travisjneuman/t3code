@@ -1,5 +1,4 @@
 import type { UseNavigateResult } from "@tanstack/react-router";
-import { useCallback } from "react";
 
 import { setRemoteAppSurface } from "./useRemoteAppState";
 
@@ -12,8 +11,5 @@ import { setRemoteAppSurface } from "./useRemoteAppState";
 export function useT3SurfaceNavigate(
   navigate: UseNavigateResult<string>,
 ): UseNavigateResult<string> {
-  return useCallback<UseNavigateResult<string>>(
-    (options) => setRemoteAppSurface("t3code").then(() => navigate(options)),
-    [navigate],
-  );
+  return (options) => setRemoteAppSurface("t3code").then(() => navigate(options));
 }

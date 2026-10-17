@@ -1,5 +1,5 @@
 import type { EnvironmentId, ExternalSessionSummary, SessionRecord } from "@t3tools/contracts";
-import { memo, type RefObject, useMemo } from "react";
+import { memo, type RefObject } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import {
@@ -113,17 +113,14 @@ function ExternalSessionDetailsContent(props: {
   const details = summary.details;
   const cwd = summary.cwd ?? undefined;
   const record = insights?.session;
-  const sessionView = useMemo(() => externalSessionView(summary, record), [summary, record]);
-  const contextWindow = useMemo(() => contextSnapshot(summary), [summary]);
+  const sessionView = externalSessionView(summary, record);
+  const contextWindow = contextSnapshot(summary);
   const context = insights?.context ?? null;
-  const contextReading = useMemo(
-    () =>
-      context === null
-        ? null
-        : // Read with the summary, so a running session's breakdown is current.
-          { context, live: summary.liveness === "running", capturedAt: summary.updatedAt },
-    [context, summary.liveness, summary.updatedAt],
-  );
+  const contextReading =
+    context === null
+      ? null
+      : // Read with the summary, so a running session's breakdown is current.
+        { context, live: summary.liveness === "running", capturedAt: summary.updatedAt };
   return (
     // Excluded from the card's density measurement, like a thread's session details.
     <div data-thread-session-details>

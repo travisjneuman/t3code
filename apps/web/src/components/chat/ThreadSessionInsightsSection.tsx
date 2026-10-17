@@ -10,7 +10,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { getModelSelectionBooleanOptionValue } from "@t3tools/shared/model";
-import { memo, useMemo } from "react";
+import { memo } from "react";
 
 import { labelSessionRecordSettings } from "../../external-sessions/atoms";
 import { HERMES_DRIVER } from "../../hermes/hermesSessions";
@@ -53,10 +53,7 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
   readonly compactDisabledReason: string | null;
   readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
 }) {
-  const threadRef = useMemo(
-    () => scopeThreadRef(props.environmentId, props.threadId),
-    [props.environmentId, props.threadId],
-  );
+  const threadRef = scopeThreadRef(props.environmentId, props.threadId);
   const insightsQuery = useSessionInsights(threadRef);
   // A thread that has not started a provider session has nothing to report
   // yet; that is a state, not an error.
@@ -140,72 +137,69 @@ function ThreadSessionSummarySection(props: {
   const { record, contextWindow } = props;
   const summary = useThreadSessionSummary(props.threadRef);
   const providers = useEnvironmentProviders().get(props.threadRef.environmentId);
-  const view = useMemo((): SessionSummaryView | null => {
-    if (summary === null) return null;
-    const entry = providers
-      ? getProviderInstanceEntry(providers, summary.providerInstanceId)
-      : undefined;
-    const driverKind = entry?.driverKind ?? summary.driver;
-    const providerName =
-      entry?.displayName ??
-      (summary.driver === null
-        ? summary.providerInstanceId
-        : formatProviderDriverKindLabel(summary.driver));
-    const traits = [
-      formatModelSelectionEffort(
-        summary.modelSelection,
-        entry?.models ?? [],
-        summary.reportedModelSelection,
+  if (summary === null) return null;
+  const entry = providers
+    ? getProviderInstanceEntry(providers, summary.providerInstanceId)
+    : undefined;
+  const driverKind = entry?.driverKind ?? summary.driver;
+  const providerName =
+    entry?.displayName ??
+    (summary.driver === null
+      ? summary.providerInstanceId
+      : formatProviderDriverKindLabel(summary.driver));
+  const traits = [
+    formatModelSelectionEffort(
+      summary.modelSelection,
+      entry?.models ?? [],
+      summary.reportedModelSelection,
+    ),
+    getModelSelectionBooleanOptionValue(summary.modelSelection, "fastMode") === true
+      ? "Fast"
+      : null,
+  ].filter((trait) => trait !== null);
+  // With no T3 session running, the provider's own record says whether it is active.
+  const status =
+    record?.status !== undefined &&
+    (summary.sessionStatus === null || summary.sessionStatus === "stopped")
+      ? RECORD_STATUS_PRESENTATION[record.status]
+      : SESSION_STATUS_PRESENTATION[summary.sessionStatus ?? "none"];
+  const runtimeMode = runtimeModeConfig[summary.runtimeMode];
+  // The provider's record wins; T3's own readings fill in what it leaves out.
+  const facts = mergeSessionRecord(
+    record === null ? null : labelSessionRecordSettings(record),
+    sessionRecordFrom({
+      startedAt: summary.startedAt,
+      version: entry?.snapshot.version,
+      toolCallCount: contextWindow?.toolUses,
+      durationMs: contextWindow?.durationMs,
+    }),
+  );
+  const view: SessionSummaryView = {
+    icon:
+      driverKind === null ? null : (
+        <ProviderInstanceIcon
+          driverKind={driverKind}
+          displayName={providerName}
+          accentColor={entry?.accentColor}
+          acpRegistryAgentId={entry?.acpRegistryAgentId}
+          acpRegistryIconUrl={entry?.acpRegistryIconUrl}
+          iconClassName="size-4"
+        />
       ),
-      getModelSelectionBooleanOptionValue(summary.modelSelection, "fastMode") === true
-        ? "Fast"
-        : null,
-    ].filter((trait) => trait !== null);
-    // With no T3 session running, the provider's own record says whether it is active.
-    const status =
-      record?.status !== undefined &&
-      (summary.sessionStatus === null || summary.sessionStatus === "stopped")
-        ? RECORD_STATUS_PRESENTATION[record.status]
-        : SESSION_STATUS_PRESENTATION[summary.sessionStatus ?? "none"];
-    const runtimeMode = runtimeModeConfig[summary.runtimeMode];
-    // The provider's record wins; T3's own readings fill in what it leaves out.
-    const facts = mergeSessionRecord(
-      record === null ? null : labelSessionRecordSettings(record),
-      sessionRecordFrom({
-        startedAt: summary.startedAt,
-        version: entry?.snapshot.version,
-        toolCallCount: contextWindow?.toolUses,
-        durationMs: contextWindow?.durationMs,
-      }),
-    );
-    return {
-      icon:
-        driverKind === null ? null : (
-          <ProviderInstanceIcon
-            driverKind={driverKind}
-            displayName={providerName}
-            accentColor={entry?.accentColor}
-            acpRegistryAgentId={entry?.acpRegistryAgentId}
-            acpRegistryIconUrl={entry?.acpRegistryIconUrl}
-            iconClassName="size-4"
-          />
-        ),
-      name: providerName,
-      model: resolveSubagentMetadata({
-        model: summary.modelSelection.model,
-        provider: entry?.snapshot,
-      }).modelLabel,
-      traits,
-      statusLabel: status.label,
-      statusDotClassName: status.dotClassName,
-      // T3 runs the thread, so its runtime mode and run count are the thread's own.
-      record: { ...facts, permissionMode: runtimeMode.label, turnCount: summary.turnCount },
-      permissionsIcon: runtimeMode.icon,
-      updatedAt: summary.updatedAt,
-      fallbackCost: contextWindow?.cost ? formatContextWindowCost(contextWindow.cost) : null,
-      error: summary.sessionStatus === "error" ? summary.lastError : null,
-    };
-  }, [summary, providers, record, contextWindow]);
-  if (view === null) return null;
+    name: providerName,
+    model: resolveSubagentMetadata({
+      model: summary.modelSelection.model,
+      provider: entry?.snapshot,
+    }).modelLabel,
+    traits,
+    statusLabel: status.label,
+    statusDotClassName: status.dotClassName,
+    // T3 runs the thread, so its runtime mode and run count are the thread's own.
+    record: { ...facts, permissionMode: runtimeMode.label, turnCount: summary.turnCount },
+    permissionsIcon: runtimeMode.icon,
+    updatedAt: summary.updatedAt,
+    fallbackCost: contextWindow?.cost ? formatContextWindowCost(contextWindow.cost) : null,
+    error: summary.sessionStatus === "error" ? summary.lastError : null,
+  };
   return <SessionSummarySection view={view} />;
 }
