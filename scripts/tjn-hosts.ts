@@ -246,9 +246,11 @@ async function snapshot(host: Host): Promise<Snapshot> {
 
 async function copyArchive(host: Host, v: string, destination: string) {
   const p = host.os === "win32" ? path.win32 : path.posix;
-  const source = p
+  const joined = p
     .join(host.cacheDir, v, `t3-${v}-${host.os}-x64.${host.os === "win32" ? "zip" : "tar.gz"}`)
     .replaceAll("\\", "/");
+  // Windows OpenSSH's SFTP resolves `C:/...` against the home directory; absolute drive paths need `/C:/...`.
+  const source = host.os === "win32" ? `/${joined}` : joined;
   const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
   // SFTP preserves archive bytes; native stdout piped through Windows PowerShell does not.
   await run("sftp", ["-b", "-", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host.ssh], {
