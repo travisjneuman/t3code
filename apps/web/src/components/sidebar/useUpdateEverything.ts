@@ -3,9 +3,9 @@ import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
-import { APP_VERSION } from "~/branding";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
+import { collectHostUpdateTargets, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on: host releases.
 import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { useEnvironments } from "~/state/environments";
 import { useNpmReleasePublished } from "~/state/npmRelease";
@@ -17,7 +17,6 @@ import { canUpdateServer, type ServerUpdateOutcome, useServerUpdate } from "../S
 import {
   closeFinishedUpdateRun,
   collectRestartingMachines,
-  collectServerUpdateTargets,
   collectUpdateEverythingResult,
   describeUpdateEverything,
   runUpdateEverything,
@@ -39,7 +38,7 @@ const UPDATE_RESTART_DELAY_MS = 5_000;
 export type ReportLocalUpdateError = (title: string, description: string) => void;
 
 export function useUpdateEverything(localUpdateVersion: string | null) {
-  const targetVersion = localUpdateVersion ?? APP_VERSION;
+  const targetVersion = useHostUpdateTarget(); // Fork add-on: host releases.
   const { environments } = useEnvironments();
   const machinesAtom = useMemo(
     () =>
@@ -62,17 +61,17 @@ export function useUpdateEverything(localUpdateVersion: string | null) {
     [environments],
   );
   const machines = useAtomValue(machinesAtom);
-  const { targets: behindServers, skipped: unreachable } = collectServerUpdateTargets(
-    machines,
-    targetVersion,
-  );
+  // Fork add-on: host releases: remote servers move to the newest published fork release.
+  const hostTargets = collectHostUpdateTargets(machines, targetVersion); // Fork add-on
+  const { targets: behindServers, skipped: unreachable } = hostTargets; // Fork add-on
   // A desktop-managed server installs from its own app's update feed, so only
   // servers that download t3 from npm wait for npm to publish the version.
-  const needsNpm = behindServers.some((server) => server.selfUpdate !== "desktop-managed");
+  // Fork add-on: host releases: a boot-service server downloads the fork's release archive.
+  const needsNpm = behindServers.some((server) => server.selfUpdate === "respawn"); // Fork add-on
   const published = useNpmReleasePublished(needsNpm ? targetVersion : null);
   const servers = published
     ? behindServers
-    : behindServers.filter((server) => server.selfUpdate === "desktop-managed");
+    : behindServers.filter((server) => server.selfUpdate !== "respawn"); // Fork add-on
   const skipped: ReadonlyArray<SkippedMachine> = [
     ...unreachable,
     ...behindServers

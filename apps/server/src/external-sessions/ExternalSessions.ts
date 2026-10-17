@@ -212,8 +212,18 @@ interface Registry {
 
 const sessionKey = (source: ExternalSessionSource, id: string) => `${source.driver}:${id}`;
 
-const isUnder = (path: string, root: string) =>
-  path === root || path.startsWith(root.endsWith(NodePath.sep) ? root : `${root}${NodePath.sep}`);
+const isUnder = (path: string, root: string) => {
+  const comparedPath =
+    process.platform === "win32" ? path.replaceAll("/", "\\").toLowerCase() : path;
+  const comparedRoot =
+    process.platform === "win32" ? root.replaceAll("/", "\\").toLowerCase() : root;
+  return (
+    comparedPath === comparedRoot ||
+    comparedPath.startsWith(
+      comparedRoot.endsWith(NodePath.sep) ? comparedRoot : `${comparedRoot}${NodePath.sep}`,
+    )
+  );
+};
 
 // Pi names a session by its file; the listing names it by the id inside.
 const PI_SESSION_FILE = /_([0-9a-f-]{36})\.jsonl$/i;

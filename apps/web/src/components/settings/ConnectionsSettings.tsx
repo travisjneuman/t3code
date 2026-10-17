@@ -151,6 +151,13 @@ import {
   type ServerPairingLinkRecord,
 } from "~/environments/primary";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
+import {
+  // Fork add-on: host releases.
+  resolveHostVersionMismatch, // Fork add-on: host releases.
+  useHostUpdateTarget, // Fork add-on: host releases.
+  useHostVersionMismatch, // Fork add-on: host releases.
+  useRefreshHostUpdateTarget, // Fork add-on: host releases.
+} from "~/host-release/hostRelease"; // Fork add-on: host releases.
 import { useUiStateStore } from "~/uiStateStore";
 import {
   resolveServerConfigVersionMismatch,
@@ -1534,7 +1541,7 @@ function SavedBackendListRow({
       );
     },
   });
-  const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+  const versionMismatch = useHostVersionMismatch(environment.serverConfig); // Fork add-on: host releases.
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -2078,10 +2085,13 @@ export function ConnectionsSettings() {
     [savedEnvironments],
   );
   const savedServerUpdateStates = useAtomValue(savedServerUpdateStatesAtom);
+  const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on: host releases.
+  const refreshHostUpdateTarget = useRefreshHostUpdateTarget(); // Fork add-on: host releases.
+  useEffect(() => refreshHostUpdateTarget(), [refreshHostUpdateTarget]); // Fork add-on
   const savedServerUpdateTargets = useMemo(
     () =>
       savedServerUpdateStates.flatMap(({ environment, updateStatus }): ServerUpdateTarget[] => {
-        const mismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+        const mismatch = resolveHostVersionMismatch(environment.serverConfig, hostUpdateTarget); // Fork add-on: host releases.
         const selfUpdate = resolveServerSelfUpdateCapability(environment.serverConfig);
         const desktopAppUpdate = supportsDesktopAppUpdate(environment.serverConfig);
         if (
@@ -2109,7 +2119,7 @@ export function ConnectionsSettings() {
           },
         ];
       }),
-    [savedServerUpdateStates],
+    [savedServerUpdateStates, hostUpdateTarget], // Fork add-on: host releases.
   );
   const loadBalancingEnvironments = useMemo(
     () => [

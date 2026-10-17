@@ -31,7 +31,8 @@ import { useMemo } from "react";
 import { sessionRecordFrom } from "../components/chat/sessionInsights.logic";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { formatProviderDriverKindLabel } from "../providerModels";
-import { environmentSummaries } from "../state/presentation";
+import { resolveRemoteOpenState } from "../remoteOpen";
+import { environmentPresentations, environmentSummaries } from "../state/presentation";
 import { useEnvironmentQuery } from "../state/query";
 
 /** Transcripts keep at most this many messages client-side; older ones drop off the top. */
@@ -188,6 +189,22 @@ export const externalSessionRelease = createEnvironmentRpcCommand(connectionAtom
   label: "environment-data:external-sessions:release",
   tag: EXTERNAL_SESSIONS_WS_METHODS.release,
 });
+
+/** The launcher runs on the server, so remote and unresolved environments cannot open locally. */
+export const externalSessionOriginIsLocalAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) => {
+    const presentation = get(environmentPresentations.presentationAtom(environmentId));
+    return (
+      presentation !== null &&
+      resolveRemoteOpenState({
+        target: presentation.entry.target,
+        sshAlias: null,
+        remoteOpenTargets: undefined,
+        isDesktopRenderer: window.desktopBridge !== undefined,
+      }).mode === "local-exec"
+    );
+  }),
+);
 
 /** Opens the app a session runs in on that session, on the server's machine. */
 export const externalSessionOpenInOrigin = createEnvironmentRpcCommand(connectionAtomRuntime, {

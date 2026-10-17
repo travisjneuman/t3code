@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -75,6 +76,7 @@ import {
   cwdBasename,
   externalSessionContinue,
   externalSessionOpenInOrigin,
+  externalSessionOriginIsLocalAtom,
   externalSessionOriginLabel,
   externalSessionProductName,
   externalSessionSettingLabel,
@@ -687,8 +689,10 @@ function OriginChip(props: {
 }) {
   const { environmentId, sessionKey, summary } = props;
   const label = externalSessionOriginLabel(summary);
+  const originIsLocal = useAtomValue(externalSessionOriginIsLocalAtom(environmentId));
   const runOpen = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
   const handleOpen = useCallback(async () => {
+    if (!originIsLocal) return;
     const result = await runOpen({ environmentId, input: { key: sessionKey } });
     if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
     const failure = squashAtomCommandFailure(result);
@@ -697,8 +701,8 @@ function OriginChip(props: {
       title: `Failed to open ${label}`,
       description: failure instanceof Error ? failure.message : "An error occurred.",
     });
-  }, [environmentId, label, runOpen, sessionKey]);
-  if (!externalSessionOpensInOrigin(summary)) {
+  }, [environmentId, label, originIsLocal, runOpen, sessionKey]);
+  if (!originIsLocal || !externalSessionOpensInOrigin(summary)) {
     return <SessionChip tooltip={`Session from ${label}`}>{label}</SessionChip>;
   }
   return (
