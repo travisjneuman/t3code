@@ -8,3 +8,7 @@ export const AGENT_LINE_CLASS =
   "flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md text-left text-[11px] outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 export const AGENT_LINE_ICON_CLASS = "size-3 shrink-0";
+
+/** "Show more" / "Show less" under one of those lists, the same height as a line. */
+export const AGENT_MORE_BUTTON_CLASS =
+  "flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-(--sidebar-row-content-inset) text-left text-[11px] text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";

@@ -40,9 +40,10 @@ threads and restarts. See [Session details](session-details.md#open-them).
 
 A thread that started subagents, through `delegate_task` or the provider's own subagent tool, shows
 an arrow and a count at its bottom left in the sidebar, wherever the thread sits: Active, Working,
-Snoozed or Settled. Click it to list all of its subagents as single lines under the thread, and
-again to hide them; they start hidden. They stay there after they finish. Hover one for its
-provider, model and status; open it to review its work, or right-click it to archive or delete it.
+Snoozed or Settled. Click it to list its subagents as single lines under the thread, and again to
+hide them; they start hidden. The first three are listed, and **Show more** lists the rest. They
+stay there after they finish. Hover one for its provider, model and status; open it to review its
+work, or right-click it to archive or delete it.
 
 ## Codex can show hidden models
 

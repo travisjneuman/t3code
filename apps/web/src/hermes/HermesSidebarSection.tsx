@@ -39,7 +39,11 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { cn } from "../lib/utils";
-import { AGENT_LINE_CLASS, AGENT_LINE_ICON_CLASS } from "../sidebar-compact/agentLines";
+import {
+  AGENT_LINE_CLASS,
+  AGENT_LINE_ICON_CLASS,
+  AGENT_MORE_BUTTON_CLASS,
+} from "../sidebar-compact/agentLines";
 import { readLocalApi } from "../localApi";
 import { useThreadShells, waitForThreadShell } from "../state/entities";
 import { useEnvironments } from "../state/environments";
@@ -63,8 +67,6 @@ import {
 } from "./hermesSessions";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:hermes-expanded";
-const MORE_BUTTON_CLASS =
-  "flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-(--sidebar-row-content-inset) text-left text-[11px] text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
 
 type MenuAction =
   | "continue"
@@ -750,17 +752,17 @@ export function HermesSidebarSection() {
               <button
                 type="button"
                 onClick={() => setExtra((value) => value + 1)}
-                className={MORE_BUTTON_CLASS}
+                className={AGENT_MORE_BUTTON_CLASS}
               >
-                <PlusIcon aria-hidden className="size-3.5 shrink-0" />
+                <PlusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
                 Load more
               </button>
             </li>
           ) : null}
           {expanded && extra > 0 ? (
             <li className="list-none">
-              <button type="button" onClick={() => setExtra(0)} className={MORE_BUTTON_CLASS}>
-                <MinusIcon aria-hidden className="size-3.5 shrink-0" />
+              <button type="button" onClick={() => setExtra(0)} className={AGENT_MORE_BUTTON_CLASS}>
+                <MinusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
                 Show less
               </button>
             </li>
