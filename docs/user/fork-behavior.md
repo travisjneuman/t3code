@@ -12,6 +12,18 @@ project with your [new-thread defaults](thread-sidebar.md#start-a-thread), Shift
 or press `mod+shift+n` (`chat.newLocal`). `chat.newWithoutProject` (`mod+alt+n`) always starts
 without a project.
 
+## Connected servers follow published fork releases
+
+Connected servers running the fork update to the newest published, non-draft fork release on the
+app's channel that is no newer than the app itself. Releases are compared by version, not by
+publication order. A server already at or past that target counts as current, even if the app has
+had another source update since the last host release.
+
+Use **Update everything** or the server's update action when a release is offered. If the release
+cannot be found, no server update is offered; the app does not ask a server to install an
+unpublished version. Boot-service installations use release archives. npm-based servers still
+need that version to be available on npm before they can update.
+
 ## Tailscale HTTPS needs HTTPS certificates
 
 [Tailscale HTTPS](remote-access.md#tailscale-https) needs **HTTPS Certificates** turned on for your

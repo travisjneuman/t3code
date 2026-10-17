@@ -45,6 +45,7 @@ import {
   externalSessionContinue,
   externalSessionEntriesAtom,
   externalSessionOpenInOrigin,
+  externalSessionOriginIsLocalAtom,
   externalSessionOriginLabel,
   externalSessionProductName,
   externalSessionTitle,
@@ -245,6 +246,7 @@ export function ExternalSessionsSidebarSection() {
   };
 
   const openInOrigin = async (entry: ExternalSessionEntry) => {
+    if (!appAtomRegistry.get(externalSessionOriginIsLocalAtom(entry.environmentId))) return;
     const result = await runOpenInOrigin({
       environmentId: entry.environmentId,
       input: { key: entry.session.key },
@@ -298,7 +300,10 @@ export function ExternalSessionsSidebarSection() {
         disabled: session.liveness === "running",
       });
     }
-    if (externalSessionOpensInOrigin(session)) {
+    if (
+      externalSessionOpensInOrigin(session) &&
+      appAtomRegistry.get(externalSessionOriginIsLocalAtom(environmentId))
+    ) {
       items.push({ id: "open-origin", label: `Open in ${externalSessionOriginLabel(session)}` });
     }
     items.push({

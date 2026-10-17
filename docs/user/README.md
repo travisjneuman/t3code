@@ -2,7 +2,7 @@
 
 Every T3 Code user guide in `docs/user/`, grouped by task, so you can find the right page in one read.
 
-Up: [docs index](../README.md) · [fork landing page](../../.github/README.md). Not here: architecture and implementation notes ([internals](../internals/README.md)), maintainer setup and release runbooks ([operations](../README.md#runbooks)).
+Up: [docs index](../README.md) · [fork landing page](../../.github/README.md). Not here: architecture and implementation notes ([internals](../internals/README.md)), maintainer setup and release runbooks ([operations](../README.md#runbooks), [fork host releases](../operations/fork-host-releases.md)).
 
 This page belongs to the ndev.t3code fork and is not part of upstream T3 Code. Pages marked _fork add-on_ document features only the fork has.
 

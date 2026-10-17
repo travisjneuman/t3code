@@ -22,6 +22,7 @@ import {
 } from "../desktopUpdate.logic";
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
 import { queueDesktopInstallWhileBusy } from "../../maintenance-queue/desktopGate"; // Fork add-on: maintenance queue.
+import { useRefreshHostUpdateTarget } from "../../host-release/hostRelease"; // Fork add-on: host releases.
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -214,6 +215,7 @@ function SidebarUpdateControl() {
   const localUpdateVersion =
     state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
+  const refreshHost = useRefreshHostUpdateTarget(); // Fork add-on: host releases.
   const runsEverything = everything.hasUpdates && !isDownloading;
   const run = useUpdateEverythingRun();
   const isRunningEverything = run !== null;
@@ -264,6 +266,7 @@ function SidebarUpdateControl() {
   const handleAction = useCallback(async () => {
     const bridge = window.desktopBridge;
     if (isInteractionDisabled) return;
+    refreshHost(); // Fork add-on: host releases.
 
     if (runsEverything) {
       setIsConfirmingEverything(true);
@@ -332,7 +335,7 @@ function SidebarUpdateControl() {
         );
       })
       .finally(() => setIsActionPending(false));
-  }, [action, isInteractionDisabled, prefersReducedMotion, runsEverything, state]);
+  }, [action, isInteractionDisabled, prefersReducedMotion, refreshHost, runsEverything, state]); // Fork add-on
 
   const runEverything = useCallback(async () => {
     const bridge = window.desktopBridge;

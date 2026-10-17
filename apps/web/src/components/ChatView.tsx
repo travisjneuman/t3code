@@ -499,6 +499,7 @@ import {
 import { useLinkedThreadPullRequest } from "./ThreadStatusIndicators";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { useForkComposerBanners } from "../forkComposerBanners"; // Fork add-on: external sessions, compare agents.
+import { useHostVersionMismatch } from "../host-release/hostRelease"; // Fork add-on: host releases.
 import { renderRemoteAppPanel } from "../remote-apps/panel/RemoteAppPanelView"; // Fork add-on: remote app panel.
 import { useRemoteAppPanelThread } from "../remote-apps/panel/remoteAppPanelThread"; // Fork add-on: remote app panel.
 import { ThreadStatusLine } from "./chat/ThreadStatusLine";
@@ -612,7 +613,6 @@ import {
   dismissVersionMismatch,
   isServerUpdateFailureDismissed,
   isVersionMismatchDismissed,
-  resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
   serverUpdateGuidance,
   supportsDesktopAppUpdate,
@@ -3052,7 +3052,7 @@ export default function ChatView(props: ChatViewProps) {
     [automaticEnvironment, logicalProjectEnvironments, environmentById],
   );
   const autoBalanceUpdateBanner = useAutoBalanceUpdateBanner(autoUpdateEnvironments);
-  const versionMismatch = resolveServerConfigVersionMismatch(serverConfig);
+  const versionMismatch = useHostVersionMismatch(serverConfig); // Fork add-on: host releases.
   const versionMismatchDismissKey =
     versionMismatch && activeThread
       ? buildVersionMismatchDismissalKey(activeThread.environmentId, versionMismatch)
