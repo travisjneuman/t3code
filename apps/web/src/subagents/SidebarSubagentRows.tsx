@@ -472,7 +472,9 @@ const SubagentLine = memo(function SubagentLine(props: {
               acpRegistryAgentId={props.providerEntry.acpRegistryAgentId}
               acpRegistryIconUrl={props.providerEntry.acpRegistryIconUrl}
               className={AGENT_LINE_ICON_CLASS}
-              iconClassName="size-3"
+              // Pi's solid block glyph fills its box and reads larger than the
+              // outline glyphs in Other Agents and Hermes, so it draws smaller.
+              iconClassName="size-2.5"
             />
           ) : (
             <CpuIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "opacity-60")} />
