@@ -63,12 +63,13 @@ Each `buildHosts` list is ordered: the first reachable host builds that platform
 fallback host's inventory name after the preferred builder. Keep caches disjoint from both the
 checkout and T3 home.
 
-A host whose server cannot download releases itself, for example because VPN split tunneling lets
-its T3 executable reach only the tailnet, can name a sibling with the same OS in `"stageFrom"`.
-After each publication the sibling downloads that host's archive from the fork release, checks it
-against `SHA256SUMS`, and puts it in the host's cache with `sftp` over SSH; the host then rechecks
-the hash and installs it into `runtime/versions/<version>`. Its in-app **Update** finds that
-complete install and skips the download. The sibling's own SSH configuration must resolve the
+A host whose server cannot download releases itself, for example because a VPN kill switch lets
+its excluded T3 executable reach only the tailnet and a few excluded address ranges, can name a
+sibling with the same OS in `"stageFrom"`. After each publication the sibling downloads that host's
+archive from the fork release, checks it against `SHA256SUMS`, and puts it in the host's cache with
+`sftp` over SSH; the host then rechecks the hash and installs it into `runtime/versions/<version>`.
+Its in-app **Update** finds that complete install and skips the download, and the launcher then
+replaces `runtime/current` with it like any other update. The sibling's own SSH configuration must resolve the
 host's `ssh` alias without a prompt. `stage <host>` repeats the delivery for the published release
 when the host or its sibling was unreachable during `release`.
 
@@ -181,7 +182,10 @@ on Linux, so Windows Firewall rules and VPN split-tunnel exclusions that match a
 keep working across updates. `runtime/current` holds hard links to the active version directory and
 uses no extra disk. The launcher points it at the version it is about to start, while no server
 runs: on updates, automatic trial rollbacks and restarts. The launcher's own replaced image waits in
-`runtime/.current-retired` until it has exited.
+`runtime/.current-retired` until it has exited. The executable at that path is replaced in place on
+every update, so a rule added for it once never needs editing. Don't add rules for
+`runtime/versions/<version>`: those directories hold each release before it is started and change
+with every release.
 
 An in-app update replaces the server but never the launcher or the service file. A host whose
 service file still names `runtime/versions/<version>` moves on its own: the first updated server
