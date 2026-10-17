@@ -36,6 +36,14 @@ In the thread details card, choose a section's title, such as **Automations** or
 collapse it to its heading, and again to expand it. Each section remembers its state across
 threads and restarts. See [Session details](session-details.md#open-them).
 
+## Saved connections stay out of the macOS keychain
+
+On macOS, the desktop app encrypts saved connections with a key in `desktop-secrets` under your T3
+home's `userdata` folder, readable only by your account, so updates no longer ask for your
+keychain password. The first launch after this change asks once more, to move connections saved
+in the keychain. Once that is done, you can delete the app's **Safe Storage** item in Keychain
+Access. Windows and Linux are unchanged.
+
 ## Thread cards name their machine
 
 Every thread card in the sidebar names the machine the thread runs on, the one picked in **Run
