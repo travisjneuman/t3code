@@ -17,6 +17,7 @@ import { currentRuntimePaths, syncCurrentRuntime } from "./currentRuntime.ts";
 // Holds the version that last tried to move, so a supervisor that still starts the old
 // launcher afterwards costs one restart, not a restart loop.
 const MOVE_ATTEMPT_FILE = ".current-move-attempt";
+const FORCED_EXIT_GRACE_MS = 15_000;
 
 const execFile = promisify(NodeChildProcess.execFile);
 const run = async (command: string, args: ReadonlyArray<string>) =>
@@ -158,7 +159,15 @@ export const moveServiceToCurrentRuntime = (managed: boolean, baseDir: string) =
         Effect.flatMap((moved) =>
           moved
             ? Effect.logInfo("service now runs from runtime/current; restarting onto it").pipe(
-                Effect.andThen(Effect.sync(() => process.kill(process.pid, "SIGTERM"))),
+                Effect.andThen(
+                  Effect.sync(() => {
+                    // Graceful shutdown from here has stalled on Linux, leaving this server
+                    // up under the old launcher; layer construction is still waiting on the
+                    // activation this parked startup never grants. Exit regardless.
+                    setTimeout(() => process.exit(1), FORCED_EXIT_GRACE_MS).unref();
+                    process.kill(process.pid, "SIGTERM");
+                  }),
+                ),
                 Effect.andThen(Effect.never),
               )
             : Effect.void,
