@@ -197,7 +197,19 @@ function remoteCommand(host: Host, request: Request) {
       command = `bash -lc ${shellQuote(command)}`;
     }
   }
-  return ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host.ssh, command];
+  return [
+    "-T",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=3",
+    host.ssh,
+    command,
+  ];
 }
 
 async function remoteSource() {
@@ -237,7 +249,9 @@ async function snapshot(host: Host): Promise<Snapshot> {
       (value.runtime === null || record(value.runtime)) &&
       Array.isArray(value.versions) &&
       Array.isArray(value.backups) &&
-      record(value.backupVersions),
+      record(value.backupVersions) &&
+      record(value.backupErrors) &&
+      Array.isArray(value.stagingBackups),
     "Invalid host snapshot.",
   );
   version(value.state.activeVersion);
@@ -253,9 +267,23 @@ async function copyArchive(host: Host, v: string, destination: string) {
   const source = host.os === "win32" ? `/${joined}` : joined;
   const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
   // SFTP preserves archive bytes; native stdout piped through Windows PowerShell does not.
-  await run("sftp", ["-b", "-", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host.ssh], {
-    input: `get ${quote(source)} ${quote(destination)}\n`,
-  });
+  await run(
+    "sftp",
+    [
+      "-b",
+      "-",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=3",
+      host.ssh,
+    ],
+    { input: `get ${quote(source)} ${quote(destination)}\n` },
+  );
 }
 
 async function release(cfg: HostConfig, override?: string) {
@@ -506,7 +534,9 @@ async function release(cfg: HostConfig, override?: string) {
   if (skipped.length > 0) {
     console.log(`Unreachable hosts skipped (not validated or changed): ${skipped.join(", ")}`);
   }
-  console.log("Mac app → Update everything");
+  console.log(
+    "Use each host's Update; use Update everything only after every connected host has the intended release source.",
+  );
 }
 
 function migrationReceipt(release: Release): ReleaseReceipt {

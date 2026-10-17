@@ -178,7 +178,16 @@ launcher, restarts and confirms that version is running before deleting other ve
 and all older backups. Successful pruning keeps exactly one installed version and that one fresh
 backup. Never delete a directory still named by the service file, even if its launcher currently
 starts a newer server. The retained backup is a current-version recovery point, not a pre-migration
-snapshot.
+snapshot. A rollback keeps a backup of the newer version it left; prune refuses before stopping
+anything while such a backup exists, so remove it deliberately once the rollback is settled.
+
+Before stopping, maintenance requires enough free space for the copied files plus headroom of twice
+their size or 256 MiB, whichever is larger; an unavailable space reading also refuses maintenance.
+Cold backups are copied into sibling `.cold-staging-*` directories, flushed and validated before
+being renamed to their final names. `status` reports leftover staging directories in `stagingBackups`
+and individual invalid backups in `backupErrors` without hiding live-state facts. Either condition
+blocks maintenance before stopping; staging directories are never removed by retention. Inspect
+leftovers deliberately before proceeding. Existing backups are preserved if the space check fails.
 
 - **Windows:** start from the recorded runtime PID in `userdata/server-runtime.json` and inspect its
   parent ancestry to identify the service's `conhost`. Stop that exact tree with
@@ -215,8 +224,9 @@ An allowed rollback keeps the current database, takes a fresh stopped backup, re
 and changes `activeVersion` in `runtime/service-state.json`, clearing the old update record. It also
 removes a recognized standalone fork `T3CODE_RELEASE_BASE_URL` line from the service file, so an
 upstream runtime's discovery and downloads agree. A nonstandard override line refuses before
-stopping rather than being guessed at. The command confirms the target version after restarting;
-the Mac app is unaffected.
+downloading a missing runtime or stopping rather than being guessed at. Service rewrite checks,
+unfinished-transition checks and backup preflight all run before an upstream download. The command
+confirms the target version after restarting; the Mac app is unaffected.
 
 An emergency same-version reinstall is manual: with explicit operator approval, stop the service,
 move the installed version directory aside, extract the replacement archive with its

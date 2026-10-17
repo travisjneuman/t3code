@@ -55,6 +55,8 @@ export interface Snapshot {
   releaseBaseUrlSet: boolean;
   backups: string[];
   backupVersions: Record<string, string>;
+  backupErrors: Record<string, string>;
+  stagingBackups: string[];
   environmentId: string;
 }
 export interface Request {
@@ -100,7 +102,7 @@ export function compareVersions(a: string, b: string): number {
   return compareSemverVersions(version(a), version(b));
 }
 export const shellQuote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
-export const psQuote = (s: string) => `'${s.replaceAll("'", "''")}'`;
+export const psQuote = (s: string) => `'${s.replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&")}'`;
 export const powershellArgs = (script: string) => [
   "-NoProfile",
   "-NonInteractive",
@@ -335,13 +337,19 @@ async function inspect(host: Host): Promise<Snapshot> {
   const runtime = (await exists(runtimePath(host))) ? await readRuntime(host) : null;
   const file = await fs.readFile(host.service.file, "utf8");
   const named = launcher(file, host);
-  const backups = await names(backupRoot(host));
+  const environmentId = (
+    await fs.readFile(path.join(host.t3Home, "userdata", "environment-id"), "utf8")
+  ).trim();
+  const entries = await names(backupRoot(host));
+  const stagingBackups = entries.filter((name) => name.startsWith(".cold-staging-"));
+  const backups = entries.filter((name) => !name.startsWith(".cold-staging-"));
   const backupVersions: Record<string, string> = {};
+  const backupErrors = new Map<string, string>();
   for (const name of backups) {
-    const savedState = path.join(backupRoot(host), name, "service-state.json");
-    if (await exists(savedState)) {
-      const saved = decodeState(await json(savedState));
-      backupVersions[name] = saved.activeVersion;
+    try {
+      backupVersions[name] = await validateBackup(host, name, { state, environmentId });
+    } catch (error) {
+      backupErrors.set(name, error instanceof Error ? error.message : String(error));
     }
   }
   return {
@@ -355,9 +363,9 @@ async function inspect(host: Host): Promise<Snapshot> {
     releaseBaseUrlSet: /^\s*(?:set\s+"?|Environment="?)T3CODE_RELEASE_BASE_URL=/im.test(file),
     backups,
     backupVersions,
-    environmentId: (
-      await fs.readFile(path.join(host.t3Home, "userdata", "environment-id"), "utf8")
-    ).trim(),
+    backupErrors: Object.fromEntries(backupErrors),
+    stagingBackups,
+    environmentId,
   };
 }
 function running(
@@ -564,8 +572,12 @@ async function verifyRestart(host: Host, before: Snapshot & { runtime: Runtime }
     4,
   );
 }
-async function validateBackup(host: Host, name: string, before: Snapshot) {
-  const dir = path.join(backupRoot(host), name);
+async function validateBackup(
+  host: Host,
+  name: string,
+  before: Pick<Snapshot, "state" | "environmentId">,
+  dir = path.join(backupRoot(host), name),
+) {
   await realDirectory(dir);
   const cold = /^cold-(.+?)(?:-\d{8}T\d{9}Z)?$/.exec(name);
   const preFork = /^pre-fork-(?:\d{8}|\d{4}-\d{2}-\d{2})$/.test(name);
@@ -574,10 +586,6 @@ async function validateBackup(host: Host, name: string, before: Snapshot) {
   requireState(
     saved.update?.status !== "pending",
     "Cold backup records a pending update; refusing retention.",
-  );
-  requireState(
-    compareVersions(saved.activeVersion, before.state.activeVersion) <= 0,
-    "A backup is newer than activeVersion; refusing retention.",
   );
   const serviceFile = cold
     ? host.os === "win32"
@@ -647,9 +655,11 @@ async function backup(host: Host, before: Snapshot) {
   await realDirectory(root);
   const createdAt = new Date().toISOString();
   const stamp = createdAt.replace(/[-:.]/g, "");
-  const dir = path.join(root, `cold-${version(before.state.activeVersion)}-${stamp}`);
-  // Always capture the current stopped state, not an older same-version recovery point.
-  await fs.mkdir(dir, { mode: 0o700 });
+  const name = `cold-${version(before.state.activeVersion)}-${stamp}`;
+  const destination = path.join(root, name);
+  requireState(!(await exists(destination)), "Cold backup destination already exists.");
+  // Incomplete copies stay separate from recovery points and are never pruned automatically.
+  const dir = await fs.mkdtemp(path.join(root, ".cold-staging-"));
   const files: Record<string, string> = {};
   const copy = async (source: string, name: string) => {
     await plainFile(source);
@@ -698,8 +708,17 @@ async function backup(host: Host, before: Snapshot) {
       }
     }
   }
-  await validateBackup(host, path.basename(dir), before);
-  return dir;
+  await validateBackup(host, name, before, dir);
+  await fs.rename(dir, destination);
+  if (host.os !== "win32") {
+    const handle = await fs.open(root, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  }
+  return destination;
 }
 async function rewrittenService(host: Host, target: string, upstream: boolean) {
   const old = await fs.readFile(host.service.file, "utf8");
@@ -752,6 +771,9 @@ async function downloadUpstream(host: Host, target: string) {
   const sameFilesystem =
     (await fs.stat(cacheFilesystem, { bigint: true })).dev ===
     (await fs.stat(versionsPath(host), { bigint: true })).dev;
+  const systemRoot = process.env.SystemRoot ?? process.env.windir;
+  requireState(host.os !== "win32" || systemRoot, "Windows system tar location is unavailable.");
+  const tar = host.os === "win32" ? path.join(systemRoot!, "System32", "tar.exe") : "tar";
   await cacheRoot(host);
   await fs.mkdir(cache, { mode: 0o700 });
   await realDirectory(cache);
@@ -781,9 +803,6 @@ async function downloadUpstream(host: Host, target: string) {
     (await hashFile(archive)) === matches[0]!.slice(0, 64),
     "Upstream archive checksum mismatch.",
   );
-  const systemRoot = process.env.SystemRoot ?? process.env.windir;
-  requireState(host.os !== "win32" || systemRoot, "Windows system tar location is unavailable.");
-  const tar = host.os === "win32" ? path.join(systemRoot!, "System32", "tar.exe") : "tar";
   const entries = (await run(tar, ["-tf", archive])).split(/\r?\n/);
   const stem = name.replace(/\.(zip|tar\.gz)$/, "");
   requireState(
@@ -830,6 +849,34 @@ async function downloadUpstream(host: Host, target: string) {
   await installed(host, target);
   return true;
 }
+async function backupSpace(host: Host) {
+  const root = backupRoot(host);
+  const filesystem = (await exists(root)) ? root : host.t3Home;
+  await realDirectory(filesystem);
+  let total = 0n;
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const file = path.join(host.t3Home, "userdata", `statev2.sqlite${suffix}`);
+    if (suffix && !(await exists(file))) {
+      continue;
+    }
+    await plainFile(file);
+    total += (await fs.stat(file, { bigint: true })).size;
+  }
+  for (const file of [statePath(host), host.service.file]) {
+    total += (await fs.stat(file, { bigint: true })).size;
+  }
+  const message =
+    "Insufficient free space for a fresh cold backup; existing backups were preserved and the service was not stopped.";
+  let available: bigint;
+  try {
+    const stats = await fs.statfs(filesystem, { bigint: true });
+    available = stats.bavail * stats.bsize;
+  } catch {
+    throw new Refusal(message);
+  }
+  const headroom = total * 2n > 256n * 1024n * 1024n ? total * 2n : 256n * 1024n * 1024n;
+  requireState(available >= total + headroom, message);
+}
 async function maintain(request: Request) {
   requireState(
     request.confirmIdle === true,
@@ -839,6 +886,14 @@ async function maintain(request: Request) {
   requireState(expected !== undefined, "Missing preflight snapshot.");
   const target = version(request.version);
   const before = await inspect(host);
+  requireState(
+    before.stagingBackups.length === 0,
+    "An incomplete cold backup exists. No service was stopped; inspect the staging directory before maintenance.",
+  );
+  requireState(
+    Object.keys(before.backupErrors).length === 0,
+    "An invalid backup exists; inspect backupErrors before maintenance. No service was stopped.",
+  );
   running(before, host);
   unchanged(expected, before);
   await realDirectory(host.t3Home);
@@ -853,12 +908,15 @@ async function maintain(request: Request) {
   let downloaded = false;
   if (pruning) {
     requireState(target === before.state.activeVersion, "Prune target differs from activeVersion.");
+    requireState(
+      Object.values(before.backupVersions).every(
+        (v) => compareVersions(v, before.state.activeVersion) <= 0,
+      ),
+      "A backup is newer than activeVersion; refusing prune. No service was stopped.",
+    );
     for (const v of before.versions) {
       version(v);
       await installed(host, v);
-    }
-    for (const name of before.backups) {
-      await validateBackup(host, name, before);
     }
   } else {
     requireState(
@@ -869,9 +927,7 @@ async function maintain(request: Request) {
       compareVersions(target, before.state.activeVersion) < 0,
       "Rollback target must be older than activeVersion.",
     );
-    downloaded = await downloadUpstream(host, target);
   }
-  await installed(host, target);
   const serviceContents = await rewrittenService(host, target, !pruning);
   requireState(
     !(await exists(path.join(host.t3Home, "runtime", ".service-state.host-maintenance"))),
@@ -881,10 +937,18 @@ async function maintain(request: Request) {
     !(await exists(`${host.service.file}.host-maintenance`)),
     "An unfinished maintenance service file exists; resolve it before maintenance.",
   );
+  await backupSpace(host);
+  unchanged(before, await inspect(host));
+  if (!pruning) {
+    downloaded = await downloadUpstream(host, target);
+  }
+  await installed(host, target);
   unchanged(
     downloaded ? { ...before, versions: [...before.versions, target].sort() } : before,
     await inspect(host),
   );
+  // The download may share the backup filesystem, so check again while the service still runs.
+  await backupSpace(host);
   let stopped = false;
   try {
     await stop(host, before);
@@ -947,7 +1011,13 @@ async function maintain(request: Request) {
         await fs.rm(dir, { recursive: true });
       }
       for (const name of before.backups) {
-        await validateBackup(host, name, before);
+        // A rollback's own recovery backup is newer than the live version and stays valid in
+        // status; only retention refuses it.
+        requireState(
+          compareVersions(await validateBackup(host, name, before), before.state.activeVersion) <=
+            0,
+          "A backup is newer than activeVersion; refusing retention.",
+        );
         await fs.rm(path.join(backupRoot(host), name), { recursive: true });
       }
       const retained = await inspect(host);
