@@ -44,6 +44,7 @@ import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import { forkParked, forkParkedFiber } from "./serverActivation.ts";
+import { moveServiceToCurrentRuntime } from "./cloud/currentRuntimeMove.ts"; // Fork add-on: fixed runtime/current path.
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -627,6 +628,7 @@ const make = (options?: StartupOptions) =>
       );
 
       const updateOutcome = yield* launcher.prepareTrial;
+      yield* moveServiceToCurrentRuntime(launcher.managed, serverConfig.baseDir); // Fork add-on: fixed runtime/current path.
 
       yield* Effect.logDebug("startup phase: publishing welcome event", {
         environmentId: environment.environmentId,
