@@ -34,7 +34,7 @@ export function CollapsibleSectionHeader({
         size === "compact" // Fork add-on: compact lineage agents
           ? "h-5 gap-1.5 text-3xs"
           : size === "sidebar" // Fork add-on: compact sidebar
-            ? "h-5 gap-1.5 text-2xs"
+            ? "h-5 gap-1.5 text-[10px]" // Same literal size as the sidebar agent lines.
             : "h-8 gap-2 text-xs",
         variant === "panel" ? "ps-2 pe-2.5" : "px-2",
         tones[tone].label,
