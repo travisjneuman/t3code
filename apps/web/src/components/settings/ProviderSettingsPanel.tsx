@@ -148,6 +148,11 @@ function providerConfigString(config: unknown, key: string): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+// These default slots run before they are configured, so they always stay listed.
+// Every other built-in leaves the list once its explicit instance is removed and
+// comes back through Add provider, which reuses the free default slot id.
+const ALWAYS_LISTED_DEFAULT_DRIVERS: ReadonlySet<string> = new Set(["codex", "claudeAgent"]);
+
 const PROVIDER_SETTINGS = providerClients.definitions.map((definition) => ({
   provider: definition.driverKind,
   hasDefaultInstance: definition.hasDefaultInstance !== false,
@@ -763,8 +768,7 @@ export function EnvironmentProviderSettings({
     const hasDefaultSlot = providerSettings.hasDefaultInstance || explicitInstance !== undefined;
     if (
       hasDefaultSlot &&
-      (driver === "codex" ||
-        driver === "claudeAgent" ||
+      (ALWAYS_LISTED_DEFAULT_DRIVERS.has(driver) ||
         isDirty ||
         resolveProviderInstanceEnabled(explicitInstance ?? { driver }) ||
         defaultInstanceId === targetInstanceId)
@@ -795,6 +799,7 @@ export function EnvironmentProviderSettings({
         explicitInstance: instance,
         driver: instance.driver,
         isDefault: defaultSlotIdsBySource.has(String(id)),
+        isDirty: true,
       });
     }
   }
@@ -1295,6 +1300,7 @@ function ProviderInstanceRow({
     favorite.provider === instanceId ? Result.succeed(favorite.model) : Result.failVoid,
   );
   const resetLabel = driverOption?.label ?? String(driver);
+  const isRemovableDefault = isDefault && isDirty && !ALWAYS_LISTED_DEFAULT_DRIVERS.has(driver);
   const projectOverride = showProjectOverride
     ? {
         value: projectOverrideValue,
@@ -1398,12 +1404,12 @@ function ProviderInstanceRow({
       }
       onUpdate={(next) => actions.updateInstance(instanceId, instance, next)}
       onDelete={
-        mode === "editor" && !isDefault
+        mode === "editor" && (!isDefault || isRemovableDefault)
           ? () => actions.deleteInstance(instanceId, instance)
           : undefined
       }
       headerAction={
-        mode === "editor" && isDefault && isDirty ? (
+        mode === "editor" && isDefault && isDirty && !isRemovableDefault ? (
           <SettingResetButton
             label={`${resetLabel} provider settings`}
             onClick={() => actions.resetDefaultInstance(driver)}

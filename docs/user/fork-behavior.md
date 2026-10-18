@@ -129,6 +129,12 @@ archiving, handing back or opening Other Agents sessions, Hermes session and set
 **Save to notes**, comparisons, and releasing provider sessions before an update. Where a whole
 settings section is unavailable, it says which access it needs.
 
+## Built-in providers can be removed from the list
+
+Built-in providers other than Codex and Claude, such as Cursor, OpenCode, Muse Code or Grok, have
+a delete button in their settings under **Settings → Providers**. Deleting one clears its settings,
+turns it off and takes it out of the list. To bring it back, choose it under **Add provider**.
+
 ## Codex can show hidden models
 
 OpenAI keeps some models out of the Codex picker, such as older or long-context versions. To list
