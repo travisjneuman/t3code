@@ -175,8 +175,11 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
     });
   }
   const httpClient = input.httpClient;
-  const baseUrl = cliReleaseDownloadBaseUrl(input.version, input.releaseBaseUrl);
-  const fileName = cliArchiveFileName(input.version, platformKey);
+  // Fork add-on: a fork build (`<version>+<build>`) ships in that nightly's release; validate
+  // rejects an archive whose runtime id differs.
+  const releaseVersion = input.version.split("+", 1)[0] ?? input.version;
+  const baseUrl = cliReleaseDownloadBaseUrl(releaseVersion, input.releaseBaseUrl);
+  const fileName = cliArchiveFileName(releaseVersion, platformKey);
 
   input.onProgress?.({ stage: "download", received: 0, total: undefined });
   const checksums = parseChecksums(

@@ -165,9 +165,19 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   orchestrationProtocolVersion: Schema.optionalKey(Schema.Int),
   releaseSource: ForwardCompatibleOptional(ServerReleaseSource), // Fork add-on: absent means unknown.
   startedAt: Schema.optionalKey(IsoDateTime), // Fork add-on: server start time.
+  forkBuild: Schema.optionalKey(TrimmedNonEmptyString), // Fork add-on: fork commit of a host build.
   capabilities: ExecutionEnvironmentCapabilities,
 });
 export type ExecutionEnvironmentDescriptor = typeof ExecutionEnvironmentDescriptor.Type;
+
+// Fork add-on: the version a server's launcher selects and update targets name. Two fork builds
+// of one upstream nightly differ only here.
+export const environmentRuntimeVersion = (
+  environment: Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "forkBuild">,
+): string =>
+  environment.forkBuild === undefined
+    ? environment.serverVersion
+    : `${environment.serverVersion}+${environment.forkBuild}`;
 
 export const RepositoryIdentityLocator = Schema.Struct({
   source: Schema.Literal("git-remote"),

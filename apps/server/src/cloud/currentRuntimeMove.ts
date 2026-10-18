@@ -11,8 +11,8 @@ import { promisify } from "node:util";
 
 import * as Effect from "effect/Effect";
 
-import packageJson from "../../package.json" with { type: "json" };
 import { currentRuntimePaths, syncCurrentRuntime } from "./currentRuntime.ts";
+import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts";
 
 // Holds the version that last tried to move, so a supervisor that still starts the old
 // launcher afterwards costs one restart, not a restart loop.
@@ -155,7 +155,7 @@ async function moveServiceFile(baseDir: string, version: string): Promise<boolea
  */
 export const moveServiceToCurrentRuntime = (managed: boolean, baseDir: string) =>
   managed
-    ? Effect.tryPromise(() => moveServiceFile(baseDir, packageJson.version)).pipe(
+    ? Effect.tryPromise(() => moveServiceFile(baseDir, SERVICE_RUNTIME_VERSION)).pipe(
         Effect.flatMap((moved) =>
           moved
             ? Effect.logInfo("service now runs from runtime/current; restarting onto it").pipe(

@@ -3,7 +3,8 @@
 Publish headless fork servers for Windows and Linux independently of the Mac app's source updates.
 The Mac coordinates the release and uploads with `gh`; a Windows build host and a Linux build host
 build their own archives from the same fork commit. No CI, Actions or scheduled release jobs are
-needed. Publishing does not update running hosts.
+needed. A Mac app built from the fork's source publishes each build it installs, then updates the
+connected hosts through its maintenance queue; see [Automatic fleet updates](#automatic-fleet-updates).
 
 ## Private host configuration
 
@@ -109,28 +110,30 @@ the standalone builder also refuses to overwrite an archive. Failed builds retai
 caches for inspection. Resolve those leftovers deliberately before rerunning; there is no
 reuse-built option.
 
-Routine Mac source updates and builds do not require host releases or host updates. Hosts move only
-when a newer fork release is published and applied.
+Hosts run a runtime id, `<nightly>+<first 12 characters of the fork commit>`, so a new fork commit
+at the same upstream nightly is a release and an update too. The version a host shows stays the
+plain nightly. Releasing that commit again is a no-op that exits `0`.
 
 The steady-state workflow is:
 
-1. Update the Mac app through its normal fork source update. Wait if there is no upstream nightly
-   newer than the hosts' active versions; ordinary updates do not reinstall the same version.
-2. Run `release` on the Mac. Preflight requires a clean checkout at `origin/main`, the merged nightly
-   version to match the installed Mac app, and no existing fork release for that version. Unreachable
+1. Update the Mac app through its normal fork source update, or rebuild and install it by hand.
+2. `release` runs on the Mac, started by the installed app (see below) or by hand. Preflight requires
+   a clean checkout at `origin/main`, the merged nightly version to match the installed Mac app, and,
+   with `--expect-sha`, the checkout to be at that commit. A release for the same nightly from an
+   earlier fork commit is replaced; one from this commit means there is nothing to do. Unreachable
    hosts are reported and skipped, not validated or changed. Every reachable host must run an older
-   version, and each platform needs a reachable configured builder.
+   runtime id, and each platform needs a reachable configured builder.
    Other inspection failures refuse the release rather than counting as unreachable. Both platforms
    build from the same commit. The Mac collects the archives and `SHA256SUMS`, compares the builders'
    hashes, and uploads them together using `gh`. Each reachable `stageFrom` host then gets its
    archive from its sibling. If a delivery fails or was skipped, remove any delivery cache the
    error names and run `stage <host>`.
-3. In the Mac app, use each host's **Update** in **Settings → Connections**. Before a host's first
-   fork update, set `T3CODE_RELEASE_BASE_URL` to the fork's release download base in its service
-   environment and restart its service. **Update everything** is safe only once every connected host
-   has loaded that setting: a host without it installs upstream's same-version archive, which a later
-   update will not replace with the fork. The update queue waits for active sessions; it does not
-   build or publish releases. Publishing alone never updates a host.
+3. The Mac app queues each connected fork host's update, which runs once the host is idle. A host's
+   **Update** in **Settings → Connections** runs it now. Before a host's first fork update, set
+   `T3CODE_RELEASE_BASE_URL` to the fork's release download base in its service environment and
+   restart its service. **Update everything** is safe only once every connected host has loaded that
+   setting: a host without it installs upstream's same-version archive, which a later update will not
+   replace with the fork.
 4. Once the hosts are idle and the release has been accepted, run `prune <host> --confirm-idle` or
    `prune --all --confirm-idle`.
 5. Use `status` to read active versions, service state, installed version directories, launcher
@@ -141,6 +144,27 @@ Release retention leaves **exactly one GitHub fork release**, deleting older rel
 their tags. Successful publication removes the selected hosts' version caches and the Mac's transfer
 cache, not the ignored checkout build output. The Mac coordinates these archives; it does not
 cross-build them.
+
+### Automatic fleet updates
+
+A Mac app built from the fork's source (local source updates enabled) runs the release itself, once
+per installed build. The build records its commit as `t3codeCommitHash` in the app's
+`package.json`. One minute after the first launch of a new build, so the Mac server reports the
+installed nightly first, the app runs `node scripts/tjn-hosts.ts release --expect-sha <commit>` in
+the checkout, detached, so quitting the app does not stop it. The commit released is the checkout's
+`HEAD` when the build was made from it, or when the build was made from `HEAD`'s first parent: the
+in-app source update commits its merge after building. Any other checkout refuses with a message to
+rebuild the Mac app.
+
+The app keeps the run in its state directory: `host-release.json` (the build it ran for, commit and
+PID), `host-release.log` (the tool's output) and `host-release.exit` (its exit code). A failed or
+refused run shows an error toast with the log path and **Retry**, once per run. The app checks fork
+releases at launch and again when a run succeeds, and queues an update for each connected
+boot-service host whose release source is the fork and that is behind the published release. It queues each host once per
+release, so a failed or cancelled update is not queued again; use that host's **Update** instead. Only
+the app that publishes queues these updates. The queue holds each update until the host is idle. A
+host whose running launcher predates runtime ids refuses a same-nightly update until its service
+has restarted once on a build that has them. Provider CLI updates and the Mac app's own update are not part of this.
 
 ### Release-notes receipt
 
@@ -167,8 +191,10 @@ An upstream server making its first transition to the fork needs that override s
 release download base in its service environment before restarting and updating.
 
 Connected servers target the newest published, non-draft release on the app's channel no newer than
-the app version, selected by version rather than API order. Servers at or past that target are
-current; an unavailable release produces no update offer. Boot-service installs consume archives;
+the app version, selected by version rather than API order. The target is that release's runtime id
+from its receipt. A server on a newer nightly, or on the same id, is current; one on the same
+nightly from another fork commit is offered the update. An unavailable release produces no update
+offer. Boot-service installs consume archives;
 npm-based servers must also wait for the version to be published on npm.
 
 An SSH-tunnel install requesting a version absent from fork releases fails with **No release

@@ -34,6 +34,7 @@ import { DesktopUpdateLaunchNotice } from "../components/sidebar/updateEverythin
 import { LegacyThreadMigrationToast } from "../components/LegacyThreadMigrationToast";
 import { ThreadNotificationCoordinator } from "../components/ThreadNotificationCoordinator";
 import { MaintenanceQueueCoordinator } from "../maintenance-queue/MaintenanceQueueCoordinator"; // Fork add-on: maintenance queue.
+import { HostReleaseAutoUpdate } from "../host-release/HostReleaseAutoUpdate"; // Fork add-on: host releases.
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { PullRequestGuideRunCoordinator } from "../components/pullRequest/guide/PullRequestGuideRunCoordinator";
@@ -240,6 +241,7 @@ function RootRouteView() {
           <SnapShotCoordinator />
           <ThreadNotificationCoordinator />
           <MaintenanceQueueCoordinator /> {/* Fork add-on: maintenance queue. */}
+          <HostReleaseAutoUpdate /> {/* Fork add-on: host releases. */}
           <ReopenClosedViewShortcut />
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />

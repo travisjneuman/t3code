@@ -1,4 +1,4 @@
-import packageJson from "../../package.json" with { type: "json" };
+import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
 export type ServicePreflightResult =
@@ -18,7 +18,7 @@ export function runServicePreflight(input: {
   readonly launcherProtocol: number;
   readonly version?: string;
 }): ServicePreflightResult {
-  const version = input.version ?? packageJson.version;
+  const version = input.version ?? SERVICE_RUNTIME_VERSION;
   if (input.launcherProtocol !== SERVICE_LAUNCHER_PROTOCOL) {
     return {
       status: "blocked",

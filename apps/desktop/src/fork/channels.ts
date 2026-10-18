@@ -47,3 +47,9 @@ export const UPDATE_GATE_INSTALL_NOW_CHANNEL = "desktop:update-gate-install-now"
 export const UPDATE_GATE_CANCEL_CHANNEL = "desktop:update-gate-cancel";
 // Main to renderer: a held install was added, released, or cancelled.
 export const UPDATE_GATE_STATE_CHANGE_CHANNEL = "desktop:update-gate-state-change";
+
+// Local source builds: the host release started for the installed build.
+export const HOST_RELEASE_GET_STATUS_CHANNEL = "desktop:host-release-get-status";
+export const HOST_RELEASE_RETRY_CHANNEL = "desktop:host-release-retry";
+// Main to renderer: the host release status changed.
+export const HOST_RELEASE_STATUS_CHANGE_CHANNEL = "desktop:host-release-status-change";

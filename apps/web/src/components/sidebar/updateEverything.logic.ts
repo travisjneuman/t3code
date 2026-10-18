@@ -3,8 +3,8 @@ import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
 import { cliReleaseChannelOf } from "@t3tools/shared/cliRelease";
 
 import {
+  resolveRuntimeVersionMismatch, // Fork add-on: fork builds.
   resolveServerSelfUpdateCapability,
-  resolveVersionMismatch,
   supportsDesktopAppUpdate,
   supportsServerUpdateThreadContinuation,
 } from "~/versionSkew";
@@ -78,7 +78,7 @@ export function collectServerUpdateTargets(
     if (machine.hostedByThisApp) continue;
     if (
       config !== null &&
-      resolveVersionMismatch(config.environment.serverVersion, targetVersion) === null
+      resolveRuntimeVersionMismatch(config.environment, targetVersion) === null // Fork add-on: fork builds.
     ) {
       continue;
     }

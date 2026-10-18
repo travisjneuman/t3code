@@ -144,6 +144,12 @@ export function compareExactServiceVersions(left: string, right: string): number
   return 0;
 }
 
+// Fork add-on: another fork build of the same nightly (`<version>+<build>`) is an update too.
+export const isServiceUpdateTarget = (target: string, from: string): boolean => {
+  const order = compareExactServiceVersions(target, from);
+  return order > 0 || (order === 0 && target !== from);
+};
+
 export function decodeServiceState(value: unknown): ServiceState | undefined {
   if (!isRecord(value)) return undefined;
   const update = value.update === undefined ? undefined : decodeServiceUpdate(value.update);
@@ -152,8 +158,7 @@ export function decodeServiceState(value: unknown): ServiceState | undefined {
     typeof value.activeVersion !== "string" ||
     !isExactServiceVersion(value.activeVersion) ||
     (value.update !== undefined && update === undefined) ||
-    (update !== undefined &&
-      compareExactServiceVersions(update.targetVersion, update.fromVersion) <= 0) ||
+    (update !== undefined && !isServiceUpdateTarget(update.targetVersion, update.fromVersion)) ||
     (update?.status === "pending" && update.fromVersion !== value.activeVersion) ||
     (update?.status === "committed" && update.targetVersion !== value.activeVersion) ||
     ((update?.status === "rolled-back" || update?.status === "failed") &&

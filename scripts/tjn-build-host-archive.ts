@@ -206,6 +206,9 @@ async function main() {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       APP_VERSION: version,
+      // The server's runtime id becomes `<version>+<build>`, so a rebuild at the same upstream
+      // nightly is still an update for the hosts (apps/server/src/cloud/runtimeVersion.ts).
+      T3CODE_FORK_BUILD: expectedSha.slice(0, 12),
       // Empty values override ignored env files too, keeping the client single-origin.
       VITE_HTTP_URL: "",
       VITE_WS_URL: "",

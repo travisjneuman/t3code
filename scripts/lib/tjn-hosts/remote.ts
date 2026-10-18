@@ -102,11 +102,13 @@ export function record(value: unknown): value is Record<string, unknown> {
 export function version(value: unknown): string {
   requireState(
     typeof value === "string" &&
-      /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-nightly\.\d{8}\.(0|[1-9]\d*))?$/.test(value),
-    "Unsupported version; expected an exact stable or nightly version.",
+      /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-nightly\.\d{8}\.(0|[1-9]\d*))?(?:\+[0-9a-f]{12})?$/.test(
+        value,
+      ),
+    "Unsupported version; expected an exact stable or nightly version, optionally +<fork build>.",
   );
   requireState(
-    value
+    releaseVersion(value)
       .split(/[.-]/)
       .filter((part) => /^\d+$/.test(part))
       .every((part) => Number.isSafeInteger(Number(part))),
@@ -114,9 +116,17 @@ export function version(value: unknown): string {
   );
   return value;
 }
+// A runtime id is the upstream nightly plus `+<fork build>`, the first 12 hex digits of the
+// fork commit (apps/server/src/cloud/runtimeVersion.ts). Ordering ignores the build.
+export const releaseVersion = (v: string) => v.split("+", 1)[0]!;
 export function compareVersions(a: string, b: string): number {
-  return compareSemverVersions(version(a), version(b));
+  return compareSemverVersions(releaseVersion(version(a)), releaseVersion(version(b)));
 }
+// Mirrors isServiceUpdateTarget in serviceProtocol.ts: a newer nightly, or another fork build of it.
+export const isUpdateTarget = (target: string, from: string) => {
+  const order = compareVersions(target, from);
+  return order > 0 || (order === 0 && target !== from);
+};
 export const shellQuote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
 export const psQuote = (s: string) => `'${s.replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&")}'`;
 export const powershellArgs = (script: string) => [
@@ -191,7 +201,7 @@ export async function run(
   }
 }
 export const archiveFile = (os: Host["os"], v: string) =>
-  `t3-${v}-${os}-x64.${os === "win32" ? "zip" : "tar.gz"}`;
+  `t3-${releaseVersion(v)}-${os}-x64.${os === "win32" ? "zip" : "tar.gz"}`;
 export const deliveryDir = (v: string) => `deliver-${v}`;
 // Windows OpenSSH's SFTP resolves `C:/...` against the home directory; absolute drive paths need `/C:/...`.
 export const sftpPath = (os: Host["os"], file: string) => {
@@ -289,7 +299,7 @@ function decodeState(value: unknown): State {
     version(u.fromVersion);
     version(u.targetVersion);
     requireState(
-      compareVersions(String(u.targetVersion), String(u.fromVersion)) > 0,
+      isUpdateTarget(String(u.targetVersion), String(u.fromVersion)),
       "Invalid service update version order.",
     );
     requireState(
@@ -447,7 +457,8 @@ function running(
     "Service is not running; refusing maintenance.",
   );
   requireState(
-    snapshot.runtime !== null && snapshot.runtime.serverVersion === snapshot.state.activeVersion,
+    snapshot.runtime !== null &&
+      snapshot.runtime.serverVersion === releaseVersion(snapshot.state.activeVersion),
     "Runtime is absent or its version differs from activeVersion.",
   );
   requireState(snapshot.environmentId.length > 0, "Missing environment identity.");
@@ -628,7 +639,7 @@ async function verifyRestart(host: Host, before: Snapshot & { runtime: Runtime }
         now.serviceStatus.toLowerCase() === (host.os === "win32" ? "running" : "active");
       if (
         isRunning &&
-        now.runtime?.serverVersion === target &&
+        now.runtime?.serverVersion === releaseVersion(target) &&
         now.runtime.pid !== before.runtime.pid &&
         now.runtime.startedAt !== before.runtime.startedAt
       ) {
@@ -950,7 +961,7 @@ async function deliver(request: Request) {
   try {
     const archive = path.join(cache, name);
     const sha256 = await downloadVerified(
-      `https://github.com/travisjneuman/t3code/releases/download/v${v}`,
+      `https://github.com/travisjneuman/t3code/releases/download/v${releaseVersion(v)}`,
       name,
       archive,
     );

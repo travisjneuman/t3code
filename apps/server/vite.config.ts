@@ -109,6 +109,8 @@ export default mergeConfig(
         __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_TOKEN__: JSON.stringify(
           repoEnv.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN?.trim() ?? "",
         ),
+        // Fork add-on: set only by scripts/tjn-build-host-archive.ts.
+        __T3CODE_FORK_BUILD__: JSON.stringify(process.env.T3CODE_FORK_BUILD?.trim() ?? ""),
       },
     },
     test: {

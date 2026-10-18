@@ -4,6 +4,7 @@ import { cliReleaseChannelOf } from "@t3tools/shared/cliRelease";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 import {
   describeHostReleaseState,
+  describeRuntimeVersion,
   type HostReleaseCheck,
   resolveHostReleaseState,
 } from "./hostRelease";
@@ -15,16 +16,19 @@ import {
 
 type HostEnvironment = Pick<
   ServerConfig["environment"],
-  "serverVersion" | "releaseSource" | "startedAt"
+  "serverVersion" | "releaseSource" | "startedAt" | "forkBuild"
 >;
 
 /** Version, channel and release source, so a row says what it runs and where it updates from. */
 export function hostRowSubtitle(
   serverVersion: string,
-  environment: Pick<HostEnvironment, "releaseSource"> | undefined,
+  environment: Pick<HostEnvironment, "releaseSource" | "forkBuild"> | undefined,
 ): string {
   return [
-    serverVersion,
+    // A fork host build names its commit, so two builds of one nightly read differently.
+    environment?.forkBuild === undefined
+      ? serverVersion
+      : describeRuntimeVersion(`${serverVersion}+${environment.forkBuild}`),
     cliReleaseChannelOf(serverVersion),
     hostReleaseSourceLabel(hostReleaseSourceOf(environment ?? {})),
   ].join(" · ");
@@ -53,7 +57,7 @@ export function hostRowTooltipFacts(
   check: HostReleaseCheck,
 ): string {
   if (environment === undefined) return "";
-  const release = resolveHostReleaseState(environment.serverVersion, check);
+  const release = resolveHostReleaseState(environment, check);
   return [
     "",
     describeStart(environment.startedAt),

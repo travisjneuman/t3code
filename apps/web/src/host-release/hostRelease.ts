@@ -1,5 +1,5 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
-import type { ServerConfig } from "@t3tools/contracts";
+import type { ExecutionEnvironmentDescriptor, ServerConfig } from "@t3tools/contracts";
 import {
   cliReleaseChannelOf,
   cliReleaseIndexPageUrl,
@@ -17,18 +17,23 @@ import {
   collectServerUpdateTargets,
   type UpdateEverythingMachine,
 } from "~/components/sidebar/updateEverything.logic";
-import { resolveVersionMismatch, type VersionMismatch } from "~/versionSkew";
+import { resolveRuntimeVersionMismatch, type VersionMismatch } from "~/versionSkew";
 
 // Remote servers update to the newest published fork release, not to this client's version:
 // the Mac builds from source at every upstream nightly, but hosts can only install a version
-// that has a release archive. A host at or past that release is current.
+// that has a release archive. A host at or past that release is current. The target is the
+// runtime id `<nightly>+<fork build>` from the release receipt, so a rebuild at the same
+// nightly is still an update.
 
 const ReleaseIndex = Schema.Array(
   Schema.Struct({
     tag_name: Schema.String,
     draft: Schema.optionalKey(Schema.Boolean),
+    body: Schema.optionalKey(Schema.NullOr(Schema.String)),
   }),
 );
+
+type PublishedRelease = (typeof ReleaseIndex.Type)[number];
 const decodeReleaseIndex = Schema.decodeUnknownEffect(ReleaseIndex);
 
 const RELEASE_INDEX_PAGE_SIZE = 100;
@@ -38,9 +43,28 @@ function releaseTagVersion(tag: string): string | undefined {
   return /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(tag)?.[1];
 }
 
+/** `tjn-hosts release` writes the fork commit into this receipt; older releases have none. */
+export function hostReleaseRuntimeId(version: string, body: string | null | undefined): string {
+  const marker = /<!-- t3-host-release (\{.*\}) -->/.exec(body ?? "")?.[1];
+  if (marker === undefined) return version;
+  let receipt: unknown;
+  try {
+    receipt = JSON.parse(marker);
+  } catch {
+    return version;
+  }
+  const forkSha =
+    typeof receipt === "object" && receipt !== null && "forkSha" in receipt
+      ? receipt.forkSha
+      : undefined;
+  return typeof forkSha === "string" && /^[a-f0-9]{40}$/.test(forkSha)
+    ? `${version}+${forkSha.slice(0, 12)}`
+    : version;
+}
+
 /** API order is not version order, and a release newer than this client is not offered. */
 export function newestPublishedHostRelease(
-  releases: ReadonlyArray<{ readonly tag_name: string; readonly draft?: boolean | undefined }>,
+  releases: ReadonlyArray<PublishedRelease>,
   clientVersion: string,
 ): string | undefined {
   const eligible = releases
@@ -52,7 +76,10 @@ export function newestPublishedHostRelease(
     })
     .toSorted((a, b) => compareSemverVersions(b.version, a.version))
     .map(({ release }) => release);
-  return newestCliReleaseVersion(eligible, cliReleaseChannelOf(clientVersion));
+  const version = newestCliReleaseVersion(eligible, cliReleaseChannelOf(clientVersion));
+  if (version === undefined) return undefined;
+  const release = eligible.find((item) => releaseTagVersion(item.tag_name) === version);
+  return hostReleaseRuntimeId(version, release?.body);
 }
 
 /** The atom never fails, so a failed check can say why instead of looking like "no release". */
@@ -92,7 +119,7 @@ const isOnline = () => typeof navigator === "undefined" || navigator.onLine !== 
 
 const hostReleaseAtom = Atom.make(
   Effect.gen(function* () {
-    const releases: Array<{ readonly tag_name: string; readonly draft?: boolean }> = [];
+    const releases: Array<PublishedRelease> = [];
     for (let page = 1; page <= RELEASE_INDEX_MAX_PAGES; page += 1) {
       const response = yield* HttpClient.get(cliReleaseIndexPageUrl(page));
       const body = yield* HttpClientResponse.filterStatusOk(response).pipe(
@@ -176,12 +203,12 @@ export type HostReleaseState =
   | { readonly status: "failed"; readonly reason: string };
 
 export function resolveHostReleaseState(
-  serverVersion: string,
+  environment: Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "forkBuild">,
   check: HostReleaseCheck,
 ): HostReleaseState {
   if (check.status !== "known") return check;
   if (check.target === null) return { status: "no-release" };
-  return resolveVersionMismatch(serverVersion, check.target) === null
+  return resolveRuntimeVersionMismatch(environment, check.target) === null
     ? { status: "current" }
     : { status: "update", version: check.target };
 }
@@ -195,10 +222,16 @@ export function describeHostReleaseState(state: HostReleaseState): string {
     case "no-release":
       return "No fork release published yet";
     case "update":
-      return `Update to ${state.version}`;
+      return `Update to ${describeRuntimeVersion(state.version)}`;
     case "failed":
       return `Couldn't check fork releases (${state.reason})`;
   }
+}
+
+/** `0.1.1-nightly.20261017.3272+17af2d5f83ab` reads as `0.1.1-nightly.20261017.3272 (fork 17af2d5)`. */
+export function describeRuntimeVersion(runtimeVersion: string): string {
+  const [version, build] = runtimeVersion.split("+", 2);
+  return build === undefined ? runtimeVersion : `${version} (fork ${build.slice(0, 7)})`;
 }
 
 export function resolveHostVersionMismatch(
@@ -207,7 +240,7 @@ export function resolveHostVersionMismatch(
 ): VersionMismatch | null {
   return hostUpdateTarget === null
     ? null
-    : resolveVersionMismatch(serverConfig?.environment.serverVersion, hostUpdateTarget);
+    : resolveRuntimeVersionMismatch(serverConfig?.environment, hostUpdateTarget);
 }
 
 export function useHostVersionMismatch(

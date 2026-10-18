@@ -1,4 +1,5 @@
 import {
+  environmentRuntimeVersion, // Fork add-on: same-nightly fork builds.
   type EnvironmentId,
   type ServerConfig,
   type ServerConfigStreamEvent,
@@ -134,7 +135,7 @@ export function matchesServerUpdateReadyEvent(
   event: ServerLifecycleStreamReadyEvent,
 ): boolean {
   return result.updateId === undefined
-    ? event.payload.environment.serverVersion === result.targetVersion
+    ? environmentRuntimeVersion(event.payload.environment) === result.targetVersion
     : event.payload.updateOutcome?.id === result.updateId;
 }
 
@@ -158,7 +159,7 @@ export function validateServerUpdateReadyEvent(
     outcome?.id === result.updateId &&
     outcome.status === "committed" &&
     outcome.targetVersion === result.targetVersion &&
-    event.payload.environment.serverVersion === result.targetVersion
+    environmentRuntimeVersion(event.payload.environment) === result.targetVersion
   ) {
     return Effect.void;
   }
@@ -255,7 +256,7 @@ export const waitForDesktopUpdateTarget = Effect.fn("waitForDesktopUpdateTarget"
 ): Effect.fn.Return<ServerLifecycleStreamReadyEvent, EReady | ECommit | ServerUpdateTerminalError> {
   for (let attempt = 1; attempt <= maxCommitAttempts; attempt += 1) {
     const ready = yield* nextReady;
-    if (ready.payload.environment.serverVersion === targetVersion) return ready;
+    if (environmentRuntimeVersion(ready.payload.environment) === targetVersion) return ready;
     if (attempt === maxCommitAttempts) break;
     const retryExit = yield* retryCommit.pipe(Effect.exit);
     if (Exit.isSuccess(retryExit)) break;
@@ -287,6 +288,9 @@ export function serverUpdateStateForProgressEvent(
     targetVersion,
   };
 }
+
+const runtimeVersionOf = (config: ServerConfig | null | undefined): string | null =>
+  config ? environmentRuntimeVersion(config.environment) : null; // Fork add-on
 
 export function serverUpdateStateForServerVersion(
   state: ServerUpdateState,
@@ -592,7 +596,8 @@ export function resolveServerConfigValue(
   if (
     projection?.source === "live" &&
     (initialConfig === null ||
-      projection.config.environment.serverVersion === initialConfig.environment.serverVersion)
+      environmentRuntimeVersion(projection.config.environment) ===
+        environmentRuntimeVersion(initialConfig.environment))
   ) {
     return projection.config;
   }
@@ -658,7 +663,7 @@ export function createServerEnvironmentAtoms<R, E>(
     Atom.make((get) =>
       serverUpdateStateForServerVersion(
         get(serverUpdateStateAtom(environmentId)),
-        get(configValueAtom(environmentId))?.environment.serverVersion ?? null,
+        runtimeVersionOf(get(configValueAtom(environmentId))),
       ),
     ).pipe(Atom.withLabel(`environment-data:server:update-state-value:${environmentId}`)),
   );
@@ -678,8 +683,7 @@ export function createServerEnvironmentAtoms<R, E>(
       const stateAtom = serverUpdateStateAtom(target.environmentId);
       let targetVersion = target.input.targetVersion;
       let fromVersion =
-        atomRegistry.get(configValueAtom(target.environmentId))?.environment.serverVersion ??
-        targetVersion;
+        runtimeVersionOf(atomRegistry.get(configValueAtom(target.environmentId))) ?? targetVersion;
       let currentStage: ServerUpdateStage = "downloading";
       let desktopCommitLostTransport = false;
       atomRegistry.set(stateAtom, {
@@ -713,7 +717,7 @@ export function createServerEnvironmentAtoms<R, E>(
           target,
           Effect.gen(function* () {
             const currentConfig = atomRegistry.get(configValueAtom(target.environmentId));
-            fromVersion = currentConfig?.environment.serverVersion ?? targetVersion;
+            fromVersion = runtimeVersionOf(currentConfig) ?? targetVersion;
             atomRegistry.set(stateAtom, {
               status: "running",
               stage: currentStage,

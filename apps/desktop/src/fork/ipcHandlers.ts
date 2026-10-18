@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 
 import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as RemoteAppIpc from "../remote-apps/RemoteAppIpc.ts";
+import * as HostReleaseIpc from "../updates/HostReleaseIpc.ts";
 import * as LocalSourceIpc from "../updates/LocalSourceIpc.ts";
 import * as UpdateGateIpc from "../updates/UpdateGateIpc.ts";
 import { confirm } from "./confirm.ts";
@@ -19,5 +20,8 @@ export const installForkIpcHandlers = Effect.fn("desktop.ipc.installForkHandlers
   }
   for (const updateGateMethod of UpdateGateIpc.methods) {
     yield* ipc.handle(updateGateMethod);
+  }
+  for (const hostReleaseMethod of HostReleaseIpc.methods) {
+    yield* ipc.handle(hostReleaseMethod);
   }
 });

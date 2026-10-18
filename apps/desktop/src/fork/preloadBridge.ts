@@ -3,6 +3,7 @@
 // and contract types, never Effect services.
 import type {
   DesktopBridge,
+  DesktopHostReleaseStatus,
   DesktopSourceSyncProgress,
   DesktopUpdateGateState,
   RemoteAppDownloadCapture,
@@ -15,7 +16,7 @@ import type {
 import * as IpcChannels from "./channels.ts";
 
 type ForkDesktopBridge = Required<
-  Pick<DesktopBridge, "confirm" | "sourceSync" | "remoteApps" | "updateGate">
+  Pick<DesktopBridge, "confirm" | "sourceSync" | "remoteApps" | "updateGate" | "hostRelease">
 >;
 
 // Mirrors RemoteAppSiteSchema; the preload imports contract types only.
@@ -97,6 +98,23 @@ function isDesktopUpdateGateState(value: unknown): value is DesktopUpdateGateSta
   return queuedAt === null || typeof queuedAt === "number";
 }
 
+function isDesktopHostReleaseStatus(value: unknown): value is DesktopHostReleaseStatus {
+  if (typeof value !== "object" || value === null) return false;
+  const status = value as Partial<DesktopHostReleaseStatus>;
+  return (
+    (status.state === "running" || status.state === "succeeded" || status.state === "failed") &&
+    typeof status.commit === "string" &&
+    typeof status.startedAt === "number" &&
+    (status.detail === null || typeof status.detail === "string") &&
+    typeof status.logPath === "string"
+  );
+}
+
+const hostReleaseStatusOrNull = (value: unknown): DesktopHostReleaseStatus | null => {
+  if (value === null || isDesktopHostReleaseStatus(value)) return value;
+  throw new Error("Invalid host release status");
+};
+
 export function makeForkDesktopBridge(ipcRenderer: Electron.IpcRenderer): ForkDesktopBridge {
   return {
     confirm: (message) => ipcRenderer.invoke(IpcChannels.CONFIRM_DIALOG_CHANNEL, message),
@@ -134,6 +152,26 @@ export function makeForkDesktopBridge(ipcRenderer: Electron.IpcRenderer): ForkDe
         ipcRenderer.on(IpcChannels.UPDATE_GATE_STATE_CHANGE_CHANNEL, wrappedListener);
         return () => {
           ipcRenderer.removeListener(IpcChannels.UPDATE_GATE_STATE_CHANGE_CHANNEL, wrappedListener);
+        };
+      },
+    },
+    hostRelease: {
+      getStatus: async () =>
+        hostReleaseStatusOrNull(
+          await ipcRenderer.invoke(IpcChannels.HOST_RELEASE_GET_STATUS_CHANNEL),
+        ),
+      retry: async () =>
+        hostReleaseStatusOrNull(await ipcRenderer.invoke(IpcChannels.HOST_RELEASE_RETRY_CHANNEL)),
+      onStatusChange: (listener) => {
+        const wrappedListener = (_event: Electron.IpcRendererEvent, status: unknown) => {
+          if (isDesktopHostReleaseStatus(status)) listener(status);
+        };
+        ipcRenderer.on(IpcChannels.HOST_RELEASE_STATUS_CHANGE_CHANNEL, wrappedListener);
+        return () => {
+          ipcRenderer.removeListener(
+            IpcChannels.HOST_RELEASE_STATUS_CHANGE_CHANNEL,
+            wrappedListener,
+          );
         };
       },
     },

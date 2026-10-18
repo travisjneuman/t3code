@@ -1,8 +1,10 @@
-import type {
-  EnvironmentId,
-  ServerConfig,
-  ServerInstallation,
-  ServerSelfUpdateCapability,
+import {
+  environmentRuntimeVersion, // Fork add-on: same-nightly fork builds.
+  type EnvironmentId,
+  type ExecutionEnvironmentDescriptor, // Fork add-on
+  type ServerConfig,
+  type ServerInstallation,
+  type ServerSelfUpdateCapability,
 } from "@t3tools/contracts";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
@@ -73,6 +75,30 @@ export function resolveVersionMismatch(
   return {
     clientVersion: normalizedClientVersion,
     serverVersion: normalizedServerVersion,
+    hint: "Version mismatch. Try syncing the client and server to the same T3 Code version.",
+  };
+}
+
+// Fork add-on: a fork host release targets `<nightly>+<fork build>`. A host on that nightly from
+// another fork build is behind too, which semver alone cannot see.
+export function resolveRuntimeVersionMismatch(
+  environment:
+    | Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "forkBuild">
+    | null
+    | undefined,
+  target: string,
+): VersionMismatch | null {
+  if (!environment) return null;
+  const [targetVersion = target, targetBuild] = target.split("+", 2);
+  const nightly = resolveVersionMismatch(environment.serverVersion, targetVersion);
+  const otherBuild =
+    targetBuild !== undefined &&
+    environment.serverVersion === targetVersion &&
+    environment.forkBuild !== targetBuild;
+  if (nightly === null && !otherBuild) return null;
+  return {
+    clientVersion: target,
+    serverVersion: environmentRuntimeVersion(environment),
     hint: "Version mismatch. Try syncing the client and server to the same T3 Code version.",
   };
 }

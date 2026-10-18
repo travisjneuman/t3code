@@ -19,9 +19,9 @@ import type {
   ServiceUpdateRecord,
 } from "./cloud/serviceProtocol.ts";
 import {
-  compareExactServiceVersions,
   decodeServiceLauncherChildMessage,
   isExactServiceVersion,
+  isServiceUpdateTarget,
   parseServiceState,
   SERVICE_LAUNCHER_CONTEXT_ENV,
   SERVICE_LAUNCHER_PROTOCOL,
@@ -654,8 +654,8 @@ export class Launcher {
       await reject("The requested target is not an exact version.");
       return;
     }
-    if (compareExactServiceVersions(message.targetVersion, child.version) <= 0) {
-      await reject("Remote updates must select a newer server version.");
+    if (!isServiceUpdateTarget(message.targetVersion, child.version)) {
+      await reject("Remote updates must select a newer server version or fork build.");
       return;
     }
     if (!NodePath.isAbsolute(message.dbPath)) {

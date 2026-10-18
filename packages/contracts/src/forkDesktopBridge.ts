@@ -65,6 +65,27 @@ export interface DesktopUpdateGateBridge {
   onStateChange: (listener: (state: DesktopUpdateGateState) => void) => () => void;
 }
 
+/** The host release the Mac app started for its installed build; see HostReleasePublisher. */
+export const DesktopHostReleaseStatusSchema = Schema.Struct({
+  /** Succeeded also covers a commit that was already published. */
+  state: Schema.Literals(["running", "succeeded", "failed"]),
+  /** The fork commit released; empty when the release could not start. */
+  commit: Schema.String,
+  startedAt: Schema.Number,
+  /** Why it failed: the tool's last output line, or why it never started. */
+  detail: Schema.NullOr(Schema.String),
+  logPath: Schema.String,
+});
+export type DesktopHostReleaseStatus = typeof DesktopHostReleaseStatusSchema.Type;
+
+export interface DesktopHostReleaseBridge {
+  /** Null until this app has started a release. */
+  getStatus: () => Promise<DesktopHostReleaseStatus | null>;
+  /** Starts the release again for the installed build, unless one is running. */
+  retry: () => Promise<DesktopHostReleaseStatus | null>;
+  onStatusChange: (listener: (status: DesktopHostReleaseStatus) => void) => () => void;
+}
+
 declare module "./ipc.ts" {
   interface DesktopBridge {
     /**
@@ -78,5 +99,7 @@ declare module "./ipc.ts" {
     remoteApps?: DesktopRemoteAppBridge;
     /** Present in desktop builds; holds update restarts while sessions are active. */
     updateGate?: DesktopUpdateGateBridge;
+    /** Present in local source builds on macOS; releases the build to the fork hosts. */
+    hostRelease?: DesktopHostReleaseBridge;
   }
 }

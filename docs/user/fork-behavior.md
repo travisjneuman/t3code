@@ -16,10 +16,15 @@ without a project.
 
 In the web and desktop clients, connected servers running the fork update to the newest published,
 non-draft fork release on the app's channel that is no newer than the app itself. Releases are
-compared by version, not by publication order. A server already at or past that target counts as
-current, even if the app has had another source update since the last host release.
+compared by version, not by publication order. A release built from a newer fork commit at the
+same upstream version also counts as an update; rows show it as the version plus `(fork <commit>)`.
 
-Use **Update everything** or the server's update action when a release is offered. If the release
+A desktop app built from the fork's source publishes a host release each time it installs a new
+build, then queues an update for each connected fork host, which runs once that host is idle. If
+publishing fails, an error notice names the log and offers **Retry**. Each host is queued once per
+release, so after a failed or cancelled update, use the server's update action instead.
+
+Use **Update everything** or the server's update action to update a server now. If the release
 cannot be found, no server update is offered; the app does not ask a server to install an
 unpublished version. Boot-service installations use release archives. npm-based servers still
 need that version to be available on npm before they can update.

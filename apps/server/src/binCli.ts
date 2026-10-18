@@ -7,7 +7,7 @@ import { Argument, Command } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
 import * as NetService from "@t3tools/shared/Net";
-import packageJson from "../package.json" with { type: "json" };
+import { SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts";
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { appCommand } from "./cli/app.ts";
@@ -96,7 +96,7 @@ export const cli = makeCli();
 
 export function runCli() {
   keepOutboundFetchOnHttp1();
-  Command.run(cli, { version: packageJson.version }).pipe(
+  Command.run(cli, { version: SERVICE_RUNTIME_VERSION }).pipe(
     Effect.scoped,
     Effect.provide(layerCliRuntime),
     NodeRuntime.runMain,
