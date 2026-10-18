@@ -437,18 +437,15 @@ export const make = Effect.gen(function* () {
   // Cache the `tailscale status` spawn for the TTL. On macOS, the Mac App
   // Store Tailscale CLI lives inside Tailscale's sandbox container, so each
   // spawn re-triggers the "Other apps" TCC prompt.
-  const cachedReadStatus /* Fork add-on */ = yield* Effect.cachedWithTTL(
+  const cachedReadTailscaleStatus = yield* Effect.cachedWithTTL(
     readTailscaleStatus.pipe(
       Effect.orElseSucceed(() => null),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
     ),
     TAILSCALE_STATUS_CACHE_TTL,
   );
-  const cachedReadMagicDnsName /* Fork add-on */ = cachedReadStatus.pipe(
-    Effect.map((status) => status?.magicDnsName ?? null), // Fork add-on
-  ); // Fork add-on
   // Fork add-on: one cached status also says whether the tailnet has HTTPS on.
-  const cachedReadHttpsCertificatesEnabled /* Fork add-on */ = cachedReadStatus.pipe(
+  const cachedReadHttpsCertificatesEnabled /* Fork add-on */ = cachedReadTailscaleStatus.pipe(
     Effect.map((status) => status?.httpsCertificatesEnabled ?? null), // Fork add-on
   ); // Fork add-on
 
@@ -571,7 +568,7 @@ export const make = Effect.gen(function* () {
       serveEnabled: state.tailscaleServeEnabled,
       servePort: state.tailscaleServePort,
       networkInterfaces: currentNetworkInterfaces,
-      readMagicDnsName: cachedReadMagicDnsName,
+      readStatus: cachedReadTailscaleStatus,
       readHttpsCertificatesEnabled: cachedReadHttpsCertificatesEnabled, // Fork add-on
     }).pipe(
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
