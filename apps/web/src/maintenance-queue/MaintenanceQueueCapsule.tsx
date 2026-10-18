@@ -59,11 +59,12 @@ function WaitingCapsule({
   const buttonClass =
     "relative shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 opacity-70 outline-none hover:bg-sidebar-row-hover hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:opacity-40";
   return (
-    <div className="flex min-h-7 w-full shrink-0 items-center gap-1 rounded-lg bg-sidebar-control-surface pr-1 text-2xs leading-4 font-medium text-sidebar-foreground">
+    // The buttons wrap below the line in a narrow sidebar rather than squeezing it to one word a row.
+    <div className="flex min-h-7 w-full shrink-0 flex-wrap items-center gap-x-1 rounded-lg bg-sidebar-control-surface pr-1 text-2xs leading-4 font-medium text-sidebar-foreground">
       <Tooltip>
         <TooltipTrigger
           render={
-            <div className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2">
+            <div className="flex min-w-0 flex-1 basis-48 items-center gap-2 py-1.5 pl-2">
               <ClockIcon className="size-3.5 shrink-0" />
               <span className="min-w-0 wrap-break-word">{line}</span>
             </div>
@@ -73,17 +74,19 @@ function WaitingCapsule({
           {title} runs once these sessions finish and stay idle for 2 minutes.
         </TooltipPopup>
       </Tooltip>
-      <button
-        type="button"
-        className={buttonClass}
-        disabled={busy}
-        onClick={() => act(onUpdateNow)}
-      >
-        Update now
-      </button>
-      <button type="button" className={buttonClass} disabled={busy} onClick={() => act(onCancel)}>
-        Cancel
-      </button>
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy}
+          onClick={() => act(onUpdateNow)}
+        >
+          Update now
+        </button>
+        <button type="button" className={buttonClass} disabled={busy} onClick={() => act(onCancel)}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

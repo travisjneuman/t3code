@@ -131,8 +131,8 @@ The steady-state workflow is:
    hashes, and uploads them together using `gh`. Each reachable `stageFrom` host then gets its
    archive from its sibling. If a delivery fails or was skipped, remove any delivery cache the
    error names and run `stage <host>`.
-3. The Mac app queues each connected fork host's update, which runs once the host is idle. A host's
-   **Update** in **Settings → Connections** runs it now. Before a host's first fork update, set
+3. The Mac app updates each connected fork host as soon as the release is published. A host's
+   **Update** in **Settings → Connections** runs it by hand. Before a host's first fork update, set
    `T3CODE_RELEASE_BASE_URL` to the fork's release download base in its service environment and
    restart its service. **Update everything** is safe only once every connected host has loaded that
    setting: a host without it installs upstream's same-version archive, which a later update will not
@@ -168,12 +168,13 @@ build with a dirty-checkout refusal; the queued release of the newer commit repl
 The app keeps the run in its state directory: `host-release.json` (the build and commit it ran for,
 and the PID), `host-release.log` (the tool's output) and `host-release.exit` (its exit code). A
 failed or refused run shows an error toast with the log path and **Retry**, once per run. The app
-checks fork releases at launch and again when a run succeeds, and queues an update for each connected
-boot-service host whose release source is the fork and that is behind the newest published release,
-even one newer than the Mac app itself. It queues each host once per release, so a failed or
-cancelled update is not queued again; use that host's **Update** instead. Only the app that
-publishes queues these updates; other clients still offer only releases no newer than themselves.
-The queue holds each update until the host is idle. Provider CLI updates and the Mac app's own
+checks fork releases at launch and again when a run succeeds, and at once updates each connected boot-service
+host whose release source is the fork and that is behind the newest published release, even one
+newer than the Mac app itself. These updates skip the maintenance queue's idle wait: the fleet
+follows the Mac's build, and running threads continue afterwards where the host supports it. Each
+host is updated once per release, so a failed update is not run again; use that host's **Update**
+instead. Only the app that publishes runs these updates; other clients still offer only releases no
+newer than themselves. Provider CLI updates and the Mac app's own
 update are not part of this.
 
 ### Release-notes receipt

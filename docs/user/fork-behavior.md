@@ -20,10 +20,10 @@ compared by version, not by publication order. A release built from a newer fork
 same upstream version also counts as an update; rows show it as the version plus `(fork <commit>)`.
 
 A desktop app built from the fork's source publishes a host release each time it pushes the fork,
-from a source sync or an update, so the hosts build while the app updates itself. It then queues an
-update for each connected fork host, even to a release newer than the app, which runs once that
-host is idle. If publishing fails, an error notice names the log and offers **Retry**. Each host is queued once per
-release, so after a failed or cancelled update, use the server's update action instead.
+from a source sync or an update, so the hosts build while the app updates itself. It then updates each
+connected fork host right away, even to a release newer than the app, without waiting for the host
+to be idle. If publishing fails, an error notice names the log and offers **Retry**. Each host is updated once per
+release, so after a failed update, use the server's update action instead.
 
 Use **Update everything** or the server's update action to update a server now. If the release
 cannot be found, no server update is offered; the app does not ask a server to install an

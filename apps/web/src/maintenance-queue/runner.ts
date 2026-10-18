@@ -65,7 +65,8 @@ function runUpdate(job: QueuedUpdate) {
       );
 }
 
-async function runAndReport(job: QueuedUpdate): Promise<void> {
+/** Runs an update at once and reports how it ended. */
+export async function runAndReport(job: QueuedUpdate): Promise<void> {
   const title = queuedUpdateTitle(job);
   const host = hostLabel(job);
   const result = await runUpdate(job);

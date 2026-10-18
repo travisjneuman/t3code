@@ -1,7 +1,8 @@
 /**
- * The Mac app that publishes fork host releases (see apps/desktop HostReleasePublisher) queues
- * each fork host's update to a newly published release once, and reports a failed publish with
- * Retry. Other clients render nothing. Fork add-on: host releases.
+ * The Mac app that publishes fork host releases (see apps/desktop HostReleasePublisher) updates
+ * each fork host to a newly published release once, right away rather than through the
+ * maintenance queue: the fleet follows the Mac's build without waiting for idle hosts. It reports
+ * a failed publish with Retry. Other clients render nothing. Fork add-on: host releases.
  */
 import { useAtomValue } from "@effect/atom-react";
 import type { DesktopHostReleaseBridge, DesktopHostReleaseStatus } from "@t3tools/contracts";
@@ -11,7 +12,7 @@ import { canUpdateServer } from "~/components/ServerUpdateAction";
 import { toastManager } from "~/components/ui/toast";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
-import { enqueueUpdate } from "~/maintenance-queue/queueStore";
+import { runAndReport } from "~/maintenance-queue/runner";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { useEnvironments } from "~/state/environments";
 import { environmentUpdateStatesAtom } from "~/state/server";
@@ -22,7 +23,7 @@ import {
   useRefreshHostUpdateTarget,
 } from "./hostRelease";
 
-// Which release each host was queued for, so a failed or declined update is not queued again.
+// Which release each host was updated to, so a failed update is not run again.
 const QUEUED_KEY = "t3code:host-release-auto-update:v1";
 // Which failed publish was already reported, so a relaunch does not report it again.
 const NOTIFIED_KEY = "t3code:host-release-notified:v1";
@@ -93,7 +94,7 @@ function usePublisherStatus(bridge: DesktopHostReleaseBridge | undefined) {
   return status;
 }
 
-function useAutoQueueHostUpdates(enabled: boolean) {
+function useAutoUpdateHosts(enabled: boolean) {
   // The release can be newer than this app: it is published when the fork is pushed.
   const target = useNewestHostRelease();
   const { environments } = useEnvironments();
@@ -127,7 +128,7 @@ function useAutoQueueHostUpdates(enabled: boolean) {
     let changed = false;
     for (const server of due) {
       if (queued[server.environmentId] === server.targetVersion) continue;
-      enqueueUpdate({
+      void runAndReport({
         kind: "server",
         environmentId: server.environmentId,
         input: {
@@ -151,6 +152,6 @@ export function HostReleaseAutoUpdate() {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.hostRelease;
   const status = usePublisherStatus(bridge);
   // Only the app that publishes releases updates the hosts, so two clients never race.
-  useAutoQueueHostUpdates(status !== null);
+  useAutoUpdateHosts(status !== null);
   return null;
 }
