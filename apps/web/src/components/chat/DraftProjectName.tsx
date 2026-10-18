@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { observeResize } from "~/lib/observeResize";
 
 import { truncateProjectName } from "./DraftProjectName.logic";
+import { domCalibratedMeasure } from "./draftProjectNameFit"; // Fork add-on: names truncate only when they overflow.
 
 export function DraftProjectName({ value }: { value: string }) {
   const containerRef = useRef<HTMLSpanElement>(null);
@@ -21,7 +22,7 @@ export function DraftProjectName({ value }: { value: string }) {
         truncateProjectName(
           value,
           container.getBoundingClientRect().width,
-          (text) => context.measureText(text).width,
+          domCalibratedMeasure(container, value, context), // Fork add-on: names truncate only when they overflow.
         ),
       );
     };

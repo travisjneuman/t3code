@@ -188,3 +188,8 @@ The same holds in **OpenTelemetry export** in **Settings → Diagnostics**: an e
 progress is blue, and a check that could not run says **Check failed** in red, with the reason on
 the dot. **Settings → Archive** leaves out "No archived threads" when archived Other Agents or
 Hermes sessions are listed below it.
+
+## Project names shorten only when they don't fit
+
+On a new thread, the project picker and its list show the whole project name when there is room.
+A name that is too long for its space keeps its start and end with `…` in the middle.
