@@ -40,6 +40,8 @@ const GITHUB_REMOTE_PREFIX =
   /^(?:(?:https?|ssh|git|git\+ssh):\/\/)?(?:[^@/]+@)?(?:www\.)?github\.com(?::\d+)?[/:]/iu;
 /** Every line the fork adds or changes in an upstream file carries this text. */
 export const FORK_MARKER = "Fork add-on";
+/** MAC_ONLY_PATHS in scripts/tjn-hosts.ts; the two must match or the Mac shows a false update. */
+const HOST_RELEASE_SKIPPED_PATHS = ["apps/desktop", "apps/mobile", "apps/marketing", "docs"];
 const MERGE_AGENT_RULES = [
   `${UPSTREAM_SYNC_PROMPT_PREFIX} (${UPSTREAM_REPOSITORY}) into this fork.`,
   "Keep upstream's text and code everywhere; never revert or reword an upstream change.",
@@ -533,6 +535,7 @@ export const make = Effect.gen(function* () {
     readonly cwd: string;
     /** Characters of stdout kept (from the end). File reads pass Infinity. */
     readonly outputLimit?: number;
+    readonly env?: Readonly<Record<string, string>>;
   }): Effect.fn.Return<CommandResult, LocalSourceUpdateError> {
     const outputLimit = input.outputLimit ?? COMMAND_OUTPUT_LIMIT;
     return yield* Effect.scoped(
@@ -542,6 +545,7 @@ export const make = Effect.gen(function* () {
             cwd: input.cwd,
             env: {
               ...process.env,
+              ...input.env,
               GIT_TERMINAL_PROMPT: "0",
               GCM_INTERACTIVE: "Never",
             },
@@ -595,6 +599,7 @@ export const make = Effect.gen(function* () {
     readonly args: ReadonlyArray<string>;
     readonly cwd: string;
     readonly outputLimit?: number;
+    readonly env?: Readonly<Record<string, string>>;
   }) {
     const result = yield* runCommand(input);
     if (result.exitCode !== 0) {
@@ -1405,6 +1410,27 @@ export const make = Effect.gen(function* () {
         "--output-dir",
         outputDir,
       ];
+      // The bundled server carries the fork build hosts compare against, as host archives do
+      // (scripts/tjn-build-host-archive.ts); unstamped, every client offers this Mac an update.
+      // `tjn-hosts release` skips commits that change only HOST_RELEASE_SKIPPED_PATHS, so the
+      // release, and this stamp, stay on the newest commit that changed anything else.
+      const forkBuild = (yield* runChecked({
+        operation: "build",
+        command: "git",
+        args: [
+          "rev-list",
+          "-1",
+          "--first-parent",
+          "HEAD",
+          "--",
+          ".",
+          ...HOST_RELEASE_SKIPPED_PATHS.map((skipped) => `:(exclude)${skipped}`),
+        ],
+        cwd: repo,
+      })).stdout
+        .trim()
+        .slice(0, 12);
+      const buildEnv = { T3CODE_FORK_BUILD: forkBuild };
       yield* Effect.gen(function* () {
         yield* stampReleaseVersion(repo, inspection.upstreamVersion);
         const firstBuild = yield* runCommand({
@@ -1412,6 +1438,7 @@ export const make = Effect.gen(function* () {
           command: "vp",
           args: buildArgs,
           cwd: repo,
+          env: buildEnv,
         });
         if (firstBuild.exitCode !== 0) {
           // Upstream reshaped code the fork builds on; give the agent one pass at it.
@@ -1420,7 +1447,13 @@ export const make = Effect.gen(function* () {
             "build-repair",
             `The merged checkout no longer builds. Fix the code so it builds again. Build output (tail):\n${trimOutput(firstBuild)}`,
           );
-          yield* runChecked({ operation: "build", command: "vp", args: buildArgs, cwd: repo });
+          yield* runChecked({
+            operation: "build",
+            command: "vp",
+            args: buildArgs,
+            cwd: repo,
+            env: buildEnv,
+          });
         }
       }).pipe(Effect.ensuring(restoreReleaseVersion(repo)));
       const applicationBundlePath = yield* findAppBundle(outputDir);
