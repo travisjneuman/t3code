@@ -1,6 +1,6 @@
 // Fork add-on: host maintenance never opens the live database for writing.
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -209,29 +209,45 @@ export const sftpPath = (os: Host["os"], file: string) => {
   return os === "win32" ? `/${slashed}` : slashed;
 };
 const sftpQuote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-/** Runs one SFTP batch; SFTP preserves archive bytes, native stdout piped through PowerShell does not. */
-export async function sftp(ssh: string, commands: Array<[string, ...string[]]>) {
-  await run(
-    "sftp",
-    [
-      "-b",
-      "-",
-      "-o",
-      "BatchMode=yes",
-      "-o",
-      "ConnectTimeout=10",
-      "-o",
-      "ServerAliveInterval=15",
-      "-o",
-      "ServerAliveCountMax=3",
-      ssh,
-    ],
-    {
-      input: commands
-        .map(([command, ...files]) => [command, ...files.map(sftpQuote)].join(" ") + "\n")
-        .join(""),
-    },
-  );
+/**
+ * Runs one SFTP batch; SFTP preserves archive bytes, native stdout piped through PowerShell does not.
+ * Its output goes to a log in `workDir`: Windows sftp with stdout and stderr on Node pipes stops
+ * after the first batch command and then waits forever.
+ */
+export async function sftp(ssh: string, commands: Array<[string, ...string[]]>, workDir: string) {
+  const log = path.join(workDir, `sftp-${randomUUID()}.log`);
+  try {
+    await run(
+      "sftp",
+      [
+        "-b",
+        "-",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=3",
+        ssh,
+      ],
+      {
+        log,
+        input: commands
+          .map(([command, ...files]) => [command, ...files.map(sftpQuote)].join(" ") + "\n")
+          .join(""),
+      },
+    );
+  } catch (error) {
+    const output = (await fs.readFile(log, "utf8").catch(() => "")).trim().slice(-16_384);
+    if (error instanceof Refusal && output) {
+      throw new Refusal(`${error.message}\n${output}`, error.exitCode);
+    }
+    throw error;
+  } finally {
+    await fs.rm(log, { force: true });
+  }
 }
 export async function hashFile(file: string): Promise<string> {
   const hash = createHash("sha256");
@@ -967,11 +983,15 @@ async function deliver(request: Request) {
     );
     const remoteCache = path.join(to.cacheDir, deliveryDir(v));
     // A leftover target cache fails `mkdir`, which stops the batch before anything is written.
-    await sftp(to.ssh, [
-      ["-mkdir", sftpPath(to.os, to.cacheDir)],
-      ["mkdir", sftpPath(to.os, remoteCache)],
-      ["put", archive.replaceAll("\\", "/"), sftpPath(to.os, path.join(remoteCache, name))],
-    ]);
+    await sftp(
+      to.ssh,
+      [
+        ["-mkdir", sftpPath(to.os, to.cacheDir)],
+        ["mkdir", sftpPath(to.os, remoteCache)],
+        ["put", archive.replaceAll("\\", "/"), sftpPath(to.os, path.join(remoteCache, name))],
+      ],
+      cache,
+    );
     return { archive: name, sha256 };
   } finally {
     await fs.rm(cache, { recursive: true, force: true });

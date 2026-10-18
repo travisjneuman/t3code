@@ -321,7 +321,11 @@ async function snapshot(host: Host): Promise<Snapshot> {
 
 async function copyArchive(host: Host, v: string, destination: string) {
   const source = hostPath(host).join(host.cacheDir, v, archiveName(v, `${host.os}-x64`));
-  await sftp(host.ssh, [["get", sftpPath(host.os, source), destination]]);
+  await sftp(
+    host.ssh,
+    [["get", sftpPath(host.os, source), destination]],
+    path.dirname(destination),
+  );
 }
 
 interface Delivery {
