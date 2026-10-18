@@ -34,7 +34,9 @@ appear indented under it.
 - Click a session Hermes started elsewhere to continue it in T3 with its history. Its next turn
   goes on in the same Hermes session.
 - Cmd/Ctrl-click or Shift-click selects several. Right-click for **Continue**, **Pin**,
-  **Archive**, **Delete** and **Copy session ID**; they apply to the whole selection.
+  **Unpin**, **Archive**, **Delete** and **Copy session IDs**; each applies to the selected
+  sessions it fits, and a mix of pinned and unpinned ones offers both. Open and Details stay one
+  session at a time.
 
 **Archive** archives the session in Hermes too. Archived sessions are listed in **Settings ›
 Archived**, where **Unarchive** brings them back. **Delete** removes the session from Hermes and

@@ -142,6 +142,7 @@ import {
 import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useScratchThreadClick } from "../fork-sidebar/useScratchThreadClick"; // Fork add-on: scratch-thread action.
+import { isBulkThreadMenuId, useBulkThreadMenu } from "../fork-sidebar/useBulkThreadMenu"; // Fork add-on: every thread action in the multi-select menu.
 import { ThreadCardMeta } from "../fork-sidebar/ThreadCardMeta"; // Fork add-on: compact sidebar cards.
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
@@ -2847,6 +2848,7 @@ export default function Sidebar() {
   const searchEnvironmentIds = useConnectedEnvironmentIds();
   const threadSearch = useThreadSearch(searchEnvironmentIds, threadSearchQuery);
   const handleNewThreadRef = useRef(newThreadContext.handleNewThread);
+  const bulkThreadMenu = useBulkThreadMenu(); // Fork add-on: every thread action in the multi-select menu.
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
   const clearPendingFileDrop = useSidebarPendingFileDropStore((s) => s.clearPendingFileDrop);
   const [renamingThreadKey, setRenamingThreadKey] = useState<string | null>(null);
@@ -3952,9 +3954,33 @@ export default function Sidebar() {
         pinnedCount: pinnedSelectedThreads.length,
       });
       const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
+      // Fork add-on: every thread action in the multi-select menu.
+      const forkBulk = bulkThreadMenu({
+        threads: selectedThreads,
+        settledKeys: settledThreadKeysRef.current,
+        snoozedKeys: snoozedThreadKeysRef.current,
+        capabilitiesOf: (environmentId) =>
+          serverConfigs.get(environmentId)?.environment.capabilities,
+        projectGroupOf: (thread) =>
+          projectGroupsRef.current.find((group) =>
+            group.memberProjectRefs.some(
+              (projectRef) =>
+                projectRef.environmentId === thread.environmentId &&
+                projectRef.projectId === thread.projectId,
+            ),
+          ) ?? null,
+        projectScopeKey,
+        setProjectScopeKey,
+        openProjectSettings,
+        workspacePathOf: (thread) =>
+          thread.worktreePath ??
+          projectByKey.get(`${thread.environmentId}:${thread.projectId}`)?.workspaceRoot ??
+          null,
+      });
       const clicked = await settlePromise(() =>
         api.contextMenu.show(
-          [
+          forkBulk.withItems([
+            // Fork add-on: every thread action in the multi-select menu.
             ...(unpinMenuItem
               ? [{ ...unpinMenuItem, disabled: !canOperateThreads(pinnedSelectedThreads) }]
               : []),
@@ -4002,11 +4028,12 @@ export default function Sidebar() {
               destructive: true,
               disabled: !canOperateThreads(selectedThreads),
             },
-          ],
+          ]), // Fork add-on: every thread action in the multi-select menu.
           position,
         ),
       );
       if (clicked._tag === "Failure" || clicked.value === null) return;
+      if (isBulkThreadMenuId(clicked.value)) return forkBulk.run(clicked.value); // Fork add-on: every thread action in the multi-select menu.
       const actionTargets =
         clicked.value === "unpin"
           ? pinnedSelectedThreads

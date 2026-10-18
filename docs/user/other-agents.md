@@ -55,10 +55,13 @@ again comes back to the list on its own. Archived sessions are listed in **Setti
 where **Unarchive** brings them back. Right-click the **Other Agents** header and choose **Show
 archived sessions** to go there.
 
-To archive many at once, Cmd-click (Ctrl-click on Windows and Linux) sessions to pick them, or
+To act on many at once, Cmd-click (Ctrl-click on Windows and Linux) sessions to pick them, or
 Shift-click to pick every session between the last one you clicked and this one, then right-click
-one of them and choose **Archive**; running sessions are skipped. **Copy session IDs** copies
-them one per line. Press Escape to clear the selection.
+one of them. The menu has the single session's actions, each over the sessions it applies to:
+**Continue in T3** (running sessions are skipped, and the first one opens), **Open in** each
+session's own app, **Copy session IDs** and **Copy folder paths** (one per line), **Open folders**
+and **Open folders in** an editor (each folder once), and **Archive** (running sessions are
+skipped). Press Escape to clear the selection.
 
 Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
 Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here

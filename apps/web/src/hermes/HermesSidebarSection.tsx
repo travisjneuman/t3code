@@ -81,6 +81,7 @@ type MenuAction =
   | "archive"
   | "delete"
   | "copy-session-id"
+  | "clear-selection"
   | "refresh"
   | "show-archived";
 
@@ -727,16 +728,23 @@ export function HermesSidebarSection() {
     if (count === 1 && row.thread === null && row.session !== null) {
       items.push({ id: "details", label: "Details" });
     }
-    if (updatable.length > 0) {
-      const allPinned = updatable.every((candidate) => candidate.pinned);
-      items.push({
-        id: allPinned ? "unpin" : "pin",
-        label: `${allPinned ? "Unpin" : "Pin"}${suffix}`,
-        icon: allPinned ? "pin-off" : "pin",
-      });
+    // A mixed selection gets both, each counting the sessions it changes.
+    const pinnable = updatable.filter((candidate) => !candidate.pinned);
+    const unpinnable = updatable.filter((candidate) => candidate.pinned);
+    const countOf = (rows: ReadonlyArray<HermesRow>) => (count > 1 ? ` (${rows.length})` : "");
+    if (pinnable.length > 0) {
+      items.push({ id: "pin", label: `Pin${countOf(pinnable)}`, icon: "pin" });
+    }
+    if (unpinnable.length > 0) {
+      items.push({ id: "unpin", label: `Unpin${countOf(unpinnable)}`, icon: "pin-off" });
     }
     if (withSession.length > 0) {
-      items.push({ id: "copy-session-id", label: "Copy session ID", icon: "hash" });
+      items.push({
+        id: "copy-session-id",
+        label:
+          withSession.length > 1 ? `Copy session IDs (${withSession.length})` : "Copy session ID",
+        icon: "hash",
+      });
     }
     if (archivable.length > 0) {
       items.push({
@@ -756,6 +764,9 @@ export function HermesSidebarSection() {
         disabled: anyRunning,
         separatorBefore: archivable.length === 0,
       });
+    }
+    if (count > 1) {
+      items.push({ id: "clear-selection", label: "Clear selection", separatorBefore: true });
     }
 
     const clicked = await api.contextMenu.show(items, position);
@@ -780,7 +791,11 @@ export function HermesSidebarSection() {
         return;
       case "pin":
       case "unpin":
-        await updateSessions(updatable, { pinned: clicked === "pin" }, clicked);
+        await updateSessions(
+          clicked === "pin" ? pinnable : unpinnable,
+          { pinned: clicked === "pin" },
+          clicked,
+        );
         break;
       case "archive":
         await archiveRows(archivable);
@@ -792,6 +807,9 @@ export function HermesSidebarSection() {
         copyToClipboard(withSession.map((candidate) => candidate.session!.id).join("\n"), {
           title: withSession.length === 1 ? "Session ID copied" : "Session IDs copied",
         });
+        return;
+      case "clear-selection":
+        setSelected(new Set());
         return;
       default:
         return;

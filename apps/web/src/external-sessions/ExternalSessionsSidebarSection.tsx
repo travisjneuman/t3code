@@ -12,6 +12,7 @@ import {
   type EditorId,
   type EnvironmentId,
   type ExternalSessionSummary,
+  type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
@@ -87,12 +88,45 @@ type RowMenuAction =
   | "open-with"
   | `editor:${EditorId}`
   | "archive"
-  | "show-archived"
-  | "copy-selected-ids"
-  | "archive-selected"
+  | "show-archived";
+
+/** The row menu's actions, each over every selected row it applies to. */
+type SelectionMenuAction =
+  | "continue"
+  | `open-origin:${string}`
+  | "copy-session-ids"
+  | "copy-paths"
+  | "open-folders"
+  | "open-with"
+  | `editor:${EditorId}`
+  | "archive"
   | "clear-selection";
 
 type MenuPosition = { readonly x: number; readonly y: number };
+
+function isReportedFailure(result: Parameters<typeof isAtomCommandInterrupted>[0]): boolean {
+  return result._tag === "Failure" && !isAtomCommandInterrupted(result);
+}
+
+function reportBulkFailures(verb: string, failed: number) {
+  if (failed === 0) return;
+  toastManager.add({
+    type: "error",
+    title: `Could not ${verb} ${failed} session${failed === 1 ? "" : "s"}`,
+  });
+}
+
+/** One entry per distinct folder on each environment. */
+function distinctFolders(
+  entries: ReadonlyArray<ExternalSessionEntry>,
+): ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly cwd: string }> {
+  const seen = new Set<string>();
+  return entries.flatMap(({ environmentId, session: { cwd } }) => {
+    if (cwd === null || seen.has(rowKey(environmentId, cwd))) return [];
+    seen.add(rowKey(environmentId, cwd));
+    return [{ environmentId, cwd }];
+  });
+}
 
 function rowKey(environmentId: string, sessionKey: string): string {
   return `${environmentId}\u0000${sessionKey}`;
@@ -510,17 +544,60 @@ export function ExternalSessionsSidebarSection() {
         return result;
       }),
     );
-    setSelection(clearSelected);
-    const failures = results.filter(
-      (result) => result._tag === "Failure" && !isAtomCommandInterrupted(result),
-    );
-    if (failures.length === 0) return;
+    reportBulkFailures("archive", results.filter(isReportedFailure).length);
+  };
+
+  // One at a time: sessions in one new folder would otherwise each create its project.
+  // The first thread opens, as continuing one session does.
+  const continueSelected = async (targets: ReadonlyArray<ExternalSessionEntry>) => {
+    let firstThread: ScopedThreadRef | null = null;
+    let failed = 0;
+    for (const entry of targets) {
+      const result = await runContinue({
+        environmentId: entry.environmentId,
+        input: { key: entry.session.key },
+      });
+      if (result._tag === "Failure") {
+        if (isReportedFailure(result)) failed += 1;
+        continue;
+      }
+      dropOlder(entry);
+      firstThread ??= scopeThreadRef(entry.environmentId, result.value.threadId);
+    }
+    reportBulkFailures("continue", failed);
+    if (firstThread === null || !(await waitForThreadShell(firstThread))) return;
+    closeMobileSidebar();
+    await navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(firstThread),
+    });
+  };
+
+  const openSelectedInOrigin = async (targets: ReadonlyArray<ExternalSessionEntry>) => {
+    let failed = 0;
+    for (const entry of targets) {
+      const result = await runOpenInOrigin({
+        environmentId: entry.environmentId,
+        input: { key: entry.session.key },
+      });
+      if (isReportedFailure(result)) failed += 1;
+    }
+    reportBulkFailures("open", failed);
+  };
+
+  const openFolders = async (
+    folders: ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly cwd: string }>,
+    editor: EditorId,
+  ) => {
+    let failed = 0;
+    for (const { environmentId, cwd } of folders) {
+      const result = await openInEditor({ environmentId, input: { cwd, editor } });
+      if (isReportedFailure(result)) failed += 1;
+    }
+    if (failed === 0) return;
     toastManager.add({
       type: "error",
-      title:
-        failures.length === 1
-          ? "Could not archive 1 session"
-          : `Could not archive ${failures.length} sessions`,
+      title: `Could not open ${failed} folder${failed === 1 ? "" : "s"}`,
     });
   };
 
@@ -531,17 +608,87 @@ export function ExternalSessionsSidebarSection() {
     const api = readLocalApi();
     if (api === undefined) return;
     const count = selected.length;
+    // Read at click time, as the single-row menu does; each action keeps its per-row rules.
+    const editorsOf = (environmentId: EnvironmentId) =>
+      appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId))?.availableEditors ?? [];
+    const continuable = selected.filter(
+      ({ environmentId, session }) =>
+        externalSessionUnsupportedReason(session) === null &&
+        appAtomRegistry.get(externalSessionContinue.permissionAtom(environmentId)),
+    );
+    const continueTargets = continuable.filter(({ session }) => session.liveness !== "running");
+    const byOrigin = new Map<string, Array<ExternalSessionEntry>>();
+    for (const entry of selected) {
+      const { environmentId, session } = entry;
+      if (
+        !externalSessionOpensInOrigin(session) ||
+        !appAtomRegistry.get(externalSessionOpenInOrigin.permissionAtom(environmentId)) ||
+        !appAtomRegistry.get(externalSessionOriginIsLocalAtom(environmentId))
+      ) {
+        continue;
+      }
+      const label = externalSessionOriginLabel(session);
+      byOrigin.set(label, [...(byOrigin.get(label) ?? []), entry]);
+    }
+    const folders = distinctFolders(selected);
+    const paths = [...new Set(folders.map(({ cwd }) => cwd))];
+    const fileManagerFolders = folders.filter(({ environmentId }) =>
+      editorsOf(environmentId).includes("file-manager"),
+    );
+    const otherEditors = [
+      ...new Set(folders.flatMap(({ environmentId }) => editorsOf(environmentId))),
+    ].filter((id) => id !== "file-manager");
     const permitted = selected.filter(({ environmentId }) =>
       appAtomRegistry.get(externalSessionArchive.permissionAtom(environmentId)),
     );
     // Running ones may be in use in the other app right now.
     const archivable = permitted.filter(({ session }) => session.liveness !== "running");
-    const items: Array<ContextMenuItem<RowMenuAction>> = [
-      { id: "copy-selected-ids", label: `Copy session IDs (${count})`, icon: "hash" },
-    ];
+
+    const items: Array<ContextMenuItem<SelectionMenuAction>> = [];
+    if (continuable.length > 0) {
+      items.push({
+        id: "continue",
+        label: `Continue in T3 (${continueTargets.length})`,
+        icon: "message-square-plus",
+        disabled: continueTargets.length === 0,
+      });
+    }
+    for (const [label, group] of byOrigin) {
+      items.push({ id: `open-origin:${label}`, label: `Open in ${label} (${group.length})` });
+    }
+    items.push({
+      id: "copy-session-ids",
+      label: `Copy session IDs (${count})`,
+      icon: "hash",
+      separatorBefore: items.length > 0,
+    });
+    if (paths.length > 0) {
+      items.push({
+        id: "copy-paths",
+        label: `Copy folder paths (${paths.length})`,
+        icon: "copy",
+      });
+    }
+    if (fileManagerFolders.length > 0) {
+      items.push({
+        id: "open-folders",
+        label: `Open folders (${fileManagerFolders.length})`,
+        icon: "folder",
+      });
+    }
+    if (otherEditors.length > 0) {
+      items.push({
+        id: "open-with",
+        label: "Open folders in",
+        children: otherEditors.map((editorId) => ({
+          id: `editor:${editorId}` as const,
+          label: EDITOR_LABEL_BY_ID.get(editorId) ?? editorId,
+        })),
+      });
+    }
     if (permitted.length > 0) {
       items.push({
-        id: "archive-selected",
+        id: "archive",
         label: `Archive (${archivable.length})`,
         icon: "archive",
         separatorBefore: true,
@@ -549,21 +696,33 @@ export function ExternalSessionsSidebarSection() {
       });
     }
     items.push({ id: "clear-selection", label: "Clear selection", separatorBefore: true });
+
     const clicked = await api.contextMenu.show(items, position);
-    switch (clicked) {
-      case "copy-selected-ids":
-        copyToClipboard(selected.map(({ session }) => nativeSessionId(session.key)).join("\n"), {
-          title: count === 1 ? "Session ID copied" : `${count} session IDs copied`,
-        });
-        return;
-      case "archive-selected":
-        await archiveSelected(archivable);
-        return;
-      case "clear-selection":
-        setSelection(clearSelected);
-        return;
-      default:
-        return;
+    if (clicked === null || clicked === "open-with") return;
+    if (clicked === "copy-session-ids") {
+      copyToClipboard(selected.map(({ session }) => nativeSessionId(session.key)).join("\n"), {
+        title: `${count} session IDs copied`,
+      });
+      return;
+    }
+    if (clicked === "copy-paths") {
+      copyToClipboard(paths.join("\n"), {
+        title: paths.length === 1 ? "Path copied" : `${paths.length} paths copied`,
+      });
+      return;
+    }
+    setSelection(clearSelected);
+    if (clicked === "continue") await continueSelected(continueTargets);
+    else if (clicked === "open-folders") await openFolders(fileManagerFolders, "file-manager");
+    else if (clicked === "archive") await archiveSelected(archivable);
+    else if (clicked.startsWith("open-origin:")) {
+      await openSelectedInOrigin(byOrigin.get(clicked.slice("open-origin:".length)) ?? []);
+    } else if (clicked.startsWith("editor:")) {
+      const editor = clicked.slice("editor:".length) as EditorId;
+      await openFolders(
+        folders.filter(({ environmentId }) => editorsOf(environmentId).includes(editor)),
+        editor,
+      );
     }
   };
 
@@ -668,10 +827,6 @@ export function ExternalSessionsSidebarSection() {
         return;
       case "show-archived":
         await showArchived();
-        return;
-      case "copy-selected-ids":
-      case "archive-selected":
-      case "clear-selection":
         return;
       default:
         await openFolder(entry, clicked.slice("editor:".length) as EditorId);

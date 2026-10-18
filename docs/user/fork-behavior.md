@@ -108,6 +108,16 @@ stays together: while anything in it is working it stays in the main list, and o
 finished trees move under **Previous agents**. Subagent rows there, workflow groups included, use the
 sidebar's compact size.
 
+## Selected threads get the whole thread menu
+
+Right-click one of several selected threads (Cmd/Ctrl-click or Shift-click to select them) and the
+menu offers what a single thread's menu does, each over the selected threads it applies to: pin
+and unpin, settle and un-settle, snooze and wake, auto-settle, title regeneration, mark unread,
+archive and delete, copying their paths, branches or thread IDs (one per line), export and save to
+notes, and hand back or move back for continued threads. Threads in one project add its filter and
+project settings; threads on one branch and worktree add a new thread there; the two sides of one
+comparison add **Open comparison**. Rename stays one thread at a time.
+
 ## Other Agents across machines
 
 The Other Agents shelf lists each machine's 60 newest sessions. When a machine has more, the
