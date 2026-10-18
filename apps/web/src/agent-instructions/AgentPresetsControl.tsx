@@ -8,8 +8,10 @@ import {
   AGENT_PROJECT_SCOPED_SETTING_KEYS,
   type AgentPreset,
   agentPresetList,
+  BUILTIN_AGENT_PRESETS,
   isBuiltinAgentPreset,
 } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { useState } from "react";
 
 import { useSettingsScope } from "../components/settings/SettingsScopeContext";
@@ -28,6 +30,7 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useUpdateEnvironmentSettings } from "../hooks/useSettings";
 import { ChoiceSelect } from "./ChoiceSelect";
 
@@ -36,20 +39,44 @@ function newPresetId(): string {
   return `user:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Whether every value the preset sets equals the scope's current one. */
+function presetMatches(preset: AgentPreset, settings: object): boolean {
+  const current = settings as Readonly<Record<string, unknown>>;
+  return Object.entries(preset.settings).every(
+    ([key, value]) => JSON.stringify(current[key]) === JSON.stringify(value),
+  );
+}
+
 export function AgentPresetsControl() {
   const settings = useScopedSettings();
   const updateScoped = useUpdateScopedSettings();
   const { target } = useSettingsScope();
   const updateEnvironment = useUpdateEnvironmentSettings(target?.environmentId ?? null);
   const presets = agentPresetList(settings);
-  const [selectedId, setSelectedId] = useState<string>(presets[0]?.id ?? "");
+  // The last preset applied, saved or picked stays selected across visits, so
+  // Save current offers to replace it after a value changes.
+  const [selectedId, setSelectedId] = useLocalStorage(
+    `t3code:agent-preset-selection:${target?.environmentId ?? "none"}`,
+    "",
+    Schema.String,
+  );
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
-  const selected = presets.find((preset) => preset.id === selectedId) ?? presets[0];
+  const selected =
+    presets.find((preset) => preset.id === selectedId) ??
+    // Saved presets set every value, so one that matches is the scope's own.
+    settings.agentPresets.find((preset) => presetMatches(preset, settings)) ??
+    BUILTIN_AGENT_PRESETS.find((preset) => presetMatches(preset, settings)) ??
+    presets[0];
+  const trimmedName = name.trim();
+  const nameIsBuiltin = BUILTIN_AGENT_PRESETS.some(
+    (preset) => preset.name.toLowerCase() === trimmedName.toLowerCase(),
+  );
+  const replacing = settings.agentPresets.some((preset) => preset.name === trimmedName);
 
   const savePreset = () => {
-    const trimmed = name.trim();
-    if (trimmed === "") return;
+    const trimmed = trimmedName;
+    if (trimmed === "" || nameIsBuiltin) return;
     const values = Object.fromEntries(
       AGENT_PROJECT_SCOPED_SETTING_KEYS.map((key) => [key, settings[key]]),
     ) as AgentPreset["settings"];
@@ -81,7 +108,9 @@ export function AgentPresetsControl() {
         variant="outline"
         disabled={selected === undefined}
         onClick={() => {
-          if (selected) updateScoped(selected.settings);
+          if (!selected) return;
+          updateScoped(selected.settings);
+          setSelectedId(selected.id);
         }}
       >
         Apply
@@ -91,7 +120,8 @@ export function AgentPresetsControl() {
         variant="outline"
         disabled={target === null}
         onClick={() => {
-          setName("");
+          // Built-ins can't change, so only a saved preset is offered for replacing.
+          setName(selected && !isBuiltinAgentPreset(selected.id) ? selected.name : "");
           setSaving(true);
         }}
       >
@@ -105,7 +135,7 @@ export function AgentPresetsControl() {
             updateEnvironment({
               agentPresets: settings.agentPresets.filter((preset) => preset.id !== selected.id),
             });
-            setSelectedId(presets[0]?.id ?? "");
+            setSelectedId("");
           }}
         >
           Delete
@@ -116,8 +146,8 @@ export function AgentPresetsControl() {
           <DialogHeader>
             <DialogTitle>Save Agents preset</DialogTitle>
             <DialogDescription>
-              Saves every Agents value for the scope picked above. A preset with the same name is
-              replaced.
+              Saves every Agents value for the scope picked above. A saved preset with the same name
+              is replaced; built-in presets can't be.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -131,13 +161,18 @@ export function AgentPresetsControl() {
                 if (event.key === "Enter") savePreset();
               }}
             />
+            {nameIsBuiltin ? (
+              <p className="mt-2 text-destructive-foreground text-xs">
+                {trimmedName} is a built-in preset. Pick another name.
+              </p>
+            ) : null}
           </DialogPanel>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSaving(false)}>
               Cancel
             </Button>
-            <Button disabled={name.trim() === ""} onClick={savePreset}>
-              Save
+            <Button disabled={trimmedName === "" || nameIsBuiltin} onClick={savePreset}>
+              {replacing ? "Replace" : "Save"}
             </Button>
           </DialogFooter>
         </DialogPopup>

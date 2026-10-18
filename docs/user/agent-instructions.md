@@ -14,8 +14,10 @@ provider-specific text.
   **Solo** turns delegation off, **Orchestrator** always delegates and runs one review round, and
   **Review-heavy** delegates when useful, reviews until clean, and keeps reviewers read-only. The
   built-ins change only those rows. **Save current** saves every Agents value for the picked scope
-  under a name, on that server; saving under an existing name replaces it, and **Delete** removes
-  a preset you saved.
+  under a name, on that server. With a preset you saved selected, it offers that name, so saving
+  replaces it; built-in presets can't be replaced. **Delete** removes a preset you saved. The row
+  keeps showing the preset you last applied, saved or picked. To make a preset your default,
+  apply it with **All projects** picked: those values are what every thread starts with.
 
 - **Delegation**: **When useful**, the default, has the thread's agent hand independent pieces of
   work to workers through the `delegate_task` tool and do small or sequential work itself.
