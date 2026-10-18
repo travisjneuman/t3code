@@ -1,0 +1,11 @@
+/*
+ * In a draft without a project, the picker sits in a flex <p> that shrinks to its content, while
+ * the trigger is capped at calc(100% - 1em) to leave room for the headline's "?". There is no "?"
+ * in that line, so the cap always cut "No project" to "No …ect". Stretching the line to the
+ * column makes the cap measure against the column instead. Unlayered, so it wins over Tailwind's
+ * utilities. Fork add-on: project names truncate only when they overflow.
+ */
+p:has([data-draft-project-trigger]) {
+  align-self: stretch;
+  justify-content: center;
+}

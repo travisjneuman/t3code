@@ -1,3 +1,5 @@
+import "./draftProjectName.css";
+
 // Upstream sizes the name with canvas measureText, which reads macOS's system font wider than the
 // DOM lays it out, so every name looked like it overflowed and lost a few characters. Scaling the
 // canvas widths so the full name matches its real DOM width keeps truncation for names that
