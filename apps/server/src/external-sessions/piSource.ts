@@ -42,6 +42,7 @@ export const makePiSource = (): ExternalSessionSource => {
 
   return {
     driver: "pi",
+    sessionFiles: (path) => [path],
     roots: [{ path: sessions, recursive: true }],
     sessionPathsFor: (changed) =>
       Effect.succeed(

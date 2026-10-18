@@ -7,12 +7,16 @@ in T3, which binds an ordinary thread to that same session.
 
 ## Decisions
 
-- **Read the providers' own session stores; never write them.** Each agent already persists its
+- **Read the providers' own session stores; write them only to delete.** Each agent already persists its
   sessions on disk (`~/.claude/projects`, `~/.codex/sessions`, `~/.grok/sessions`,
   `~/.pi/agent/sessions`, `~/.gemini/antigravity-cli`). One adapter per store lives in
   [`apps/server/src/external-sessions/`](../../apps/server/src/external-sessions). Watching a
   session writes nothing to T3's database; only an explicit continue, and the sync of a continued
-  thread, do.
+  thread, do. Delete is the one write to a store, and it refuses a running session and one a T3
+  thread continues. Codex deletes its own through `thread/delete`; the Claude, Grok and Pi sources
+  name their files (`sessionFiles`), which are removed only when strictly under a source root, and
+  a Claude session's Claude desktop records go too, or that app would list a session with nothing
+  behind it. Antigravity has no `sessionFiles`, since its store is one shared database.
 - **Render with the thread timeline, not a second transcript.** The view feeds the messages to
   the standard `MessagesTimeline` as runless timeline entries: user and assistant text become
   message entries, and each tool line becomes a work entry. The header and the docked

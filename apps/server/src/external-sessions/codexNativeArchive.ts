@@ -1,6 +1,6 @@
 /**
- * Unarchive a Codex session in Codex itself, through a short-lived
- * `codex app-server` (`thread/unarchive`). T3's archive no longer archives in
+ * Unarchive or delete a Codex session in Codex itself, through a short-lived
+ * `codex app-server` (`thread/unarchive`, `thread/delete`). T3's archive no longer archives in
  * Codex, but older T3 archives did, and Codex moved those rollouts to
  * `archived_sessions/`; T3 never touches those files. Fork add-on; see docs/internals/external-sessions.md.
  *
@@ -24,7 +24,7 @@ import { codexInstanceHome, enabledInstancesOf } from "./continueExternalSession
 
 const REQUEST_TIMEOUT = "20 seconds";
 
-export type CodexArchiveMethod = "thread/unarchive";
+export type CodexArchiveMethod = "thread/unarchive" | "thread/delete";
 
 export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -62,7 +62,8 @@ export const make = Effect.gen(function* () {
 
   /**
    * Runs the request; returns why it could not, or null when Codex did it.
-   * Never fails: the T3 side of an archive does not depend on Codex.
+   * Never fails: the T3 side of an unarchive does not depend on Codex, and a
+   * delete reports the reason instead.
    */
   const run = (method: CodexArchiveMethod, threadId: string): Effect.Effect<string | null> =>
     Effect.gen(function* () {

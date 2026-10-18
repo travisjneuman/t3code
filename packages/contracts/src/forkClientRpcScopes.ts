@@ -19,6 +19,7 @@ export const FORK_CLIENT_GUARDED_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.continue]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.archive]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.delete]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.handBack]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.release]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: AuthOrchestrationOperateScope,

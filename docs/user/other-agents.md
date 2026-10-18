@@ -48,8 +48,8 @@ a continued thread any other way does the same.
 
 ## Archive a session
 
-Right-click a session to continue it, copy its session ID or folder path, open its folder, or
-archive it. Archiving only takes the session off T3's list: it stays where it is in the agent's
+Right-click a session to continue it, copy its session ID or folder path, open its folder,
+archive it, or [delete it](#delete-a-session). Archiving only takes the session off T3's list: it stays where it is in the agent's
 own app. A running session can't be archived until it stops, and an archived session that runs
 again comes back to the list on its own. Archived sessions are listed in **Settings › Archived**,
 where **Unarchive** brings them back. Right-click the **Other Agents** header and choose **Show
@@ -60,8 +60,17 @@ Shift-click to pick every session between the last one you clicked and this one,
 one of them. The menu has the single session's actions, each over the sessions it applies to:
 **Continue in T3** (running sessions are skipped, and the first one opens), **Open in** each
 session's own app, **Copy session IDs** and **Copy folder paths** (one per line), **Open folders**
-and **Open folders in** an editor (each folder once), and **Archive** (running sessions are
-skipped). Press Escape to clear the selection.
+and **Open folders in** an editor (each folder once), **Archive** and **Delete** (running
+sessions are skipped). Press Escape to clear the selection.
+
+## Delete a session
+
+**Delete** in a session's right-click menu, or in **Settings › Archived** for an archived one,
+removes the session from the agent itself, so it is gone from that agent's own app too, such as
+Claude desktop or the Codex app. T3 asks first, and it cannot be undone. A running session can't
+be deleted until it stops. A session you continued in T3 is deleted by deleting its T3 thread.
+Antigravity keeps all its sessions in one database, so delete those in Antigravity. If Claude
+desktop is open, it may keep showing a deleted session until you restart it.
 
 Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
 Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here

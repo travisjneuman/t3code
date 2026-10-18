@@ -213,6 +213,9 @@ export const makeClaudeSource = (desktopArchive?: ClaudeDesktopArchive): Externa
 
   return {
     driver: "claudeAgent",
+    // The transcript, and the folder beside it with its subagents and tool output.
+    sessionFiles: (path) =>
+      path.endsWith(".jsonl") ? [path, path.slice(0, -".jsonl".length)] : [path],
     roots: [
       { path: projects, recursive: true },
       { path: registry, recursive: false },

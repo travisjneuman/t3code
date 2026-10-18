@@ -8,6 +8,7 @@ import {
   EXTERNAL_SESSIONS_WS_METHODS,
   type ExternalSessionArchiveInput,
   type ExternalSessionContinueInput,
+  type ExternalSessionDeleteInput,
   type ExternalSessionHandBackInput,
   type ExternalSessionInsightsInput,
   type ExternalSessionListOlderInput,
@@ -33,6 +34,8 @@ export const makeHandlers = Effect.gen(function* () {
       externalSessions.subscribeRunningElsewhere.pipe(Stream.map((threadIds) => ({ threadIds }))),
     [EXTERNAL_SESSIONS_WS_METHODS.archive]: (input: ExternalSessionArchiveInput) =>
       externalSessions.archiveSession(input),
+    [EXTERNAL_SESSIONS_WS_METHODS.delete]: (input: ExternalSessionDeleteInput) =>
+      externalSessions.deleteSession(input),
     [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: (input: ExternalSessionUnarchiveInput) =>
       externalSessions.unarchiveSession(input.key),
     [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: (_input: unknown) =>

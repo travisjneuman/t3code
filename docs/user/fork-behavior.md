@@ -135,7 +135,7 @@ searched 2 of 3 hosts", and its tooltip names the one that didn't answer. With n
 
 A connection paired with limited access, for example without operate or provider management
 access, hides the fork's actions the server would refuse instead of letting them fail: continuing,
-archiving, handing back or opening Other Agents sessions, Hermes session and settings changes,
+archiving, deleting, handing back or opening Other Agents sessions, Hermes session and settings changes,
 **Save to notes**, comparisons, and releasing provider sessions before an update. Where a whole
 settings section is unavailable, it says which access it needs.
 

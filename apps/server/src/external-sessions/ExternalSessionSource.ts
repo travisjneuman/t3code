@@ -1,6 +1,7 @@
 /**
  * What every provider's session store adapter provides to ExternalSessions.
- * Adapters only read; they never write to another app's files.
+ * Adapters only read; the one write is Delete, which removes what
+ * `sessionFiles` names when the user deletes a session.
  *
  * @module external-sessions/ExternalSessionSource
  */
@@ -157,6 +158,12 @@ export interface ExternalSessionSource {
   readonly writesHeldOpen?: true;
   /** The details card's session record, context and connectors; see `ReadSessionInsights`. */
   readonly readInsights?: ReadSessionInsights;
+  /**
+   * The files and folders that hold one session, which Delete removes. Absent
+   * when sessions share one store (Antigravity's database) or the provider
+   * deletes its own (Codex, through its app-server). Fork add-on.
+   */
+  readonly sessionFiles?: (sessionPath: string) => ReadonlyArray<string>;
 }
 
 // Tool output and pasted files can be huge; a summary line is enough here.

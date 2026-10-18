@@ -28,6 +28,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   subscribeRunningElsewhere: "externalSessions.subscribeRunningElsewhere",
   archive: "externalSessions.archive",
   unarchive: "externalSessions.unarchive",
+  delete: "externalSessions.delete",
   subscribeArchived: "externalSessions.subscribeArchived",
   handBack: "externalSessions.handBack",
   release: "externalSessions.release",
@@ -406,6 +407,29 @@ export const ExternalSessionsUnarchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHOD
 });
 
 /**
+ * Deletes a session from the agent's own store, so its own app loses it too.
+ * Refused while it runs, and for Antigravity, which keeps every conversation
+ * in one database. It cannot be undone.
+ */
+export const ExternalSessionDeleteInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+});
+export type ExternalSessionDeleteInput = typeof ExternalSessionDeleteInput.Type;
+
+export const ExternalSessionDeleteResult = Schema.Struct({});
+export type ExternalSessionDeleteResult = typeof ExternalSessionDeleteResult.Type;
+
+export const ExternalSessionsDeleteRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.delete, {
+  payload: ExternalSessionDeleteInput,
+  success: ExternalSessionDeleteResult,
+  error: Schema.Union([
+    ExternalSessionNotFoundError,
+    ExternalSessionError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+/**
  * The provider instance a thread was continued from, read from its id
  * (`import:<instance>:<session id>`, as continue and the onboarding importer
  * make it), or null for any other thread.
@@ -458,6 +482,13 @@ export const externalSessionOpensInOrigin = (session: {
   readonly origin: string | null;
 }): boolean =>
   session.origin === "Desktop" && (session.driver === "claudeAgent" || session.driver === "codex");
+
+/**
+ * Whether T3 can delete a session from its agent's own store. Antigravity
+ * keeps every session in one database. Fork add-on.
+ */
+export const externalSessionDeletable = (session: { readonly driver: string }): boolean =>
+  CONTINUABLE_DRIVERS.has(session.driver);
 
 /** Opens a session in the app it runs in, on the server's machine. */
 export const ExternalSessionOpenInOriginInput = Schema.Struct({
@@ -535,6 +566,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsSubscribeRunningElsewhereRpc,
   ExternalSessionsArchiveRpc,
   ExternalSessionsUnarchiveRpc,
+  ExternalSessionsDeleteRpc,
   ExternalSessionsSubscribeArchivedRpc,
   ExternalSessionsHandBackRpc,
   ExternalSessionsReleaseRpc,
@@ -551,6 +583,7 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere]: AuthOrchestrationReadScope,
   [EXTERNAL_SESSIONS_WS_METHODS.archive]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.unarchive]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.delete]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived]: AuthOrchestrationReadScope,
   [EXTERNAL_SESSIONS_WS_METHODS.handBack]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.release]: AuthOrchestrationOperateScope,

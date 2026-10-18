@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   EDITORS,
+  externalSessionDeletable,
   externalSessionOpensInOrigin,
   externalSessionUnsupportedReason,
   type ContextMenuItem,
@@ -53,6 +54,7 @@ import {
   cwdBasename,
   externalSessionArchive,
   externalSessionContinue,
+  externalSessionDelete,
   externalSessionEntriesAtom,
   externalSessionHostLabelsAtom,
   externalSessionListCutsAtom,
@@ -88,6 +90,7 @@ type RowMenuAction =
   | "open-with"
   | `editor:${EditorId}`
   | "archive"
+  | "delete"
   | "show-archived";
 
 /** The row menu's actions, each over every selected row it applies to. */
@@ -100,6 +103,7 @@ type SelectionMenuAction =
   | "open-with"
   | `editor:${EditorId}`
   | "archive"
+  | "delete"
   | "clear-selection";
 
 type MenuPosition = { readonly x: number; readonly y: number };
@@ -284,6 +288,7 @@ export function ExternalSessionsSidebarSection() {
   const navigate = useNavigate();
   const runContinue = useAtomCommand(externalSessionContinue, { reportFailure: false });
   const runArchive = useAtomCommand(externalSessionArchive, { reportFailure: false });
+  const runDelete = useAtomCommand(externalSessionDelete, { reportFailure: false });
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const runOpenInOrigin = useAtomCommand(externalSessionOpenInOrigin, { reportFailure: false });
   const runListOlder = useAtomCommand(externalSessionListOlder, { reportFailure: false });
@@ -547,6 +552,55 @@ export function ExternalSessionsSidebarSection() {
     reportBulkFailures("archive", results.filter(isReportedFailure).length);
   };
 
+  // Gone from the agent's own app too, so it always asks first. One at a time, and an
+  // open session's view leaves with it.
+  const deleteSessions = async (targets: ReadonlyArray<ExternalSessionEntry>) => {
+    const api = readLocalApi();
+    const [first] = targets;
+    if (api === undefined || first === undefined) return;
+    const confirmed = await api.dialogs
+      .confirm(
+        [
+          targets.length === 1
+            ? `Delete "${externalSessionTitle(first.session)}"?`
+            : `Delete ${targets.length} sessions?`,
+          targets.length === 1
+            ? `This deletes the session in ${externalSessionProductName(first.session)} too. It cannot be undone.`
+            : "This deletes each session in its agent's own app too. It cannot be undone.",
+        ].join("\n"),
+        { variant: "destructive" },
+      )
+      .catch(() => false);
+    if (!confirmed) return;
+    let failed = 0;
+    let lastFailure: unknown = null;
+    let leftActive = false;
+    for (const entry of targets) {
+      const result = await runDelete({
+        environmentId: entry.environmentId,
+        input: { key: entry.session.key },
+      });
+      if (result._tag === "Failure") {
+        if (!isReportedFailure(result)) continue;
+        failed += 1;
+        lastFailure = squashAtomCommandFailure(result);
+        continue;
+      }
+      dropOlder(entry);
+      if (rowKey(entry.environmentId, entry.session.key) === activeKey) leftActive = true;
+    }
+    if (targets.length === 1 && failed === 1) {
+      toastManager.add({
+        type: "error",
+        title: "Could not delete session",
+        description: lastFailure instanceof Error ? lastFailure.message : "An error occurred.",
+      });
+    } else {
+      reportBulkFailures("delete", failed);
+    }
+    if (leftActive) await navigate({ to: "/" });
+  };
+
   // One at a time: sessions in one new folder would otherwise each create its project.
   // The first thread opens, as continuing one session does.
   const continueSelected = async (targets: ReadonlyArray<ExternalSessionEntry>) => {
@@ -643,6 +697,12 @@ export function ExternalSessionsSidebarSection() {
     );
     // Running ones may be in use in the other app right now.
     const archivable = permitted.filter(({ session }) => session.liveness !== "running");
+    const deletePermitted = selected.filter(
+      ({ environmentId, session }) =>
+        externalSessionDeletable(session) &&
+        appAtomRegistry.get(externalSessionDelete.permissionAtom(environmentId)),
+    );
+    const deletable = deletePermitted.filter(({ session }) => session.liveness !== "running");
 
     const items: Array<ContextMenuItem<SelectionMenuAction>> = [];
     if (continuable.length > 0) {
@@ -695,6 +755,16 @@ export function ExternalSessionsSidebarSection() {
         disabled: archivable.length === 0,
       });
     }
+    if (deletePermitted.length > 0) {
+      items.push({
+        id: "delete",
+        label: `Delete (${deletable.length})`,
+        icon: "trash",
+        destructive: true,
+        separatorBefore: permitted.length === 0,
+        disabled: deletable.length === 0,
+      });
+    }
     items.push({ id: "clear-selection", label: "Clear selection", separatorBefore: true });
 
     const clicked = await api.contextMenu.show(items, position);
@@ -715,6 +785,7 @@ export function ExternalSessionsSidebarSection() {
     if (clicked === "continue") await continueSelected(continueTargets);
     else if (clicked === "open-folders") await openFolders(fileManagerFolders, "file-manager");
     else if (clicked === "archive") await archiveSelected(archivable);
+    else if (clicked === "delete") await deleteSessions(deletable);
     else if (clicked.startsWith("open-origin:")) {
       await openSelectedInOrigin(byOrigin.get(clicked.slice("open-origin:".length)) ?? []);
     } else if (clicked.startsWith("editor:")) {
@@ -752,6 +823,9 @@ export function ExternalSessionsSidebarSection() {
       externalSessionOpenInOrigin.permissionAtom(environmentId),
     );
     const canArchive = appAtomRegistry.get(externalSessionArchive.permissionAtom(environmentId));
+    const canDelete =
+      externalSessionDeletable(session) &&
+      appAtomRegistry.get(externalSessionDelete.permissionAtom(environmentId));
     const items: Array<ContextMenuItem<RowMenuAction>> = [];
     if (externalSessionUnsupportedReason(session) === null && canContinue) {
       items.push({
@@ -801,6 +875,16 @@ export function ExternalSessionsSidebarSection() {
         disabled: session.liveness === "running",
       });
     }
+    if (canDelete) {
+      items.push({
+        id: "delete",
+        label: "Delete",
+        icon: "trash",
+        destructive: true,
+        separatorBefore: !canArchive,
+        disabled: session.liveness === "running",
+      });
+    }
 
     const clicked = await api.contextMenu.show(items, position);
     switch (clicked) {
@@ -824,6 +908,9 @@ export function ExternalSessionsSidebarSection() {
         return;
       case "archive":
         await archiveSession(entry);
+        return;
+      case "delete":
+        await deleteSessions([entry]);
         return;
       case "show-archived":
         await showArchived();

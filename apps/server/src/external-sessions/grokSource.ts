@@ -46,6 +46,8 @@ export const makeGrokSource = (): ExternalSessionSource => {
 
   return {
     driver: "grok",
+    // A folder per session.
+    sessionFiles: (path) => [path],
     roots: [{ path: sessions, recursive: true }],
     sessionPathsFor: (changed) => {
       const dir = NodePath.dirname(changed);

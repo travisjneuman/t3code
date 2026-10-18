@@ -174,6 +174,12 @@ export const externalSessionUnarchive = createEnvironmentRpcCommand(connectionAt
   tag: EXTERNAL_SESSIONS_WS_METHODS.unarchive,
 });
 
+/** Removes a session from its agent's own store, so it is gone from that app too. */
+export const externalSessionDelete = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:delete",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.delete,
+});
+
 /** One message on a continued thread's original agent and model (handBack.tsx). */
 export const externalSessionHandBack = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:hand-back",

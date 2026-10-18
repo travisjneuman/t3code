@@ -2,14 +2,16 @@
  * Live view of agent sessions running outside T3: Claude Code, Codex, Grok,
  * Pi, and Antigravity, from CLIs, desktop apps, and IDE extensions. Each
  * provider's own session store is watched while anyone subscribes and is
- * never written to. Continuing an idle Claude, Codex, Grok, or Pi session
+ * written only by Delete. Continuing an idle Claude, Codex, Grok, or Pi session
  * binds a T3 thread to that same session (continueExternalSession.ts), after
  * which it is listed as that thread instead. Handing one to a different agent
  * makes a separate thread from its history and leaves the session listed.
  * Archiving one hides it from the list (externalSessionArchive.ts) and leaves
  * it where it is in the agent's own app; it comes back when it runs again.
  * Older Codex archives also archived in Codex, so unarchiving those restores
- * them there (codexNativeArchive.ts). Claude sessions
+ * them there (codexNativeArchive.ts). Deleting one removes it from the agent's
+ * own store: Codex deletes its own, the other stores lose the files the
+ * source names (`sessionFiles`), and Claude desktop its records. Claude sessions
  * archived in Claude desktop are hidden and listed as archived too, read-only
  * (claudeDesktopArchive.ts). Fork add-on; see docs/internals/external-sessions.md.
  *
@@ -23,6 +25,8 @@ import {
   type ExternalSessionArchiveResult,
   type ExternalSessionArchivedResult,
   type ExternalSessionArchivedSession,
+  type ExternalSessionDeleteInput,
+  type ExternalSessionDeleteResult,
   type ExternalSessionHandBackResult,
   type ExternalSessionInsightsResult,
   type ExternalSessionOpenInOriginResult,
@@ -156,6 +160,17 @@ export class ExternalSessions extends Context.Service<
       ExternalSessionArchiveResult,
       ExternalSessionNotFoundError | ExternalSessionError
     >;
+    /**
+     * Delete a session from the agent's own store, so its own app loses it
+     * too. Refused while running, while a T3 thread continues it, and where
+     * sessions share one store (Antigravity). Fork add-on.
+     */
+    readonly deleteSession: (
+      input: ExternalSessionDeleteInput,
+    ) => Effect.Effect<
+      ExternalSessionDeleteResult,
+      ExternalSessionNotFoundError | ExternalSessionError
+    >;
     /** List the session again, restoring it in Codex when an older archive archived it there. */
     readonly unarchiveSession: (
       key: string,
@@ -222,6 +237,8 @@ interface Registry {
   readonly publish: Effect.Effect<void>;
   /** Re-reads which sessions T3 owns and republishes the list. */
   readonly refreshOwned: Effect.Effect<void>;
+  /** Drops a deleted session and republishes, before its store's watcher reports it. */
+  readonly forget: (key: string) => Effect.Effect<void>;
   /**
    * The listed entry for `key`, or else one looked up on demand in the
    * history window (an older search result), which then stays registered.
@@ -711,6 +728,17 @@ const make = Effect.gen(function* () {
         };
       },
       refreshOwned: Effect.andThen(refreshOwnedIds, publish),
+      forget: (key) =>
+        Effect.suspend(() => {
+          const entry = entries.get(key);
+          if (entry !== undefined) {
+            entries.delete(key);
+            const rest = (keysByPath.get(entry.path) ?? []).filter((other) => other !== key);
+            if (rest.length > 0) keysByPath.set(entry.path, rest);
+            else keysByPath.delete(entry.path);
+          }
+          return publish;
+        }),
       resolve: (key) =>
         Effect.gen(function* () {
           const listed = entries.get(key);
@@ -954,6 +982,73 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const deleteSession: ExternalSessions["Service"]["deleteSession"] = ({ key }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* RcRef.get(registryRef);
+        const entry = yield* registry.resolve(key);
+        const summary = registry.summaryFor(key);
+        if (entry === undefined || summary === null) {
+          return yield* new ExternalSessionNotFoundError({ key });
+        }
+        if (summary.liveness === "running") {
+          return yield* new ExternalSessionError({
+            message: "This session is still running. Stop it in the other app, then delete it.",
+          });
+        }
+        if ((yield* ownedSessionIds).has(entry.info.id)) {
+          return yield* new ExternalSessionError({
+            message: "A T3 thread continues this session. Delete that thread instead.",
+          });
+        }
+        const { source } = entry;
+        if (source.driver === "codex") {
+          const refused = yield* codexNativeArchive.run("thread/delete", entry.info.id);
+          if (refused !== null) {
+            return yield* new ExternalSessionError({
+              message: `Codex could not delete this session: ${refused}`,
+            });
+          }
+        } else if (source.sessionFiles !== undefined) {
+          const roots = source.roots.map((root) => root.path);
+          for (const target of source.sessionFiles(entry.path)) {
+            // Never a store root itself, and never anything outside one.
+            if (!roots.some((root) => target !== root && isUnder(target, root))) continue;
+            yield* fileSystem
+              .remove(target, { recursive: true, force: true })
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ExternalSessionError({ message: "Could not delete the session.", cause }),
+                ),
+              );
+          }
+          // Otherwise Claude desktop would still list it, with nothing to open.
+          if (source.driver === "claudeAgent") {
+            for (const record of yield* claudeDesktopArchive.recordPaths(entry.info.id)) {
+              yield* fileSystem.remove(record, { force: true }).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ExternalSessionError({
+                      message: "Deleted the session, but Claude desktop still lists it.",
+                      cause,
+                    }),
+                ),
+              );
+            }
+          }
+        } else {
+          return yield* new ExternalSessionError({
+            message:
+              "This agent keeps all its sessions in one database, so T3 can't delete one. Delete it in the agent's own app.",
+          });
+        }
+        yield* archive.remove(key);
+        yield* registry.forget(key);
+        return {};
+      }),
+    );
+
   const unarchiveSession: ExternalSessions["Service"]["unarchiveSession"] = (key) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1087,6 +1182,7 @@ const make = Effect.gen(function* () {
     subscribeRunningElsewhere: sync.runningElsewhere,
     ownedSessionIds,
     archiveSession,
+    deleteSession,
     unarchiveSession,
     subscribeArchived,
     handBack,

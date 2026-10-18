@@ -9,7 +9,7 @@
  * `local_<id>` name, which Claude's `claude://code/continue` link opens; the
  * rest of the record holds account and bridge identifiers, so it is dropped
  * right after parsing and never logged or sent. T3 never writes these files, so a session
- * archived there is unarchived there. Fork add-on; see
+ * archived there is unarchived there; deleting a session removes its records. Fork add-on; see
  * docs/internals/external-sessions.md.
  *
  * @module external-sessions/claudeDesktopArchive
@@ -148,6 +148,8 @@ export interface ClaudeDesktopArchive {
   readonly sessionMetadata: (
     cliSessionId: string,
   ) => Effect.Effect<ClaudeDesktopSessionMetadata | null>;
+  /** Every record Claude desktop keeps for a CLI session, freshly scanned, for Delete. */
+  readonly recordPaths: (cliSessionId: string) => Effect.Effect<ReadonlyArray<string>>;
 }
 
 export const make = Effect.gen(function* () {
@@ -233,6 +235,12 @@ export const make = Effect.gen(function* () {
       ),
     sessionMetadata: (cliSessionId) =>
       Effect.map(latest, (result) => result.metadata.get(cliSessionId) ?? null),
+    recordPaths: (cliSessionId) =>
+      Effect.map(lock.withPermits(1)(scan), () =>
+        [...files].flatMap(([path, file]) =>
+          file.record?.cliSessionId === cliSessionId ? [path] : [],
+        ),
+      ),
   };
   return desktopArchive;
 });
