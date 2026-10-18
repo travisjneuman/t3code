@@ -108,6 +108,9 @@ export const AgentSettingsFields = {
   agentWorkerModelSelection: NullableModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  agentWorkerModelSelectionFixed: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   agentReviewWorkerModelSelection: NullableModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -152,6 +155,7 @@ export const AgentSettingsFields = {
 export const AgentSettingsOptionalFields = {
   agentDelegationMode: Schema.optionalKey(AgentDelegationMode),
   agentWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
+  agentWorkerModelSelectionFixed: Schema.optionalKey(Schema.Boolean),
   agentReviewWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
   agentResearchWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
   agentMaxParallelWorkers: Schema.optionalKey(PersistedParallelWorkers),
@@ -207,6 +211,7 @@ export const AgentSettingsPatchFields = {
 export const AGENT_PROJECT_SCOPED_SETTING_KEYS = [
   "agentDelegationMode",
   "agentWorkerModelSelection",
+  "agentWorkerModelSelectionFixed",
   "agentReviewWorkerModelSelection",
   "agentResearchWorkerModelSelection",
   "agentMaxParallelWorkers",
@@ -352,13 +357,21 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
       : "- Delegate work that splits into independent pieces; do small or sequential work yourself. Review every worker's result.",
     "- Delegate with the t3-code delegate_task tool, not native subagents.",
     settings.agentWorkerModelSelection === null
-      ? "- Workers run on your own model unless a task needs another."
-      : `- Default worker target: ${workerTarget(settings.agentWorkerModelSelection)}.`,
-    review === null ? null : `- Review workers (role "review"): ${workerTarget(review)}.`,
-    research === null ? null : `- Research workers (role "research"): ${workerTarget(research)}.`,
-    anyTarget
-      ? "- Set role on every delegate_task. Leave out target and T3 uses the target for that role."
-      : null,
+      ? settings.agentWorkerModelSelectionFixed
+        ? "- No general worker target is configured. Fixed mode refuses delegation for roles without a role-specific target."
+        : "- Workers run on your own model unless a task needs another."
+      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed worker target" : "Default worker target"}: ${workerTarget(settings.agentWorkerModelSelection)}.`,
+    review === null
+      ? null
+      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed review worker target" : "Review workers (role \"review\")"}: ${workerTarget(review)}.`,
+    research === null
+      ? null
+      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed research worker target" : "Research workers (role \"research\")"}: ${workerTarget(research)}.`,
+    settings.agentWorkerModelSelectionFixed
+      ? "- Fixed targets apply to T3 delegate_task only. Set a role on every delegation and leave target out; T3 uses its role-specific selection or the general worker selection, enforces the configured provider, model, and options, and refuses conflicting or unconfigured targets. Provider-native subagents are separate."
+      : anyTarget
+        ? "- Set role on every delegate_task. Leave out target and T3 uses the target for that role."
+        : null,
     `- At most ${settings.agentMaxParallelWorkers} ${settings.agentMaxParallelWorkers === 1 ? "worker runs" : "workers run"} at once under the thread's agent, counting workers that workers start; T3 refuses more.`,
     "- Give each worker one short, scoped task with the files it owns, the files it must not touch, and what done means. Ask for a short report: changed files, what was verified, open questions.",
     settings.agentReadOnlyReviewers

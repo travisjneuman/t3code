@@ -174,7 +174,11 @@ export const makeLocalSource = Effect.gen(function* () {
       const inspection = yield* localSourceUpdates.inspect;
       // A build that predates the newest nightly still needs one, even when
       // a sync already merged it.
-      if (inspection.behind === 0 && environment.appVersion === inspection.upstreamVersion) {
+      if (
+        inspection.behind === 0 &&
+        environment.appVersion === inspection.upstreamVersion &&
+        inspection.currentCommit === inspection.installedCommit
+      ) {
         yield* updateState((current) => reduceDesktopUpdateStateOnNoUpdate(current, checkedAt));
         yield* logUpdaterInfo("no updates available");
         return true;

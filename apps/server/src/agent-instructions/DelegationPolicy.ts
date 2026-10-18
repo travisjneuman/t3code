@@ -13,12 +13,15 @@ import {
   agentWorkerIsReadOnly,
   agentWorkerModelForRole,
   type AgentSettings,
+  defaultInstanceIdForDriver,
   MAX_AGENT_DELEGATION_DEPTH,
   CommandId,
   type NodeId,
+  type OrchestratorMcpTarget,
   type OrchestrationV2ThreadProjection,
   type OrchestratorMcpDelegateTaskInput,
   OrchestratorMcpFailure,
+  type ServerProvider,
   type ThreadId,
 } from "@t3tools/contracts";
 import { WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
@@ -55,6 +58,58 @@ function levelLabel(count: number): string {
   return count === 1 ? "level" : "levels";
 }
 
+function optionSelectionsKey(
+  options: ReadonlyArray<{ readonly id: string; readonly value: string | boolean }> | undefined,
+): string {
+  return JSON.stringify(
+    [...(options ?? [])]
+      .toSorted((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+      .map(({ id, value }) => [id, value]),
+  );
+}
+
+function fixedTargetMatches(
+  requested: OrchestratorMcpTarget | undefined,
+  selection: NonNullable<ReturnType<typeof agentWorkerModelForRole>>,
+  providers: ReadonlyArray<ServerProvider> | undefined,
+): boolean {
+  if (requested === undefined) return true;
+  if (
+    requested.providerInstanceId !== undefined &&
+    requested.providerInstanceId !== selection.instanceId
+  ) {
+    return false;
+  }
+  if (requested.driverKind !== undefined) {
+    const selectedProvider = providers?.find(
+      (provider) => provider.instanceId === selection.instanceId,
+    );
+    const selectedDriver =
+      selectedProvider?.driver ??
+      (defaultInstanceIdForDriver(requested.driverKind) === selection.instanceId
+        ? requested.driverKind
+        : undefined);
+    if (selectedDriver !== requested.driverKind) return false;
+  }
+  if (requested.model !== undefined && requested.model !== selection.model) return false;
+  if (
+    requested.options !== undefined &&
+    optionSelectionsKey(requested.options) !== optionSelectionsKey(selection.options)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function fixedTargetFailure(role: string | undefined, configured: boolean): OrchestratorMcpFailure {
+  return new OrchestratorMcpFailure({
+    code: "invalid_request",
+    message: configured
+      ? `Worker targets are fixed in Settings > Agents. The requested target conflicts with the configured ${role ? `${role} ` : ""}worker target; leave target out or use its configured provider, model, and options.`
+      : `Worker targets are fixed in Settings > Agents, but no target is configured for the ${role ? `${role} ` : ""}worker. Configure a worker model before delegating.`,
+  });
+}
+
 /** The line T3 puts at the top of a worker's task about delegating further. */
 export function workerDepthLine(settings: AgentSettings, workerDepth: number): string {
   const remaining = settings.agentMaxDelegationDepth - workerDepth;
@@ -70,6 +125,7 @@ export function workerDepthLine(settings: AgentSettings, workerDepth: number): s
  */
 export function applyDelegationPolicy(input: {
   readonly settings: AgentSettings;
+  readonly providers?: ReadonlyArray<ServerProvider>;
   readonly parent: Pick<OrchestrationV2ThreadProjection, "thread" | "subagents">;
   readonly level: DelegationLevel;
   readonly request: OrchestratorMcpDelegateTaskInput;
@@ -108,22 +164,39 @@ export function applyDelegationPolicy(input: {
     }
   }
   const requested = request.target;
-  const roleModel =
-    requested?.providerInstanceId === undefined &&
-    requested?.driverKind === undefined &&
-    requested?.model === undefined
-      ? agentWorkerModelForRole(settings, request.role)
-      : null;
-  const options = requested?.options ?? roleModel?.options;
-  return Effect.succeed({
-    target:
+  let target = requested;
+  if (settings.agentWorkerModelSelectionFixed && !input.isRetry) {
+    const fixedSelection = agentWorkerModelForRole(settings, request.role);
+    if (fixedSelection === null) {
+      return Effect.fail(fixedTargetFailure(request.role, false));
+    }
+    if (!fixedTargetMatches(requested, fixedSelection, input.providers)) {
+      return Effect.fail(fixedTargetFailure(request.role, true));
+    }
+    target = {
+      providerInstanceId: fixedSelection.instanceId,
+      model: fixedSelection.model,
+      options: fixedSelection.options ?? [],
+    };
+  } else if (!settings.agentWorkerModelSelectionFixed) {
+    const roleModel =
+      requested?.providerInstanceId === undefined &&
+      requested?.driverKind === undefined &&
+      requested?.model === undefined
+        ? agentWorkerModelForRole(settings, request.role)
+        : null;
+    const options = requested?.options ?? roleModel?.options;
+    target =
       roleModel === null
         ? requested
         : {
             providerInstanceId: roleModel.instanceId,
             model: roleModel.model,
             ...(options === undefined ? {} : { options }),
-          },
+          };
+  }
+  return Effect.succeed({
+    target,
     task: [
       agentWorkerIsReadOnly(settings, request.role) ? AGENT_READ_ONLY_WORKER_LINE : null,
       workerDepthLine(settings, workerDepth),
@@ -212,6 +285,7 @@ export const make = Effect.gen(function* () {
   const prepare = (input: {
     readonly parent: DelegationParent;
     readonly request: OrchestratorMcpDelegateTaskInput;
+    readonly providers: ReadonlyArray<ServerProvider>;
     readonly isRetry: boolean;
   }): Effect.Effect<PreparedDelegation, OrchestratorMcpFailure> =>
     Effect.gen(function* () {
@@ -232,6 +306,7 @@ export const make = Effect.gen(function* () {
           : yield* activeWorkersUnder(top);
       const policy = yield* applyDelegationPolicy({
         ...input,
+        providers: input.providers,
         settings,
         level: { depth: chain.length - 1, activeWorkers },
       });

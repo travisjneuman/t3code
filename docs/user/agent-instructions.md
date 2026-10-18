@@ -28,10 +28,16 @@ These rows show while Delegation is on:
 
 - **Worker model**: the provider and model workers run on, including options such as reasoning
   effort. When an agent calls `delegate_task` without a target, T3 runs the worker on this model.
-  Leave it off to run workers on the thread's own model. To use GPT-6.1 Sol through Pi, pick the
-  Pi instance, the `openai-codex/gpt-6.1-sol` model, and High thinking.
+  Leave it off to run workers on the thread's own model.
 - **Review worker model** and **Research worker model**: a different model for workers started
   with the review or research role. Off uses the worker model.
+- **Fixed worker targets**: when on, T3 always uses the configured provider, model, and options
+  for each worker role, and rejects a delegation that requests a different target. A role-specific
+  model takes precedence; other roles use Worker model. Delegations without a configured target
+  are refused. This setting is project-scoped and can be saved in an Agents preset. It does not
+  change the thread's main model or provider-native subagents. A selected saved preset can override
+  both the fixed-target setting and worker selections for that thread; built-in presets leave those
+  values unchanged.
 - **Parallel workers**: the most workers running at once under one thread's agent, counting
   workers that workers start. The default is 12; pick another count, or **Custom…** to type one
   from 1 to 30. Each worker is a full agent process, so every worker adds memory use (the row

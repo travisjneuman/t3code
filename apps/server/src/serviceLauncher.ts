@@ -340,6 +340,11 @@ async function discardDatabaseBackup(baseDir: string, updateId: string): Promise
   await syncDirectory(NodePath.dirname(backupDir));
 }
 
+function reportRecoveryCleanupFailure(error: unknown): void {
+  // Fork add-on: retained recovery data must be visible if the filesystem blocks cleanup.
+  process.stderr.write(`[service-launcher] Temporary database recovery cleanup failed: ${String(error)}\n`);
+}
+
 export async function readServiceState(filePath: string): Promise<ServiceState> {
   const contents = await NodeFSP.readFile(filePath, "utf8");
   const state = parseServiceState(contents);
@@ -539,7 +544,7 @@ export class Launcher {
     const update = this.#state.update;
     if (update?.status !== "pending") {
       if (update !== undefined) {
-        await discardDatabaseBackup(this.#baseDir, update.id).catch(() => undefined);
+        await discardDatabaseBackup(this.#baseDir, update.id).catch(reportRecoveryCleanupFailure);
       }
       await this.#startChild(this.#state.activeVersion, "active", update);
       return;
@@ -735,7 +740,7 @@ export class Launcher {
     await writeServiceState(this.#statePath, next);
     this.#state = next;
     child.role = "active";
-    await discardDatabaseBackup(this.#baseDir, committed.id).catch(() => undefined);
+    await discardDatabaseBackup(this.#baseDir, committed.id).catch(reportRecoveryCleanupFailure);
     await sendMessage(child.process, { type: "committed", updateId: committed.id });
   }
 
@@ -798,7 +803,7 @@ export class Launcher {
       };
       await writeServiceState(this.#statePath, next);
       this.#state = next;
-      await discardDatabaseBackup(this.#baseDir, pending.id).catch(() => undefined);
+      await discardDatabaseBackup(this.#baseDir, pending.id).catch(reportRecoveryCleanupFailure);
     }
     // Signal listeners alone do not keep Node alive.
     this.#timer = setInterval(() => {}, 2_147_483_647);
@@ -826,7 +831,7 @@ export class Launcher {
     };
     await writeServiceState(this.#statePath, next);
     this.#state = next;
-    await discardDatabaseBackup(this.#baseDir, pending.id).catch(() => undefined);
+    await discardDatabaseBackup(this.#baseDir, pending.id).catch(reportRecoveryCleanupFailure);
     await this.#startChild(next.activeVersion, "active", outcome);
   }
 }

@@ -1174,14 +1174,6 @@ const make = Effect.gen(function* () {
     readonly parent: Pick<OrchestrationV2ThreadProjection, "thread">;
     readonly target: OrchestratorMcpTarget | undefined;
     readonly providers: ReadonlyArray<ServerProvider>;
-    /**
-     * Set only when the command that will dispatch this target already has a receipt: that
-     * dispatch can only replay the recorded result, never start anything new, so filtering
-     * candidates by the project's current settings would just refuse a retry that does no new
-     * work. Never set this for a resolution whose dispatch uses a different command id than the
-     * one checked for a receipt.
-     */
-    readonly skipProjectEnablementFilter?: boolean;
   }): Effect.Effect<ResolvedTarget, OrchestratorMcpFailure> =>
     Effect.gen(function* () {
       const requestedInstanceId = input.target?.providerInstanceId;
@@ -1212,12 +1204,10 @@ const make = Effect.gen(function* () {
           ...healthyCandidates.filter((candidate) => candidate !== inheritedCandidate),
         ];
         for (const candidate of orderedCandidates) {
-          const enabledForProject =
-            input.skipProjectEnablementFilter === true ||
-            (yield* threadManagement.isProviderInstanceEnabledForProject({
-              projectId: input.parent.thread.projectId,
-              instanceId: candidate.instanceId,
-            }));
+          const enabledForProject = yield* threadManagement.isProviderInstanceEnabledForProject({
+            projectId: input.parent.thread.projectId,
+            instanceId: candidate.instanceId,
+          });
           if (enabledForProject) {
             instanceId = candidate.instanceId;
             break;
@@ -1954,7 +1944,6 @@ const make = Effect.gen(function* () {
             "Delegated tasks require an active run owned by this MCP provider session.",
           );
         }
-        const providers = yield* loadProviders;
         const key = yield* requestKey(input.clientRequestId);
         const commandId = stableCommandId({
           scope,
@@ -1962,26 +1951,31 @@ const make = Effect.gen(function* () {
           operation: "delegate-task",
         });
         const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
+        // A receipt replay does not need a fresh provider snapshot; its original dispatch target
+        // is already recorded under this exact command id.
+        const providers = isRetryOfAcceptedDelegation ? [] : yield* loadProviders;
         const policy /* Fork add-on */ = yield* forkPolicy.prepare({
           parent, // Fork add-on
           request: input, // Fork add-on
+          providers,
           isRetry: isRetryOfAcceptedDelegation, // Fork add-on
         }); // Fork add-on: agent instructions.
-        const target = yield* resolveTargetRechecking({
-          parent,
-          target: policy.target, // Fork add-on: agent instructions.
-          providers,
-          skipProjectEnablementFilter: isRetryOfAcceptedDelegation,
-        });
-        const runtimeMode = yield* resolveRuntimeMode(
-          parent.thread.runtimeMode,
-          input.runtimeMode,
-          target,
-        );
-        const interactionMode = yield* resolveInteractionMode(
-          parent.thread.interactionMode,
-          input.interactionMode,
-        );
+        // The command id is derived from this caller, operation, and request key. Once its
+        // receipt exists, dispatch can only replay that receipt; resolving current provider and
+        // mode settings here could reject (or appear to redirect) an already accepted worker.
+        const target: ResolvedTarget = isRetryOfAcceptedDelegation
+          ? { modelSelection: parent.thread.modelSelection, supportedRuntimeModes: undefined }
+          : yield* resolveTargetRechecking({
+              parent,
+              target: policy.target, // Fork add-on: agent instructions.
+              providers,
+            });
+        const runtimeMode = isRetryOfAcceptedDelegation
+          ? parent.thread.runtimeMode
+          : yield* resolveRuntimeMode(parent.thread.runtimeMode, input.runtimeMode, target);
+        const interactionMode = isRetryOfAcceptedDelegation
+          ? parent.thread.interactionMode
+          : yield* resolveInteractionMode(parent.thread.interactionMode, input.interactionMode);
         let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
         if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
           const project = yield* requireProject(parent.thread.projectId);

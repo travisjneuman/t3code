@@ -65,13 +65,15 @@ export interface DesktopUpdateGateBridge {
   onStateChange: (listener: (state: DesktopUpdateGateState) => void) => () => void;
 }
 
-/** The host release the Mac app started for its installed build; see HostReleasePublisher. */
+/** Local host fleet build status reported by the source-built Mac app. */
 export const DesktopHostReleaseStatusSchema = Schema.Struct({
-  /** Succeeded also covers a commit that was already published. */
+  /** Succeeded means every configured host staged this commit locally. */
   state: Schema.Literals(["running", "succeeded", "failed"]),
-  /** The fork commit released; empty when the release could not start. */
+  /** The fork commit built; empty when the build could not start. */
   commit: Schema.String,
   startedAt: Schema.Number,
+  /** Available only after a successful build across all configured hosts. */
+  targetVersion: Schema.optionalKey(Schema.String),
   /** Why it failed: the tool's last output line, or why it never started. */
   detail: Schema.NullOr(Schema.String),
   logPath: Schema.String,
@@ -79,9 +81,9 @@ export const DesktopHostReleaseStatusSchema = Schema.Struct({
 export type DesktopHostReleaseStatus = typeof DesktopHostReleaseStatusSchema.Type;
 
 export interface DesktopHostReleaseBridge {
-  /** Null until this app has started a release. */
+  /** Null until this app has observed or started a local host build. */
   getStatus: () => Promise<DesktopHostReleaseStatus | null>;
-  /** Starts the release again for the installed build, unless one is running. */
+  /** Retries the existing failed local build at its recorded commit. */
   retry: () => Promise<DesktopHostReleaseStatus | null>;
   onStatusChange: (listener: (status: DesktopHostReleaseStatus) => void) => () => void;
 }
@@ -99,7 +101,7 @@ declare module "./ipc.ts" {
     remoteApps?: DesktopRemoteAppBridge;
     /** Present in desktop builds; holds update restarts while sessions are active. */
     updateGate?: DesktopUpdateGateBridge;
-    /** Present in local source builds on macOS; releases the build to the fork hosts. */
+    /** Present in local source builds on macOS; builds and stages fork hosts on explicit Update. */
     hostRelease?: DesktopHostReleaseBridge;
   }
 }

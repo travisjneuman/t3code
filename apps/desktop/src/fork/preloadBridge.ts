@@ -105,6 +105,8 @@ function isDesktopHostReleaseStatus(value: unknown): value is DesktopHostRelease
     (status.state === "running" || status.state === "succeeded" || status.state === "failed") &&
     typeof status.commit === "string" &&
     typeof status.startedAt === "number" &&
+    (status.targetVersion === undefined ||
+      (status.state === "succeeded" && typeof status.targetVersion === "string")) &&
     (status.detail === null || typeof status.detail === "string") &&
     typeof status.logPath === "string"
   );

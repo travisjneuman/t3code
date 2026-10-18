@@ -2,6 +2,11 @@
 
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity) and serves web, desktop, and mobile clients.
 
+For a task, load all applicable `AGENTS.md` instructions. Use the project
+overview and `Where code lives` section below, plus the README overview and
+Routes section, to select only docs relevant to the affected subsystem. Do not
+read full documentation files by default.
+
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
 
 ## What makes T3 Code special?
@@ -64,12 +69,12 @@ We need to be on the same page with terminology. When communicating, use this la
 
 ## Hit every surface
 
-The most common defect in this repo is a change that works on the path you tested and is missing everywhere else. Before calling frontend work done, walk this list and say which entries applied:
+Use this list to identify the surfaces a task may affect. Follow the relevant entries and call out directly affected surfaces; do not audit unrelated clients, providers, or workflows:
 
 - **Entry points.** A behavior reachable from the chat view is usually also reachable from Settings, the command palette, and a keybinding. Fixing one is not fixing the feature.
 - **Clients.** Web, desktop (wraps web, adds Electron shell/IPC), and mobile (React Native, separate navigation). Shared logic lives in `packages/client-runtime`
 - **Providers.** Codex, Claude, Cursor, Grok, OpenCode, and Antigravity each have an adapter. Provider-shaped features need a decision per adapter, even if the decision is "not supported here".
-- **Agents.** A capability a user can trigger is usually one an agent should reach through MCP tools, and scheduled tasks run the same paths. That only works when it is a service method, not handler code.
+- **Agents.** A capability a user can trigger may also need an agent-facing MCP path. Check this when the task concerns a user-triggered capability; scheduled tasks share those paths.
 - **Contracts.** Anything crossing the wire is typed in `packages/contracts`. Change the schema and the server, web, mobile, and desktop all follow.
 - **Reverse states.** If you added a way in, add the way out and the way to see it. Snooze needs unsnooze. Close needs reopen. A one-way door is a bug.
 - **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
@@ -86,25 +91,25 @@ The most common defect in this repo is a change that works on the path you teste
 
 ## Test data
 
-An empty database is a bad test. Seed your worktree's `.t3` with a copy of real data instead of pointing at live state:
+Do not create test databases, data copies, backups, or duplicate owner state unless the maintainer specifically requests them. If testing is requested, use synthetic data in the isolated local `.t3` state. Never read or copy `~/.t3/userdata`, secrets, settings, sessions, or scheduled work as test fixtures without specific authorization.
 
-- Run `vp run migrate-dev-db` with your dev server stopped. It rebuilds `<worktree>/.t3/userdata/statev2.sqlite` from a read-only snapshot of `~/.t3/userdata/statev2.sqlite`, the developer's real data. It keeps recent projects and their stopped threads, and drops scheduled tasks, pending work, and auth sessions, so your dev server never runs the developer's agents. Raise `--projects` and `--threads-per-project` for more data.
-- Refresh `statev2.sqlite`, not `state.sqlite`. The server copies the V1 `state.sqlite` only when `statev2.sqlite` is missing.
-- Bring `secrets` and `settings.json` only if the flow under test needs them.
-- Copy in, never symlink. Data flows one way: into your sandbox, never back out.
+## Verification
 
-## Verifying
-
-- Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
-- Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
-- **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
-- Backend behavior changes ship with focused tests for that behavior.
-- The server is event-sourced, and side effects run after the command commits. In tests, drain the effect worker (`OrchestrationEffectWorkerV2.drain`) or await the specific persisted event or `Deferred` that marks the milestone. Never wait on sleeps or polling. A test that needs a timeout to pass is wrong.
-- Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
+- Do not add or run tests, lint, typechecks, check scripts, validation builds, deployment rehearsals, or extra browser verification unless the maintainer specifically requests them.
+- T3 updates may create the installer's temporary database recovery copy during a version switch; remove it after success or rollback. This scoped permission does not authorize retained backups or previous builds.
+- For an authorized check, use the narrowest requested scope. Do not run repo-wide checks or add tests to a change unless they were specifically requested.
+- For requested browser review, use managed CamoFox Headless, the browser built into the agent's app, or computer use. Do not install or independently invoke Playwright or another browser-automation stack.
+- The server is event-sourced, and side effects run after the command commits. If a test is specifically requested, await the relevant persisted event or `Deferred` instead of relying on sleeps or polling.
 
 For authorized mobile verification, a missing or outdated native client is a build step, not a blocker. Run `node scripts/mobile-native-client.ts ensure <ios|android> <device-id>` on the simulator host before starting Metro. It checks the local Expo fingerprint and builds/installs when needed. See `test-t3-mobile` for the full workflow.
 
 ## Pull requests
+
+- Follow the repository owner's commit and publication rules. Where the owner
+  requires all pending changes in an owned repository to be committed, review
+  the full pending set, exclude credentials and runtime/build artifacts, then
+  stage it with `git add -A`; do not wait for unfinished work to become a
+  separate task. Never publish to a repository you do not own.
 
 - Never make a PR unless the developer explicitly asks you to do so.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
@@ -150,7 +155,7 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 ## Taste
 
 - Complexity belongs at the adapter boundary. Orchestration stays pure, UI stays dumb.
-- Client mutations use `createEnvironmentRpcCommand`. Add protected methods to `CLIENT_GUARDED_RPC_SCOPES` in contracts and use the command's `permissionAtom` for UI availability. Grants are checked at execution against the destination environment; the server remains authoritative. Keep raw RPC clients inside `rpc/`, and extend the permission behavior tests when adding a protected method.
+- Client mutations use `createEnvironmentRpcCommand`. Add protected methods to `CLIENT_GUARDED_RPC_SCOPES` in contracts and use the command's `permissionAtom` for UI availability. Grants are checked at execution against the destination environment; the server remains authoritative. Keep raw RPC clients inside `rpc/`; preserve the permission behavior contract when adding a protected method.
 - Server features are services; transports stay thin. A `ws.ts` RPC handler, HTTP route, or MCP tool decodes input, calls one service method, and maps errors. See [Effect services](docs/internals/effect-services.md).
 - `apps/web/src/components/ui` exports own their look. Pick a `variant` or `size`; do not restyle one with `className`. If none fits and the look is a generic concept, add a variant to the component; a look that belongs to one feature stays in that feature's own component, not in `components/ui`. Layout classes (width, flex, margin, position) belong on the parent. `shadcn/no-restyle` fails lint on violations. See [Web UI](docs/internals/web-ui.md).
 - Inferred types over annotations. `any` is the enemy.
@@ -160,5 +165,5 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 
 ## Additional tips
 
-- Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
+- Perform live browser or computer-use verification only when the maintainer explicitly requests it; use one of the approved browser methods above.
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.

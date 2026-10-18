@@ -40,8 +40,6 @@ const GITHUB_REMOTE_PREFIX =
   /^(?:(?:https?|ssh|git|git\+ssh):\/\/)?(?:[^@/]+@)?(?:www\.)?github\.com(?::\d+)?[/:]/iu;
 /** Every line the fork adds or changes in an upstream file carries this text. */
 export const FORK_MARKER = "Fork add-on";
-/** MAC_ONLY_PATHS in scripts/tjn-hosts.ts; the two must match or the Mac shows a false update. */
-const HOST_RELEASE_SKIPPED_PATHS = ["apps/desktop", "apps/mobile", "apps/marketing", "docs"];
 const MERGE_AGENT_RULES = [
   `${UPSTREAM_SYNC_PROMPT_PREFIX} (${UPSTREAM_REPOSITORY}) into this fork.`,
   "Keep upstream's text and code everywhere; never revert or reword an upstream change.",
@@ -68,7 +66,10 @@ const PACKAGE_VERSION_PATTERN = /("version":\s*")[^"]*(")/u;
 
 // scripts/build-desktop-artifact.ts records the checkout it built from here.
 const RecordedSourceRepository = Schema.fromJsonString(
-  Schema.Struct({ t3codeSourceRepositoryPath: Schema.optionalKey(Schema.String) }),
+  Schema.Struct({
+    t3codeSourceRepositoryPath: Schema.optionalKey(Schema.String),
+    t3codeCommitHash: Schema.optionalKey(Schema.String), // Fork add-on: detect unbuilt fork changes.
+  }),
 );
 const decodeRecordedSourceRepository = Schema.decodeUnknownEffect(RecordedSourceRepository);
 
@@ -100,6 +101,7 @@ export class LocalSourceUpdateError extends Schema.TaggedError<LocalSourceUpdate
 export interface LocalSourceUpdateInspection {
   readonly repositoryPath: string;
   readonly currentCommit: string;
+  readonly installedCommit?: string; // Fork add-on: nightly version alone does not identify a fork build.
   /** Newest upstream nightly tag reachable from upstream/main, e.g. `v0.0.46-nightly.20261003.2610`. */
   readonly upstreamTag: string;
   /** The tag without its leading `v`; used as the local build version. */
@@ -488,6 +490,13 @@ export const make = Effect.gen(function* () {
   const supported = environment.platform === "darwin" && environment.isPackaged;
   const repositoryPath = supported ? yield* resolveRepositoryPath : undefined;
   const enabled = repositoryPath !== undefined && (yield* isGitWorkTree(repositoryPath));
+  const installedCommit = yield* fileSystem
+    .readFileString(environment.path.join(environment.appPath, "package.json"))
+    .pipe(
+      Effect.flatMap(decodeRecordedSourceRepository),
+      Effect.map((value) => value.t3codeCommitHash?.trim().toLowerCase()),
+      Effect.orElseSucceed(() => undefined),
+    );
 
   const makeError = (
     operation: LocalSourceUpdateOperation,
@@ -773,6 +782,7 @@ export const make = Effect.gen(function* () {
     return {
       repositoryPath: repo,
       currentCommit: currentCommit.stdout.trim(),
+      ...(installedCommit ? { installedCommit } : {}), // Fork add-on: offer locally changed source too.
       upstreamTag,
       upstreamVersion: nightlyVersionFromTag(upstreamTag),
       upstreamCommit: upstreamCommit.stdout.trim(),
@@ -1319,7 +1329,10 @@ export const make = Effect.gen(function* () {
       }
       // Sync already merged this nightly; it still needs building when the
       // running app predates it.
-      if (environment.appVersion === inspection.upstreamVersion) {
+      if (
+        environment.appVersion === inspection.upstreamVersion &&
+        inspection.currentCommit === inspection.installedCommit
+      ) {
         return yield* makeError(
           "merge",
           `this build already runs upstream nightly ${inspection.upstreamTag}`,
@@ -1394,8 +1407,12 @@ export const make = Effect.gen(function* () {
           repo,
         );
       }
+      // Fork add-on: keep build scratch with the pending app, outside system temporary storage.
+      const scratchDir = environment.path.join(outputDir, "scratch");
+      yield* fileSystem.makeDirectory(scratchDir, { recursive: true });
+      const scratchEnv = { TMPDIR: scratchDir, TMP: scratchDir, TEMP: scratchDir };
       // Upstream nightlies change dependencies, so install before building.
-      yield* runChecked({ operation: "build", command: "vp", args: ["i"], cwd: repo });
+      yield* runChecked({ operation: "build", command: "vp", args: ["i"], cwd: repo, env: scratchEnv });
       const buildArgs = [
         "run",
         "dist:desktop:artifact",
@@ -1410,27 +1427,16 @@ export const make = Effect.gen(function* () {
         "--output-dir",
         outputDir,
       ];
-      // The bundled server carries the fork build hosts compare against, as host archives do
-      // (scripts/tjn-build-host-archive.ts); unstamped, every client offers this Mac an update.
-      // `tjn-hosts release` skips commits that change only HOST_RELEASE_SKIPPED_PATHS, so the
-      // release, and this stamp, stay on the newest commit that changed anything else.
+      // Fork add-on: every machine builds the same pushed commit for this explicit Update.
       const forkBuild = (yield* runChecked({
         operation: "build",
         command: "git",
-        args: [
-          "rev-list",
-          "-1",
-          "--first-parent",
-          "HEAD",
-          "--",
-          ".",
-          ...HOST_RELEASE_SKIPPED_PATHS.map((skipped) => `:(exclude)${skipped}`),
-        ],
+        args: ["rev-parse", "HEAD"],
         cwd: repo,
       })).stdout
         .trim()
         .slice(0, 12);
-      const buildEnv = { T3CODE_FORK_BUILD: forkBuild };
+      const buildEnv = { ...scratchEnv, T3CODE_FORK_BUILD: forkBuild };
       yield* Effect.gen(function* () {
         yield* stampReleaseVersion(repo, inspection.upstreamVersion);
         const firstBuild = yield* runCommand({

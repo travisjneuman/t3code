@@ -1,8 +1,7 @@
 /**
- * The Mac app that publishes fork host releases (see apps/desktop HostReleasePublisher) updates
- * each fork host to a newly published release once, right away rather than through the
- * maintenance queue: the fleet follows the Mac's build without waiting for idle hosts. It reports
- * a failed publish with Retry. Other clients render nothing. Fork add-on: host releases.
+ * The source-built Mac app queues idle boot-service hosts to update to a locally staged target.
+ * A failed build offers Retry for the same requested commit. Other clients render nothing.
+ * Fork add-on: local host builds.
  */
 import { useAtomValue } from "@effect/atom-react";
 import type { DesktopHostReleaseBridge, DesktopHostReleaseStatus } from "@t3tools/contracts";
@@ -12,20 +11,19 @@ import { canUpdateServer } from "~/components/ServerUpdateAction";
 import { toastManager } from "~/components/ui/toast";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
-import { runAndReport } from "~/maintenance-queue/runner";
+import { enqueueUpdate, type QueuedUpdate } from "~/maintenance-queue/queueStore";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { useEnvironments } from "~/state/environments";
 import { environmentUpdateStatesAtom } from "~/state/server";
 import { environmentSessionStatesAtom } from "~/state/session";
 import {
   collectHostUpdateTargets,
-  useNewestHostRelease,
   useRefreshHostUpdateTarget,
 } from "./hostRelease";
 
-// Which release each host was updated to, so a failed update is not run again.
+// Which staged target each host was queued for, so a failed or cancelled update is not queued again.
 const QUEUED_KEY = "t3code:host-release-auto-update:v1";
-// Which failed publish was already reported, so a relaunch does not report it again.
+// Which failed build was already reported, so a relaunch does not report it again.
 const NOTIFIED_KEY = "t3code:host-release-notified:v1";
 
 function readJson(key: string): unknown {
@@ -60,8 +58,8 @@ function reportFailure(bridge: DesktopHostReleaseBridge, status: DesktopHostRele
   writeJson(NOTIFIED_KEY, runKey);
   const id = toastManager.add({
     type: "error",
-    title: "Fork hosts were not updated",
-    description: `${status.detail ?? "The host release failed."} Log: ${status.logPath}`,
+    title: "Local fork hosts were not staged",
+    description: `${status.detail ?? "The local host build failed."} Log: ${status.logPath}`,
     timeout: 0,
     actionProps: {
       children: "Retry",
@@ -78,14 +76,11 @@ function usePublisherStatus(bridge: DesktopHostReleaseBridge | undefined) {
   const refreshTarget = useRefreshHostUpdateTarget();
   useEffect(() => {
     if (bridge === undefined) return;
-    let previous: DesktopHostReleaseStatus["state"] | null = null;
     const apply = (next: DesktopHostReleaseStatus | null) => {
       setStatus(next);
+      refreshTarget();
       if (next === null) return;
       if (next.state === "failed") reportFailure(bridge, next);
-      // The release check runs once at startup, before a release published since then.
-      if (next.state === "succeeded" && previous === "running") refreshTarget();
-      previous = next.state;
     };
     const unsubscribe = bridge.onStatusChange(apply);
     void bridge.getStatus().then(apply, () => undefined);
@@ -94,9 +89,7 @@ function usePublisherStatus(bridge: DesktopHostReleaseBridge | undefined) {
   return status;
 }
 
-function useAutoUpdateHosts(enabled: boolean) {
-  // The release can be newer than this app: it is published when the fork is pushed.
-  const target = useNewestHostRelease();
+function useAutoUpdateHosts(target: string | null) {
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));
@@ -115,11 +108,11 @@ function useAutoUpdateHosts(enabled: boolean) {
   }));
   // A desktop-managed host would relaunch someone's app, and respawn hosts install from npm.
   const due =
-    enabled && target !== null
-      ? collectHostUpdateTargets(machines, target).targets.filter(
+    target === null
+      ? []
+      : collectHostUpdateTargets(machines, target).targets.filter(
           (server) => server.selfUpdate === "boot-service",
-        )
-      : [];
+        );
   const dueKey = due.map((server) => `${server.environmentId}=${server.targetVersion}`).join(",");
 
   useEffect(() => {
@@ -128,7 +121,7 @@ function useAutoUpdateHosts(enabled: boolean) {
     let changed = false;
     for (const server of due) {
       if (queued[server.environmentId] === server.targetVersion) continue;
-      void runAndReport({
+      const job: QueuedUpdate = {
         kind: "server",
         environmentId: server.environmentId,
         input: {
@@ -139,7 +132,8 @@ function useAutoUpdateHosts(enabled: boolean) {
         },
         queuedAt: Date.now(),
         notifiedAt: null,
-      });
+      };
+      enqueueUpdate(job);
       queued[server.environmentId] = server.targetVersion;
       changed = true;
     }
@@ -151,7 +145,13 @@ function useAutoUpdateHosts(enabled: boolean) {
 export function HostReleaseAutoUpdate() {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.hostRelease;
   const status = usePublisherStatus(bridge);
-  // Only the app that publishes releases updates the hosts, so two clients never race.
-  useAutoUpdateHosts(status !== null);
+  // Only a successful local build supplies a target; generic web clients cannot queue archives.
+  useAutoUpdateHosts(
+    status?.state === "succeeded" &&
+      typeof status.targetVersion === "string" &&
+      status.targetVersion.trim() !== ""
+      ? status.targetVersion
+      : null,
+  );
   return null;
 }

@@ -2420,6 +2420,7 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
     }
 
     const tmpRoot = yield* fs.makeTempDirectoryScoped({
+      directory: stageResourcesDir, // Fork add-on: icon packaging stays inside the build stage.
       prefix: "t3code-icon-build-",
     });
 
@@ -3504,7 +3505,9 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const iconAssets = resolveDesktopBuildIconAssets(appVersion);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
+  yield* fs.makeDirectory(options.outputDir, { recursive: true }); // Fork add-on: no builds in OS temp.
   const stageRoot = yield* mkdir({
+    directory: options.outputDir, // Fork add-on: scoped staging is cleaned after packaging.
     prefix: `t3code-desktop-${options.platform}-stage-`,
   });
 

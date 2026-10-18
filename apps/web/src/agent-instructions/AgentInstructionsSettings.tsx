@@ -154,6 +154,7 @@ export function AgentInstructionsSettingsSection() {
   const mixedReadOnly = useScopedSettingsMixed(["agentReadOnlyReviewers"]);
   const mixedDepth = useScopedSettingsMixed(["agentMaxDelegationDepth"]);
   const mixedGit = useScopedSettingsMixed(["agentOrchestratorOwnsGit"]);
+  const mixedFixedWorkerTargets = useScopedSettingsMixed(["agentWorkerModelSelectionFixed"]);
   const mixedVerification = useScopedSettingsMixed(["agentVerification"]);
   const mixedPushPolicy = useScopedSettingsMixed(["agentPushPolicy"]);
   const mixedInstructions = useScopedSettingsMixed(["agentInstructions"]);
@@ -226,6 +227,33 @@ export function AgentInstructionsSettingsSection() {
                   settings.defaultModelSelection,
                 )}
                 {...modelControl}
+              />
+            }
+          />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentWorkerModelSelectionFixed"]}
+            {...searchableSetting("agent-fixed-worker-targets")}
+            description="When on, T3 uses the configured role model, falling back to Worker model, and rejects different targets. A role without a configured target is refused. This does not change the main model or provider-native subagents."
+            resetAction={
+              settings.agentWorkerModelSelectionFixed ? (
+                <SettingResetButton
+                  label="fixed worker targets"
+                  onClick={() => updateSettings({ agentWorkerModelSelectionFixed: false })}
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                mixed={mixedFixedWorkerTargets}
+                checked={
+                  mixedFixedWorkerTargets ? false : settings.agentWorkerModelSelectionFixed
+                }
+                onCheckedChange={(checked) =>
+                  updateSettings({ agentWorkerModelSelectionFixed: Boolean(checked) })
+                }
+                aria-label="Fixed worker targets"
               />
             }
           />

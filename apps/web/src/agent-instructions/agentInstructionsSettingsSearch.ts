@@ -28,6 +28,13 @@ export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["delegate_task subagent child worker provider model target pi codex"],
   },
   {
+    id: "agent-fixed-worker-targets",
+    title: "Fixed worker targets",
+    to: "/settings/general",
+    scope: "project-defaults",
+    searchTerms: ["delegate_task lock fixed provider model options worker coworker target"],
+  },
+  {
     id: "agent-review-worker-model",
     title: "Review worker model",
     to: "/settings/general",

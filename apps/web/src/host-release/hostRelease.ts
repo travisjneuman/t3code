@@ -1,17 +1,12 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
-import type { ExecutionEnvironmentDescriptor, ServerConfig } from "@t3tools/contracts";
-import {
-  cliReleaseChannelOf,
-  cliReleaseIndexPageUrl,
-  newestCliReleaseVersion,
-} from "@t3tools/shared/cliRelease";
-import { compareSemverVersions } from "@t3tools/shared/semver";
+import type {
+  DesktopHostReleaseStatus,
+  ExecutionEnvironmentDescriptor,
+  ServerConfig,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
-import { FetchHttpClient, HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import { AsyncResult, Atom } from "effect/reactivity";
 
-import { APP_VERSION } from "~/branding";
 import type { ServerUpdateOutcome } from "~/components/ServerUpdateAction";
 import {
   collectServerUpdateTargets,
@@ -19,166 +14,63 @@ import {
 } from "~/components/sidebar/updateEverything.logic";
 import { resolveRuntimeVersionMismatch, type VersionMismatch } from "~/versionSkew";
 
-// Remote servers update to the newest published fork release, not to this client's version:
-// the Mac builds from source at every upstream nightly, but hosts can only install a version
-// that has a release archive. A host at or past that release is current. The target is the
-// runtime id `<nightly>+<fork build>` from the release receipt, so a rebuild at the same
-// nightly is still an update.
-
-const ReleaseIndex = Schema.Array(
-  Schema.Struct({
-    tag_name: Schema.String,
-    draft: Schema.optionalKey(Schema.Boolean),
-    body: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  }),
-);
-
-type PublishedRelease = (typeof ReleaseIndex.Type)[number];
-const decodeReleaseIndex = Schema.decodeUnknownEffect(ReleaseIndex);
-
-const RELEASE_INDEX_PAGE_SIZE = 100;
-const RELEASE_INDEX_MAX_PAGES = 3;
-
-function releaseTagVersion(tag: string): string | undefined {
-  return /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(tag)?.[1];
-}
-
-/** `tjn-hosts release` writes the fork commit into this receipt; older releases have none. */
-export function hostReleaseRuntimeId(version: string, body: string | null | undefined): string {
-  const marker = /<!-- t3-host-release (\{.*\}) -->/.exec(body ?? "")?.[1];
-  if (marker === undefined) return version;
-  let receipt: unknown;
-  try {
-    receipt = JSON.parse(marker);
-  } catch {
-    return version;
-  }
-  const forkSha =
-    typeof receipt === "object" && receipt !== null && "forkSha" in receipt
-      ? receipt.forkSha
-      : undefined;
-  return typeof forkSha === "string" && /^[a-f0-9]{40}$/.test(forkSha)
-    ? `${version}+${forkSha.slice(0, 12)}`
-    : version;
-}
-
-/**
- * API order is not version order, and a release newer than this client is not offered unless
- * `newerThanClient`: the publishing Mac app releases each fork push before it updates itself.
- */
-export function newestPublishedHostRelease(
-  releases: ReadonlyArray<PublishedRelease>,
-  clientVersion: string,
-  newerThanClient = false,
-): string | undefined {
-  const eligible = releases
-    .flatMap((release) => {
-      const version = releaseTagVersion(release.tag_name);
-      return version !== undefined &&
-        (newerThanClient || compareSemverVersions(version, clientVersion) <= 0)
-        ? [{ release, version }]
-        : [];
-    })
-    .toSorted((a, b) => compareSemverVersions(b.version, a.version))
-    .map(({ release }) => release);
-  const version = newestCliReleaseVersion(eligible, cliReleaseChannelOf(clientVersion));
-  if (version === undefined) return undefined;
-  const release = eligible.find((item) => releaseTagVersion(item.tag_name) === version);
-  return hostReleaseRuntimeId(version, release?.body);
-}
-
-/** The atom never fails, so a failed check can say why instead of looking like "no release". */
-type HostReleaseLookup =
-  | {
-      readonly _tag: "found";
-      /** Null when every release is newer than this client. */
-      readonly version: string | null;
-      readonly newest: string;
-    }
-  | { readonly _tag: "none" }
+// Fork hosts update only to a version the explicit desktop Update flow has staged on every
+// configured host. Generic web clients have no local build bridge and must not offer archives.
+type HostBuildLookup =
+  | { readonly _tag: "found"; readonly targetVersion: string }
+  | { readonly _tag: "building" }
+  | { readonly _tag: "local-build-required" }
   | { readonly _tag: "failed"; readonly reason: string };
 
-function formatRateLimitReset(epochSeconds: string | undefined): string {
-  const seconds = Number(epochSeconds);
-  if (!Number.isFinite(seconds) || seconds <= 0) return "";
-  const time = new Date(seconds * 1000).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `, resets ${time}`;
-}
-
-/** GitHub exposes its rate-limit headers to CORS reads, so the reason costs no extra call. */
-export function describeHostReleaseCheckFailure(error: unknown, online: boolean): string {
-  if (!online) return "offline";
-  if (!HttpClientError.isHttpClientError(error)) return "unexpected response from GitHub";
-  const reason = error.reason;
-  if (reason._tag === "StatusCodeError") {
-    const { status, headers } = reason.response;
-    if (status === 429 || (status === 403 && headers["x-ratelimit-remaining"] === "0")) {
-      return `GitHub rate limit${formatRateLimitReset(headers["x-ratelimit-reset"])}`;
-    }
-    return `GitHub returned ${status}`;
+function hostBuildLookup(status: DesktopHostReleaseStatus | null): HostBuildLookup {
+  if (status === null) return { _tag: "local-build-required" };
+  if (status.state === "running") return { _tag: "building" };
+  if (status.state === "failed") {
+    return { _tag: "failed", reason: status.detail ?? "local host build failed" };
   }
-  return reason._tag === "TransportError"
-    ? "GitHub unreachable"
-    : "unexpected response from GitHub";
+  return status.targetVersion === undefined || status.targetVersion.trim() === ""
+    ? { _tag: "local-build-required" }
+    : { _tag: "found", targetVersion: status.targetVersion };
 }
-
-const isOnline = () => typeof navigator === "undefined" || navigator.onLine !== false;
 
 const hostReleaseAtom = Atom.make(
-  Effect.gen(function* () {
-    const releases: Array<PublishedRelease> = [];
-    for (let page = 1; page <= RELEASE_INDEX_MAX_PAGES; page += 1) {
-      const response = yield* HttpClient.get(cliReleaseIndexPageUrl(page));
-      const body = yield* HttpClientResponse.filterStatusOk(response).pipe(
-        Effect.flatMap((ok) => ok.json),
-        Effect.flatMap(decodeReleaseIndex),
-      );
-      releases.push(...body);
-      if (body.length < RELEASE_INDEX_PAGE_SIZE) break;
-    }
-    const newest = newestPublishedHostRelease(releases, APP_VERSION, true);
-    const version = newestPublishedHostRelease(releases, APP_VERSION) ?? null;
-    const lookup: HostReleaseLookup =
-      newest === undefined ? { _tag: "none" } : { _tag: "found", version, newest };
-    return lookup;
+  Effect.tryPromise({
+    try: async (): Promise<HostBuildLookup> => {
+      const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.hostRelease;
+      return bridge === undefined
+        ? { _tag: "local-build-required" }
+        : hostBuildLookup(await bridge.getStatus());
+    },
+    catch: (error) => error,
   }).pipe(
-    Effect.catch((error): Effect.Effect<HostReleaseLookup> =>
+    Effect.catch((error): Effect.Effect<HostBuildLookup> =>
       Effect.succeed({
         _tag: "failed",
-        reason: describeHostReleaseCheckFailure(error, isOnline()),
+        reason: error instanceof Error ? error.message : "desktop host build status unavailable",
       }),
     ),
-    // Tracing headers would make the browser send a CORS preflight.
-    Effect.provideService(HttpClient.TracerPropagationEnabled, false),
-    Effect.provide(FetchHttpClient.layer),
   ),
-).pipe(Atom.keepAlive, Atom.withLabel("fork-host-release"));
+).pipe(Atom.keepAlive, Atom.withLabel("local-fork-host-build"));
 
 /**
- * The version remote servers should run, or null while it is unknown. Unknown offers no
- * update at all, so a version without a release archive is never offered.
+ * The locally staged host version, or null until an explicit desktop Update has staged it.
  */
 export function useHostUpdateTarget(): string | null {
   const result = useAtomValue(hostReleaseAtom);
-  // A failed check settles as a value that replaces an earlier find, which may name a release
-  // since deleted.
   return AsyncResult.isSuccess(result) && result.value._tag === "found"
-    ? result.value.version
+    ? result.value.targetVersion
     : null;
 }
 
-/** The newest fork host release, even one newer than this client, for the publisher's queue. */
+/** The locally staged version, including one newer than this app, for the host update queue. */
 export function useNewestHostRelease(): string | null {
   const result = useAtomValue(hostReleaseAtom);
   return AsyncResult.isSuccess(result) && result.value._tag === "found"
-    ? result.value.newest
+    ? result.value.targetVersion
     : null;
 }
 
-/** Unauthenticated GitHub API calls are limited per IP, so this runs on app start and on demand. */
+/** Re-reads the local desktop bridge status on app events and on demand. */
 export function useRefreshHostUpdateTarget(): () => void {
   return useAtomRefresh(hostReleaseAtom);
 }
@@ -186,38 +78,47 @@ export function useRefreshHostUpdateTarget(): () => void {
 export type HostReleaseCheck =
   | { readonly status: "checking" }
   | { readonly status: "known"; readonly target: string | null }
+  | { readonly status: "building" }
+  | { readonly status: "local-build-required" }
   | { readonly status: "failed"; readonly reason: string };
 
 const CHECKING: HostReleaseCheck = { status: "checking" };
 
 export function resolveHostReleaseCheck(
-  result: AsyncResult.AsyncResult<HostReleaseLookup, unknown>,
+  result: AsyncResult.AsyncResult<HostBuildLookup, unknown>,
 ): HostReleaseCheck {
-  // A refresh keeps the previous value while it runs; showing it would make Retry look idle.
+  // A refresh keeps the previous value while it runs, so wait for it to settle.
   if (AsyncResult.isInitial(result) || result.waiting) return CHECKING;
   if (!AsyncResult.isSuccess(result)) {
-    return { status: "failed", reason: "unexpected response from GitHub" };
+    return { status: "failed", reason: "desktop host build status unavailable" };
   }
   const lookup = result.value;
   if (lookup._tag === "failed") return { status: "failed", reason: lookup.reason };
-  return { status: "known", target: lookup._tag === "found" ? lookup.version : null };
+  if (lookup._tag === "building") return { status: "building" };
+  if (lookup._tag === "local-build-required") return { status: "local-build-required" };
+  return { status: "known", target: lookup.targetVersion };
 }
 
 export function useHostReleaseCheck(): HostReleaseCheck {
   return resolveHostReleaseCheck(useAtomValue(hostReleaseAtom));
 }
 
-const checkFailure = (reason: string) => `couldn't check fork releases (${reason})`;
+const checkFailure = (reason: string) => `couldn't read the local host build status (${reason})`;
 
-/** The muted line Connections shows above its hosts, or null unless the check failed. */
+/** The muted line Connections shows above its hosts, including when a local build is required. */
 export function hostReleaseCheckFailureNotice(check: HostReleaseCheck): string | null {
-  return check.status === "failed" ? `Couldn't check fork releases (${check.reason})` : null;
+  if (check.status === "local-build-required") {
+    return "Local host build required. Press Update in the source desktop app to stage fork hosts.";
+  }
+  if (check.status === "building") return "Building and staging the local fork version…";
+  return check.status === "failed" ? `Local host build failed (${check.reason})` : null;
 }
 
 export type HostReleaseState =
   | { readonly status: "checking" }
   | { readonly status: "current" }
-  | { readonly status: "no-release" }
+  | { readonly status: "building" }
+  | { readonly status: "local-build-required" }
   | { readonly status: "update"; readonly version: string }
   | { readonly status: "failed"; readonly reason: string };
 
@@ -226,7 +127,7 @@ export function resolveHostReleaseState(
   check: HostReleaseCheck,
 ): HostReleaseState {
   if (check.status !== "known") return check;
-  if (check.target === null) return { status: "no-release" };
+  if (check.target === null) return { status: "local-build-required" };
   return resolveRuntimeVersionMismatch(environment, check.target) === null
     ? { status: "current" }
     : { status: "update", version: check.target };
@@ -235,15 +136,17 @@ export function resolveHostReleaseState(
 export function describeHostReleaseState(state: HostReleaseState): string {
   switch (state.status) {
     case "checking":
-      return "Checking fork releases…";
+      return "Checking local host build…";
     case "current":
       return "Up to date";
-    case "no-release":
-      return "No fork release published yet";
+    case "building":
+      return "Building and staging the local fork version…";
+    case "local-build-required":
+      return "Local host build required. Press Update in the source desktop app.";
     case "update":
       return `Update to ${describeRuntimeVersion(state.version)}`;
     case "failed":
-      return `Couldn't check fork releases (${state.reason})`;
+      return `Local host build failed (${state.reason})`;
   }
 }
 
@@ -269,8 +172,8 @@ export function useHostVersionMismatch(
 }
 
 /**
- * Without a known release, a failed check reports every remote host it could not compare, so
- * Update everything says it couldn't check instead of looking like nothing needs updating.
+ * Without a staged target, a failed local-status read reports every remote host it could not
+ * compare, so Update everything doesn't look like nothing needs updating.
  */
 export function collectHostUpdateTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,

@@ -51,8 +51,8 @@ async function removeTree(dir: string, sentinel?: string): Promise<boolean> {
 }
 
 /**
- * Keeps the active runtime and any runtime installed after it, which a staged host release
- * is waiting to update to. Files Windows still holds open stay until the next start.
+ * Keeps the active runtime and newer pending candidates, but removes a failed trial after
+ * rollback. Files Windows still holds open are reported and retried at the next start.
  */
 async function pruneRuntimes(runtimeDir: string, version: string) {
   const state = parseServiceState(
@@ -73,7 +73,11 @@ async function pruneRuntimes(runtimeDir: string, version: string) {
     const installedAt =
       (sentinel === undefined ? undefined : await mtime(sentinel)) ?? (await mtime(dir));
     if (installedAt === undefined) continue;
-    const stale = staging ? now - installedAt > STALE_STAGING_MS : installedAt < activeInstalledAt;
+    const failedTarget =
+      state.update !== undefined &&
+      state.update.status !== "committed" &&
+      entry.name === state.update.targetVersion;
+    const stale = failedTarget || (staging ? now - installedAt > STALE_STAGING_MS : installedAt < activeInstalledAt);
     if (!stale) continue;
     ((await removeTree(dir, sentinel)) ? removed : kept).push(entry.name);
   }
@@ -101,7 +105,9 @@ export const refreshLauncherAndPruneRuntimes = (managed: boolean, baseDir: strin
               Effect.flatMap((result) =>
                 result === undefined || result.removed.length + result.kept.length === 0
                   ? Effect.void
-                  : Effect.logInfo("removed runtimes older than the active one", result),
+                  : result.kept.length > 0
+                    ? Effect.logWarning("runtime cleanup incomplete; retained paths need attention", result)
+                    : Effect.logInfo("removed retired runtimes and recovery files", result),
               ),
             )
           : // A launcher that kept old code after its restart may run from an old version.

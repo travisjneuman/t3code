@@ -57,12 +57,12 @@ export function useUpdateEverything(localUpdateVersion: string | null) {
     canMaintain: canUpdateServer(sessionStates[index]!),
     updateState: updateStates[index]!,
   }));
-  // Fork add-on: host releases: remote servers move to the newest published fork release.
+  // Fork add-on: host builds: remote fork hosts move to the latest successfully staged target.
   const hostTargets = collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck); // Fork add-on
   const { targets: behindServers, skipped: unreachable } = hostTargets; // Fork add-on
   // A desktop-managed server installs from its own app's update feed, so only
   // servers that download t3 from npm wait for npm to publish the version.
-  // Fork add-on: host releases: a boot-service server downloads the fork's release archive.
+  // Fork add-on: host builds: a boot-service server installs its locally staged fork target.
   const needsNpm = behindServers.some((server) => server.selfUpdate === "respawn"); // Fork add-on
   const published = useNpmReleasePublished(needsNpm ? targetVersion : null);
   const servers = published

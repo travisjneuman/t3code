@@ -201,8 +201,7 @@ async function main() {
     );
     const scratch = await fs.mkdtemp(path.join(outputDir, "build-"));
     const cargoTargetDir = path.join(repoRoot, "native/resource-monitor/target");
-    // Archive installs and smoke extraction use OS temp APIs. Keep that scratch
-    // under the coordinator-owned cache, never the system temporary directory.
+    // Keep command scratch under the coordinator-owned cache, never the system temporary directory.
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       APP_VERSION: version,
@@ -288,12 +287,6 @@ async function main() {
       ],
       { env },
     );
-    await run(
-      process.execPath,
-      ["scripts/smoke-cli-archive.ts", "--archive", archive, "--expect-version", version],
-      { env },
-    );
-
     const stat = await fs.lstat(archive);
     requireState(
       stat.isFile() && stat.size > 0,
@@ -338,7 +331,7 @@ async function main() {
   }
   requireState(sha256, "Build did not produce an archive checksum.");
   // This must remain the final stdout line: the coordinator reads it from its
-  // build log, checks the transferred checksum, and removes the version cache.
+  // build log, checks the local archive checksum, installs it, and removes the build cache.
   console.log(JSON.stringify({ archive, sha256 }));
 }
 

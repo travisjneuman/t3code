@@ -35,7 +35,7 @@ export function hostRowSubtitle(
 }
 
 const UPDATES_FROM: Record<HostReleaseSource, string> = {
-  fork: "Updates from fork releases",
+  fork: "Updates from locally staged fork builds",
   upstream: "Updates from upstream releases",
   custom: "Updates from a custom mirror (T3CODE_RELEASE_BASE_URL)",
   unknown: "Update source not reported (older server)",

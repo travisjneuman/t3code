@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// Fork add-on: deliberate Mac-owned host releases, without hosted build automation.
+// Fork add-on: explicit Mac-owned orchestration for host-local builds and maintenance.
 import * as fs from "node:fs/promises";
 import { homedir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   compareVersions,
-  deliveryDir,
-  hashFile,
   isUpdateTarget,
   powershellArgs,
   psQuote,
@@ -16,8 +14,6 @@ import {
   releaseVersion,
   requireState,
   run,
-  sftp,
-  sftpPath,
   shellQuote,
   version,
   type Host,
@@ -30,28 +26,28 @@ import { beginRun, heldLocks, runSummary, type Journal, type Step } from "./lib/
 const REPOSITORY = "travisjneuman/t3code";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CONFIG = path.join(homedir(), ".config", "t3code-fork", "hosts.json");
-const CACHE = path.join(homedir(), "Library", "Caches", "t3code-fork-release");
-const PLATFORMS = ["win32-x64", "linux-x64"] as const;
-const USAGE = `Usage: node scripts/tjn-hosts.ts release [--build-host name] [--expect-sha sha] [--dry-run]
+const FLEET_RESULT_FILE = path.join(
+  homedir(),
+  "Library",
+  "Application Support",
+  "t3code-fork",
+  "host-fleet-build-result.json",
+);
+const USAGE = `Usage: node scripts/tjn-hosts.ts build-local --expect-sha <full-sha> [--result-file <path>]
        node scripts/tjn-hosts.ts status
-       node scripts/tjn-hosts.ts stage <host> [--dry-run]
        node scripts/tjn-hosts.ts prune <host>|--all --confirm-idle [--dry-run]
        node scripts/tjn-hosts.ts rollback <host> [--to version] --confirm-idle [--dry-run]
 Exit codes: 0 success; 1 command/IO failure; 2 usage; 3 preflight refusal or locked host;
-            4 maintenance/publication may be partial (inspect before continuing).
---dry-run runs only the read-only preflight and prints every step per host; it changes
-nothing and does not need --confirm-idle. Changing runs lock each host they cover and keep a
-phase journal under ~/Library/Application Support/t3code-fork/host-runs.
-Unreachable hosts are reported and skipped during release preflight only.
-A host runs \`<nightly>+<fork build>\`, so a new fork commit at the same upstream nightly is
-released too; it replaces that nightly's release. Releasing a commit already published, or one
-that changes only apps/desktop, apps/mobile, apps/marketing or docs since it, is a no-op.
---expect-sha refuses unless the checkout is at that commit (the Mac app passes the commit
-it pushed). Only the host tool files must be clean; the rest of the checkout may hold other work.
-A host with stageFrom gets each release from that host over SSH after publication; stage
-repeats that for the published release. Its in-app Update then installs without downloading.
-Rollback requiring a database restore is refused before stopping the service.
-After pruning a migrated release, fix forward; this tool never writes live userdata.`;
+            4 fleet build may be partial (inspect host output before continuing).
+For prune/rollback, --dry-run prints the read-only preflight and steps; it changes nothing and
+does not need --confirm-idle. Changing runs lock each host they cover and keep a phase journal under
+~/Library/Application Support/t3code-fork/host-runs.
+Every configured host builds its own server from the exact pushed SHA and stages it locally.
+No GitHub release, tag, archive transfer or service restart is part of this command. The existing
+idle-aware Update flow activates the staged version later. Offline or failed hosts are listed and
+must succeed on a later user-triggered Update. Rollback requiring a database restore is refused
+before stopping the service. After pruning a migrated release, fix forward; this tool never writes
+live userdata.`;
 
 interface Release {
   tag_name: string;
@@ -67,7 +63,7 @@ interface ReleaseReceipt {
   migrations: Record<string, boolean>;
 }
 
-type Platform = (typeof PLATFORMS)[number];
+type Platform = "win32-x64" | "linux-x64";
 const hostPath = (host: Host) => (host.os === "win32" ? path.win32 : path.posix);
 const archiveName = (v: string, platform: Platform) =>
   `t3-${releaseVersion(v)}-${platform}.${platform === "win32-x64" ? "zip" : "tar.gz"}`;
@@ -95,8 +91,8 @@ function text(value: unknown): value is string {
 async function config(): Promise<HostConfig> {
   const value: unknown = JSON.parse(await fs.readFile(CONFIG, "utf8"));
   requireState(
-    record(value) && value.version === 1 && record(value.hosts) && record(value.buildHosts),
-    "Unsupported hosts.json shape; expected version 1, hosts, and buildHosts.",
+    record(value) && value.version === 1 && record(value.hosts),
+    "Unsupported hosts.json shape; expected version 1 and hosts.",
   );
   const hosts = value.hosts;
   requireState(Object.keys(hosts).length > 0, "No hosts configured.");
@@ -167,44 +163,12 @@ async function config(): Promise<HostConfig> {
       "Service file cannot be inside live userdata.",
     );
   }
-  for (const [name, raw] of Object.entries(hosts)) {
-    if (!record(raw) || raw.stageFrom === undefined) {
-      continue;
-    }
-    const source =
-      typeof raw.stageFrom === "string" && Object.hasOwn(hosts, raw.stageFrom)
-        ? hosts[raw.stageFrom]
-        : undefined;
-    requireState(
-      raw.stageFrom !== name &&
-        record(source) &&
-        source.os === raw.os &&
-        source.stageFrom === undefined,
-      "stageFrom must name another configured host with the same OS that downloads its own releases.",
-    );
-  }
-  for (const platform of PLATFORMS) {
-    const names = value.buildHosts[platform];
-    requireState(
-      Array.isArray(names) &&
-        names.length > 0 &&
-        new Set(names).size === names.length &&
-        names.every(
-          (name) =>
-            typeof name === "string" &&
-            Object.hasOwn(hosts, name) &&
-            record(hosts[name]) &&
-            `${hosts[name].os}-x64` === platform,
-        ),
-      "Each buildHosts platform must list distinct matching configured hosts.",
-    );
-  }
   return value as unknown as HostConfig;
 }
 
 const git = (...args: string[]) => run("git", args, { cwd: ROOT });
 
-// remoteSource() sends these to every host, so they must be exactly the released commit's.
+// remoteSource() sends these to every host, so they must match the requested commit.
 const SHIPPED_PATHS = [
   "scripts",
   "packages/shared/src/semver.ts",
@@ -213,22 +177,6 @@ const SHIPPED_PATHS = [
 const shippedFilesAt = async (sha: string) =>
   (await git("status", "--porcelain", "--", ...SHIPPED_PATHS)) === "" &&
   (await git("diff", "--name-only", sha, "--", ...SHIPPED_PATHS)) === "";
-// Host archives hold only the server, web client and resource monitor (tjn-build-host-archive.ts),
-// so a change confined to these paths needs no host build or restart.
-const MAC_ONLY_PATHS = ["apps/desktop", "apps/mobile", "apps/marketing", "docs"];
-const hostArchiveSame = (from: string, to: string) =>
-  git(
-    "diff",
-    "--name-only",
-    from,
-    to,
-    "--",
-    ".",
-    ...MAC_ONLY_PATHS.map((path) => `:(exclude)${path}`),
-  ).then(
-    (changed) => changed === "",
-    () => false,
-  );
 const gh = (...args: string[]) => run("gh", args, { cwd: ROOT });
 
 async function releases(): Promise<Release[]> {
@@ -347,110 +295,16 @@ async function snapshot(host: Host): Promise<Snapshot> {
   return value as unknown as Snapshot;
 }
 
-async function copyArchive(host: Host, v: string, destination: string) {
-  const source = hostPath(host).join(host.cacheDir, v, archiveName(v, `${host.os}-x64`));
-  await sftp(
-    host.ssh,
-    [["get", sftpPath(host.os, source), destination]],
-    path.dirname(destination),
-  );
-}
-
-interface Delivery {
-  name: string;
-  host: Host;
-  source: string;
-  sourceHost: Host;
-}
-
-// The source downloads the published archive itself, so delivery never depends on which
-// host built it or on the Mac's transfer cache.
-function deliverySteps(v: string, deliveries: Delivery[]): Step[] {
-  return deliveries.flatMap(({ name, host, source, sourceHost }): Step[] => {
-    const archive = archiveName(v, `${host.os}-x64`);
-    const sourceCache = hostPath(sourceHost).join(sourceHost.cacheDir, deliveryDir(v));
-    const targetCache = hostPath(host).join(host.cacheDir, deliveryDir(v));
-    const installedDir = hostPath(host).join(host.t3Home, "runtime", "versions", v);
-    return [
-      {
-        host: source,
-        phase: `deliver:${name}`,
-        mutates: true,
-        does: [
-          remoteShown(sourceHost, { action: "deliver", version: v, to: name }),
-          `on host: download ${archive} and SHA256SUMS from the fork release v${releaseVersion(v)} into ${sourceCache}; check its SHA-256`,
-          `on host: sftp -b - ${host.ssh}: mkdir ${targetCache}; put ${archive} there; then rm -r ${sourceCache}`,
-        ],
-        ifStopped: `${name}'s delivery cache ${targetCache} may remain.`,
-        leaves: `${name}'s delivery cache ${targetCache}`,
-      },
-      {
-        host: name,
-        phase: "install",
-        mutates: true,
-        final: true,
-        does: [
-          remoteShown(host, { action: "install", version: v }),
-          `on host: recheck the SHA-256; extract into ${installedDir} with .install-complete; rm -r ${targetCache}`,
-        ],
-        ifStopped: `${installedDir} is complete or absent; ${targetCache} may remain.`,
-      },
-    ];
-  });
-}
-
-async function deliverReleases(v: string, deliveries: Delivery[], journal: Journal) {
-  for (const { name, host, source, sourceHost } of deliveries) {
-    const sha256 = await journal.step(source, `deliver:${name}`, async () => {
-      const result = await remote(sourceHost, { action: "deliver", version: v, to: host });
-      requireState(
-        record(result) &&
-          result.archive === archiveName(v, `${host.os}-x64`) &&
-          typeof result.sha256 === "string" &&
-          /^[a-f0-9]{64}$/.test(result.sha256),
-        "Invalid delivery receipt.",
-      );
-      return result.sha256;
-    });
-    await journal.step(name, "install", () =>
-      remote(host, { action: "install", version: v, sha256 }),
-    );
-    console.log(`${name}: ${v} staged from ${source}; its Update installs it without downloading.`);
-  }
-}
-
-interface ReleasePlan {
-  v: string;
-  /** What hosts run and install: `<v>+<first 12 of sha>`. */
-  id: string;
-  tag: string;
-  tagSha: string;
+interface LocalBuildPlan {
   sha: string;
-  existing: Release[];
-  /** This nightly's earlier release, from another fork commit. */
-  replaced: Release | undefined;
-  skipped: string[];
-  chosen: Array<{ platform: Platform; name: string; host: Host; ordinal: number }>;
-  migrations: Record<string, boolean>;
-  staging: string;
-  deliveries: Delivery[];
+  nightly: string;
+  targetVersion: string;
 }
 
-// Read-only: git, the GitHub listing and host inspection. Dry runs stop after this.
-// A string result means this commit is already published and there is nothing to do.
-async function releasePreflight(
-  cfg: HostConfig,
-  override?: string,
-  expectSha?: string,
-): Promise<ReleasePlan | string> {
-  if (override) {
-    requireState(
-      PLATFORMS.some((platform) => cfg.buildHosts[platform].includes(override)),
-      "--build-host must name a configured platform build host.",
-    );
-  }
+async function localBuildPreflight(sha: string): Promise<LocalBuildPlan> {
+  requireState(/^[a-f0-9]{40}$/.test(sha), "Expected a full lowercase commit SHA.");
   requireState((await git("branch", "--show-current")) === "main", "Mac checkout is not on main.");
-  requireState(await shippedFilesAt("HEAD"), "The Mac checkout's host tool files have changes.");
+  requireState(await shippedFilesAt(sha), "The host build tools differ from the requested commit.");
   for (const args of [
     ["remote", "get-url", "origin"],
     ["remote", "get-url", "--push", "origin"],
@@ -468,459 +322,155 @@ async function releasePreflight(
     ),
     "Upstream remote is not the expected repository.",
   );
-  const sha = await git("rev-parse", "HEAD");
-  requireState(
-    sha === (await git("rev-parse", "origin/main")),
-    "Mac HEAD differs from origin/main.",
-  );
-  requireState(
-    expectSha === undefined || sha === expectSha,
-    "The checkout moved past the requested commit; release the newer commit instead.",
-  );
+  requireState((await git("cat-file", "-t", sha)) === "commit", "Requested SHA is not a local commit.");
   requireState(
     (await git("ls-remote", "origin", "refs/heads/main")).split(/\s/)[0] === sha,
-    "Origin/main moved; synchronize before releasing.",
+    "The requested SHA is not the current pushed origin/main commit.",
   );
-  const tags = (await git("tag", "--merged", "HEAD", "--list", "v*-nightly.*"))
+
+  const tags = (await git("tag", "--merged", sha, "--list", "v*-nightly.*"))
     .split("\n")
     .filter(Boolean);
-  const v = tags
+  const nightly = tags
     .map((tag) => version(tag.slice(1)))
     .sort(compareVersions)
     .at(-1);
-  requireState(v !== undefined, "No merged upstream nightly tag found.");
-  const tag = `v${v}`;
+  requireState(nightly !== undefined, "No merged upstream nightly tag found for the requested commit.");
+  const tag = `v${nightly}`;
   requireState(
     (await git("cat-file", "-t", `refs/tags/${tag}`)) === "commit",
-    "Upstream tag is not lightweight; refusing to create or rewrite tags.",
+    "Upstream nightly tag is not lightweight; refusing to build from it.",
   );
   const tagSha = await git("rev-parse", `refs/tags/${tag}`);
   requireState(
     (await git("ls-remote", "upstream", `refs/tags/${tag}`)).split(/\s/)[0] === tagSha,
     "Local nightly tag differs from upstream.",
   );
-  const originTag = await git("ls-remote", "origin", `refs/tags/${tag}`);
-  requireState(
-    !originTag || originTag.split(/\s/)[0] === tagSha,
-    "Origin tag differs from upstream; refusing to rewrite it.",
-  );
-  const id = `${v}+${sha.slice(0, 12)}`;
-  const existing = await releases();
-  const replaced = existing.find((item) => item.tag_name === tag);
-  if (replaced !== undefined) {
-    requireState(!replaced.draft, "A draft fork release uses this tag; inspect it first.");
-    const published = releaseReceipt(replaced).forkSha;
-    if (published === sha) {
-      return `${tag} is already published from ${sha}; nothing to release.`;
-    }
-    if (await hostArchiveSame(published, sha)) {
-      return `${tag} from ${published.slice(0, 12)} already holds everything hosts run at ${sha.slice(0, 12)}; nothing to release.`;
-    }
-  }
+  return { sha, nightly, targetVersion: version(`${nightly}+${sha.slice(0, 12)}`) };
+}
 
-  const snapshots = new Map<string, Snapshot>();
-  const skipped: string[] = [];
-  for (const [name, host] of Object.entries(cfg.hosts)) {
-    let state: Snapshot;
-    try {
-      state = await snapshot(host);
-    } catch (error) {
-      if (!(error instanceof Refusal) || error.exitCode !== 255) {
-        throw error;
-      }
-      skipped.push(name);
-      console.error(`${name}: unreachable; skipped release preflight and builder selection.`);
-      continue;
+function resultFile(value: string | undefined) {
+  const selected = path.resolve(value ?? FLEET_RESULT_FILE);
+  requireState(
+    path.isAbsolute(selected) && selected === FLEET_RESULT_FILE,
+    `--result-file must be ${FLEET_RESULT_FILE}.`,
+  );
+  return selected;
+}
+
+async function clearResultFile(file: string) {
+  const directory = path.dirname(file);
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  requireState(
+    (await fs.realpath(directory)) === directory,
+    "Fleet result directory resolves through a link; refusing to write it.",
+  );
+  try {
+    const stat = await fs.lstat(file);
+    requireState(stat.isFile() && !stat.isSymbolicLink(), "Fleet result path is not a regular file.");
+    await fs.unlink(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
     }
-    requireState(
-      isUpdateTarget(id, state.state.activeVersion),
-      `${name} already runs ${state.state.activeVersion}, this build or a newer one.`,
-    );
-    snapshots.set(name, state);
   }
-  const chosen = PLATFORMS.map((platform) => {
-    const choices = cfg.buildHosts[platform];
-    const candidates = override && choices.includes(override) ? [override] : choices;
-    const name = candidates.find((candidate) => snapshots.has(candidate));
-    requireState(
-      name !== undefined,
-      `No reachable configured build host for ${platform}${override && choices.includes(override) ? " (explicit selection)" : ""}.`,
-    );
-    return { platform, name, host: cfg.hosts[name]!, ordinal: choices.indexOf(name) + 1 };
+}
+
+async function writeResultFile(file: string, commit: string, targetVersion: string) {
+  const temporary = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(temporary, `${JSON.stringify({ commit, targetVersion })}\n`, {
+    flag: "wx",
+    mode: 0o600,
+    flush: true,
   });
-
-  const migrations: Record<string, boolean> = {};
-  for (const state of snapshots.values()) {
-    const from = state.state.activeVersion;
-    if (Object.hasOwn(migrations, from)) {
-      continue;
-    }
-    // Only upstream migrations determine this receipt: the additive fork ledger is independent.
-    const fromTag = `refs/tags/v${releaseVersion(from)}`;
-    const baseline = await git("rev-parse", `${fromTag}^{commit}`);
-    requireState(
-      (await git("ls-remote", "upstream", fromTag)).split(/\s/)[0] === baseline,
-      "Migration baseline tag differs from upstream or is unavailable.",
-    );
-    const changed = await git(
-      "diff",
-      "--name-only",
-      fromTag,
-      sha,
-      "--",
-      "apps/server/src/persistence/Migrations.ts",
-      "apps/server/src/persistence/Migrations",
-      "apps/server/src/persistence/reconcileV2PreviewMigration.ts",
-    );
-    migrations[from] = changed !== "";
+  try {
+    await fs.rename(temporary, file);
+  } catch (error) {
+    await fs.rm(temporary, { force: true });
+    throw error;
   }
-
-  const staging = path.join(CACHE, v);
-  requireState(
-    path.resolve(await fs.realpath(path.dirname(CACHE))) === path.resolve(path.dirname(CACHE)),
-    "Mac cache parent traverses a link.",
-  );
-  requireState(
-    !(await exists(staging)),
-    `Mac staging directory ${staging} already exists; inspect and remove it deliberately before releasing.`,
-  );
-  const deliveries: Delivery[] = [];
-  for (const [name, host] of Object.entries(cfg.hosts)) {
-    const source = host.stageFrom;
-    if (source === undefined) {
-      continue;
-    }
-    if (!snapshots.has(name) || !snapshots.has(source)) {
-      console.error(`${name}: it or ${source} is unreachable; afterwards run \`stage ${name}\`.`);
-    } else if (snapshots.get(name)!.versions.includes(id)) {
-      console.error(`${name}: ${id} is already installed there; nothing to deliver.`);
-    } else {
-      deliveries.push({ name, host, source, sourceHost: cfg.hosts[source]! });
-    }
-  }
-  return {
-    v,
-    id,
-    tag,
-    tagSha,
-    sha,
-    existing,
-    replaced,
-    skipped,
-    chosen,
-    migrations,
-    staging,
-    deliveries,
-  };
 }
 
-// The exact argv the run executes; dry runs and the journal print the same arrays.
-function publication(p: ReleasePlan) {
-  const files = p.chosen.map((build) => path.join(p.staging, archiveName(p.v, build.platform)));
-  const sums = path.join(p.staging, "SHA256SUMS");
-  const notesFile = path.join(p.staging, "release-notes.md");
-  return {
-    sums,
-    notesFile,
-    push: ["push", "origin", `refs/tags/${p.tag}`],
-    create: [
-      "release",
-      "create",
-      p.tag,
-      "--repo",
-      REPOSITORY,
-      "--prerelease",
-      "--verify-tag",
-      "--title",
-      `T3 Code host release ${p.id}`,
-      "--notes-file",
-      notesFile,
-      ...files,
-      sums,
-    ],
-    // Deleting a release keeps its tag, which is upstream's.
-    replace:
-      p.replaced === undefined
-        ? undefined
-        : ["release", "delete", p.tag, "--repo", REPOSITORY, "--yes"],
-    remove: p.existing
-      .filter((old) => old.tag_name !== p.tag)
-      .map((old) => ["release", "delete", old.tag_name, "--repo", REPOSITORY, "--yes"]),
-  };
-}
-
-function releaseSteps(p: ReleasePlan): Step[] {
-  const pub = publication(p);
-  const unpublished = "Nothing was published.";
-  return [
-    {
-      host: null,
-      phase: "stage",
-      mutates: true,
-      does: [`mkdir -p ${CACHE}`, `mkdir ${p.staging}`],
-      ifStopped: unpublished,
-      leaves: `the Mac staging directory ${p.staging}`,
-    },
-    ...p.chosen.flatMap(({ name, host, platform }): Step[] => {
-      const hp = hostPath(host);
-      const cache = hp.join(host.cacheDir, p.v);
-      return [
-        {
-          host: name,
-          phase: "build",
-          mutates: true,
-          does: [
-            remoteShown(host, { action: "build", version: p.v, sha: p.sha }),
-            `on host, in ${host.checkout}: git fetch origin main; git merge --ff-only ${p.sha}`,
-            `on host: mkdir ${cache}; at lowered priority, logging to ${hp.join(cache, "build.log")}: ${shown([...host.node, "scripts/tjn-build-host-archive.ts", "--version", p.v, "--expect-sha", p.sha, "--out", cache])}`,
-          ],
-          ifStopped: `${name}'s version cache ${cache} is retained for inspection; release refuses to reuse it. ${unpublished}`,
-          leaves: `${name}'s version cache ${cache}`,
-        },
-        {
-          host: name,
-          phase: "transfer",
-          mutates: true,
-          does: [
-            `sftp -b - ${host.ssh}: get ${hp.join(cache, archiveName(p.v, platform))} ${path.join(p.staging, archiveName(p.v, platform))}`,
-            "compare its SHA-256 with the builder receipt",
-          ],
-          ifStopped: `The local copy may be partial. ${unpublished}`,
-        },
-      ];
-    }),
-    {
-      host: null,
-      phase: "notes",
-      mutates: true,
-      does: [
-        `write ${pub.sums} and ${pub.notesFile}`,
-        "recheck that the checkout and upstream tag did not change",
-      ],
-      ifStopped: unpublished,
-    },
-    {
-      host: null,
-      phase: "push-tag",
-      mutates: true,
-      does: [shown(["git", ...pub.push])],
-      ifStopped: `The upstream tag may now be on origin; preflight accepts that identical tag. ${unpublished}`,
-    },
-    ...(pub.replace === undefined
-      ? []
-      : [
-          {
-            host: null,
-            phase: "replace",
-            mutates: true,
-            does: [shown(["gh", ...pub.replace])],
-            ifStopped: `${p.tag}'s earlier release may be gone and the new one not yet published; inspect the fork releases.`,
-          },
-        ]),
-    {
-      host: null,
-      phase: "publish",
-      mutates: true,
-      final: true,
-      does: [shown(["gh", ...pub.create])],
-      ifStopped: "The release may exist, possibly incomplete; inspect the fork releases.",
-    },
-    {
-      host: null,
-      phase: "retention",
-      mutates: true,
-      does: [
-        "recheck that only this release was added",
-        ...pub.remove.map((args) => shown(["gh", ...args])),
-      ],
-      ifStopped: "Some older releases may remain; their tags are kept either way.",
-    },
-    ...p.chosen.map(({ name, host }): Step => ({
-      host: name,
-      phase: "remove-cache",
-      mutates: true,
-      does: [
-        remoteShown(host, { action: "remove-cache", version: p.v }),
-        `on host: rm -r ${hostPath(host).join(host.cacheDir, p.v)}`,
-      ],
-      ifStopped: `${name}'s version cache may remain.`,
-    })),
-    {
-      host: null,
-      phase: "remove-staging",
-      mutates: true,
-      does: [`rm -r ${p.staging}`],
-      ifStopped: "The Mac staging directory may remain.",
-    },
-    ...deliverySteps(p.id, p.deliveries),
-  ];
-}
-
-async function release(p: ReleasePlan, journal: Journal) {
-  const pub = publication(p);
-  await journal.step(null, "stage", async () => {
-    await fs.mkdir(CACHE, { recursive: true, mode: 0o700 });
-    requireState(
-      path.resolve(await fs.realpath(CACHE)) === path.resolve(CACHE),
-      "Mac release cache traverses a link.",
-    );
-    await fs.mkdir(p.staging, { mode: 0o700 });
-  });
-  const results = await Promise.allSettled(
-    p.chosen.map(async (build) => {
-      const name = archiveName(p.v, build.platform);
-      const sha256 = await journal.step(build.name, "build", async () => {
-        const result = await remote(build.host, { action: "build", version: p.v, sha: p.sha });
-        requireState(
-          record(result) &&
-            typeof result.archive === "string" &&
-            typeof result.sha256 === "string" &&
-            /^[a-f0-9]{64}$/.test(result.sha256),
-          "Invalid host builder receipt.",
-        );
-        requireState(
-          result.archive === hostPath(build.host).join(build.host.cacheDir, p.v, name),
-          "Builder returned an unexpected archive path.",
-        );
-        return result.sha256;
-      });
-      const destination = path.join(p.staging, name);
-      await journal.step(build.name, "transfer", async () => {
-        await copyArchive(build.host, p.v, destination);
-        requireState(
-          (await hashFile(destination)) === sha256,
-          "Transferred archive differs from the host checksum.",
-        );
-      });
-      return { ...build, destination, archive: name, sha256 };
-    }),
-  );
-  const failures = results.filter((result) => result.status === "rejected");
-  if (failures.length > 0) {
-    throw new Refusal(
-      `${failures.map((result) => (result.reason instanceof Error ? result.reason.message : String(result.reason))).join("\n")}\nBuild failed; named version caches are retained for inspection. No release was published.`,
-      1,
-    );
-  }
-  const built = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-  const receipt: ReleaseReceipt = {
-    schemaVersion: 1,
-    forkSha: p.sha,
-    upstreamTag: p.tag,
-    builders: built.map((build) => ({
-      platform: build.platform,
-      role: build.ordinal === 1 ? "primary" : `fallback-${build.ordinal - 1}`,
-    })),
-    migrations: p.migrations,
-  };
-  const notes = [
-    `Fork SHA: ${p.sha}`,
-    `Host runtime: ${p.id}`,
-    `Upstream nightly: ${p.tag} (${p.tagSha})`,
-    ...receipt.builders.map((builder) => `${builder.platform}: ${builder.role} builder`),
-    ...Object.entries(p.migrations).map(
-      ([from, changed]) =>
-        `Upstream migrations since ${from}: ${changed ? "changed; automated rollback refused, manual restore needs owner's go" : "unchanged"}.`,
-    ),
-    "After pruning a migrated release, fix forward. This tool never restores live userdata.",
-    `<!-- t3-host-release ${JSON.stringify(receipt)} -->`,
-  ].join("\n\n");
-  await journal.step(null, "notes", async () => {
-    await fs.writeFile(
-      pub.sums,
-      built.map((build) => `${build.sha256}  ${build.archive}\n`).join(""),
+async function buildLocal(
+  cfg: HostConfig,
+  sha: string,
+  resultPath: string,
+) {
+  const hosts = Object.keys(cfg.hosts);
+  const failures: string[] = [];
+  const completed: string[] = [];
+  await changing("build-local", hosts, "whole", async (journal) => {
+    journal.plan([
       {
-        flag: "wx",
+        host: null,
+        phase: "clear-result",
+        mutates: true,
+        does: [`remove stale result ${resultPath}`],
+        ifStopped: "The stale result was removed; no host build may have started.",
       },
-    );
-    await fs.writeFile(pub.notesFile, notes, { flag: "wx" });
-    // The Mac app may build and commit in this checkout meanwhile; the hosts built p.sha.
-    requireState(
-      (await shippedFilesAt(p.sha)) &&
-        (await git("merge-base", "--is-ancestor", p.sha, "HEAD").then(
-          () => true,
-          () => false,
-        )),
-      "Mac checkout changed the host tool files or left the released commit; publication refused.",
-    );
-    requireState(
-      (await git("rev-parse", `refs/tags/${p.tag}`)) === p.tagSha,
-      "Upstream tag changed during the build; publication refused.",
-    );
-  });
-  try {
-    await journal.step(null, "push-tag", () => git(...pub.push));
-    if (pub.replace !== undefined) {
-      const replace = pub.replace;
-      await journal.step(null, "replace", () => gh(...replace));
-    }
-    await journal.step(null, "publish", () => gh(...pub.create));
-    await journal.step(null, "retention", async () => {
-      const afterPublish = await releases();
-      requireState(
-        afterPublish.length === p.existing.length + (p.replaced === undefined ? 1 : 0) &&
-          afterPublish.some((item) => item.tag_name === p.tag && !item.draft) &&
-          afterPublish.every(
-            (item) =>
-              (item.tag_name === p.tag && releaseReceipt(item).forkSha === p.sha) ||
-              p.existing.some((old) => old.tag_name === item.tag_name && old.draft === item.draft),
-          ),
-        "Release inventory changed concurrently; retention was not performed.",
-      );
-      for (const args of pub.remove) {
-        await gh(...args);
+      ...hosts.map((name): Step => ({
+        host: name,
+        phase: "build-and-stage",
+        mutates: true,
+        does: [
+          remoteShown(cfg.hosts[name]!, {
+            action: "build-and-stage",
+            version: "<nightly>+<requested-sha-12>",
+            sha,
+          }),
+          "build from the exact requested commit on this host, install it as a local pending runtime, and remove the intermediate archive",
+        ],
+        ifStopped: `${name} may have a partial build cache or a fully staged runtime; inspect that host before retrying.`,
+      })),
+      {
+        host: null,
+        phase: "write-result",
+        mutates: true,
+        does: [`write ${resultPath} only after every configured host staged this target`],
+        ifStopped: "All hosts may be staged, but the desktop will not queue activation without the result file.",
+      },
+    ]);
+    await journal.step(null, "clear-result", () => clearResultFile(resultPath));
+    const plan = await journal.step(null, "preflight", () => localBuildPreflight(sha));
+
+    for (const name of hosts) {
+      const host = cfg.hosts[name]!;
+      try {
+        console.log(`${name}: building and staging ${plan.targetVersion} from ${sha}.`);
+        const value = await journal.step(name, "build-and-stage", () =>
+          remote(host, {
+            action: "build-and-stage",
+            version: plan.targetVersion,
+            sha: plan.sha,
+          }),
+        );
+        requireState(
+          record(value) &&
+            value.targetVersion === plan.targetVersion &&
+            ["staged", "already-staged", "already-active"].includes(String(value.status)),
+          `${name}: host returned an unexpected build result.`,
+        );
+        console.log(`${name}: ${String(value.status)} ${plan.targetVersion}.`);
+        completed.push(name);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`${name}: ${message}`);
+        console.error(`${name}: build/stage failed or host is offline: ${message}`);
       }
-    });
-    for (const build of built) {
-      await journal.step(build.name, "remove-cache", () =>
-        remote(build.host, { action: "remove-cache", version: p.v }),
+    }
+    if (failures.length > 0) {
+      throw new Refusal(
+        `Fleet build incomplete for ${plan.targetVersion}. Completed: ${completed.join(", ") || "none"}. Pending or failed: ${failures.join(" | ")}. No success result was written; use the desktop Retry action to repeat this same commit.`,
+        4,
       );
     }
-    await journal.step(null, "remove-staging", () => fs.rm(p.staging, { recursive: true }));
-  } catch (error) {
-    throw new Refusal(
-      `Publication/retention may be partial; inspect the fork release and named version caches before continuing. No retry or repair was attempted. ${error instanceof Error ? error.message : String(error)}`,
-      4,
+    await journal.step(null, "write-result", () =>
+      writeResultFile(resultPath, plan.sha, plan.targetVersion),
     );
-  }
-  console.log(`Published ${p.id}; retained tags, removed other releases and build caches.`);
-  try {
-    await deliverReleases(p.id, p.deliveries, journal);
-  } catch (error) {
-    throw new Refusal(
-      `Published ${p.tag}, but delivery did not finish: ${error instanceof Error ? error.message : String(error)}\nRemove any leftover delivery cache named below, then run \`stage <host>\`.`,
-      1,
-    );
-  }
-  if (p.skipped.length > 0) {
-    console.log(`Unreachable hosts skipped (not validated or changed): ${p.skipped.join(", ")}`);
-  }
-  console.log(
-    "The Mac app updates each connected fork host once it is idle; a host's Update in Settings → Connections does it now.",
-  );
+    console.log(JSON.stringify({ commit: plan.sha, targetVersion: plan.targetVersion }));
+  });
 }
 
-// Read-only: the GitHub listing, the target's snapshot and the source's reachability.
-async function stagePreflight(cfg: HostConfig, name: string) {
-  const host = cfg.hosts[name]!;
-  const source = host.stageFrom;
-  requireState(source !== undefined, "Host has no stageFrom; it downloads its own releases.");
-  const v = releaseId(currentRelease(await releases()));
-  const before = await snapshot(host);
-  requireState(
-    isUpdateTarget(v, before.state.activeVersion),
-    "Host already runs the published fork release; nothing to stage.",
-  );
-  requireState(
-    !before.versions.includes(v),
-    "The published release is already installed on the host; apply it with its Update.",
-  );
-  const sourceHost = cfg.hosts[source]!;
-  await remote(sourceHost, { action: "ready" });
-  return { v, deliveries: [{ name, host, source, sourceHost }] };
-}
-
-// Refusals here come before any host is changed.
 function releaseReceipt(release: Release): ReleaseReceipt {
   const markers = [...release.body.matchAll(/<!-- t3-host-release (.+) -->/g)];
   requireState(markers.length === 1, `Release ${release.tag_name} has no unique receipt.`);
@@ -968,19 +518,23 @@ interface Maintenance {
   target: string;
 }
 
-// Read-only: the GitHub listing and host inspection. Dry runs stop after this.
+// Read-only host inspection. Rollback additionally needs a verified legacy release receipt.
 async function maintenancePreflight(
   command: MaintenanceCommand,
   cfg: HostConfig,
   selected: string[],
   target: string | undefined,
 ): Promise<Maintenance[]> {
-  const releaseInfo = currentRelease(await releases());
-  const current = releaseId(releaseInfo);
+  const releaseInfo = command === "rollback" ? currentRelease(await releases()) : undefined;
+  const current = releaseInfo === undefined ? undefined : releaseId(releaseInfo);
   const work: Maintenance[] = [];
   for (const name of selected) {
     const host = cfg.hosts[name]!;
     const before = await snapshot(host);
+    if (command === "prune") {
+      work.push({ name, host, before, target: before.state.activeVersion });
+      continue;
+    }
     requireState(
       before.state.activeVersion === current,
       "Host is not on the published fork release.",
@@ -1006,7 +560,7 @@ async function maintenancePreflight(
       );
       let receipt: ReleaseReceipt;
       try {
-        receipt = releaseReceipt(releaseInfo);
+        receipt = releaseReceipt(releaseInfo!);
       } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         refuseRestore(host, before, to);
@@ -1171,9 +725,15 @@ async function main() {
     return;
   }
   const command = args.shift();
+  if (command === "release") {
+    throw new Refusal(
+      "The legacy release command is retired and will not build or publish hosts. Update the desktop app, then Retry the failed host build.",
+      2,
+    );
+  }
   let hostName: string | undefined;
-  let buildHost: string | undefined;
   let expectSha: string | undefined;
+  let requestedResultFile: string | undefined;
   let target: string | undefined;
   let all = false;
   let idle = false;
@@ -1190,22 +750,27 @@ async function main() {
       idle = true;
     } else if (
       arg === "--dry-run" &&
-      (command === "release" ||
-        command === "prune" ||
-        command === "rollback" ||
-        command === "stage") &&
+      (command === "prune" || command === "rollback") &&
       !dryRun
     ) {
       dryRun = true;
-    } else if (arg === "--build-host" && command === "release" && !buildHost) {
-      buildHost = args.shift();
-      if (!buildHost || buildHost.startsWith("-")) {
-        throw new Refusal("--build-host needs a configured name.\n" + USAGE, 2);
-      }
-    } else if (arg === "--expect-sha" && command === "release" && !expectSha) {
+    } else if (
+      arg === "--expect-sha" &&
+      command === "build-local" &&
+      !expectSha
+    ) {
       expectSha = args.shift();
       if (!expectSha || !/^[a-f0-9]{40}$/.test(expectSha)) {
         throw new Refusal("--expect-sha needs a full commit SHA.\n" + USAGE, 2);
+      }
+    } else if (
+      arg === "--result-file" &&
+      command === "build-local" &&
+      !requestedResultFile
+    ) {
+      requestedResultFile = args.shift();
+      if (!requestedResultFile || requestedResultFile.startsWith("-")) {
+        throw new Refusal("--result-file needs an absolute path.\n" + USAGE, 2);
       }
     } else if (arg === "--to" && command === "rollback" && !target) {
       target = args.shift();
@@ -1214,7 +779,7 @@ async function main() {
       }
     } else if (
       !arg.startsWith("-") &&
-      (command === "prune" || command === "rollback" || command === "stage") &&
+      (command === "prune" || command === "rollback") &&
       !hostName
     ) {
       hostName = arg;
@@ -1224,9 +789,9 @@ async function main() {
   }
   if (
     !command ||
-    !["release", "status", "prune", "rollback", "stage"].includes(command) ||
+    !["build-local", "status", "prune", "rollback"].includes(command) ||
     ((command === "prune" || command === "rollback") && all === Boolean(hostName)) ||
-    (command === "stage" && !hostName)
+    (command === "build-local" && !expectSha)
   ) {
     throw new Refusal(USAGE, 2);
   }
@@ -1241,64 +806,9 @@ async function main() {
     );
   }
   const cfg = await config();
-  if (command === "release") {
-    const hosts = Object.keys(cfg.hosts);
-    if (dryRun) {
-      const plan = await releasePreflight(cfg, buildHost, expectSha);
-      if (typeof plan === "string") {
-        console.log(plan);
-        return;
-      }
-      await printDryRun(
-        [
-          `release ${plan.id} from ${plan.sha}${plan.replaced === undefined ? "" : `, replacing ${plan.tag}'s release`}`,
-          ...plan.chosen.map(
-            (build) =>
-              `${build.platform}: ${build.name} (${build.ordinal === 1 ? "primary" : `fallback-${build.ordinal - 1}`})`,
-          ),
-          ...Object.entries(plan.migrations).map(
-            ([from, changed]) =>
-              `Upstream migrations since ${from}: ${changed ? "changed" : "unchanged"}`,
-          ),
-          ...(plan.skipped.length > 0 ? [`Unreachable, skipped: ${plan.skipped.join(", ")}`] : []),
-        ],
-        hosts,
-        releaseSteps(plan),
-      );
-      return;
-    }
-    // Every host is locked: preflight compares all of them, and builders are chosen among them.
-    await changing("release", hosts, "whole", async (journal) => {
-      const plan = await journal.step(null, "preflight", () =>
-        releasePreflight(cfg, buildHost, expectSha),
-      );
-      if (typeof plan === "string") {
-        console.log(plan);
-        return;
-      }
-      journal.plan(releaseSteps(plan));
-      await release(plan, journal);
-    });
-    return;
-  }
-  if (command === "stage") {
-    requireState(Object.hasOwn(cfg.hosts, hostName!), "Unknown configured host.");
-    const source = cfg.hosts[hostName!]!.stageFrom;
-    const locked = source === undefined ? [hostName!] : [source, hostName!];
-    if (dryRun) {
-      const plan = await stagePreflight(cfg, hostName!);
-      await printDryRun(
-        [`stage ${plan.v} onto ${hostName} from ${source}`],
-        locked,
-        deliverySteps(plan.v, plan.deliveries),
-      );
-      return;
-    }
-    await changing("stage", locked, "whole", async (journal) => {
-      const plan = await journal.step(null, "preflight", () => stagePreflight(cfg, hostName!));
-      journal.plan(deliverySteps(plan.v, plan.deliveries));
-      await deliverReleases(plan.v, plan.deliveries, journal);
-    });
+  if (command === "build-local") {
+    const selectedResultFile = resultFile(requestedResultFile);
+    await buildLocal(cfg, expectSha!, selectedResultFile);
     return;
   }
   if (command === "status") {

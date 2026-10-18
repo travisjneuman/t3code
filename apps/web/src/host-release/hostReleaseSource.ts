@@ -1,8 +1,8 @@
 import type { ServerReleaseSource } from "@t3tools/contracts";
 
-// A server installs updates from the release base it was built or configured with, not from
-// wherever this client found the target version. Only fork hosts are safe to update in bulk to
-// a fork release; the rest may fetch a different build of the same version, or fail.
+// A server installs updates from the source it was built or configured with, not from
+// wherever this client learned the target version. Only fork hosts are safe to update in bulk
+// to a locally staged fork build; other sources may fetch a different build or fail.
 
 /** `unknown` is a server too old to report its source. */
 export type HostReleaseSource = ServerReleaseSource | "unknown";
@@ -14,7 +14,7 @@ export function hostReleaseSourceOf(environment: {
 }
 
 const SOURCE_LABELS: Record<HostReleaseSource, string> = {
-  fork: "fork releases",
+  fork: "locally staged fork builds",
   upstream: "upstream releases",
   custom: "custom mirror",
   unknown: "source unknown",

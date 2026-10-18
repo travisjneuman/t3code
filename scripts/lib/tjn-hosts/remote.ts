@@ -30,7 +30,8 @@ export interface Host {
 export interface HostConfig {
   version: 1;
   hosts: Record<string, Host>;
-  buildHosts: Record<"win32-x64" | "linux-x64", string[]>;
+  // Retained for old private inventories; local builds use every configured host.
+  buildHosts?: Record<"win32-x64" | "linux-x64", string[]>;
 }
 export interface State {
   protocol: 3;
@@ -70,7 +71,7 @@ export interface Request {
   action:
     | "ready"
     | "inspect"
-    | "build"
+    | "build-and-stage"
     | "remove-cache"
     | "prune"
     | "rollback"
@@ -353,6 +354,24 @@ async function installed(host: Host, v: string) {
     (await fs.readFile(sentinel, "utf8")).trim() === v,
     "Installed version is incomplete or has the wrong sentinel.",
   );
+}
+async function installedSourceSha(host: Host, v: string): Promise<string | undefined> {
+  const file = path.join(versionsPath(host), version(v), ".fork-source-sha");
+  if (!(await exists(file))) {
+    return undefined;
+  }
+  await plainFile(file);
+  const sha = (await fs.readFile(file, "utf8")).trim();
+  requireState(/^[a-f0-9]{40}$/.test(sha), "Installed source SHA marker is invalid.");
+  return sha;
+}
+async function removeBuildCache(host: Host, target: string) {
+  const cache = path.join(host.cacheDir, version(target));
+  if (!(await exists(cache))) {
+    return;
+  }
+  await realDirectory(cache);
+  await fs.rm(cache, { recursive: true });
 }
 async function readRuntime(host: Host): Promise<Runtime> {
   const value = await json(runtimePath(host));
@@ -881,7 +900,17 @@ async function downloadVerified(base: string, name: string, file: string) {
   return sha256;
 }
 // Extracts a checked archive inside its cache, then publishes `versions/<target>` complete or not at all.
-async function installArchive(host: Host, target: string, cache: string, archive: string) {
+async function installArchive(
+  host: Host,
+  target: string,
+  cache: string,
+  archive: string,
+  sourceSha?: string,
+) {
+  requireState(
+    sourceSha === undefined || /^[a-f0-9]{40}$/.test(sourceSha),
+    "Invalid installed source SHA.",
+  );
   const dir = path.join(versionsPath(host), target);
   requireState(!(await exists(dir)), "Version directory already exists; refusing to overwrite it.");
   await realDirectory(versionsPath(host));
@@ -913,6 +942,13 @@ async function installArchive(host: Host, target: string, cache: string, archive
   await fs.mkdir(extracted);
   await run(tar, ["-xf", archive, "-C", extracted, "--strip-components=1"]);
   await plainFile(path.join(extracted, host.os === "win32" ? "t3.exe" : "t3"));
+  if (sourceSha !== undefined) {
+    await fs.writeFile(path.join(extracted, ".fork-source-sha"), `${sourceSha}\n`, {
+      flag: "wx",
+      mode: 0o444,
+      flush: true,
+    });
+  }
   if (sameFilesystem) {
     await fs.writeFile(path.join(extracted, ".install-complete"), target + "\n", {
       flag: "wx",
@@ -1228,12 +1264,17 @@ async function maintain(request: Request) {
     );
   }
 }
-async function build(request: Request) {
+async function buildArchive(request: Request) {
   const { host } = request;
-  const v = version(request.version);
+  const target = version(request.version);
+  const v = releaseVersion(target);
   requireState(
     typeof request.sha === "string" && /^[a-f0-9]{40}$/.test(request.sha),
     "Missing exact build SHA.",
+  );
+  requireState(
+    target.endsWith(`+${request.sha.slice(0, 12)}`),
+    "Target runtime does not identify the requested source SHA.",
   );
   const git = (...args: string[]) => run("git", args, { cwd: host.checkout });
   await realDirectory(host.checkout);
@@ -1263,7 +1304,7 @@ async function build(request: Request) {
     (await git("rev-parse", "HEAD")) === request.sha && (await git("status", "--porcelain")) === "",
     "Build checkout did not reach the exact clean SHA.",
   );
-  const out = path.join(host.cacheDir, v);
+  const out = path.join(host.cacheDir, target);
   requireState(
     !(await exists(out)),
     "Build cache already exists; refusing to overwrite or silently reuse it.",
@@ -1343,6 +1384,60 @@ async function build(request: Request) {
   );
   return result;
 }
+async function buildAndStage(request: Request) {
+  const { host } = request;
+  const target = version(request.version);
+  requireState(
+    typeof request.sha === "string" && /^[a-f0-9]{40}$/.test(request.sha),
+    "Missing exact build SHA.",
+  );
+  requireState(
+    target.endsWith(`+${request.sha.slice(0, 12)}`),
+    "Target runtime does not identify the requested source SHA.",
+  );
+
+  const before = await inspect(host);
+  requireState(
+    before.state.update?.status !== "pending",
+    "A service update is already pending; finish or resolve it before staging another build.",
+  );
+  if (before.state.activeVersion === target) {
+    await installed(host, target);
+    const installedSha = await installedSourceSha(host, target);
+    requireState(
+      installedSha === undefined || installedSha === request.sha,
+      "The active runtime has a different source SHA marker.",
+    );
+    await removeBuildCache(host, target);
+    return { targetVersion: target, status: "already-active" };
+  }
+  requireState(
+    isUpdateTarget(target, before.state.activeVersion),
+    `Target ${target} is not newer than the active runtime ${before.state.activeVersion}.`,
+  );
+
+  const targetDir = path.join(versionsPath(host), target);
+  if (await exists(targetDir)) {
+    await installed(host, target);
+    requireState(
+      (await installedSourceSha(host, target)) === request.sha,
+      "The staged runtime exists but cannot be confirmed as this exact source SHA.",
+    );
+    await removeBuildCache(host, target);
+    return { targetVersion: target, status: "already-staged" };
+  }
+
+  const cache = path.join(host.cacheDir, target);
+  await cacheRoot(host);
+  await removeBuildCache(host, target);
+  try {
+    const result = await buildArchive(request);
+    await installArchive(host, target, cache, result.archive, request.sha);
+    return { targetVersion: target, status: "staged" };
+  } finally {
+    await fs.rm(cache, { recursive: true, force: true });
+  }
+}
 export async function runHost(request: Request) {
   requireState(
     process.platform === request.host.os && process.arch === "x64",
@@ -1353,8 +1448,8 @@ export async function runHost(request: Request) {
       return { ready: true };
     case "inspect":
       return inspect(request.host);
-    case "build":
-      return build(request);
+    case "build-and-stage":
+      return buildAndStage(request);
     case "prune":
     case "rollback":
       return maintain(request);
