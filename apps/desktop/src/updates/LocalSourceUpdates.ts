@@ -1168,8 +1168,7 @@ export const make = Effect.gen(function* () {
     return yield* checkForkMarkers(repo, label, markersBefore, agent);
   });
 
-  // Only the working tree is stamped; restoring from the index keeps a pending
-  // merge's staged result.
+  // Only the working tree is stamped, so restoring from the index undoes it.
   const stampReleaseVersion = (repo: string, version: string) =>
     Effect.forEach(
       RELEASE_PACKAGE_FILES,
@@ -1272,6 +1271,26 @@ export const make = Effect.gen(function* () {
   // Sync and update both rewrite the checkout, so they never overlap.
   const repositoryLock = yield* Semaphore.make(1);
 
+  // Fails with the merge still open, like mergeUpstream; callers abort it.
+  const commitUpstreamMerge = (repo: string, target: string, label: string, agent: boolean) =>
+    Effect.gen(function* () {
+      const message = `chore(sync): merge ${label}`;
+      const dispositions = yield* mergeUpstream(repo, target, label, message, agent);
+      yield* reportProgress({ phase: "committing" });
+      yield* runChecked({
+        operation: "merge",
+        command: "git",
+        args: [
+          "commit",
+          "--no-verify",
+          "--no-edit",
+          "-m",
+          mergeCommitMessage(message, dispositions),
+        ],
+        cwd: repo,
+      });
+    });
+
   const syncAndBuild = Effect.gen(function* () {
     yield* requireIdleCheckout("build");
     const inspection = yield* inspect;
@@ -1293,48 +1312,52 @@ export const make = Effect.gen(function* () {
         );
       }
     }
-    const mergeMessage = `chore(sync): merge upstream nightly ${inspection.upstreamTag}`;
+    // Committed and pushed before building, as the background sync does, so the fork hosts
+    // build this commit while this Mac does. A failed build then leaves the merge in place.
+    if (merging) {
+      // The peeled commit is merged (not the tag) so it matches what inspect counted.
+      yield* commitUpstreamMerge(
+        repo,
+        inspection.upstreamCommit,
+        `upstream nightly ${inspection.upstreamTag}`,
+        true,
+      ).pipe(
+        Effect.catchCause((cause) =>
+          abortMerge(repo).pipe(Effect.flatMap((leftovers) => failAfterCleanup(cause, leftovers))),
+        ),
+      );
+    }
+    const earlyPush = yield* pushFork(repo);
     const buildsDir = environment.path.join(environment.stateDir, SOURCE_UPDATE_BUILDS_DIR);
     // Forgets the pending build too, so install never points at a deleted bundle.
     const removeBuilds = Ref.set(builtUpdateRef, null).pipe(
       Effect.andThen(fileSystem.remove(buildsDir, { recursive: true, force: true })),
       Effect.ignore,
     );
-    // Without a merge to abort, stash tracked fixes only: new files may belong to another writer.
-    const restoreCheckout = merging
-      ? abortMerge(repo)
-      : runChecked({
-          operation: "build",
-          command: "git",
-          args: ["stash", "push", "-m", "local source update: unbuilt fixes"],
-          cwd: repo,
-        }).pipe(
-          Effect.mapError((error) =>
-            makeError(
-              "build",
-              `cleanup failed; unbuilt edits could not be stashed and the checkout may still be dirty. Preserve or stash them by hand. ${error.detail}`,
-              error,
-              repo,
-            ),
-          ),
-          Effect.andThen(
-            gitMerge(repo, ["status", "--porcelain=v1", "--untracked-files=all"]).pipe(
-              Effect.map((result) => result.stdout.trim()),
-            ),
-          ),
-          Effect.uninterruptible,
-        );
+    // Stashes tracked fixes only: new files may belong to another writer.
+    const restoreCheckout = runChecked({
+      operation: "build",
+      command: "git",
+      args: ["stash", "push", "-m", "local source update: unbuilt fixes"],
+      cwd: repo,
+    }).pipe(
+      Effect.mapError((error) =>
+        makeError(
+          "build",
+          `cleanup failed; unbuilt edits could not be stashed and the checkout may still be dirty. Preserve or stash them by hand. ${error.detail}`,
+          error,
+          repo,
+        ),
+      ),
+      Effect.andThen(
+        gitMerge(repo, ["status", "--porcelain=v1", "--untracked-files=all"]).pipe(
+          Effect.map((result) => result.stdout.trim()),
+        ),
+      ),
+      Effect.uninterruptible,
+    );
     const built = yield* Effect.gen(function* () {
       const markersBeforeBuild = yield* countForkMarkers(repo, "HEAD");
-      // The peeled commit is merged (not the tag) so it matches what inspect counted.
-      const dispositions = merging
-        ? yield* mergeUpstream(
-            repo,
-            inspection.upstreamCommit,
-            inspection.upstreamTag,
-            mergeMessage,
-          )
-        : [];
       const timestamp = yield* Clock.currentTimeMillis;
       // A new build supersedes any earlier one that was never installed.
       yield* removeBuilds;
@@ -1390,23 +1413,15 @@ export const make = Effect.gen(function* () {
         }
       }).pipe(Effect.ensuring(restoreReleaseVersion(repo)));
       const applicationBundlePath = yield* findAppBundle(outputDir);
-      // Records the merge result (or, without a merge, the regenerated lockfile
-      // and agent fixes); the author comes from the repo config. Hooks are
-      // skipped so the formatter does not rewrite upstream files.
+      // Records the regenerated lockfile and agent fixes; the author comes from
+      // the repo config. Hooks are skipped so the formatter does not rewrite upstream files.
       yield* attributableUntrackedPaths(repo);
       yield* gitMerge(repo, ["add", "-u"]);
-      // A build repair must not invalidate a move's destination or introduce new marker loss.
-      // These original identities were already validated by the one marker-repair pass.
-      const accountedOriginals = new Map<string, Set<number>>();
-      for (const entry of dispositions) {
-        const lines = accountedOriginals.get(entry.path) ?? new Set<number>();
-        lines.add(entry.line);
-        accountedOriginals.set(entry.path, lines);
-      }
+      // A build repair must not introduce marker loss; the merge's own was settled before it.
       const { after, changes, lost } = yield* findLostMarkers(repo, markersBeforeBuild);
       const finalAccounting = accountForMarkerLoss(
-        dispositions,
-        accountedOriginals,
+        [],
+        new Map<string, ReadonlySet<number>>(),
         markersBeforeBuild,
         after,
         lost,
@@ -1418,7 +1433,8 @@ export const make = Effect.gen(function* () {
           `the build left unexplained ${FORK_MARKER} losses. Files: ${describeLostMarkers(finalAccounting.unexplained)}`,
         );
       }
-      if (merging || (yield* hasStagedChanges(repo))) {
+      const fixed = yield* hasStagedChanges(repo);
+      if (fixed) {
         yield* runChecked({
           operation: "merge",
           command: "git",
@@ -1427,14 +1443,12 @@ export const make = Effect.gen(function* () {
             "--no-verify",
             "--no-edit",
             "-m",
-            merging
-              ? mergeCommitMessage(mergeMessage, dispositions)
-              : `fix(desktop): build upstream nightly ${inspection.upstreamTag}`,
+            `fix(desktop): build upstream nightly ${inspection.upstreamTag}`,
           ],
           cwd: repo,
         });
       }
-      return { applicationBundlePath };
+      return { applicationBundlePath, fixed };
     }).pipe(
       // Preserve the original failure, adding any checkout leftovers after cleanup.
       Effect.catchCause((cause) =>
@@ -1444,7 +1458,8 @@ export const make = Effect.gen(function* () {
         ),
       ),
     );
-    const push = yield* pushFork(repo);
+    // The fix commit is released too, after the release of the merge already running.
+    const push = built.fixed ? yield* pushFork(repo) : earlyPush;
     const build = {
       version: inspection.upstreamVersion,
       applicationBundlePath: built.applicationBundlePath,
@@ -1488,18 +1503,7 @@ export const make = Effect.gen(function* () {
       const label = agent
         ? `upstream main ${target.slice(0, 10)}`
         : `upstream nightly ${inspection.upstreamTag}`;
-      const message = `chore(sync): merge ${label}`;
-      yield* Effect.gen(function* () {
-        const dispositions = yield* mergeUpstream(repo, target, label, message, agent);
-        yield* reportProgress({ phase: "committing" });
-        yield* git([
-          "commit",
-          "--no-verify",
-          "--no-edit",
-          "-m",
-          mergeCommitMessage(message, dispositions),
-        ]);
-      }).pipe(
+      yield* commitUpstreamMerge(repo, target, label, agent).pipe(
         Effect.catchCause((cause) =>
           abortMerge(repo).pipe(
             Effect.tap(() => (agent ? Effect.void : Ref.set(autoSyncBlockedRef, target))),
