@@ -116,9 +116,9 @@ plain nightly. Releasing that commit again is a no-op that exits `0`.
 
 The steady-state workflow is:
 
-1. Push the fork from the Mac app: its upstream sync, auto-sync or **Update** pushes, and the app
-   releases each pushed commit (see below). The Mac app's own rebuild runs alongside; the release
-   does not wait for it.
+1. Upstream sync and auto-sync push the fork, which pulls every host checkout. **Update** pushes
+   before it builds, and the app releases that commit (see below). The Mac app's own rebuild runs
+   alongside; the release does not wait for it.
 2. `release` runs on the Mac, started by the app or by hand. Preflight requires the checkout on
    `main` at `origin/main`, the host tool files (`scripts/` and the two source files hosts receive)
    unchanged from that commit, and, with `--expect-sha`, the checkout at that commit. Other files may
@@ -150,15 +150,17 @@ cross-build them.
 
 ### Automatic fleet updates
 
-A Mac app built from the fork's source (local source updates enabled) releases each commit it
-pushes to the fork: after a successful push, the app runs
+A Mac app built from the fork's source (local source updates enabled) releases each commit its
+**Update** pushes to the fork. A source sync or auto-sync push only pulls the host checkouts, so
+the hosts build and update when the Mac is updated, not when upstream lands. After **Update**'s
+push, the app runs
 `node scripts/tjn-hosts.ts release --expect-sha <commit>` in the checkout, detached, so quitting the
 app does not stop it. The repo-sync push has already pulled every host checkout to that commit, so
 DESK and YOGA build while the Mac rebuilds itself. **Update** commits the upstream merge and pushes
 it before it builds, as the background sync does, so the hosts start at the first click; a failed
 Mac build leaves that merge in place, and a build repair is committed and pushed afterwards as
 `fix(desktop): build upstream nightly …`, which releases again. A push during a running release is released when
-that run ends; only the newest such push is kept. Pushes made outside the app, such as an agent's
+that run ends; only the newest such push is kept. Sync pushes and pushes made outside the app, such as an agent's
 push-safe, do not release; run `release` by hand or use **Retry**. A newly installed build also
 releases the checkout's `HEAD` one minute after its first launch, unless that commit was already
 released.

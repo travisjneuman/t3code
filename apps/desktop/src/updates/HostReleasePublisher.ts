@@ -1,8 +1,8 @@
-// Fork add-on: each time this app pushes the fork (a source sync or an update),
-// the Mac app publishes a fork host release (`node scripts/tjn-hosts.ts release`)
-// for that commit, and each fork host then updates itself through the
-// maintenance queue. A newly installed build releases the checkout once more in
-// case its commit was not released. The release runs detached so quitting the
+// Fork add-on: each time an Update pushes the fork, before it builds, the Mac app
+// publishes a fork host release (`node scripts/tjn-hosts.ts release`) for that
+// commit, so the hosts build alongside it, and then updates each fork host. A
+// sync's push only pulls the host checkouts. A newly installed build releases the
+// checkout once more in case its commit was not released. The release runs detached so quitting the
 // app does not stop it; its record, log and exit code live in stateDir. See
 // docs/operations/fork-host-releases.md.
 import type { DesktopHostReleaseStatus } from "@t3tools/contracts";
@@ -78,7 +78,7 @@ export class HostReleasePublisher extends Context.Service<
   HostReleasePublisher,
   {
     readonly getStatus: Effect.Effect<DesktopHostReleaseStatus | null>;
-    /** Follows the fork pushes, and releases a newly installed build's checkout once. */
+    /** Follows Update's fork pushes, and releases a newly installed build's checkout once. */
     readonly start: Effect.Effect<void>;
     /** Releases the checkout again, unless a release is running. */
     readonly retry: Effect.Effect<DesktopHostReleaseStatus | null>;
@@ -274,7 +274,7 @@ const make = Effect.gen(function* () {
 
   const start = Effect.gen(function* () {
     if (!enabled || build === undefined) return;
-    yield* localSourceUpdates.pushedCommits.pipe(
+    yield* localSourceUpdates.buildCommits.pipe(
       Stream.runForEach(releasePushed),
       Effect.forkIn(scope),
     );

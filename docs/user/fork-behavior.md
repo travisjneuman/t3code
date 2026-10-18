@@ -19,9 +19,9 @@ non-draft fork release on the app's channel that is no newer than the app itself
 compared by version, not by publication order. A release built from a newer fork commit at the
 same upstream version also counts as an update; rows show it as the version plus `(fork <commit>)`.
 
-A desktop app built from the fork's source publishes a host release each time it pushes the fork,
-from a source sync or an update, so the hosts build while the app updates itself. **Update**
-pushes before it starts building, so the hosts start as soon as you click it, not when you restart. It then updates each
+A desktop app built from the fork's source keeps the hosts in step with it. A source sync pushes
+the fork, which pulls the new code onto every host. **Update** pushes before it starts building and
+publishes a host release, so the hosts build as soon as you click it, alongside the app. It then updates each
 connected fork host right away, even to a release newer than the app, without waiting for the host
 to be idle. If publishing fails, an error notice names the log and offers **Retry**. Each host is updated once per
 release, so after a failed update, use the server's update action instead.

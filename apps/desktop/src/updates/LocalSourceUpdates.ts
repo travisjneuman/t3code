@@ -145,8 +145,11 @@ export class LocalSourceUpdates extends Context.Service<
      * sync button (which has the agent) merges it.
      */
     readonly autoSyncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
-    /** Each commit this app pushed to the fork; the host release publisher follows it. */
-    readonly pushedCommits: Stream.Stream<string>;
+    /**
+     * Each commit an Update pushed to the fork, so the host release publisher builds it on the
+     * hosts alongside this Mac. A sync's push only pulls the other checkouts.
+     */
+    readonly buildCommits: Stream.Stream<string>;
   }
 >()("@t3tools/desktop/updates/LocalSourceUpdates") {}
 
@@ -448,7 +451,7 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const builtUpdateRef = yield* Ref.make<LocalSourceUpdateBuild | null>(null);
-  const pushedCommits = yield* PubSub.unbounded<string>();
+  const buildCommits = yield* PubSub.unbounded<string>();
 
   // The environment variable wins; otherwise the path the build recorded.
   const resolveRepositoryPath = Effect.gen(function* () {
@@ -1209,7 +1212,10 @@ export const make = Effect.gen(function* () {
   // sync or build: the merge stands locally and the result says why it was skipped.
   // A configured sync runner pushes instead of plain git, so its owner's other
   // checkouts are pulled to the pushed commit too.
-  const pushFork = Effect.fn("desktop.localSourceUpdates.pushFork")(function* (repo: string) {
+  const pushFork = Effect.fn("desktop.localSourceUpdates.pushFork")(function* (
+    repo: string,
+    build: boolean,
+  ) {
     yield* reportProgress({ phase: "pushing" });
     const configuredRunner = process.env[SYNC_RUNNER_ENV]?.trim();
     const runner =
@@ -1245,14 +1251,16 @@ export const make = Effect.gen(function* () {
           via: runner ? "sync runner" : "git",
         });
       }
-      const head = yield* runCommand({
-        operation: "push",
-        command: "git",
-        args: ["rev-parse", "HEAD"],
-        cwd: repo,
-      }).pipe(Effect.option);
-      if (Option.isSome(head) && head.value.exitCode === 0) {
-        yield* PubSub.publish(pushedCommits, head.value.stdout.trim());
+      if (build) {
+        const head = yield* runCommand({
+          operation: "push",
+          command: "git",
+          args: ["rev-parse", "HEAD"],
+          cwd: repo,
+        }).pipe(Effect.option);
+        if (Option.isSome(head) && head.value.exitCode === 0) {
+          yield* PubSub.publish(buildCommits, head.value.stdout.trim());
+        }
       }
       return { pushed: true } satisfies ForkPushResult;
     }
@@ -1299,7 +1307,10 @@ export const make = Effect.gen(function* () {
     if (!merging) {
       const pendingBuild = yield* Ref.get(builtUpdateRef);
       if (pendingBuild) {
-        return { ...pendingBuild, push: yield* pushFork(repo) } satisfies LocalSourceUpdateBuild;
+        return {
+          ...pendingBuild,
+          push: yield* pushFork(repo, true),
+        } satisfies LocalSourceUpdateBuild;
       }
       // Sync already merged this nightly; it still needs building when the
       // running app predates it.
@@ -1327,7 +1338,7 @@ export const make = Effect.gen(function* () {
         ),
       );
     }
-    const earlyPush = yield* pushFork(repo);
+    const earlyPush = yield* pushFork(repo, true);
     const buildsDir = environment.path.join(environment.stateDir, SOURCE_UPDATE_BUILDS_DIR);
     // Forgets the pending build too, so install never points at a deleted bundle.
     const removeBuilds = Ref.set(builtUpdateRef, null).pipe(
@@ -1459,7 +1470,7 @@ export const make = Effect.gen(function* () {
       ),
     );
     // The fix commit is released too, after the release of the merge already running.
-    const push = built.fixed ? yield* pushFork(repo) : earlyPush;
+    const push = built.fixed ? yield* pushFork(repo, true) : earlyPush;
     const build = {
       version: inspection.upstreamVersion,
       applicationBundlePath: built.applicationBundlePath,
@@ -1514,7 +1525,7 @@ export const make = Effect.gen(function* () {
       return {
         merged: behind,
         upstreamTag: inspection.upstreamTag,
-        push: yield* pushFork(repo),
+        push: yield* pushFork(repo, false),
       } satisfies LocalSourceSyncResult;
     }).pipe(
       repositoryLock.withPermits(1),
@@ -1592,7 +1603,7 @@ export const make = Effect.gen(function* () {
     install,
     syncSource: syncUpstream(true),
     autoSyncSource: syncUpstream(false),
-    pushedCommits: Stream.fromPubSub(pushedCommits),
+    buildCommits: Stream.fromPubSub(buildCommits),
   });
 });
 

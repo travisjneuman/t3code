@@ -73,7 +73,7 @@ function makeHarness(options: HarnessOptions = {}) {
     syncSource:
       options.syncSource ?? Effect.succeed({ merged: 0, upstreamTag: UPSTREAM_TAG, push: null }),
     autoSyncSource: Effect.succeed({ merged: 0, upstreamTag: UPSTREAM_TAG, push: null }),
-    pushedCommits: Stream.empty,
+    buildCommits: Stream.empty,
   } satisfies LocalSourceUpdates.LocalSourceUpdates["Service"]);
 
   const layerApp = Layer.succeed(ElectronApp.ElectronApp, {
