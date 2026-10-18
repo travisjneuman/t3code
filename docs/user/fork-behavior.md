@@ -18,6 +18,8 @@ In the web and desktop clients, connected servers running the fork update to the
 non-draft fork release on the app's channel that is no newer than the app itself. Releases are
 compared by version, not by publication order. A release built from a newer fork commit at the
 same upstream version also counts as an update; rows show it as the version plus `(fork <commit>)`.
+The desktop app's own server is never compared with a host release: it ships inside the app, so
+it offers a server update only when its version differs from the app's.
 
 A desktop app built from the fork's source keeps the hosts in step with it. A source sync pushes
 the fork, which pulls the new code onto every host. **Update** pushes before it starts building and

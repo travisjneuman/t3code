@@ -12,7 +12,11 @@ import {
   collectServerUpdateTargets,
   type UpdateEverythingMachine,
 } from "~/components/sidebar/updateEverything.logic";
-import { resolveRuntimeVersionMismatch, type VersionMismatch } from "~/versionSkew";
+import {
+  resolveRuntimeVersionMismatch,
+  resolveServerConfigVersionMismatch,
+  type VersionMismatch,
+} from "~/versionSkew";
 
 // Fork hosts update only to a version the explicit desktop Update flow has staged on every
 // configured host. Generic web clients have no local build bridge and must not offer archives.
@@ -160,6 +164,11 @@ export function resolveHostVersionMismatch(
   serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
   hostUpdateTarget: string | null,
 ): VersionMismatch | null {
+  // A desktop app's own server ships in the same bundle that publishes host releases, so it is
+  // never behind the staged target; a Mac build newer than the last staging would read as one.
+  if (serverConfig?.environment.capabilities.serverSelfUpdate === "desktop-managed") {
+    return resolveServerConfigVersionMismatch(serverConfig);
+  }
   return hostUpdateTarget === null
     ? null
     : resolveRuntimeVersionMismatch(serverConfig?.environment, hostUpdateTarget);
