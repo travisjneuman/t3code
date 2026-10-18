@@ -169,6 +169,13 @@ push-safe, do not release; run `release` by hand or use **Retry**. A newly insta
 releases the checkout's `HEAD` one minute after its first launch, unless that commit was already
 released.
 
+The Mac build stamps its bundled server with `T3CODE_FORK_BUILD`, as host archives do, using the
+newest first-parent commit outside `MAC_ONLY_PATHS`. That commit is the one `release` publishes,
+since commits confined to those paths are skipped. An unstamped Mac server never matches the
+release's `<nightly>+<fork build>`, so every client offers it a server update that does not clear.
+`HOST_RELEASE_SKIPPED_PATHS` in `apps/desktop/src/updates/LocalSourceUpdates.ts` must match
+`MAC_ONLY_PATHS` in `scripts/tjn-hosts.ts`. A hand-built Mac app needs the same variable.
+
 The host build only needs the commit on `origin/main`, and publication only needs the Mac's host
 tool files unchanged and the commit still in `HEAD`'s history, so a later push during a release
 does not fail it. A later push can still move a host checkout while it builds, which fails that
