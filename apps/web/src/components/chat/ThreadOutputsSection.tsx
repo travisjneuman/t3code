@@ -9,18 +9,15 @@ import { StartTruncatedPath } from "../StartTruncatedPath";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { type OutputFile, sumOutputChanges } from "./sessionInsights.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
-import {
-  THREAD_DETAILS_PANEL_ICON_CLASS,
-  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
-} from "./threadDetailsPanelStyles";
+import { THREAD_DETAILS_PANEL_AGENT_LINE_CLASS } from "./threadDetailsPanelStyles";
 import { useOpenSessionFile } from "./useOpenSessionFile";
 
 const OUTPUTS_INITIAL_COUNT = 8;
 
-const OUTPUT_ROW_CLASS = cn(
-  "flex h-8 w-full min-w-0 items-center rounded-lg text-sm text-foreground/80",
-  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
-);
+// Same dense line as the lineage subagent rows; a row with nothing to open
+// keeps the size without the pointer and hover.
+const OUTPUT_STATIC_ROW_CLASS =
+  "flex h-5 w-full min-w-0 items-center gap-1.5 rounded-md px-2.5 text-left text-[10px] text-foreground/80";
 
 /** Files the thread's turns changed, newest first; each opens its diff. Fork add-on. */
 export const ThreadOutputsSection = memo(function ThreadOutputsSection(props: {
@@ -101,7 +98,7 @@ export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
       }
       data-thread-outputs-panel
     >
-      <ul className="m-0 max-h-[17rem] list-none overflow-y-auto overscroll-contain p-0">
+      <ul className="m-0 max-h-[13.5rem] list-none overflow-y-auto overscroll-contain p-0">
         {visible.map((output) => (
           <li key={output.path}>
             <OutputRow
@@ -118,12 +115,15 @@ export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
           type="button"
           aria-expanded={showAll}
           onClick={() => setShowAll((value) => !value)}
-          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
+          className={cn(
+            THREAD_DETAILS_PANEL_AGENT_LINE_CLASS,
+            "text-muted-foreground/70 hover:text-foreground/80",
+          )}
         >
           {showAll ? (
-            <MinusIcon aria-hidden className="size-4 shrink-0" />
+            <MinusIcon aria-hidden className="size-3 shrink-0" />
           ) : (
-            <PlusIcon aria-hidden className="size-4 shrink-0" />
+            <PlusIcon aria-hidden className="size-3 shrink-0" />
           )}
           {showAll ? "Show fewer" : `Show all ${outputs.length}`}
         </button>
@@ -144,13 +144,13 @@ function OutputRow(props: {
   const { output, onOpenTurnDiff, onOpenFile } = props;
   const content = (
     <>
-      <FileDiffIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+      <FileDiffIcon aria-hidden className="size-3 shrink-0 text-muted-foreground" />
       <StartTruncatedPath
         path={formatWorkspaceRelativePath(output.path, props.workspaceRoot)}
         className="flex-1"
       />
       {output.hasStats ? (
-        <span className="shrink-0 text-2xs">
+        <span className="shrink-0">
           <DiffStatLabel
             additions={output.additions}
             deletions={output.deletions}
@@ -168,17 +168,10 @@ function OutputRow(props: {
         ? () => onOpenFile(output.path)
         : null;
   if (open === null) {
-    return <div className={OUTPUT_ROW_CLASS}>{content}</div>;
+    return <div className={OUTPUT_STATIC_ROW_CLASS}>{content}</div>;
   }
   return (
-    <button
-      type="button"
-      className={cn(
-        OUTPUT_ROW_CLASS,
-        "cursor-pointer hover:bg-black/[0.055] dark:hover:bg-white/[0.075]",
-      )}
-      onClick={open}
-    >
+    <button type="button" className={THREAD_DETAILS_PANEL_AGENT_LINE_CLASS} onClick={open}>
       {content}
     </button>
   );

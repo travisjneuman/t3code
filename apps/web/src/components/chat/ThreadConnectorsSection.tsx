@@ -7,10 +7,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { mcpServerStatusPresentation } from "./sessionInsights.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadDetailsStatusDot } from "./ThreadDetailsStatRow";
-import {
-  THREAD_DETAILS_PANEL_ICON_CLASS,
-  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
-} from "./threadDetailsPanelStyles";
+import { THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS } from "./threadDetailsPanelStyles";
 
 /** MCP servers the provider session has loaded, with their connection state. Fork add-on. */
 export const ThreadConnectorsSection = memo(function ThreadConnectorsSection(props: {
@@ -45,20 +42,22 @@ function ConnectorRow(props: { readonly server: SessionMcpServer }) {
       : null,
   ].filter((detail) => detail !== null);
   const statusLabel = (
-    <span className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
+    <span className="flex shrink-0 items-center gap-1.5 text-3xs text-muted-foreground">
       <ThreadDetailsStatusDot className={status.dotClassName} />
       {status.label}
     </span>
   );
   return (
     <li
-      className={cn("flex items-center rounded-lg py-1.5", THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS)}
+      className={cn("flex items-center rounded-md py-0.5", THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS)}
     >
-      <PlugIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+      <PlugIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground/80">{server.name}</span>
+        <span className="block truncate text-2xs/4 font-medium text-foreground/80">
+          {server.name}
+        </span>
         {details.length > 0 ? (
-          <p className="truncate text-2xs text-muted-foreground tabular-nums">
+          <p className="truncate text-3xs/3.5 text-muted-foreground tabular-nums">
             {details.join(" · ")}
           </p>
         ) : null}
