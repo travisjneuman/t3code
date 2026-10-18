@@ -31,7 +31,11 @@ version label and `--build-version` (tag without the leading `v`).
   reports its own package version, so an unstamped build shows a client/server
   mismatch and offers a server update that does not exist.
 - "Behind" is counted against the tag's commit. A fork that already contains it is
-  up to date even if `upstream/main` has moved on.
+  up to date even if `upstream/main` has moved on, as long as the running app is on
+  that nightly and was built from the checkout's `HEAD`. Builds stamp
+  `t3codeCommitHash` as a 12-character short hash while inspect reads the full
+  `HEAD`, so `runsCheckedOutCommit` compares them as a prefix; exact equality never
+  matches and offers the same nightly forever.
 
 ## Merge, build, then commit
 

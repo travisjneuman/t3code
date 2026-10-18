@@ -177,7 +177,7 @@ export const makeLocalSource = Effect.gen(function* () {
       if (
         inspection.behind === 0 &&
         environment.appVersion === inspection.upstreamVersion &&
-        inspection.currentCommit === inspection.installedCommit
+        LocalSourceUpdates.runsCheckedOutCommit(inspection)
       ) {
         yield* updateState((current) => reduceDesktopUpdateStateOnNoUpdate(current, checkedAt));
         yield* logUpdaterInfo("no updates available");

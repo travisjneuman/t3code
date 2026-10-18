@@ -62,7 +62,9 @@ newer one is out or you press the merge button.
 
 The merge button beside the update button (**Sync fork with official T3 Code**) merges everything
 on upstream's `main` branch, including changes that are not in a nightly yet, without building.
-The update button builds them with the next nightly.
+
+When the checkout has commits the installed app wasn't built from but no newer nightly is out,
+the update button says so and **Sync & Build** builds them at the current nightly's version.
 
 Sync and update refuse to start while the checkout has uncommitted changes, is not on `main`, or
 is in the middle of another merge.

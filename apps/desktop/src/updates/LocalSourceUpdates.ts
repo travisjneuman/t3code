@@ -112,6 +112,15 @@ export interface LocalSourceUpdateInspection {
   readonly behind: number;
 }
 
+// Fork add-on: builds stamp `git rev-parse --short=12 HEAD`, while inspect
+// reads the full HEAD, so the installed commit only ever matches as a prefix.
+export const runsCheckedOutCommit = (
+  inspection: Pick<LocalSourceUpdateInspection, "currentCommit" | "installedCommit">,
+): boolean =>
+  inspection.installedCommit !== undefined &&
+  inspection.installedCommit.length >= 7 &&
+  inspection.currentCommit.toLowerCase().startsWith(inspection.installedCommit);
+
 /** Pushing to origin is best effort: whoever builds the fork may not be able to push it. */
 export type ForkPushResult =
   | { readonly pushed: true }
@@ -1331,7 +1340,7 @@ export const make = Effect.gen(function* () {
       // running app predates it.
       if (
         environment.appVersion === inspection.upstreamVersion &&
-        inspection.currentCommit === inspection.installedCommit
+        runsCheckedOutCommit(inspection)
       ) {
         return yield* makeError(
           "merge",
@@ -1412,7 +1421,13 @@ export const make = Effect.gen(function* () {
       yield* fileSystem.makeDirectory(scratchDir, { recursive: true });
       const scratchEnv = { TMPDIR: scratchDir, TMP: scratchDir, TEMP: scratchDir };
       // Upstream nightlies change dependencies, so install before building.
-      yield* runChecked({ operation: "build", command: "vp", args: ["i"], cwd: repo, env: scratchEnv });
+      yield* runChecked({
+        operation: "build",
+        command: "vp",
+        args: ["i"],
+        cwd: repo,
+        env: scratchEnv,
+      });
       const buildArgs = [
         "run",
         "dist:desktop:artifact",

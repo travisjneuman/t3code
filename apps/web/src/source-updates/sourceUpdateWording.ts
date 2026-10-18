@@ -27,14 +27,24 @@ export function withSourceUpdateDescription(
   state: DesktopUpdateState | null,
   fallback: string,
 ): string {
-  return state?.sourceUpdate
-    ? "Merges the latest upstream nightly into this fork and builds the app locally."
-    : fallback;
+  if (!state?.sourceUpdate) return fallback;
+  return isForkRebuild(state)
+    ? "Builds this fork's newer commits into the app locally."
+    : "Merges the latest upstream nightly into this fork and builds the app locally.";
+}
+
+// The desktop also offers a build when the checkout moved past the installed
+// commit with no newer nightly; the offered version is then the running one.
+function isForkRebuild(state: DesktopUpdateState): boolean {
+  return state.availableVersion !== null && state.availableVersion === state.currentVersion;
 }
 
 export function getSourceUpdateButtonTooltip(state: DesktopUpdateState): string | null {
   if (!state.sourceUpdate) return null;
   if (state.status === "available") {
+    if (isForkRebuild(state)) {
+      return "This fork has commits the installed app was not built from. Click to build them locally.";
+    }
     return `Upstream nightly${state.availableVersion ? ` ${state.availableVersion}` : ""} available. Click to merge the upstream nightly into this fork and build locally.`;
   }
   if (state.status === "downloading") {
