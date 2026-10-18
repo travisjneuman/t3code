@@ -1,8 +1,10 @@
-// Fork add-on: once per installed local source build, the Mac app publishes a
-// fork host release (`node scripts/tjn-hosts.ts release`), and each fork host
-// then updates itself through the maintenance queue. The release runs detached
-// so quitting the app does not stop it; its record, log and exit code live in
-// stateDir. See docs/operations/fork-host-releases.md.
+// Fork add-on: each time this app pushes the fork (a source sync or an update),
+// the Mac app publishes a fork host release (`node scripts/tjn-hosts.ts release`)
+// for that commit, and each fork host then updates itself through the
+// maintenance queue. A newly installed build releases the checkout once more in
+// case its commit was not released. The release runs detached so quitting the
+// app does not stop it; its record, log and exit code live in stateDir. See
+// docs/operations/fork-host-releases.md.
 import type { DesktopHostReleaseStatus } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -27,7 +29,7 @@ import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 const RECORD_FILE = "host-release.json";
 const LOG_FILE = "host-release.log";
 const EXIT_FILE = "host-release.exit";
-// The release refuses until the Mac server reports the installed nightly.
+// Lets a relaunched app settle before the fallback release for its build.
 const STARTUP_DELAY = "1 minute";
 const WATCH_INTERVAL = "15 seconds";
 // A recorded process this old without an exit code is a reused pid, not the release.
@@ -39,7 +41,7 @@ printf '%s\\n' "$code" > "$3.tmp" && mv "$3.tmp" "$3"`;
 
 const PublishRecord = Schema.fromJsonString(
   Schema.Struct({
-    /** `<app version>@<commit hash>` of the installed build this ran for. */
+    /** `<app version>@<commit hash>` of the installed build that started this run. */
     build: Schema.String,
     commit: Schema.String,
     pid: Schema.NullOr(Schema.Number),
@@ -76,9 +78,9 @@ export class HostReleasePublisher extends Context.Service<
   HostReleasePublisher,
   {
     readonly getStatus: Effect.Effect<DesktopHostReleaseStatus | null>;
-    /** Starts the release for a newly installed build, after the startup delay. */
+    /** Follows the fork pushes, and releases a newly installed build's checkout once. */
     readonly start: Effect.Effect<void>;
-    /** Starts it again for the installed build, unless one is running. */
+    /** Releases the checkout again, unless a release is running. */
     readonly retry: Effect.Effect<DesktopHostReleaseStatus | null>;
   }
 >()("t3/desktop/updates/HostReleasePublisher") {}
@@ -91,6 +93,8 @@ const make = Effect.gen(function* () {
   const localSourceUpdates = yield* LocalSourceUpdates.LocalSourceUpdates;
   const scope = yield* Scope.Scope;
   const lastStatusRef = yield* Ref.make<DesktopHostReleaseStatus | null>(null);
+  // The newest commit pushed while a release ran; it is released once that run ends.
+  const queuedCommitRef = yield* Ref.make<string | null>(null);
 
   const repo = Option.getOrUndefined(localSourceUpdates.repositoryPath);
   const enabled = (yield* localSourceUpdates.enabled) && repo !== undefined;
@@ -167,10 +171,6 @@ const make = Effect.gen(function* () {
     return next;
   });
 
-  const watch = Effect.gen(function* () {
-    while ((yield* refresh)?.state === "running") yield* Effect.sleep(WATCH_INTERVAL);
-  });
-
   const gitOutput = (args: ReadonlyArray<string>) =>
     Effect.scoped(
       spawner
@@ -194,62 +194,100 @@ const make = Effect.gen(function* () {
       Effect.orElseSucceed(() => undefined),
     );
 
-  // The in-app update commits its merge after building, so the build's commit is then
-  // the parent of the one to release.
-  const releasableCommit = Effect.gen(function* () {
-    if (commitHash === undefined) return undefined;
-    const head = yield* gitOutput(["rev-parse", "HEAD"]);
-    if (head === undefined) return undefined;
-    if (head.startsWith(commitHash)) return head;
-    const parent = yield* gitOutput(["rev-parse", "--verify", "--quiet", "HEAD^1"]);
-    return parent?.startsWith(commitHash) === true ? head : undefined;
+  const launch = (commit: string | undefined) =>
+    Effect.gen(function* () {
+      if (!enabled || build === undefined || repo === undefined) return;
+      const startedAt = yield* Clock.currentTimeMillis;
+      if (commit === undefined) {
+        return yield* writeRecord({
+          build,
+          commit: "",
+          pid: null,
+          startedAt,
+          refusal: "The source checkout has no commit to release.",
+        });
+      }
+      yield* fileSystem.remove(exitPath, { force: true });
+      const pid = yield* Effect.scoped(
+        spawner
+          .spawn(
+            ChildProcess.make("/bin/sh", ["-c", RELEASE_SCRIPT, "sh", commit, logPath, exitPath], {
+              cwd: repo,
+              env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "Never" },
+              stdin: "ignore",
+              stdout: "ignore",
+              stderr: "ignore",
+              detached: true,
+            }),
+          )
+          .pipe(
+            Effect.tap((child) => child.unref),
+            Effect.map((child) => Number(child.pid)),
+          ),
+      ).pipe(Effect.option);
+      yield* writeRecord(
+        Option.isNone(pid)
+          ? {
+              build,
+              commit,
+              pid: null,
+              startedAt,
+              refusal: "The release tool could not be started.",
+            }
+          : { build, commit, pid: pid.value, startedAt, refusal: null },
+      );
+      if (Option.isSome(pid)) yield* logInfo("host release started", { commit, logPath });
+    }).pipe(
+      Effect.catchCause((cause) =>
+        logWarning("host release could not start", { cause: Cause.pretty(cause) }),
+      ),
+    );
+
+  // Runs while a release is running, then releases a commit pushed meanwhile.
+  const watch: Effect.Effect<void> = Effect.gen(function* () {
+    while ((yield* refresh)?.state === "running") yield* Effect.sleep(WATCH_INTERVAL);
+    const queued = yield* Ref.getAndSet(queuedCommitRef, null);
+    const record = yield* readRecord;
+    if (queued === null || queued === record?.commit) return;
+    yield* launch(queued);
+    yield* watch;
   });
 
-  const launch = Effect.gen(function* () {
-    if (!enabled || build === undefined || repo === undefined) return;
-    const startedAt = yield* Clock.currentTimeMillis;
-    const commit = yield* releasableCommit;
-    const refuse = (refusal: string) =>
-      writeRecord({ build, commit: commit ?? "", pid: null, startedAt, refusal });
-    if (commit === undefined) {
-      return yield* refuse(
-        "The source checkout moved since this app was built, so the hosts were not updated. " +
-          "Rebuild the Mac app.",
-      );
-    }
-    yield* fileSystem.remove(exitPath, { force: true });
-    const pid = yield* Effect.scoped(
-      spawner
-        .spawn(
-          ChildProcess.make("/bin/sh", ["-c", RELEASE_SCRIPT, "sh", commit, logPath, exitPath], {
-            cwd: repo,
-            env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "Never" },
-            stdin: "ignore",
-            stdout: "ignore",
-            stderr: "ignore",
-            detached: true,
-          }),
-        )
-        .pipe(
-          Effect.tap((child) => child.unref),
-          Effect.map((child) => Number(child.pid)),
-        ),
-    ).pipe(Effect.option);
-    if (Option.isNone(pid)) return yield* refuse("The release tool could not be started.");
-    yield* writeRecord({ build, commit, pid: pid.value, startedAt, refusal: null });
-    yield* logInfo("host release started", { commit, logPath });
-  }).pipe(
-    Effect.catchCause((cause) =>
-      logWarning("host release could not start", { cause: Cause.pretty(cause) }),
-    ),
-  );
+  /** A release that ran or runs for this commit needs no other. */
+  const releasedOrRunning = (commit: string) =>
+    Effect.gen(function* () {
+      const record = yield* readRecord;
+      if (record === undefined || record.commit !== commit) return false;
+      return (yield* statusOf(record)).state !== "failed";
+    });
+
+  const releasePushed = (commit: string) =>
+    Effect.gen(function* () {
+      if ((yield* refresh)?.state === "running") {
+        yield* Ref.set(queuedCommitRef, commit);
+        return;
+      }
+      if (yield* releasedOrRunning(commit)) return;
+      yield* launch(commit);
+      yield* watch.pipe(Effect.forkIn(scope));
+    });
 
   const start = Effect.gen(function* () {
     if (!enabled || build === undefined) return;
+    yield* localSourceUpdates.pushedCommits.pipe(
+      Stream.runForEach(releasePushed),
+      Effect.forkIn(scope),
+    );
     const record = yield* readRecord;
     if (record?.build !== build) {
       yield* Effect.sleep(STARTUP_DELAY);
-      yield* launch;
+      const head = yield* gitOutput(["rev-parse", "HEAD"]);
+      const current = yield* readRecord;
+      if (head !== undefined && (yield* releasedOrRunning(head)) && current !== undefined) {
+        yield* writeRecord({ ...current, build }).pipe(Effect.ignore);
+      } else if ((yield* refresh)?.state !== "running") {
+        yield* launch(head);
+      }
     }
     yield* watch;
   }).pipe(Effect.forkIn(scope), Effect.asVoid, Effect.withSpan("desktop.hostRelease.start"));
@@ -257,7 +295,7 @@ const make = Effect.gen(function* () {
   const retry = Effect.gen(function* () {
     const status = yield* refresh;
     if (status?.state === "running") return status;
-    yield* launch;
+    yield* launch(yield* gitOutput(["rev-parse", "HEAD"]));
     yield* watch.pipe(Effect.forkIn(scope));
     return yield* refresh;
   }).pipe(Effect.withSpan("desktop.hostRelease.retry"));

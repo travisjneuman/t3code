@@ -149,27 +149,33 @@ async function moveServiceFile(baseDir: string, version: string): Promise<boolea
 }
 
 /**
+ * Exits this server so the launcher exits with it ("active child exited unexpectedly"), and
+ * systemd or the cmd loop starts the launcher again from the path the service file names.
+ */
+export const restartService = (reason: string) =>
+  Effect.logInfo(reason).pipe(
+    Effect.andThen(
+      Effect.sync(() => {
+        // Graceful shutdown from here has stalled on Linux, leaving this server up under
+        // the old launcher; layer construction is still waiting on the activation this
+        // parked startup never grants. Exit regardless.
+        setTimeout(() => process.exit(1), FORCED_EXIT_GRACE_MS).unref();
+        process.kill(process.pid, "SIGTERM");
+      }),
+    ),
+    Effect.andThen(Effect.never),
+  );
+
+/**
  * Runs once the server is committed and before it accepts commands. When the service file
- * moved, the server exits: the old launcher exits with it, and systemd or the cmd loop
- * starts the launcher again from `runtime/current`, which then starts this version there.
+ * moved, the server restarts the service, which then starts this version from `runtime/current`.
  */
 export const moveServiceToCurrentRuntime = (managed: boolean, baseDir: string) =>
   managed
     ? Effect.tryPromise(() => moveServiceFile(baseDir, SERVICE_RUNTIME_VERSION)).pipe(
         Effect.flatMap((moved) =>
           moved
-            ? Effect.logInfo("service now runs from runtime/current; restarting onto it").pipe(
-                Effect.andThen(
-                  Effect.sync(() => {
-                    // Graceful shutdown from here has stalled on Linux, leaving this server
-                    // up under the old launcher; layer construction is still waiting on the
-                    // activation this parked startup never grants. Exit regardless.
-                    setTimeout(() => process.exit(1), FORCED_EXIT_GRACE_MS).unref();
-                    process.kill(process.pid, "SIGTERM");
-                  }),
-                ),
-                Effect.andThen(Effect.never),
-              )
+            ? restartService("service now runs from runtime/current; restarting onto it")
             : Effect.void,
         ),
         Effect.catch((cause) =>

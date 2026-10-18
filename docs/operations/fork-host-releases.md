@@ -116,10 +116,13 @@ plain nightly. Releasing that commit again is a no-op that exits `0`.
 
 The steady-state workflow is:
 
-1. Update the Mac app through its normal fork source update, or rebuild and install it by hand.
-2. `release` runs on the Mac, started by the installed app (see below) or by hand. Preflight requires
-   a clean checkout at `origin/main`, the merged nightly version to match the installed Mac app, and,
-   with `--expect-sha`, the checkout to be at that commit. A release for the same nightly from an
+1. Push the fork from the Mac app: its upstream sync, auto-sync or **Update** pushes, and the app
+   releases each pushed commit (see below). The Mac app's own rebuild runs alongside; the release
+   does not wait for it.
+2. `release` runs on the Mac, started by the app or by hand. Preflight requires the checkout on
+   `main` at `origin/main`, the host tool files (`scripts/` and the two source files hosts receive)
+   unchanged from that commit, and, with `--expect-sha`, the checkout at that commit. Other files may
+   hold uncommitted work. A release for the same nightly from an
    earlier fork commit is replaced; one from this commit means there is nothing to do. Unreachable
    hosts are reported and skipped, not validated or changed. Every reachable host must run an older
    runtime id, and each platform needs a reachable configured builder.
@@ -134,8 +137,8 @@ The steady-state workflow is:
    restart its service. **Update everything** is safe only once every connected host has loaded that
    setting: a host without it installs upstream's same-version archive, which a later update will not
    replace with the fork.
-4. Once the hosts are idle and the release has been accepted, run `prune <host> --confirm-idle` or
-   `prune --all --confirm-idle`.
+4. Nothing to clean up: each host removes older runtimes itself once its update is committed (see
+   [Automatic cleanup](#automatic-cleanup)). `prune` remains for a host that needs a cold backup.
 5. Use `status` to read active versions, service state, installed version directories, launcher
    paths, release-base overrides, cold backups and the published fork release.
 
@@ -147,24 +150,31 @@ cross-build them.
 
 ### Automatic fleet updates
 
-A Mac app built from the fork's source (local source updates enabled) runs the release itself, once
-per installed build. The build records its commit as `t3codeCommitHash` in the app's
-`package.json`. One minute after the first launch of a new build, so the Mac server reports the
-installed nightly first, the app runs `node scripts/tjn-hosts.ts release --expect-sha <commit>` in
-the checkout, detached, so quitting the app does not stop it. The commit released is the checkout's
-`HEAD` when the build was made from it, or when the build was made from `HEAD`'s first parent: the
-in-app source update commits its merge after building. Any other checkout refuses with a message to
-rebuild the Mac app.
+A Mac app built from the fork's source (local source updates enabled) releases each commit it
+pushes to the fork: after a successful push, the app runs
+`node scripts/tjn-hosts.ts release --expect-sha <commit>` in the checkout, detached, so quitting the
+app does not stop it. The repo-sync push has already pulled every host checkout to that commit, so
+DESK and YOGA build while the Mac rebuilds itself. A push during a running release is released when
+that run ends; only the newest such push is kept. Pushes made outside the app, such as an agent's
+push-safe, do not release; run `release` by hand or use **Retry**. A newly installed build also
+releases the checkout's `HEAD` one minute after its first launch, unless that commit was already
+released.
 
-The app keeps the run in its state directory: `host-release.json` (the build it ran for, commit and
-PID), `host-release.log` (the tool's output) and `host-release.exit` (its exit code). A failed or
-refused run shows an error toast with the log path and **Retry**, once per run. The app checks fork
-releases at launch and again when a run succeeds, and queues an update for each connected
-boot-service host whose release source is the fork and that is behind the published release. It queues each host once per
-release, so a failed or cancelled update is not queued again; use that host's **Update** instead. Only
-the app that publishes queues these updates. The queue holds each update until the host is idle. A
-host whose running launcher predates runtime ids refuses a same-nightly update until its service
-has restarted once on a build that has them. Provider CLI updates and the Mac app's own update are not part of this.
+The host build only needs the commit on `origin/main`, and publication only needs the Mac's host
+tool files unchanged and the commit still in `HEAD`'s history, so a later push during a release
+does not fail it. A later push can still move a host checkout while it builds, which fails that
+build with a dirty-checkout refusal; the queued release of the newer commit replaces it.
+
+The app keeps the run in its state directory: `host-release.json` (the build and commit it ran for,
+and the PID), `host-release.log` (the tool's output) and `host-release.exit` (its exit code). A
+failed or refused run shows an error toast with the log path and **Retry**, once per run. The app
+checks fork releases at launch and again when a run succeeds, and queues an update for each connected
+boot-service host whose release source is the fork and that is behind the newest published release,
+even one newer than the Mac app itself. It queues each host once per release, so a failed or
+cancelled update is not queued again; use that host's **Update** instead. Only the app that
+publishes queues these updates; other clients still offer only releases no newer than themselves.
+The queue holds each update until the host is idle. Provider CLI updates and the Mac app's own
+update are not part of this.
 
 ### Release-notes receipt
 
@@ -222,6 +232,27 @@ extra restart. `runtime/.current-move-attempt` records the version that tried, s
 still starts the old launcher costs one restart rather than a loop; `prune` and `rollback` also
 migrate. `status` reports the launcher directory, and `launcherVersion` is the version
 `runtime/current` holds.
+
+The launcher passes its own runtime id to its server as `T3_SERVICE_LAUNCHER_VERSION`. A managed
+server whose launcher runs other code, or predates the variable, exits once after its update is
+committed, so the supervisor restarts the launcher from `runtime/current` onto the new code.
+`runtime/.launcher-refresh-attempt` records the version that tried, so an old launcher the
+supervisor keeps starting costs one restart, not a loop; that server then logs a warning and keeps
+older runtimes.
+
+### Automatic cleanup
+
+Once a managed server runs under a launcher of its own version with its update committed, it
+removes, before accepting commands:
+
+- every `runtime/versions/<id>` installed before the active one, judged by the `.install-complete`
+  sentinel's time, sentinel first so a half-removed directory never reads as installed;
+- `versions/.staging-*` directories older than an hour;
+- `runtime/db-backup` and `runtime/.current-retired`.
+
+A runtime installed after the active one is kept: it is a staged release waiting for its update.
+Files Windows still holds open stay until the next start. The server logs what it removed and
+what it kept. The Mac's desktop-managed server does not run this.
 
 ## Pruning and safe service stops
 

@@ -1249,9 +1249,13 @@ async function build(request: Request) {
     "Build checkout origin is not the fork.",
   );
   await git("fetch", "origin", "main");
+  // The Mac may push again while hosts build; the requested commit only has to be on main.
   requireState(
-    (await git("rev-parse", "origin/main")) === request.sha,
-    "Build origin/main moved from the requested SHA.",
+    await git("merge-base", "--is-ancestor", request.sha, "origin/main").then(
+      () => true,
+      () => false,
+    ),
+    "The requested SHA is not on origin/main.",
   );
   await git("merge-base", "--is-ancestor", "HEAD", request.sha);
   await git("merge", "--ff-only", request.sha);

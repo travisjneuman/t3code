@@ -16,3 +16,6 @@ export const FORK_BUILD: string | undefined =
  */
 export const SERVICE_RUNTIME_VERSION =
   FORK_BUILD === undefined ? packageJson.version : `${packageJson.version}+${FORK_BUILD}`;
+
+/** Set by the service launcher for its server, so a server can tell it runs under older code. */
+export const LAUNCHER_VERSION_ENV = "T3_SERVICE_LAUNCHER_VERSION";

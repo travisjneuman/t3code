@@ -19,9 +19,10 @@ non-draft fork release on the app's channel that is no newer than the app itself
 compared by version, not by publication order. A release built from a newer fork commit at the
 same upstream version also counts as an update; rows show it as the version plus `(fork <commit>)`.
 
-A desktop app built from the fork's source publishes a host release each time it installs a new
-build, then queues an update for each connected fork host, which runs once that host is idle. If
-publishing fails, an error notice names the log and offers **Retry**. Each host is queued once per
+A desktop app built from the fork's source publishes a host release each time it pushes the fork,
+from a source sync or an update, so the hosts build while the app updates itself. It then queues an
+update for each connected fork host, even to a release newer than the app, which runs once that
+host is idle. If publishing fails, an error notice names the log and offers **Retry**. Each host is queued once per
 release, so after a failed or cancelled update, use the server's update action instead.
 
 Use **Update everything** or the server's update action to update a server now. If the release
@@ -59,6 +60,8 @@ A background service runs `~/.t3/runtime/current/t3` (`t3.exe` on Windows), and 
 the same across updates and rollbacks. Point firewall rules and VPN split-tunnel exclusions that
 match an exact program at it. A service installed by an older version moves to this path by
 itself on its next update, including one started from the app; T3 restarts one extra time then.
+After each update the service also restarts its launcher onto the new version if needed, then
+removes the older versions and the update's leftovers by itself.
 
 ## Tailscale HTTPS needs HTTPS certificates
 

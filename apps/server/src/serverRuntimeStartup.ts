@@ -45,6 +45,7 @@ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import { forkParked, forkParkedFiber } from "./serverActivation.ts";
 import { moveServiceToCurrentRuntime } from "./cloud/currentRuntimeMove.ts"; // Fork add-on: fixed runtime/current path.
+import { refreshLauncherAndPruneRuntimes } from "./cloud/runtimeRetention.ts"; // Fork add-on: launcher refresh and runtime cleanup.
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -629,6 +630,7 @@ const make = (options?: StartupOptions) =>
 
       const updateOutcome = yield* launcher.prepareTrial;
       yield* moveServiceToCurrentRuntime(launcher.managed, serverConfig.baseDir); // Fork add-on: fixed runtime/current path.
+      yield* refreshLauncherAndPruneRuntimes(launcher.managed, serverConfig.baseDir); // Fork add-on: launcher refresh and runtime cleanup.
 
       yield* Effect.logDebug("startup phase: publishing welcome event", {
         environmentId: environment.environmentId,

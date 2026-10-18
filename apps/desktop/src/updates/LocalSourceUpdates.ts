@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
@@ -144,6 +145,8 @@ export class LocalSourceUpdates extends Context.Service<
      * sync button (which has the agent) merges it.
      */
     readonly autoSyncSource: Effect.Effect<LocalSourceSyncResult, LocalSourceUpdateError>;
+    /** Each commit this app pushed to the fork; the host release publisher follows it. */
+    readonly pushedCommits: Stream.Stream<string>;
   }
 >()("@t3tools/desktop/updates/LocalSourceUpdates") {}
 
@@ -445,6 +448,7 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const builtUpdateRef = yield* Ref.make<LocalSourceUpdateBuild | null>(null);
+  const pushedCommits = yield* PubSub.unbounded<string>();
 
   // The environment variable wins; otherwise the path the build recorded.
   const resolveRepositoryPath = Effect.gen(function* () {
@@ -1242,6 +1246,15 @@ export const make = Effect.gen(function* () {
           via: runner ? "sync runner" : "git",
         });
       }
+      const head = yield* runCommand({
+        operation: "push",
+        command: "git",
+        args: ["rev-parse", "HEAD"],
+        cwd: repo,
+      }).pipe(Effect.option);
+      if (Option.isSome(head) && head.value.exitCode === 0) {
+        yield* PubSub.publish(pushedCommits, head.value.stdout.trim());
+      }
       return { pushed: true } satisfies ForkPushResult;
     }
     const reason =
@@ -1575,6 +1588,7 @@ export const make = Effect.gen(function* () {
     install,
     syncSource: syncUpstream(true),
     autoSyncSource: syncUpstream(false),
+    pushedCommits: Stream.fromPubSub(pushedCommits),
   });
 });
 

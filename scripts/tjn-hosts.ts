@@ -45,7 +45,8 @@ phase journal under ~/Library/Application Support/t3code-fork/host-runs.
 Unreachable hosts are reported and skipped during release preflight only.
 A host runs \`<nightly>+<fork build>\`, so a new fork commit at the same upstream nightly is
 released too; it replaces that nightly's release. Releasing a commit already published is a
-no-op. --expect-sha refuses unless the checkout is at that commit (the Mac app passes its build).
+no-op. --expect-sha refuses unless the checkout is at that commit (the Mac app passes the commit
+it pushed). Only the host tool files must be clean; the rest of the checkout may hold other work.
 A host with stageFrom gets each release from that host over SSH after publication; stage
 repeats that for the published release. Its in-app Update then installs without downloading.
 Rollback requiring a database restore is refused before stopping the service.
@@ -201,6 +202,16 @@ async function config(): Promise<HostConfig> {
 }
 
 const git = (...args: string[]) => run("git", args, { cwd: ROOT });
+
+// remoteSource() sends these to every host, so they must be exactly the released commit's.
+const SHIPPED_PATHS = [
+  "scripts",
+  "packages/shared/src/semver.ts",
+  "apps/server/src/cloud/currentRuntime.ts",
+];
+const shippedFilesAt = async (sha: string) =>
+  (await git("status", "--porcelain", "--", ...SHIPPED_PATHS)) === "" &&
+  (await git("diff", "--name-only", sha, "--", ...SHIPPED_PATHS)) === "";
 const gh = (...args: string[]) => run("gh", args, { cwd: ROOT });
 
 async function releases(): Promise<Release[]> {
@@ -422,7 +433,7 @@ async function releasePreflight(
     );
   }
   requireState((await git("branch", "--show-current")) === "main", "Mac checkout is not on main.");
-  requireState((await git("status", "--porcelain")) === "", "Mac checkout is dirty.");
+  requireState(await shippedFilesAt("HEAD"), "The Mac checkout's host tool files have changes.");
   for (const args of [
     ["remote", "get-url", "origin"],
     ["remote", "get-url", "--push", "origin"],
@@ -447,7 +458,7 @@ async function releasePreflight(
   );
   requireState(
     expectSha === undefined || sha === expectSha,
-    "The checkout moved since the installed Mac build; rebuild the Mac first.",
+    "The checkout moved past the requested commit; release the newer commit instead.",
   );
   requireState(
     (await git("ls-remote", "origin", "refs/heads/main")).split(/\s/)[0] === sha,
@@ -476,10 +487,6 @@ async function releasePreflight(
     !originTag || originTag.split(/\s/)[0] === tagSha,
     "Origin tag differs from upstream; refusing to rewrite it.",
   );
-  const runtime: unknown = JSON.parse(
-    await fs.readFile(path.join(homedir(), ".t3", "userdata", "server-runtime.json"), "utf8"),
-  );
-  requireState(record(runtime) && runtime.serverVersion === v, "run the Mac's fork update first");
   const id = `${v}+${sha.slice(0, 12)}`;
   const existing = await releases();
   const replaced = existing.find((item) => item.tag_name === tag);
@@ -806,9 +813,14 @@ async function release(p: ReleasePlan, journal: Journal) {
       },
     );
     await fs.writeFile(pub.notesFile, notes, { flag: "wx" });
+    // The Mac app may build and commit in this checkout meanwhile; the hosts built p.sha.
     requireState(
-      (await git("status", "--porcelain")) === "" && (await git("rev-parse", "HEAD")) === p.sha,
-      "Mac checkout changed during the build; publication refused.",
+      (await shippedFilesAt(p.sha)) &&
+        (await git("merge-base", "--is-ancestor", p.sha, "HEAD").then(
+          () => true,
+          () => false,
+        )),
+      "Mac checkout changed the host tool files or left the released commit; publication refused.",
     );
     requireState(
       (await git("rev-parse", `refs/tags/${p.tag}`)) === p.tagSha,

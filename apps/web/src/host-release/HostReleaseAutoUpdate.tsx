@@ -18,7 +18,7 @@ import { environmentUpdateStatesAtom } from "~/state/server";
 import { environmentSessionStatesAtom } from "~/state/session";
 import {
   collectHostUpdateTargets,
-  useHostUpdateTarget,
+  useNewestHostRelease,
   useRefreshHostUpdateTarget,
 } from "./hostRelease";
 
@@ -94,7 +94,8 @@ function usePublisherStatus(bridge: DesktopHostReleaseBridge | undefined) {
 }
 
 function useAutoQueueHostUpdates(enabled: boolean) {
-  const target = useHostUpdateTarget();
+  // The release can be newer than this app: it is published when the fork is pushed.
+  const target = useNewestHostRelease();
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));

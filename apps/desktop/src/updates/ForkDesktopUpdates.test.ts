@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
@@ -70,9 +71,9 @@ function makeHarness(options: HarnessOptions = {}) {
       steps.push("install");
     }),
     syncSource:
-      options.syncSource ??
-      Effect.succeed({ merged: 0, upstreamTag: UPSTREAM_TAG, push: null }),
+      options.syncSource ?? Effect.succeed({ merged: 0, upstreamTag: UPSTREAM_TAG, push: null }),
     autoSyncSource: Effect.succeed({ merged: 0, upstreamTag: UPSTREAM_TAG, push: null }),
+    pushedCommits: Stream.empty,
   } satisfies LocalSourceUpdates.LocalSourceUpdates["Service"]);
 
   const layerApp = Layer.succeed(ElectronApp.ElectronApp, {

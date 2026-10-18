@@ -30,6 +30,7 @@ import {
   SERVICE_STOP_MARKER_FILE,
 } from "./cloud/serviceProtocol.ts";
 import { syncCurrentRuntime } from "./cloud/currentRuntime.ts"; // Fork add-on: fixed runtime/current path.
+import { LAUNCHER_VERSION_ENV, SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts"; // Fork add-on: launcher refresh.
 
 const HANDOFF_DELAY_MS = 2_000;
 /**
@@ -584,7 +585,11 @@ export class Launcher {
     };
     const spawnArguments = runtimeSpawnArguments({ ...paths, entryPath }); // Fork add-on: fixed runtime/current path.
     const child = NodeChildProcess.spawn(spawnArguments.command, spawnArguments.args, {
-      env: { ...process.env, [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context) },
+      env: {
+        ...process.env,
+        [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context),
+        [LAUNCHER_VERSION_ENV]: SERVICE_RUNTIME_VERSION, // Fork add-on: launcher refresh.
+      },
       stdio: ["inherit", "inherit", "inherit", "ipc"],
     });
     await new Promise<void>((resolve, reject) => {

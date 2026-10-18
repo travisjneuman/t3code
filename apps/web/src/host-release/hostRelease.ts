@@ -62,15 +62,20 @@ export function hostReleaseRuntimeId(version: string, body: string | null | unde
     : version;
 }
 
-/** API order is not version order, and a release newer than this client is not offered. */
+/**
+ * API order is not version order, and a release newer than this client is not offered unless
+ * `newerThanClient`: the publishing Mac app releases each fork push before it updates itself.
+ */
 export function newestPublishedHostRelease(
   releases: ReadonlyArray<PublishedRelease>,
   clientVersion: string,
+  newerThanClient = false,
 ): string | undefined {
   const eligible = releases
     .flatMap((release) => {
       const version = releaseTagVersion(release.tag_name);
-      return version !== undefined && compareSemverVersions(version, clientVersion) <= 0
+      return version !== undefined &&
+        (newerThanClient || compareSemverVersions(version, clientVersion) <= 0)
         ? [{ release, version }]
         : [];
     })
@@ -84,7 +89,12 @@ export function newestPublishedHostRelease(
 
 /** The atom never fails, so a failed check can say why instead of looking like "no release". */
 type HostReleaseLookup =
-  | { readonly _tag: "found"; readonly version: string }
+  | {
+      readonly _tag: "found";
+      /** Null when every release is newer than this client. */
+      readonly version: string | null;
+      readonly newest: string;
+    }
   | { readonly _tag: "none" }
   | { readonly _tag: "failed"; readonly reason: string };
 
@@ -129,9 +139,10 @@ const hostReleaseAtom = Atom.make(
       releases.push(...body);
       if (body.length < RELEASE_INDEX_PAGE_SIZE) break;
     }
-    const version = newestPublishedHostRelease(releases, APP_VERSION);
+    const newest = newestPublishedHostRelease(releases, APP_VERSION, true);
+    const version = newestPublishedHostRelease(releases, APP_VERSION) ?? null;
     const lookup: HostReleaseLookup =
-      version === undefined ? { _tag: "none" } : { _tag: "found", version };
+      newest === undefined ? { _tag: "none" } : { _tag: "found", version, newest };
     return lookup;
   }).pipe(
     Effect.catch((error): Effect.Effect<HostReleaseLookup> =>
@@ -156,6 +167,14 @@ export function useHostUpdateTarget(): string | null {
   // since deleted.
   return AsyncResult.isSuccess(result) && result.value._tag === "found"
     ? result.value.version
+    : null;
+}
+
+/** The newest fork host release, even one newer than this client, for the publisher's queue. */
+export function useNewestHostRelease(): string | null {
+  const result = useAtomValue(hostReleaseAtom);
+  return AsyncResult.isSuccess(result) && result.value._tag === "found"
+    ? result.value.newest
     : null;
 }
 
