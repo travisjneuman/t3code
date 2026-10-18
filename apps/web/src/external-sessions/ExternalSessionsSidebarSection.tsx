@@ -33,7 +33,7 @@ import {
 } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useStableCallback } from "../hooks/useStableCallback";
-import { cn } from "../lib/utils";
+import { cn, isMacPlatform } from "../lib/utils";
 import {
   AGENT_LINE_CLASS,
   AGENT_LINE_ICON_CLASS,
@@ -45,6 +45,7 @@ import { waitForThreadShell } from "../state/entities";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { useAtomCommand } from "../state/use-atom-command";
+import { useThreadSelectionStore } from "../threadSelectionStore";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
@@ -86,12 +87,57 @@ type RowMenuAction =
   | "open-with"
   | `editor:${EditorId}`
   | "archive"
-  | "show-archived";
+  | "show-archived"
+  | "copy-selected-ids"
+  | "archive-selected"
+  | "clear-selection";
 
 type MenuPosition = { readonly x: number; readonly y: number };
 
 function rowKey(environmentId: string, sessionKey: string): string {
   return `${environmentId}\u0000${sessionKey}`;
+}
+
+/** Cmd/Ctrl-click toggles a row, Shift-click selects from the anchor, as in the thread list. */
+interface RowSelection {
+  readonly keys: ReadonlySet<string>;
+  readonly anchor: string | null;
+}
+
+const NO_SELECTED_KEYS: ReadonlySet<string> = new Set();
+
+function toggleSelected(selection: RowSelection, key: string): RowSelection {
+  const keys = new Set(selection.keys);
+  if (keys.has(key)) keys.delete(key);
+  else keys.add(key);
+  return { keys, anchor: keys.has(key) ? key : selection.anchor };
+}
+
+/** Adds the shown rows between the anchor and `key`; without a shown anchor, just `key`. */
+function selectRangeTo(
+  selection: RowSelection,
+  key: string,
+  shownKeys: ReadonlyArray<string>,
+): RowSelection {
+  const keys = new Set(selection.keys);
+  const anchorIndex = selection.anchor === null ? -1 : shownKeys.indexOf(selection.anchor);
+  const targetIndex = shownKeys.indexOf(key);
+  if (anchorIndex === -1 || targetIndex === -1) {
+    keys.add(key);
+    return { keys, anchor: key };
+  }
+  for (const shownKey of shownKeys.slice(
+    Math.min(anchorIndex, targetIndex),
+    Math.max(anchorIndex, targetIndex) + 1,
+  )) {
+    keys.add(shownKey);
+  }
+  return { keys, anchor: selection.anchor };
+}
+
+function clearSelected(selection: RowSelection): RowSelection {
+  if (selection.keys.size === 0) return selection;
+  return { keys: NO_SELECTED_KEYS, anchor: selection.anchor };
 }
 
 /**
@@ -182,12 +228,17 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
  * environments, one line each. Running ones always show, even with the shelf
  * collapsed; expanded, the last day's follow, then a collapsible Earlier
  * group. Right-click a row for its actions, or the header to find archived
- * sessions. Renders nothing while no environment reports any.
+ * sessions; Cmd/Ctrl- and Shift-click select rows for bulk actions. Renders
+ * nothing while no environment reports any.
  */
 export function ExternalSessionsSidebarSection() {
   const liveEntries = useAtomValue(externalSessionEntriesAtom);
   const cuts = useAtomValue(externalSessionListCutsAtom);
   const [olderPages, setOlderPages] = useState(NO_OLDER_PAGES);
+  const [selection, setSelection] = useState<RowSelection>({
+    keys: NO_SELECTED_KEYS,
+    anchor: null,
+  });
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
   const [earlierExpanded, setEarlierExpanded] = useLocalStorage(
     EARLIER_EXPANDED_STORAGE_KEY,
@@ -252,6 +303,34 @@ export function ExternalSessionsSidebarSection() {
     else if (now - Date.parse(entry.session.updatedAt) < RECENT_MS) bands.recent.push(entry);
     else bands.earlier.push(entry);
   }
+
+  // The rows in screen order: what Shift-click ranges over and bulk actions act on.
+  const shownEarlier = firstWithOpen(bands.earlier, earlierExpanded ? Infinity : 0, activeKey);
+  const shownEntries = expanded
+    ? [...bands.active, ...bands.recent, ...shownEarlier]
+    : bands.active;
+  const selectedEntries = () =>
+    shownEntries.filter((entry) =>
+      selection.keys.has(rowKey(entry.environmentId, entry.session.key)),
+    );
+
+  // One selection at a time: selecting threads drops the sessions' selection.
+  const threadSelectionActive = useThreadSelectionStore(
+    (state) => state.selectedThreadKeys.size > 0,
+  );
+  useEffect(() => {
+    if (threadSelectionActive) setSelection(clearSelected);
+  }, [threadSelectionActive]);
+
+  const hasSelection = selection.keys.size > 0;
+  useEffect(() => {
+    if (!hasSelection) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelection(clearSelected);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [hasSelection]);
 
   // Sessions hidden in this browser before archive existed are archived, once,
   // on the first non-empty list. Keys of sessions not listed then
@@ -420,6 +499,74 @@ export function ExternalSessionsSidebarSection() {
     dropOlder(entry);
   };
 
+  const archiveSelected = async (targets: ReadonlyArray<ExternalSessionEntry>) => {
+    const results = await Promise.all(
+      targets.map(async (entry) => {
+        const result = await runArchive({
+          environmentId: entry.environmentId,
+          input: { key: entry.session.key },
+        });
+        if (result._tag !== "Failure") dropOlder(entry);
+        return result;
+      }),
+    );
+    setSelection(clearSelected);
+    const failures = results.filter(
+      (result) => result._tag === "Failure" && !isAtomCommandInterrupted(result),
+    );
+    if (failures.length === 0) return;
+    toastManager.add({
+      type: "error",
+      title:
+        failures.length === 1
+          ? "Could not archive 1 session"
+          : `Could not archive ${failures.length} sessions`,
+    });
+  };
+
+  const showSelectionMenu = async (
+    selected: ReadonlyArray<ExternalSessionEntry>,
+    position: MenuPosition,
+  ) => {
+    const api = readLocalApi();
+    if (api === undefined) return;
+    const count = selected.length;
+    const permitted = selected.filter(({ environmentId }) =>
+      appAtomRegistry.get(externalSessionArchive.permissionAtom(environmentId)),
+    );
+    // Running ones may be in use in the other app right now.
+    const archivable = permitted.filter(({ session }) => session.liveness !== "running");
+    const items: Array<ContextMenuItem<RowMenuAction>> = [
+      { id: "copy-selected-ids", label: `Copy session IDs (${count})`, icon: "hash" },
+    ];
+    if (permitted.length > 0) {
+      items.push({
+        id: "archive-selected",
+        label: `Archive (${archivable.length})`,
+        icon: "archive",
+        separatorBefore: true,
+        disabled: archivable.length === 0,
+      });
+    }
+    items.push({ id: "clear-selection", label: "Clear selection", separatorBefore: true });
+    const clicked = await api.contextMenu.show(items, position);
+    switch (clicked) {
+      case "copy-selected-ids":
+        copyToClipboard(selected.map(({ session }) => nativeSessionId(session.key)).join("\n"), {
+          title: count === 1 ? "Session ID copied" : `${count} session IDs copied`,
+        });
+        return;
+      case "archive-selected":
+        await archiveSelected(archivable);
+        return;
+      case "clear-selection":
+        setSelection(clearSelected);
+        return;
+      default:
+        return;
+    }
+  };
+
   const showArchived = async () => {
     closeMobileSidebar();
     await navigate({ to: "/settings/archived" });
@@ -428,6 +575,13 @@ export function ExternalSessionsSidebarSection() {
   const showRowMenu = async (entry: ExternalSessionEntry, position: MenuPosition) => {
     const api = readLocalApi();
     if (api === undefined) return;
+    if (selection.keys.has(rowKey(entry.environmentId, entry.session.key))) {
+      const selected = selectedEntries();
+      if (selected.length > 1) {
+        await showSelectionMenu(selected, position);
+        return;
+      }
+    }
     const { environmentId, session } = entry;
     // Read at click time, so rows do not each subscribe to the server config.
     const config = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId));
@@ -515,10 +669,37 @@ export function ExternalSessionsSidebarSection() {
       case "show-archived":
         await showArchived();
         return;
+      case "copy-selected-ids":
+      case "archive-selected":
+      case "clear-selection":
+        return;
       default:
         await openFolder(entry, clicked.slice("editor:".length) as EditorId);
     }
   };
+
+  // Modifier clicks select instead of opening; the Link would otherwise open a new window.
+  const handleRowClick = useStableCallback((entry: ExternalSessionEntry, event: MouseEvent) => {
+    const key = rowKey(entry.environmentId, entry.session.key);
+    const isModClick = isMacPlatform(navigator.platform) ? event.metaKey : event.ctrlKey;
+    if (isModClick || event.shiftKey) {
+      event.preventDefault();
+      useThreadSelectionStore.getState().clearSelection();
+      const shownKeys = shownEntries.map(({ environmentId, session }) =>
+        rowKey(environmentId, session.key),
+      );
+      setSelection((current) =>
+        isModClick ? toggleSelected(current, key) : selectRangeTo(current, key, shownKeys),
+      );
+      return;
+    }
+    setSelection((current) =>
+      current.keys.size === 0 && current.anchor === key
+        ? current
+        : { keys: NO_SELECTED_KEYS, anchor: key },
+    );
+    closeMobileSidebar();
+  });
 
   // Rows are memoized, so they get one stable callback that runs the latest menu.
   const handleRowContextMenu = useStableCallback(
@@ -548,8 +729,9 @@ export function ExternalSessionsSidebarSection() {
           .join(" · ");
   const rowProps = {
     activeKey,
+    selectedKeys: selection.keys,
     nowMinute,
-    onNavigate: closeMobileSidebar,
+    onClick: handleRowClick,
     onContextMenu: handleRowContextMenu,
   };
 
@@ -606,10 +788,7 @@ export function ExternalSessionsSidebarSection() {
                     {`Earlier (${bands.earlier.length})`}
                   </CollapsibleSectionHeader>
                 </div>
-                <ExternalSessionRows
-                  entries={firstWithOpen(bands.earlier, earlierExpanded ? Infinity : 0, activeKey)}
-                  {...rowProps}
-                />
+                <ExternalSessionRows entries={shownEarlier} {...rowProps} />
                 {earlierExpanded
                   ? cuts.map((cut) => {
                       const pages = olderPages.get(cut.environmentId);
@@ -647,8 +826,9 @@ export function ExternalSessionsSidebarSection() {
 function ExternalSessionRows(props: {
   entries: ReadonlyArray<ExternalSessionEntry>;
   activeKey: string | null;
+  selectedKeys: ReadonlySet<string>;
   nowMinute: string;
-  onNavigate: () => void;
+  onClick: (entry: ExternalSessionEntry, event: MouseEvent) => void;
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
   if (props.entries.length === 0) return null;
@@ -661,8 +841,9 @@ function ExternalSessionRows(props: {
             key={key}
             entry={entry}
             isActive={props.activeKey === key}
+            isSelected={props.selectedKeys.has(key)}
             nowMinute={props.nowMinute}
-            onNavigate={props.onNavigate}
+            onClick={props.onClick}
             onContextMenu={props.onContextMenu}
           />
         );
@@ -753,8 +934,9 @@ function sessionRowLabel({ environmentLabel, session }: ExternalSessionEntry): s
 const ExternalSessionLine = memo(function ExternalSessionLine(props: {
   entry: ExternalSessionEntry;
   isActive: boolean;
+  isSelected: boolean;
   nowMinute: string;
-  onNavigate: () => void;
+  onClick: (entry: ExternalSessionEntry, event: MouseEvent) => void;
   onContextMenu: (entry: ExternalSessionEntry, position: MenuPosition) => void;
 }) {
   const { environmentId, environmentLabel, session } = props.entry;
@@ -769,7 +951,7 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
               params={{ environmentId, sessionKey: session.key }}
               aria-label={sessionRowLabel(props.entry)}
               aria-current={props.isActive ? "page" : undefined}
-              onClick={props.onNavigate}
+              onClick={(event) => props.onClick(props.entry, event)}
               onContextMenu={(event) => {
                 event.preventDefault();
                 props.onContextMenu(props.entry, { x: event.clientX, y: event.clientY });
@@ -779,9 +961,11 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
                 "px-(--sidebar-row-content-inset)",
                 props.isActive
                   ? "bg-sidebar-row-active text-sidebar-foreground"
-                  : session.liveness === "recent"
-                    ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-row-hover",
+                  : props.isSelected
+                    ? "bg-sidebar-row-selected text-sidebar-foreground"
+                    : session.liveness === "recent"
+                      ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-row-hover",
               )}
             />
           }
