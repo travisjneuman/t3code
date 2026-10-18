@@ -144,10 +144,21 @@ export function upsertProviderWorkspaceSnapshot(
   };
 }
 
-// Fork add-on: provider and model brand names. Hermes and Pi report their full catalog when signed in, so a stale row must not outlive it.
-const GATEWAY_INVENTORY_DRIVERS: ReadonlySet<string> = new Set(["hermes", "pi"]); // Fork add-on: provider and model brand names
+// Fork add-on: provider and model brand names. Hermes reports its full catalog when signed in, so a stale row must not outlive it.
+const GATEWAY_INVENTORY_DRIVERS: ReadonlySet<string> = new Set(["hermes"]); // Fork add-on: provider and model brand names
 
 const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean => {
+  if (provider.driver === ProviderDriverKind.make("pi")) {
+    // Pi reports known auth only after RPC inventory discovery completes.
+    // An empty inventory is warning/unauthenticated; failed or interactive
+    // discovery stays ready/unknown and must keep the last known models.
+    return !(
+      provider.installed &&
+      (provider.status === "ready" || provider.status === "warning") &&
+      provider.auth.status !== "unknown"
+    );
+  }
+
   if (
     provider.driver === ProviderDriverKind.make("acpRegistry") ||
     GATEWAY_INVENTORY_DRIVERS.has(provider.driver) // Fork add-on: provider and model brand names

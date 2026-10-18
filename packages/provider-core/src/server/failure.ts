@@ -45,6 +45,7 @@ function causeMessage(cause: unknown): string | undefined {
         case "ContextHandoffBudgetError":
           return new ContextHandoffBudgetError().message;
         case "ClaudeBackgroundWorkBlocksQueryReplacementError":
+        case "CursorModelUnavailableError":
         case "HermesTurnNotSentError": // Fork add-on: Hermes provider.
           return stringField(cause, "message");
         case "ContextHandoffDeliveryUncertainError":
