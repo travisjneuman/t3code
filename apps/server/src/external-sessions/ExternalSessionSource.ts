@@ -149,6 +149,12 @@ export interface ExternalSessionSource {
    * Without it they age out of the list after two weeks.
    */
   readonly listsUntilArchived?: true;
+  /**
+   * The provider keeps session files open while it appends to them. macOS file
+   * events report such a write only when the file closes, so the registry also
+   * polls these files' mtimes. Fork add-on.
+   */
+  readonly writesHeldOpen?: true;
   /** The details card's session record, context and connectors; see `ReadSessionInsights`. */
   readonly readInsights?: ReadSessionInsights;
 }

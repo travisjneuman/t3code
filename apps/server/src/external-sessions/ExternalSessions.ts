@@ -94,6 +94,7 @@ const IDLE_MS = 60 * 60 * 1000;
 // Batches a burst of writes (a streamed reply) into one re-read.
 const FLUSH_DELAY = "600 millis";
 const LIVENESS_INTERVAL = "15 seconds";
+const HELD_OPEN_POLL_INTERVAL = "5 seconds";
 const WATCH_RESTART_DELAY = "30 seconds";
 const OWNED_REFRESH_MS = 30 * 1000;
 const SNAPSHOT_BYTES = 8 * 1024 * 1024;
@@ -652,6 +653,35 @@ const make = Effect.gen(function* () {
     yield* Effect.forkScoped(Effect.forever(flush));
     // Liveness is time-based: "running" decays to "idle" without any file event.
     yield* Effect.forkScoped(Effect.repeat(publish, Schedule.spaced(LIVENESS_INTERVAL)));
+
+    // Fork add-on: writes to files a provider holds open raise no event on macOS
+    // until the file closes, so poll their mtimes and feed changes to the flush.
+    const heldOpenMtimes = new Map<string, number>();
+    const pollHeldOpen = Effect.gen(function* () {
+      const watched = new Map<string, ExternalSessionSource>();
+      for (const entry of entries.values()) {
+        if (entry.source.writesHeldOpen) watched.set(entry.path, entry.source);
+      }
+      for (const path of heldOpenMtimes.keys()) {
+        if (!watched.has(path)) heldOpenMtimes.delete(path);
+      }
+      let touched = false;
+      for (const [path, source] of watched) {
+        const mtimeMs = yield* provide(statMtimeMs(path));
+        if (mtimeMs === null) continue;
+        const previous = heldOpenMtimes.get(path);
+        heldOpenMtimes.set(path, mtimeMs);
+        if (previous === undefined || previous === mtimeMs) continue;
+        pending.set(path, source);
+        touched = true;
+      }
+      if (touched) yield* Queue.offer(wake, undefined);
+    });
+    if (sources.some((source) => source.writesHeldOpen)) {
+      yield* Effect.forkScoped(
+        Effect.repeat(pollHeldOpen, Schedule.spaced(HELD_OPEN_POLL_INTERVAL)),
+      );
+    }
 
     const registry: Registry = {
       entries,

@@ -100,6 +100,11 @@ in T3, which binds an ordinary thread to that same session.
   list matches Codex's own). A watcher the OS drops is started again 30 seconds later and its store
   re-read. The watchers stop 30 seconds after the last subscriber leaves. Bursts of writes, such as a streamed
   reply, are batched into one re-read about every 600 ms.
+- **Codex rollouts are also polled.** Codex Desktop keeps every loaded thread's rollout open while
+  it appends, and macOS FSEvents report a write to an open file only when it closes. The watcher
+  alone left a running Codex thread idle for as long as the app stayed open. Sources flagged
+  `writesHeldOpen` have their listed files' mtimes checked every 5 seconds while the list is
+  watched, and a change goes through the same re-read.
 - **Older sessions open on demand.** A session subscribe for a key the registry lacks, such as an
   older [session search](./session-search.md) result, walks that one store once over search's
   90-day window

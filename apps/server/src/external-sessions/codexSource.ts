@@ -252,6 +252,8 @@ export const makeCodexSource = (): ExternalSessionSource => {
     driver: "codex",
     // Codex moves an archived rollout out of `sessions`, so what is here is unarchived.
     listsUntilArchived: true,
+    // Codex Desktop holds every loaded thread's rollout open.
+    writesHeldOpen: true,
     roots: [{ path: sessions, recursive: true }],
     sessionPathsFor: (changed) =>
       Effect.succeed(ROLLOUT_FILE.test(NodePath.basename(changed)) ? [changed] : []),
