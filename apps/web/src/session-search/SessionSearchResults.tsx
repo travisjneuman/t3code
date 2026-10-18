@@ -73,10 +73,11 @@ export function SessionSearchResults(props: { query: string }) {
       : `${count} · searched ${search.answeredHosts} of ${search.searchedHosts} hosts`;
   const status = search.isPending ? "Searching…" : search.complete ? null : "Partial";
   return (
-    <section aria-label="Other Agents search results" className="mt-2">
-      <div className="mx-0.5 h-8">
+    <section aria-label="Other Agents search results" className="mt-1">
+      <div className="mx-0.5 h-5">
         <CollapsibleSectionHeader
           expanded={expanded}
+          size="sidebar"
           onClick={() => setExpanded((value) => !value)}
           title={failedHosts ?? undefined}
           accessory={

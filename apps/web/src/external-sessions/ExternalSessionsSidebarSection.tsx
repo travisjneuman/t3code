@@ -554,13 +554,14 @@ export function ExternalSessionsSidebarSection() {
   };
 
   return (
-    <section aria-label="Other Agents" className="mt-2">
+    <section aria-label="Other Agents" className="mt-1">
       <div
-        className="@container/other-agents mx-0.5 h-8"
+        className="@container/other-agents mx-0.5 h-5"
         onContextMenu={(event) => void handleHeaderContextMenu(event)}
       >
         <CollapsibleSectionHeader
           expanded={expanded}
+          size="sidebar"
           onClick={toggleExpanded}
           onMouseDown={preventMouseFocus}
           accessory={
@@ -588,9 +589,10 @@ export function ExternalSessionsSidebarSection() {
             <ExternalSessionRows entries={bands.recent} {...rowProps} />
             {bands.earlier.length > 0 || cuts.length > 0 ? (
               <div role="group" aria-label="Earlier">
-                <div className="mr-0.5 ml-2.5 h-8">
+                <div className="mr-0.5 ml-2.5 h-5">
                   <CollapsibleSectionHeader
                     expanded={earlierExpanded}
+                    size="sidebar"
                     onClick={toggleEarlier}
                     onMouseDown={preventMouseFocus}
                     accessory={

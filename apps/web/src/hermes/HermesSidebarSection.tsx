@@ -858,14 +858,15 @@ export function HermesSidebarSection() {
   const runningCount = rows.filter((row) => row.running).length;
 
   return (
-    <section aria-label={sectionName} className="mt-2">
+    <section aria-label={sectionName} className="mt-1">
       <div
-        className="@container/hermes mx-0.5 flex h-8 items-center gap-0.5"
+        className="@container/hermes mx-0.5 flex h-5 items-center gap-0.5"
         onContextMenu={(event) => void handleHeaderContextMenu(event)}
       >
         <div className="min-w-0 flex-1">
           <CollapsibleSectionHeader
             expanded={expanded}
+            size="sidebar"
             onClick={() => setExpanded((value) => !value)}
             onMouseDown={preventMouseFocus}
             accessory={
@@ -889,7 +890,7 @@ export function HermesSidebarSection() {
           title={`New ${sectionName} session`}
           onMouseDown={preventMouseFocus}
           onClick={() => void startNew()}
-          className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+          className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         >
           <PlusIcon aria-hidden className="size-3.5" />
         </button>
