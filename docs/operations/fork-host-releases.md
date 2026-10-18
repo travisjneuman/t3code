@@ -112,7 +112,10 @@ reuse-built option.
 
 Hosts run a runtime id, `<nightly>+<first 12 characters of the fork commit>`, so a new fork commit
 at the same upstream nightly is a release and an update too. The version a host shows stays the
-plain nightly. Releasing that commit again is a no-op that exits `0`.
+plain nightly. Releasing that commit again is a no-op that exits `0`, and so is releasing a commit
+that changes only `apps/desktop`, `apps/mobile`, `apps/marketing` or `docs` since the published
+one: host archives hold only the server, web client and resource monitor, so the hosts neither
+rebuild nor restart.
 
 The steady-state workflow is:
 
@@ -160,7 +163,8 @@ DESK and YOGA build while the Mac rebuilds itself. **Update** commits the upstre
 it before it builds, as the background sync does, so the hosts start at the first click; a failed
 Mac build leaves that merge in place, and a build repair is committed and pushed afterwards as
 `fix(desktop): build upstream nightly …`, which releases again. A push during a running release is released when
-that run ends; only the newest such push is kept. Sync pushes and pushes made outside the app, such as an agent's
+that run ends; only the newest such push is kept, and the replaced run's end is not announced, so
+it raises no failure notice and the hosts update once, to the newer release. Sync pushes and pushes made outside the app, such as an agent's
 push-safe, do not release; run `release` by hand or use **Retry**. A newly installed build also
 releases the checkout's `HEAD` one minute after its first launch, unless that commit was already
 released.

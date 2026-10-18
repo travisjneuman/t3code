@@ -156,20 +156,24 @@ const make = Effect.gen(function* () {
       return status("failed", "The release stopped before it finished.");
     });
 
-  const refresh = Effect.gen(function* () {
-    const record = yield* readRecord;
-    const next = record === undefined ? null : yield* statusOf(record);
-    const previous = yield* Ref.getAndSet(lastStatusRef, next);
-    if (next !== null && JSON.stringify(next) !== JSON.stringify(previous)) {
-      yield* electronWindow.sendAll(IpcChannels.HOST_RELEASE_STATUS_CHANGE_CHANNEL, next);
-      if (next.state === "failed") {
-        yield* logWarning("host release failed", { detail: next.detail, logPath });
-      } else if (next.state === "succeeded") {
-        yield* logInfo("host release finished", { commit: next.commit });
+  // `quietEnd` leaves a finished run unannounced, for when a newer commit may replace it.
+  const announce = (quietEnd: boolean) =>
+    Effect.gen(function* () {
+      const record = yield* readRecord;
+      const next = record === undefined ? null : yield* statusOf(record);
+      if (quietEnd && next !== null && next.state !== "running") return next;
+      const previous = yield* Ref.getAndSet(lastStatusRef, next);
+      if (next !== null && JSON.stringify(next) !== JSON.stringify(previous)) {
+        yield* electronWindow.sendAll(IpcChannels.HOST_RELEASE_STATUS_CHANGE_CHANNEL, next);
+        if (next.state === "failed") {
+          yield* logWarning("host release failed", { detail: next.detail, logPath });
+        } else if (next.state === "succeeded") {
+          yield* logInfo("host release finished", { commit: next.commit });
+        }
       }
-    }
-    return next;
-  });
+      return next;
+    });
+  const refresh = announce(false);
 
   const gitOutput = (args: ReadonlyArray<string>) =>
     Effect.scoped(
@@ -243,12 +247,16 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  // Runs while a release is running, then releases a commit pushed meanwhile.
+  // Runs while a release is running, then releases a commit pushed meanwhile. The replaced
+  // run's end is never announced: no failure notice, and hosts update once, to the newer one.
   const watch: Effect.Effect<void> = Effect.gen(function* () {
-    while ((yield* refresh)?.state === "running") yield* Effect.sleep(WATCH_INTERVAL);
+    while ((yield* announce(true))?.state === "running") yield* Effect.sleep(WATCH_INTERVAL);
     const queued = yield* Ref.getAndSet(queuedCommitRef, null);
     const record = yield* readRecord;
-    if (queued === null || queued === record?.commit) return;
+    if (queued === null || queued === record?.commit) {
+      yield* refresh;
+      return;
+    }
     yield* launch(queued);
     yield* watch;
   });

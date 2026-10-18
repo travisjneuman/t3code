@@ -44,8 +44,9 @@ nothing and does not need --confirm-idle. Changing runs lock each host they cove
 phase journal under ~/Library/Application Support/t3code-fork/host-runs.
 Unreachable hosts are reported and skipped during release preflight only.
 A host runs \`<nightly>+<fork build>\`, so a new fork commit at the same upstream nightly is
-released too; it replaces that nightly's release. Releasing a commit already published is a
-no-op. --expect-sha refuses unless the checkout is at that commit (the Mac app passes the commit
+released too; it replaces that nightly's release. Releasing a commit already published, or one
+that changes only apps/desktop, apps/mobile, apps/marketing or docs since it, is a no-op.
+--expect-sha refuses unless the checkout is at that commit (the Mac app passes the commit
 it pushed). Only the host tool files must be clean; the rest of the checkout may hold other work.
 A host with stageFrom gets each release from that host over SSH after publication; stage
 repeats that for the published release. Its in-app Update then installs without downloading.
@@ -212,6 +213,22 @@ const SHIPPED_PATHS = [
 const shippedFilesAt = async (sha: string) =>
   (await git("status", "--porcelain", "--", ...SHIPPED_PATHS)) === "" &&
   (await git("diff", "--name-only", sha, "--", ...SHIPPED_PATHS)) === "";
+// Host archives hold only the server, web client and resource monitor (tjn-build-host-archive.ts),
+// so a change confined to these paths needs no host build or restart.
+const MAC_ONLY_PATHS = ["apps/desktop", "apps/mobile", "apps/marketing", "docs"];
+const hostArchiveSame = (from: string, to: string) =>
+  git(
+    "diff",
+    "--name-only",
+    from,
+    to,
+    "--",
+    ".",
+    ...MAC_ONLY_PATHS.map((path) => `:(exclude)${path}`),
+  ).then(
+    (changed) => changed === "",
+    () => false,
+  );
 const gh = (...args: string[]) => run("gh", args, { cwd: ROOT });
 
 async function releases(): Promise<Release[]> {
@@ -492,8 +509,12 @@ async function releasePreflight(
   const replaced = existing.find((item) => item.tag_name === tag);
   if (replaced !== undefined) {
     requireState(!replaced.draft, "A draft fork release uses this tag; inspect it first.");
-    if (releaseReceipt(replaced).forkSha === sha) {
+    const published = releaseReceipt(replaced).forkSha;
+    if (published === sha) {
       return `${tag} is already published from ${sha}; nothing to release.`;
+    }
+    if (await hostArchiveSame(published, sha)) {
+      return `${tag} from ${published.slice(0, 12)} already holds everything hosts run at ${sha.slice(0, 12)}; nothing to release.`;
     }
   }
 
