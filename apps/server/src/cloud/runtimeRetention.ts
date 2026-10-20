@@ -9,6 +9,7 @@ import * as NodePath from "node:path";
 
 import * as Effect from "effect/Effect";
 
+import { syncCurrentRuntime } from "./currentRuntime.ts";
 import { restartService } from "./currentRuntimeMove.ts";
 import { LAUNCHER_VERSION_ENV, SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts";
 import { parseServiceState, SERVICE_STATE_FILE } from "./serviceProtocol.ts";
@@ -77,7 +78,9 @@ async function pruneRuntimes(runtimeDir: string, version: string) {
       state.update !== undefined &&
       state.update.status !== "committed" &&
       entry.name === state.update.targetVersion;
-    const stale = failedTarget || (staging ? now - installedAt > STALE_STAGING_MS : installedAt < activeInstalledAt);
+    const stale =
+      failedTarget ||
+      (staging ? now - installedAt > STALE_STAGING_MS : installedAt < activeInstalledAt);
     if (!stale) continue;
     ((await removeTree(dir, sentinel)) ? removed : kept).push(entry.name);
   }
@@ -99,14 +102,28 @@ export const refreshLauncherAndPruneRuntimes = (managed: boolean, baseDir: strin
   return Effect.tryPromise(() => launcherNeedsRefresh(runtimeDir, SERVICE_RUNTIME_VERSION)).pipe(
     Effect.flatMap((refresh) =>
       refresh
-        ? restartService("the service launcher runs older code; restarting it onto this version")
+        ? // Only the fork's launcher fills runtime/current, so one from an upstream release
+          // would restart as itself; this server fills it first.
+          Effect.tryPromise(() => syncCurrentRuntime(baseDir, SERVICE_RUNTIME_VERSION)).pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("could not point runtime/current at this version", { cause }),
+            ),
+            Effect.andThen(
+              restartService(
+                "the service launcher runs older code; restarting it onto this version",
+              ),
+            ),
+          )
         : process.env[LAUNCHER_VERSION_ENV] === SERVICE_RUNTIME_VERSION
           ? Effect.tryPromise(() => pruneRuntimes(runtimeDir, SERVICE_RUNTIME_VERSION)).pipe(
               Effect.flatMap((result) =>
                 result === undefined || result.removed.length + result.kept.length === 0
                   ? Effect.void
                   : result.kept.length > 0
-                    ? Effect.logWarning("runtime cleanup incomplete; retained paths need attention", result)
+                    ? Effect.logWarning(
+                        "runtime cleanup incomplete; retained paths need attention",
+                        result,
+                      )
                     : Effect.logInfo("removed retired runtimes and recovery files", result),
               ),
             )
