@@ -35,7 +35,9 @@ version label and `--build-version` (tag without the leading `v`).
   that nightly and was built from the checkout's `HEAD`. Builds stamp
   `t3codeCommitHash` as a 12-character short hash while inspect reads the full
   `HEAD`, so `runsCheckedOutCommit` compares them as a prefix; exact equality never
-  matches and offers the same nightly forever.
+  matches and offers the same nightly forever. The `fix(desktop): build upstream
+nightly` commit lands after the build that stamped its parent, so inspect counts
+  a `HEAD` that is that commit, directly on the stamped one, as built.
 
 ## Merge, build, then commit
 

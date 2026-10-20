@@ -25,6 +25,9 @@ const LOCAL_UPDATE_HELPER_PATH = "local-source-update-helper.sh";
 // Holds at most one build: cleared before each build, after a failed build, and by the install helper.
 const SOURCE_UPDATE_BUILDS_DIR = "source-updates";
 const LOCKFILE_PATH = "pnpm-lock.yaml";
+// Update commits lockfile and repair edits under this subject only after the build that
+// stamped the app with the commit before it.
+const BUILD_FIX_SUBJECT = "fix(desktop): build upstream nightly ";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
 // eslint-disable-next-line no-control-regex
@@ -787,11 +790,27 @@ export const make = Effect.gen(function* () {
         repo,
       );
     }
-    const currentCommit = yield* gitChecked("inspect", ["rev-parse", "HEAD"]);
+    const currentCommit = (yield* gitChecked("inspect", ["rev-parse", "HEAD"])).stdout.trim();
+    // The app built by an Update that then committed a build fix carries the fix's parent
+    // as its stamp, but its bundle already contains the fix.
+    const [headParents = "", headSubject = ""] = (yield* gitChecked("inspect", [
+      "log",
+      "-1",
+      "--format=%P%n%s",
+      "HEAD",
+    ])).stdout.split("\n");
+    const builtCommit =
+      installedCommit &&
+      installedCommit.length >= 7 &&
+      headSubject.startsWith(BUILD_FIX_SUBJECT) &&
+      !headParents.includes(" ") &&
+      headParents.startsWith(installedCommit)
+        ? currentCommit.slice(0, installedCommit.length)
+        : installedCommit;
     return {
       repositoryPath: repo,
-      currentCommit: currentCommit.stdout.trim(),
-      ...(installedCommit ? { installedCommit } : {}), // Fork add-on: offer locally changed source too.
+      currentCommit,
+      ...(builtCommit ? { installedCommit: builtCommit } : {}), // Fork add-on: offer locally changed source too.
       upstreamTag,
       upstreamVersion: nightlyVersionFromTag(upstreamTag),
       upstreamCommit: upstreamCommit.stdout.trim(),
@@ -1508,7 +1527,7 @@ export const make = Effect.gen(function* () {
             "--no-verify",
             "--no-edit",
             "-m",
-            `fix(desktop): build upstream nightly ${inspection.upstreamTag}`,
+            `${BUILD_FIX_SUBJECT}${inspection.upstreamTag}`,
           ],
           cwd: repo,
         });

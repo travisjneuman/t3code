@@ -322,7 +322,10 @@ async function localBuildPreflight(sha: string): Promise<LocalBuildPlan> {
     ),
     "Upstream remote is not the expected repository.",
   );
-  requireState((await git("cat-file", "-t", sha)) === "commit", "Requested SHA is not a local commit.");
+  requireState(
+    (await git("cat-file", "-t", sha)) === "commit",
+    "Requested SHA is not a local commit.",
+  );
   requireState(
     (await git("ls-remote", "origin", "refs/heads/main")).split(/\s/)[0] === sha,
     "The requested SHA is not the current pushed origin/main commit.",
@@ -335,7 +338,10 @@ async function localBuildPreflight(sha: string): Promise<LocalBuildPlan> {
     .map((tag) => version(tag.slice(1)))
     .sort(compareVersions)
     .at(-1);
-  requireState(nightly !== undefined, "No merged upstream nightly tag found for the requested commit.");
+  requireState(
+    nightly !== undefined,
+    "No merged upstream nightly tag found for the requested commit.",
+  );
   const tag = `v${nightly}`;
   requireState(
     (await git("cat-file", "-t", `refs/tags/${tag}`)) === "commit",
@@ -367,7 +373,10 @@ async function clearResultFile(file: string) {
   );
   try {
     const stat = await fs.lstat(file);
-    requireState(stat.isFile() && !stat.isSymbolicLink(), "Fleet result path is not a regular file.");
+    requireState(
+      stat.isFile() && !stat.isSymbolicLink(),
+      "Fleet result path is not a regular file.",
+    );
     await fs.unlink(file);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -391,11 +400,7 @@ async function writeResultFile(file: string, commit: string, targetVersion: stri
   }
 }
 
-async function buildLocal(
-  cfg: HostConfig,
-  sha: string,
-  resultPath: string,
-) {
+async function buildLocal(cfg: HostConfig, sha: string, resultPath: string) {
   const hosts = Object.keys(cfg.hosts);
   const failures: string[] = [];
   const completed: string[] = [];
@@ -427,37 +432,41 @@ async function buildLocal(
         phase: "write-result",
         mutates: true,
         does: [`write ${resultPath} only after every configured host staged this target`],
-        ifStopped: "All hosts may be staged, but the desktop will not queue activation without the result file.",
+        ifStopped:
+          "All hosts may be staged, but the desktop will not queue activation without the result file.",
       },
     ]);
     await journal.step(null, "clear-result", () => clearResultFile(resultPath));
     const plan = await journal.step(null, "preflight", () => localBuildPreflight(sha));
 
-    for (const name of hosts) {
-      const host = cfg.hosts[name]!;
-      try {
-        console.log(`${name}: building and staging ${plan.targetVersion} from ${sha}.`);
-        const value = await journal.step(name, "build-and-stage", () =>
-          remote(host, {
-            action: "build-and-stage",
-            version: plan.targetVersion,
-            sha: plan.sha,
-          }),
-        );
-        requireState(
-          record(value) &&
-            value.targetVersion === plan.targetVersion &&
-            ["staged", "already-staged", "already-active"].includes(String(value.status)),
-          `${name}: host returned an unexpected build result.`,
-        );
-        console.log(`${name}: ${String(value.status)} ${plan.targetVersion}.`);
-        completed.push(name);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failures.push(`${name}: ${message}`);
-        console.error(`${name}: build/stage failed or host is offline: ${message}`);
-      }
-    }
+    // Each host builds in its own checkout, so one slow host should not hold the others back.
+    await Promise.all(
+      hosts.map(async (name) => {
+        const host = cfg.hosts[name]!;
+        try {
+          console.log(`${name}: building and staging ${plan.targetVersion} from ${sha}.`);
+          const value = await journal.step(name, "build-and-stage", () =>
+            remote(host, {
+              action: "build-and-stage",
+              version: plan.targetVersion,
+              sha: plan.sha,
+            }),
+          );
+          requireState(
+            record(value) &&
+              value.targetVersion === plan.targetVersion &&
+              ["staged", "already-staged", "already-active"].includes(String(value.status)),
+            `${name}: host returned an unexpected build result.`,
+          );
+          console.log(`${name}: ${String(value.status)} ${plan.targetVersion}.`);
+          completed.push(name);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failures.push(`${name}: ${message}`);
+          console.error(`${name}: build/stage failed or host is offline: ${message}`);
+        }
+      }),
+    );
     if (failures.length > 0) {
       throw new Refusal(
         `Fleet build incomplete for ${plan.targetVersion}. Completed: ${completed.join(", ") || "none"}. Pending or failed: ${failures.join(" | ")}. No success result was written; use the desktop Retry action to repeat this same commit.`,
@@ -748,26 +757,14 @@ async function main() {
       !idle
     ) {
       idle = true;
-    } else if (
-      arg === "--dry-run" &&
-      (command === "prune" || command === "rollback") &&
-      !dryRun
-    ) {
+    } else if (arg === "--dry-run" && (command === "prune" || command === "rollback") && !dryRun) {
       dryRun = true;
-    } else if (
-      arg === "--expect-sha" &&
-      command === "build-local" &&
-      !expectSha
-    ) {
+    } else if (arg === "--expect-sha" && command === "build-local" && !expectSha) {
       expectSha = args.shift();
       if (!expectSha || !/^[a-f0-9]{40}$/.test(expectSha)) {
         throw new Refusal("--expect-sha needs a full commit SHA.\n" + USAGE, 2);
       }
-    } else if (
-      arg === "--result-file" &&
-      command === "build-local" &&
-      !requestedResultFile
-    ) {
+    } else if (arg === "--result-file" && command === "build-local" && !requestedResultFile) {
       requestedResultFile = args.shift();
       if (!requestedResultFile || requestedResultFile.startsWith("-")) {
         throw new Refusal("--result-file needs an absolute path.\n" + USAGE, 2);
