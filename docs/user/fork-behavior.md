@@ -86,6 +86,12 @@ keychain password. The first launch after this change asks once more, to move co
 in the keychain. Once that is done, you can delete the app's **Safe Storage** item in Keychain
 Access. Windows and Linux are unchanged.
 
+## Renamed machines keep their new name
+
+On web and desktop, a saved environment takes the name its machine reports each time it
+connects, so renaming a machine renames it in **Settings → Connections** and everywhere else the
+app names it. The mobile app keeps the name you gave it.
+
 ## Thread cards name their machine
 
 Every thread card in the sidebar names the machine the thread runs on, the one picked in **Run
