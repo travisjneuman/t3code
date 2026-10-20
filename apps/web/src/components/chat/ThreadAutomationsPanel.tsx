@@ -45,6 +45,24 @@ const LAST_RUN_LABEL: Record<ScheduledTask["lastRunStatus"], string> /* Fork add
   failed: "Last run failed", // Fork add-on
 }; // Fork add-on
 
+function taskScheduleLine(task: ScheduledTask) {
+  return (
+    <>
+      {scheduleLabel(task.schedule)}
+      {task.enabled && task.nextRunAt !== null ? (
+        <>
+          {" · next "}
+          <ScheduledRelativeLabel value={task.nextRunAt} />
+        </>
+      ) : task.enabled ? (
+        ""
+      ) : (
+        " · paused"
+      )}
+    </>
+  );
+}
+
 export function ThreadAutomationsPanel(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -176,24 +194,18 @@ export function ThreadAutomationsPanel(props: {
                 {LAST_RUN_LABEL[task.lastRunStatus] /* Fork add-on */}
               </span /* Fork add-on */>
             </span>
-            <div className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground/80">
-                {task.title}
-              </span>
-              <p className="truncate text-2xs text-muted-foreground">
-                {scheduleLabel(task.schedule)}
-                {task.enabled && task.nextRunAt !== null ? (
-                  <>
-                    {" · next "}
-                    <ScheduledRelativeLabel value={task.nextRunAt} />
-                  </>
-                ) : task.enabled ? (
-                  ""
-                ) : (
-                  " · paused"
-                )}
-              </p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger render={<div className="min-w-0 flex-1" />}>
+                <span className="block truncate text-sm font-medium text-foreground/80">
+                  {task.title}
+                </span>
+                <p className="truncate text-2xs text-muted-foreground">{taskScheduleLine(task)}</p>
+              </TooltipTrigger>
+              <TooltipPopup side="left">
+                <p className="font-medium">{task.title}</p>
+                <p className="text-muted-foreground">{taskScheduleLine(task)}</p>
+              </TooltipPopup>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger
                 render={

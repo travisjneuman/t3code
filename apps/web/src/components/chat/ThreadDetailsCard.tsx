@@ -91,12 +91,18 @@ export function ThreadDetailsCard({
     const measure = () => {
       const frame = element.closest<HTMLElement>("[data-thread-details-card]");
       const next = element.offsetHeight + (frame ? frame.offsetHeight - frame.clientHeight : 0);
-      const lineage = element.querySelector<HTMLElement>("[data-thread-relationships-panel]");
+      // PR lists and lineage scroll as they expand. Counting them toward density would hide
+      // the section and workspace controls when the user asks to see more rows.
+      const lists = element.querySelectorAll<HTMLElement>(
+        "[data-thread-relationships-panel], [data-thread-details-pr-list]",
+      );
       // Fork add-on: session details. They are long and render only at full density, so
       // counting them would hide themselves.
       const sessionDetails = element.querySelector<HTMLElement>("[data-thread-session-details]"); // Fork add-on
       const fittingHeight = // Fork add-on
-        next - (lineage?.offsetHeight ?? 0) - (sessionDetails?.offsetHeight ?? 0); // Fork add-on
+        next -
+        Array.from(lists).reduce((sum, list) => sum + list.offsetHeight, 0) -
+        (sessionDetails?.offsetHeight ?? 0); // Fork add-on
       setMeasurements((current) => {
         const heights = current.key === measurementKey ? current.heights : { full: 0, compact: 0 };
         const fullContentHeight =
