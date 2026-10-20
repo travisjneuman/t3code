@@ -3,6 +3,7 @@ import { classifyCliReleaseBaseUrl } from "./cliReleaseGuards.ts"; // Fork add-o
 export * from "./cliReleaseGuards.ts"; // Fork add-on: release source, HTTPS and download-size guards.
 
 const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code"; // Fork add-on: host releases come from the fork.
+export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
 

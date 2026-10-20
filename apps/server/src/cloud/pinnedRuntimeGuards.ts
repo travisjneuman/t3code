@@ -8,7 +8,6 @@
 import { cliReleaseAssetSizeProblem } from "@t3tools/shared/cliRelease";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import type { HttpClientResponse } from "effect/http";
 
 export class ReleaseAssetTooLargeError extends Schema.TaggedError<ReleaseAssetTooLargeError>()(
@@ -52,30 +51,6 @@ export const releaseAssetByteCap = () => {
       : Effect.fail(new ReleaseAssetTooLargeError({ problem }));
   };
 };
-
-/**
- * `arrayBuffer` is bounded only when the declared length bounds the body: fetch decodes
- * `content-encoding` transparently, so an encoded body, or one with no length, is counted as it
- * streams instead.
- */
-export const readReleaseAsset = Effect.fn("cloud.pinned_runtime.read_release_asset")(function* (
-  response: HttpClientResponse.HttpClientResponse,
-) {
-  const encoding = response.headers["content-encoding"]?.trim().toLowerCase();
-  if (declaredLength(response) !== undefined && (!encoding || encoding === "identity")) {
-    return new Uint8Array(yield* response.arrayBuffer);
-  }
-  const chunks = yield* response.stream.pipe(Stream.tap(releaseAssetByteCap()), Stream.runCollect);
-  let size = 0;
-  for (const chunk of chunks) size += chunk.byteLength;
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-});
 
 /** Keeps the cap's reason in the install error's step, where the user-facing message reads it. */
 export const releaseAssetErrorStep = (step: string, cause: unknown): string =>
