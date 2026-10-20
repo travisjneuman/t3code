@@ -18,6 +18,7 @@ import {
 } from "@t3tools/client-runtime/state/provider-instance-display";
 
 export { normalizeProviderAccentColor, shouldShowInstanceBadge };
+export { getProviderInstanceEntry }; // Fork add-on: hand-back and session insights resolve an instance's display name
 
 /**
  * Local-only placeholder used while a draft has no provider it can safely
