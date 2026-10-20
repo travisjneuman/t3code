@@ -29,6 +29,7 @@ import {
 
 import { ensureLocalApi } from "../../localApi";
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { observeResize } from "../../lib/observeResize";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
@@ -286,6 +287,7 @@ function PoolSegment({
   readonly color: string;
   readonly now: number;
   readonly index: number;
+  readonly labeled: boolean;
   readonly showAccountName: boolean;
 }) {
   return account.redeem ? (
@@ -331,12 +333,14 @@ function SegmentTriggers({
   color,
   now,
   index,
+  labeled,
   showAccountName,
 }: SegmentPayload & {
   readonly refillPercent: number;
   readonly color: string;
   readonly now: number;
   readonly index: number;
+  readonly labeled: boolean;
   readonly showAccountName: boolean;
 }) {
   const popover = use(SegmentPopoverContext) ?? undefined;
@@ -356,7 +360,10 @@ function SegmentTriggers({
             type="button"
             style={{ gridColumn: index, gridRow: 1 }}
             aria-label={`${account.displayName ?? (account.email ? accountInitials(account.email) : account.driver)}: ${remaining}% left${resetsIn ? `, ${resetsIn}` : ""}${timeLeft === null ? "" : `, ${timeLeft}% of the window left`}${credits ? `, ${credits} reset ${credits === 1 ? "credit" : "credits"} banked` : ""}`}
-            className="relative h-5 min-w-0 cursor-pointer rounded-md bg-muted text-start outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[popup-open]:ring-1 data-[popup-open]:ring-inset data-[popup-open]:ring-border @2xl/pool:h-8"
+            className={cn(
+              "relative min-w-0 cursor-pointer rounded-md bg-muted text-start outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[popup-open]:ring-1 data-[popup-open]:ring-inset data-[popup-open]:ring-border",
+              labeled ? "h-8" : "h-5",
+            )}
           />
         }
       >
@@ -387,11 +394,19 @@ function SegmentTriggers({
         <ForkPaceTick window={window} now={now} />{/* Fork add-on: pace line, under the labels. */}
         <span
           aria-hidden
-          className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-md text-3xs leading-none font-semibold text-foreground/80 tabular-nums @2xl/pool:hidden"
+          className={cn(
+            "absolute inset-0 flex items-center justify-center overflow-hidden rounded-md text-3xs leading-none font-semibold text-foreground/80 tabular-nums",
+            labeled && "hidden",
+          )}
         >
           {index}
         </span>
-        <div className="relative hidden h-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2 text-xs @2xl/pool:flex">
+        <div
+          className={cn(
+            "relative h-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2 text-xs",
+            labeled ? "flex" : "hidden",
+          )}
+        >
           {showAccountName ? (
             <AccountName
               account={account}
@@ -419,7 +434,7 @@ function SegmentTriggers({
           ) : null}
         </div>
       </PopoverTrigger>
-      <LegendRow payload={payload} color={color} now={now} index={index} />
+      {labeled ? null : <LegendRow payload={payload} color={color} now={now} index={index} />}
     </>
   );
 }
@@ -446,7 +461,7 @@ function LegendRow({
       payload={payload}
       style={{ gridColumn: "1 / -1", gridRow: index + 1 }}
       render={<Button variant="ghost" size="compact" />}
-      className="min-w-0 @2xl/pool:hidden"
+      className="min-w-0"
     >
       <span className="relative inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-3xs leading-none font-semibold text-foreground/80 tabular-nums">
         <span
@@ -481,6 +496,8 @@ function LegendRow({
   );
 }
 
+const LABELED_SEGMENT_MIN_WIDTH = 224;
+
 function PoolBar({
   pool,
   color,
@@ -491,11 +508,32 @@ function PoolBar({
   readonly now: number;
 }) {
   const restores = new Map(pool.resets.map((reset) => [reset.member.account.key, reset]));
+  const columns = pool.columns.length;
+  const [dimensions, setDimensions] = useState({ width: 0, gap: 0 });
+  const probeRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const probe = probeRef.current;
+    const grid = gridRef.current;
+    if (!probe || !grid) return;
+    return observeResize(probe, ([entry]) => {
+      if (!entry) return;
+      setDimensions({
+        width: entry.contentRect.width,
+        gap: Number.parseFloat(getComputedStyle(grid).columnGap) || 0,
+      });
+    });
+  }, []);
+  const labeled =
+    (dimensions.width - dimensions.gap * (columns - 1)) / columns >= LABELED_SEGMENT_MIN_WIDTH;
   return (
-    <div className="@container/pool min-w-0">
+    <div className="min-w-0">
+      {/* A height-independent probe keeps legend changes from triggering resize feedback. */}
+      <div ref={probeRef} />
       <div
+        ref={gridRef}
         className="grid gap-x-1 gap-y-1"
-        style={{ gridTemplateColumns: `repeat(${pool.columns.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
         {pool.columns.map((member, position) =>
           member.window ? (
@@ -508,7 +546,8 @@ function PoolBar({
               color={color}
               now={now}
               index={position + 1}
-              showAccountName={pool.columns.length > 1}
+              labeled={labeled}
+              showAccountName={columns > 1}
             />
           ) : null,
         )}
