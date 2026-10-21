@@ -5,7 +5,7 @@
  */
 import { useAtomValue } from "@effect/atom-react";
 import type { DesktopHostReleaseBridge, DesktopHostReleaseStatus } from "@t3tools/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { canUpdateServer } from "~/components/ServerUpdateAction";
 import { toastManager } from "~/components/ui/toast";
@@ -16,10 +16,7 @@ import { environmentIdsKey } from "~/state/environmentAtomList";
 import { useEnvironments } from "~/state/environments";
 import { environmentUpdateStatesAtom } from "~/state/server";
 import { environmentSessionStatesAtom } from "~/state/session";
-import {
-  collectHostUpdateTargets,
-  useRefreshHostUpdateTarget,
-} from "./hostRelease";
+import { collectHostUpdateTargets, useRefreshHostUpdateTarget } from "./hostRelease";
 
 // Which staged target each host was queued for, so a failed or cancelled update is not queued again.
 const QUEUED_KEY = "t3code:host-release-auto-update:v1";
@@ -52,9 +49,14 @@ function readQueued(): Record<string, string> {
     : {};
 }
 
-function reportFailure(bridge: DesktopHostReleaseBridge, status: DesktopHostReleaseStatus): void {
-  const runKey = `${status.commit}:${status.startedAt}`;
-  if (readJson(NOTIFIED_KEY) === runKey) return;
+const runKeyOf = (status: DesktopHostReleaseStatus) => `${status.commit}:${status.startedAt}`;
+
+function reportFailure(
+  bridge: DesktopHostReleaseBridge,
+  status: DesktopHostReleaseStatus,
+): ReturnType<typeof toastManager.add> | null {
+  const runKey = runKeyOf(status);
+  if (readJson(NOTIFIED_KEY) === runKey) return null;
   writeJson(NOTIFIED_KEY, runKey);
   const id = toastManager.add({
     type: "error",
@@ -69,18 +71,30 @@ function reportFailure(bridge: DesktopHostReleaseBridge, status: DesktopHostRele
       },
     },
   });
+  return id;
 }
 
 function usePublisherStatus(bridge: DesktopHostReleaseBridge | undefined) {
   const [status, setStatus] = useState<DesktopHostReleaseStatus | null>(null);
   const refreshTarget = useRefreshHostUpdateTarget();
+  const failureToastRef = useRef<{
+    readonly id: ReturnType<typeof toastManager.add>;
+    readonly runKey: string;
+  } | null>(null);
   useEffect(() => {
     if (bridge === undefined) return;
     const apply = (next: DesktopHostReleaseStatus | null) => {
       setStatus(next);
       refreshTarget();
-      if (next === null) return;
-      if (next.state === "failed") reportFailure(bridge, next);
+      // Update can rebuild a repaired commit seconds after a failed run; that run supersedes the toast.
+      const shown = failureToastRef.current;
+      if (shown !== null && (next === null || runKeyOf(next) !== shown.runKey)) {
+        toastManager.close(shown.id);
+        failureToastRef.current = null;
+      }
+      if (next?.state !== "failed") return;
+      const id = reportFailure(bridge, next);
+      if (id !== null) failureToastRef.current = { id, runKey: runKeyOf(next) };
     };
     const unsubscribe = bridge.onStatusChange(apply);
     void bridge.getStatus().then(apply, () => undefined);
