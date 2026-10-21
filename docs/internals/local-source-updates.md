@@ -36,7 +36,7 @@ version label and `--build-version` (tag without the leading `v`).
   `t3codeCommitHash` as a 12-character short hash while inspect reads the full
   `HEAD`, so `runsCheckedOutCommit` compares them as a prefix; exact equality never
   matches and offers the same nightly forever. The `fix(desktop): build upstream
-nightly` commit lands after the build that stamped its parent, so inspect counts
+  nightly` commit lands after the build that stamped its parent, so inspect counts
   a `HEAD` that is that commit, directly on the stamped one, as built.
 
 ## Merge, build, then commit
@@ -121,8 +121,15 @@ caught.
 
 ## Conflicts
 
-`pnpm-lock.yaml` conflicts always take upstream's file; `vp i` runs before every
-build and regenerates it from the merged manifests.
+`pnpm-lock.yaml` is never merged as text. Every merge, conflicted or not, replaces
+it with upstream's file and runs `vp i --lockfile-only` before committing, so the
+fork's lockfile is always upstream's plus the entries fork manifests add. A clean
+text merge is not safe: upstream rewrites peer suffixes (`@volar/typescript@2.4.28`
+becoming `@volar/typescript@2.4.28(typescript@7.0.2)`) across every importer it
+owns, git keeps the fork-only importers' old references, and pnpm rejects the
+result with `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Fork hosts install the pushed
+merge commit from a clean checkout before the Mac build could fix it, so the
+lockfile has to be right in the merge commit itself.
 
 ## Agent fallback
 

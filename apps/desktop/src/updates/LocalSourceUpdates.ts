@@ -973,12 +973,31 @@ export const make = Effect.gen(function* () {
         conflicted.push(path);
         continue;
       }
-      // Take upstream's lockfile; the install before the build regenerates it
-      // from the merged package manifests.
+      // rebuildLockfile replaces it once every manifest has merged.
       yield* gitMerge(repo, ["checkout", "--theirs", "--", path]);
       yield* gitMerge(repo, ["add", "--", path]);
     }
     return conflicted.length > 0 && agent ? yield* resolveWithAgent(repo, conflicted) : conflicted;
+  });
+
+  // The lockfile is never merged as text. Upstream rewrites peer suffixes on
+  // dependency bumps, and a conflict-free text merge leaves the fork's own
+  // importers pointing at snapshots upstream dropped, which `vp i` rejects.
+  // Fork hosts install the pushed merge commit from a clean checkout, so it must
+  // be consistent when committed: start from upstream's lockfile and let pnpm
+  // add only what the fork's manifests need.
+  const rebuildLockfile = Effect.fn("desktop.localSourceUpdates.rebuildLockfile")(function* (
+    repo: string,
+    target: string,
+  ) {
+    yield* gitMerge(repo, ["checkout", target, "--", LOCKFILE_PATH]);
+    yield* runChecked({
+      operation: "merge",
+      command: "vp",
+      args: ["i", "--lockfile-only"],
+      cwd: repo,
+    });
+    yield* gitMerge(repo, ["add", "--", LOCKFILE_PATH]);
   });
 
   const attributableUntrackedPaths = Effect.fn(
@@ -1211,6 +1230,7 @@ export const make = Effect.gen(function* () {
         );
       }
     }
+    yield* rebuildLockfile(repo, target);
     return yield* checkForkMarkers(repo, label, markersBefore, agent);
   });
 

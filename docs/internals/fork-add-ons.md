@@ -72,7 +72,10 @@ the host the way process diagnostics do; it runs only while its dialog is open.
   `apps/web/public/manifest.webmanifest`. `tsconfig.json` files accept comments, so their fork
   lines carry markers.
 - Generated output: `pnpm-lock.yaml` and `apps/web/src/routeTree.gen.ts`. Do not hand-mark
-  package-manager or router output; regeneration would remove the markers.
+  package-manager or router output; regeneration would remove the markers. Never hand-edit the
+  lockfile either: upstream sync rebuilds it from upstream's copy plus fork manifests
+  ([conflicts](./local-source-updates.md#conflicts)), and a by-hand fix goes the same way:
+  `git checkout upstream/main -- pnpm-lock.yaml && vp i --lockfile-only`.
 - Binary icons: `apps/web/public/apple-touch-icon.png`, `apps/web/public/favicon-16x16.png`,
   `apps/web/public/favicon-32x32.png`, and `apps/web/public/favicon.ico`.
 - `.gitignore` patterns cannot have trailing comments: the comment would become part of the
