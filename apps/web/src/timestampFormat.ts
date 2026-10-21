@@ -281,7 +281,7 @@ export function formatElapsedDurationLabel(isoDate: string, nowMs: number = Date
   return `${days}d`;
 }
 
-function formatRelativeTimeUntil(isoDate: string): RelativeTimeParts | null {
+export function formatRelativeTimeUntil(isoDate: string): RelativeTimeParts | null { // Fork add-on: exported for SessionSummarySection rate-limit resets
   const date = parseTimestampDate(isoDate);
   if (!date) return null;
   const diffMs = date.getTime() - Date.now();
