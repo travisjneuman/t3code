@@ -30,7 +30,7 @@ import {
   getStartedThreadModelChangeBlockReason,
   resolveComposerInteractionMode,
 } from "../components/ChatView.logic";
-import { ComposerFooterModeControls } from "../components/chat/ChatComposer";
+import { ComposerFooterModeControls } from "../components/chat/ComposerFooterControls";
 import {
   ComposerControl,
   ComposerControlIcon,

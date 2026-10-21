@@ -25,7 +25,7 @@ import { ArchiveX, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
-import { ArchivedThreadsPanel as UpstreamArchivedThreadsPanel } from "../components/settings/SettingsPanels";
+import { ArchivedThreadsPanel as UpstreamArchivedThreadsPanel } from "../components/settings/ArchivedThreadsPanel";
 import { useSettingsScope } from "../components/settings/SettingsScopeContext";
 import { SettingsRow, SettingsSection } from "../components/settings/settingsLayout";
 import { Button } from "../components/ui/button";
