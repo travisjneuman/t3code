@@ -48,7 +48,8 @@ export function isMaintenanceBusyThread(
   return (
     thread.activeRunId !== null ||
     BUSY_RUN_STATUSES.has(thread.status) ||
-    thread.pendingRuntimeRequest !== null ||
+    // An async question outlives its run and is answered by a new one; only a blocking one holds a live run.
+    (thread.pendingRuntimeRequest !== null && thread.pendingRuntimeRequest.blocking !== false) ||
     (thread.pendingBackgroundTasks ?? []).some((task) => task.kind !== "command")
   );
 }

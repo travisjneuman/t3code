@@ -86,13 +86,16 @@ release feed; update it by pulling and building again.
 
 Provider updates, T3 server updates, and the app's own restart into a new version wait while
 the sessions they would interrupt are active. A session is active while it is running or waiting
-for an approval or your input; paused and stopped sessions don't hold anything up. A Hermes
+for an approval or your input; paused and stopped sessions don't hold anything up, and neither
+does a question an agent left open after finishing its turn. A Hermes
 Agent counts as active while its gateway is busy or any of its agents are running. A provider
 update waits only for that provider's sessions on that machine, and a server or app update waits
 for every session it would restart.
 
 A waiting update shows in the sidebar as **Waiting for N active sessions on** the machine's
-name, and runs by itself once those sessions have stayed idle for 2 minutes. **Update now** runs
+name, and runs by itself once those sessions have stayed idle for 2 minutes. After the app starts
+or a machine reconnects, it shows **Waiting for** the machine **to stay idle** for those first 2
+minutes while it gets that machine's current sessions. **Update now** runs
 it right away; **Cancel** drops it, and a downloaded app update stays ready for the update
 button. If an update is still waiting after 4 hours, you get one notification.
 
