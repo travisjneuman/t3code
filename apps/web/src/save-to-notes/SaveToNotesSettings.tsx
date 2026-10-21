@@ -28,7 +28,7 @@ const ROWS: ReadonlyArray<FolderRowProps> = [
     searchId: "save-to-notes-notes-folder",
     label: "Notes folder",
     description:
-      "Where Save to notes, Summary asks the agent to file a note. The agent follows the folder's own AGENTS.md or CLAUDE.md to pick the spot.",
+      "Where Save to notes, Summary asks the agent to file a note. The agent follows the folder's own AGENTS.md or CLAUDE.md to pick the spot. ${NAME} uses this machine's environment variable.",
     patch: (value) => ({ notesDirectory: value }),
   },
   {
@@ -36,7 +36,7 @@ const ROWS: ReadonlyArray<FolderRowProps> = [
     searchId: "save-to-notes-saved-threads-folder",
     label: "Saved threads folder",
     description:
-      "Where Save to notes, Full copy writes a thread's prompts and final answers, one file per thread.",
+      "Where Save to notes, Full copy writes a thread's prompts and final answers, one file per thread. ${NAME} uses this machine's environment variable.",
     patch: (value) => ({ savedThreadsDirectory: value }),
   },
 ];

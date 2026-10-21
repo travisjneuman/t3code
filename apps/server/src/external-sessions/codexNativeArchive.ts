@@ -32,6 +32,7 @@ export const make = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const hostEnvironment = yield* HostProcess.Environment;
+  const homeDirectory = yield* HostProcess.HomeDirectory;
 
   const realPath = (target: string) =>
     fileSystem.realPath(target).pipe(Effect.orElseSucceed(() => path.resolve(target)));
@@ -51,7 +52,7 @@ export const make = Effect.gen(function* () {
       if ((yield* realPath(codex.layout.sharedHomePath)) !== listedHome) continue;
       const environment = mergeProviderInstanceEnvironment(instance.environment);
       return {
-        binaryPath: expandHomePath(codex.settings.binaryPath),
+        binaryPath: expandHomePath(codex.settings.binaryPath, homeDirectory),
         homePath: codex.layout.effectiveHomePath ?? "",
         launchArgs: resolveCodexLaunchArgs(codex.settings.launchArgs, environment),
         environment,

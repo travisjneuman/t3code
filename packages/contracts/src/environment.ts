@@ -154,6 +154,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       without a local browser runtime open server tabs here. */
   serverBrowser: Schema.optionalKey(Schema.Boolean),
   hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers hostBackups.list.
+  existingCheckout: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers existingCheckout.find.
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

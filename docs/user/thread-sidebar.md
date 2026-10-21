@@ -13,6 +13,11 @@ an existing worktree, use **New thread in this worktree** from the branch toolba
 When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
+To run a project on a machine that does not have it yet, pick **Add to another
+machine** in the machine menu. If that machine already has the repository checked
+out in its add-project folder, beside its other projects, or one level below
+either, T3 Code offers to add that folder instead of cloning a second copy.
+
 ### Start without a project
 
 A thread does not need a project. To start one without a project, click **or

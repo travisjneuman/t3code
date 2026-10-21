@@ -385,6 +385,7 @@ import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on: compare 
 import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
 import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
 import { HostBackupsRpcs } from "./hostBackups.ts"; // Fork add-on: host backups.
+import { ExistingCheckoutRpcs } from "./existingCheckout.ts"; // Fork add-on: existing checkout.
 
 export const WS_METHODS = {
   projectsList: "projects.list",
@@ -2104,4 +2105,5 @@ export const WsRpcGroup = RpcGroup.make(
   ...HermesSessionsRpcs, // Fork add-on: Hermes provider.
   ...MaintenanceQueueRpcs, // Fork add-on: maintenance queue.
   ...HostBackupsRpcs, // Fork add-on: host backups.
+  ...ExistingCheckoutRpcs, // Fork add-on: existing checkout.
 ).middleware(RpcScopeAuthorization);

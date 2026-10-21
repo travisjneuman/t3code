@@ -395,6 +395,7 @@ export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const crypto = yield* Crypto.Crypto;
   const hostEnvironment = yield* HostProcess.Environment;
+  const homeDirectory = yield* HostProcess.HomeDirectory;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projects = yield* ProjectService.ProjectService;
@@ -444,9 +445,9 @@ export const make = Effect.gen(function* () {
         const configured = config.value.homePath.trim();
         homePath =
           configured.length > 0
-            ? path.resolve(expandHomePath(configured))
+            ? path.resolve(expandHomePath(configured, homeDirectory))
             : fromEnvironment.length > 0
-              ? path.resolve(expandHomePath(fromEnvironment))
+              ? path.resolve(expandHomePath(fromEnvironment, homeDirectory))
               : path.join(NodeOS.homedir(), ".claude");
       } else if (source === "codex") {
         const codex = yield* codexInstanceHome(instance, hostEnvironment).pipe(
@@ -458,7 +459,7 @@ export const make = Effect.gen(function* () {
         // Grok has no home setting; GROK_HOME or `~/.grok`, as UsageService reads it.
         homePath =
           fromEnvironment.length > 0
-            ? path.resolve(expandHomePath(fromEnvironment))
+            ? path.resolve(expandHomePath(fromEnvironment, homeDirectory))
             : path.join(NodeOS.homedir(), ".grok");
       }
       if (isUnder(path, transcript, yield* realPath(homePath))) return instanceId;

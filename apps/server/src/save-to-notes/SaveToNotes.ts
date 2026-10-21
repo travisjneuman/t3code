@@ -31,6 +31,8 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { listLoginShellCandidates, readEnvironmentFromLoginShell } from "@t3tools/shared/shell";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -140,6 +142,46 @@ const copyFileName = (title: string, threadId: string): string => {
   return exportFileName(title, "md").replace(/\.md$/, `-${tail || "thread"}.md`);
 };
 
+const ENVIRONMENT_REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+
+/**
+ * Replaces each `${NAME}` with this machine's value, so one folder setting can
+ * fit every environment. The desktop app starts outside a shell, so names its
+ * own environment lacks are read from the login shell, where profiles export them.
+ */
+const expandEnvironmentReferences = Effect.fn("SaveToNotes.expandEnvironmentReferences")(function* (
+  value: string,
+) {
+  const names = [
+    ...new Set(Array.from(value.matchAll(ENVIRONMENT_REFERENCE), ([, name]) => name ?? "")),
+  ];
+  const environment = yield* HostProcess.Environment;
+  const platform = yield* HostProcess.Platform;
+  const known: Partial<Record<string, string>> = {};
+  for (const name of names) {
+    if (environment[name]) known[name] = environment[name];
+  }
+  const missing = names.filter((name) => known[name] === undefined);
+  if (missing.length > 0 && platform !== "win32") {
+    for (const shell of listLoginShellCandidates(platform, environment.SHELL)) {
+      const fromShell = yield* Effect.try(() => readEnvironmentFromLoginShell(shell, missing)).pipe(
+        Effect.orElseSucceed((): Partial<Record<string, string>> => ({})),
+      );
+      if (missing.some((name) => fromShell[name])) {
+        Object.assign(known, fromShell);
+        break;
+      }
+    }
+  }
+  return {
+    expanded: value.replace(
+      ENVIRONMENT_REFERENCE,
+      (reference, name: string) => known[name] ?? reference,
+    ),
+    unset: names.filter((name) => !known[name]),
+  };
+});
+
 const make = Effect.gen(function* () {
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const projects = yield* ProjectStore.ProjectStoreV2;
@@ -161,10 +203,16 @@ const make = Effect.gen(function* () {
           message: `Set the ${label} first (${SETTINGS_PATH}).`,
         });
       }
-      const folder = expandHomePath(raw);
+      const { expanded, unset } = yield* expandEnvironmentReferences(raw);
+      if (unset.length > 0) {
+        return yield* new SaveToNotesError({
+          message: `The ${label} uses ${unset.map((name) => `\${${name}}`).join(", ")}, which this machine does not set.`,
+        });
+      }
+      const folder = path.normalize(expandHomePath(expanded, yield* HostProcess.HomeDirectory));
       if (!path.isAbsolute(folder)) {
         return yield* new SaveToNotesError({
-          message: `The ${label} must be a full path, like ~/notes.`,
+          message: `The ${label} must be a full path, like ~/notes or \${NOTES_ROOT}/notes.`,
         });
       }
       const stat = yield* fileSystem.stat(folder).pipe(Effect.option);

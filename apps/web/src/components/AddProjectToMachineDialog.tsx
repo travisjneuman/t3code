@@ -5,10 +5,13 @@ import {
   getCloneDestinationPath,
   getCloneDirectoryName,
 } from "@t3tools/client-runtime/operations/projects";
+import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
 import {
+  EXISTING_CHECKOUT_WS_METHODS,
   type EnvironmentId,
   type ProjectIgnoredFile,
   type ScopedProjectRef,
+  repositoryGroupingKeyOf,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import { ArrowRightIcon } from "lucide-react";
@@ -16,12 +19,14 @@ import { useEffect, useId, useState } from "react";
 import { create } from "zustand";
 
 import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
+import { connectionAtomRuntime } from "../connection/runtime";
 import { useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
 import {
   COPYABLE_FILE_MAX_BYTES,
   type CloneProtocol,
+  addExistingCheckout,
   addProjectToMachine,
   cloneUrlForProtocol,
   cloneUrlProtocol,
@@ -67,6 +72,14 @@ export function openAddProjectToMachine(request: AddProjectToMachineRequest) {
 
 const close = () => useRequest.setState({ request: null });
 
+// Fork add-on: existing checkout. Idle TTL 0: it reads the other machine's disk, so it runs only
+// while the dialog is open and is read fresh each time.
+const existingCheckoutQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:existing-checkout:find",
+  tag: EXISTING_CHECKOUT_WS_METHODS.find,
+  idleTtlMs: 0,
+});
+
 export function AddProjectToMachineDialogHost() {
   const request = useRequest((state) => state.request);
   return request ? <AddProjectToMachineDialog request={request} /> : null;
@@ -97,6 +110,34 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const [pathOverride, setPathOverride] = useState<string | null>(null);
   const destinationPath = pathOverride ?? defaultPath;
 
+  // Fork add-on: existing checkout. A machine that already has the repository adds that folder.
+  const subdirectory = project
+    ? projectSubdirectory(project.repositoryIdentity?.rootPath, project.workspaceRoot)
+    : "";
+  const repositoryKey = project?.repositoryIdentity
+    ? repositoryGroupingKeyOf(project.repositoryIdentity)
+    : null;
+  const canFindCheckout =
+    targetEnvironment?.serverConfig?.environment.capabilities.existingCheckout === true;
+  const existingCheckout = useEnvironmentQuery(
+    target && repositoryKey && canFindCheckout
+      ? existingCheckoutQuery({ environmentId: target.environmentId, input: { repositoryKey } })
+      : null,
+  );
+  const searching =
+    target !== null &&
+    repositoryKey !== null &&
+    canFindCheckout &&
+    existingCheckout.data === null &&
+    existingCheckout.error === null;
+  const foundRoot = existingCheckout.data?.repositoryRoot ?? null;
+  const [cloneInstead, setCloneInstead] = useState(false);
+  const addExisting = foundRoot !== null && !cloneInstead;
+  const [existingPathOverride, setExistingPathOverride] = useState<string | null>(null);
+  const existingPath =
+    existingPathOverride ?? (foundRoot ? joinSubdirectory(foundRoot, subdirectory) : "");
+  const folderPath = addExisting ? existingPath : destinationPath;
+
   const canListFiles = source?.serverConfig?.environment.capabilities.ignoredFileListing === true;
   const ignoredFiles = useEnvironmentQuery(
     project && canListFiles
@@ -119,10 +160,12 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 
   // The project or every target can vanish while the dialog is open. Submitting
   // before the file list loads would silently skip the default .env copies.
+  // Waiting on the search keeps a clone from starting before a checkout it would duplicate is found.
   const unavailable =
     project === null ||
     target === null ||
-    (canListFiles && ignoredFiles.data === null && ignoredFiles.error === null);
+    searching ||
+    (!addExisting && canListFiles && ignoredFiles.data === null && ignoredFiles.error === null);
   useEffect(() => {
     if (project === null) close();
   }, [project]);
@@ -160,7 +203,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 
   const submit = async () => {
     if (!project || !target || submitting) return;
-    if (destinationPath.trim().length === 0) {
+    if (folderPath.trim().length === 0) {
       setError("Choose a folder on the other machine.");
       return;
     }
@@ -168,23 +211,30 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     setError(null);
     const projectId = newProjectId();
     try {
-      await addProjectToMachine({
-        source: { environmentId: project.environmentId, cwd: project.workspaceRoot },
-        subdirectory: projectSubdirectory(
-          project.repositoryIdentity?.rootPath,
-          project.workspaceRoot,
-        ),
-        target: { environmentId: target.environmentId, label: target.label },
-        projectId,
-        title: project.title,
-        remoteUrl,
-        destinationPath: destinationPath.trim(),
-        files: files.filter((file) => selectedFiles.has(file.path)).map((file) => file.path),
-      });
+      if (addExisting) {
+        await addExistingCheckout({
+          environmentId: target.environmentId,
+          projectId,
+          title: project.title,
+          workspaceRoot: folderPath.trim(),
+        });
+      } else {
+        await addProjectToMachine({
+          source: { environmentId: project.environmentId, cwd: project.workspaceRoot },
+          subdirectory,
+          target: { environmentId: target.environmentId, label: target.label },
+          projectId,
+          title: project.title,
+          remoteUrl,
+          destinationPath: folderPath.trim(),
+          files: files.filter((file) => selectedFiles.has(file.path)).map((file) => file.path),
+        });
+      }
       close();
       openClonedProject(scopeProjectRef(target.environmentId, projectId));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start the clone.");
+      const fallback = addExisting ? "Could not add the project." : "Could not start the clone.";
+      setError(cause instanceof Error ? cause.message : fallback);
       setSubmitting(false);
     }
   };
@@ -207,8 +257,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
           <DialogHeader>
             <DialogTitle>Add to another machine</DialogTitle>
             <DialogDescription>
-              Clone {project?.repositoryIdentity?.displayName ?? project?.title} and bring the local
-              files git does not track.
+              {addExisting
+                ? `${target?.label ?? "That machine"} already has ${project?.repositoryIdentity?.displayName ?? project?.title}. Add its folder as the project there.`
+                : `Clone ${project?.repositoryIdentity?.displayName ?? project?.title} and bring the local files git does not track.`}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -226,15 +277,17 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 </span>
               </div>
               <div className="flex w-28 flex-col items-center gap-0.5 text-muted-foreground text-xs">
-                <span>git clone</span>
+                <span>{addExisting ? "already there" : "git clone"}</span>
                 <span className="flex w-full items-center">
                   <span className="h-px flex-1 bg-border" />
                   <ArrowRightIcon className="-ms-1 size-3.5" aria-hidden />
                 </span>
                 <span>
-                  {selectedFiles.size === 0
-                    ? "no files"
-                    : `+ ${selectedFiles.size} ${selectedFiles.size === 1 ? "file" : "files"}`}
+                  {addExisting
+                    ? "no copy"
+                    : selectedFiles.size === 0
+                      ? "no files"
+                      : `+ ${selectedFiles.size} ${selectedFiles.size === 1 ? "file" : "files"}`}
                 </span>
               </div>
               <div className="flex min-w-0 flex-col gap-1">
@@ -242,7 +295,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   <Select
                     value={target?.environmentId ?? null}
                     onValueChange={(value) => {
-                      if (value) setTargetId(value);
+                      if (!value) return;
+                      setTargetId(value);
+                      setCloneInstead(false);
+                      setExistingPathOverride(null);
                     }}
                     items={targets.map((t) => ({ value: t.environmentId, label: t.label }))}
                   >
@@ -272,41 +328,68 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   </span>
                 )}
                 <span className="flex min-w-0 font-mono text-muted-foreground text-xs">
-                  <MiddleTruncate value={destinationPath} />
+                  <MiddleTruncate value={folderPath} />
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Clone over</Label>
-              {sshUrl && httpsUrl ? (
-                <ToggleGroup
-                  aria-label="Clone protocol"
-                  value={protocol ? [protocol] : []}
-                  onValueChange={(next) => {
-                    const value = next[0];
-                    if (value === "ssh" || value === "https") setProtocol(value);
-                  }}
-                >
-                  <Toggle value="ssh">SSH</Toggle>
-                  <Toggle value="https">HTTPS</Toggle>
-                </ToggleGroup>
-              ) : null}
-              <span className="truncate font-mono text-muted-foreground text-xs">{remoteUrl}</span>
-            </div>
+            {addExisting ? null : (
+              <div className="flex flex-col gap-1.5">
+                <Label>Clone over</Label>
+                {sshUrl && httpsUrl ? (
+                  <ToggleGroup
+                    aria-label="Clone protocol"
+                    value={protocol ? [protocol] : []}
+                    onValueChange={(next) => {
+                      const value = next[0];
+                      if (value === "ssh" || value === "https") setProtocol(value);
+                    }}
+                  >
+                    <Toggle value="ssh">SSH</Toggle>
+                    <Toggle value="https">HTTPS</Toggle>
+                  </ToggleGroup>
+                ) : null}
+                <span className="truncate font-mono text-muted-foreground text-xs">
+                  {remoteUrl}
+                </span>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-path`}>Folder on {target?.label ?? "the other machine"}</Label>
               <Input
                 id={`${id}-path`}
-                value={destinationPath}
-                onChange={(event) => setPathOverride(event.target.value)}
+                value={folderPath}
+                onChange={(event) =>
+                  addExisting
+                    ? setExistingPathOverride(event.target.value)
+                    : setPathOverride(event.target.value)
+                }
                 spellCheck={false}
                 autoComplete="off"
               />
+              {searching ? (
+                <p className="text-muted-foreground text-xs">
+                  Looking for a checkout already on {target?.label ?? "that machine"}…
+                </p>
+              ) : foundRoot !== null ? (
+                <p className="flex flex-wrap items-center gap-x-1 text-muted-foreground text-xs">
+                  {addExisting
+                    ? "Found an existing checkout."
+                    : `${target?.label ?? "That machine"} already has a checkout.`}
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    onClick={() => setCloneInstead(!cloneInstead)}
+                  >
+                    {addExisting ? "Clone a new copy instead" : "Use it instead"}
+                  </Button>
+                </p>
+              ) : null}
             </div>
 
-            {canListFiles ? (
+            {canListFiles && !addExisting ? (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
                   <Label className="flex-1">Copy ignored files</Label>
@@ -372,7 +455,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               Cancel
             </Button>
             <Button type="submit" disabled={unavailable || submitting}>
-              {submitting ? "Starting…" : `Clone to ${target?.label ?? "machine"}`}
+              {submitting
+                ? "Starting…"
+                : `${addExisting ? "Add to" : "Clone to"} ${target?.label ?? "machine"}`}
             </Button>
           </DialogFooter>
         </form>
@@ -392,6 +477,13 @@ function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: 
   return workspaceRoot.startsWith(prefix) && /^[\\/]/.test(rest)
     ? rest.slice(1).replaceAll("\\", "/")
     : "";
+}
+
+/** Uses the found folder's own separator, since the other machine may be Windows. */
+function joinSubdirectory(root: string, subdirectory: string) {
+  if (!subdirectory) return root;
+  const separator = root.includes("\\") ? "\\" : "/";
+  return `${root.replace(/[\\/]+$/, "")}${separator}${subdirectory.replaceAll("/", separator)}`;
 }
 
 function defaultSelection(files: readonly ProjectIgnoredFile[]): ReadonlySet<string> {

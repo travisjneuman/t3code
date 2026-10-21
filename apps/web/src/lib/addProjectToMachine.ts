@@ -78,6 +78,31 @@ export interface AddProjectToMachineInput {
   readonly files: ReadonlyArray<string>;
 }
 
+/** Adds a checkout the other machine already has as the project there, instead of cloning. Fork add-on: existing checkout. */
+export async function addExistingCheckout(input: {
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly title: string;
+  readonly workspaceRoot: string;
+}): Promise<void> {
+  const created = await runAtomCommand(
+    appAtomRegistry,
+    projectEnvironment.create,
+    {
+      environmentId: input.environmentId,
+      input: {
+        projectId: input.projectId,
+        title: input.title,
+        workspaceRoot: input.workspaceRoot,
+        createWorkspaceRootIfMissing: false,
+        defaultModelSelection: null,
+      },
+    },
+    { label: "Add existing checkout", reportFailure: false },
+  );
+  if (created._tag === "Failure") throw new Error(failureMessage(created));
+}
+
 function failureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]): string {
   const error = squashAtomCommandFailure(result);
   return error instanceof Error ? error.message : "An error occurred.";

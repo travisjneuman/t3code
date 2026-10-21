@@ -6,6 +6,7 @@
 import * as Effect from "effect/Effect";
 
 import * as CompareAgentsRpc from "./compare-agents/CompareAgentsRpc.ts";
+import * as ExistingCheckoutRpc from "./existing-checkout/ExistingCheckoutRpc.ts";
 import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts";
 import * as HermesSessionsRpc from "./hermes/HermesSessionsRpc.ts";
 import * as HostBackupsRpc from "./host-backups/HostBackupsRpc.ts";
@@ -24,5 +25,6 @@ export const makeHandlers = Effect.gen(function* () {
     ...(yield* HermesSessionsRpc.makeHandlers),
     ...(yield* MaintenanceQueueRpc.makeHandlers),
     ...(yield* HostBackupsRpc.makeHandlers),
+    ...(yield* ExistingCheckoutRpc.makeHandlers),
   };
 });

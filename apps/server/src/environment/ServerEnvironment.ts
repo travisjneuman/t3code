@@ -270,6 +270,7 @@ export const make = Effect.gen(function* () {
       ...(desktopAppUpdate ? { desktopAppUpdate: true } : {}),
       serverBrowser: true,
       hostBackups: true, // Fork add-on: host backups.
+      existingCheckout: true, // Fork add-on: existing checkout.
     },
   };
 

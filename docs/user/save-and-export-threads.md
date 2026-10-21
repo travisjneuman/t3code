@@ -34,6 +34,10 @@ The mobile app can't export threads yet.
 vault. Set the folders once in **Settings → General → Projects & threads**. They are paths on the
 machine that runs the environment, and the folders must already exist.
 
+If your notes live at a different path on each machine, export the path as an environment variable
+on each one (in your shell profile on macOS and Linux, or as a user environment variable on
+Windows) and set the folder once under **All environments**, such as `${NOTES_ROOT}/Threads`.
+
 - **Summary** sends the thread's agent a message asking it to write a summary note into your
   **Notes folder**. The agent first reads that folder's `AGENTS.md` or `CLAUDE.md`, so a vault with
   its own placement rules gets the note where those rules say. It replies with the note's path.
