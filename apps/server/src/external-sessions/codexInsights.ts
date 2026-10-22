@@ -180,9 +180,10 @@ export const addTotals = (into: UsageTokenTotals, add: UsageTokenTotals): UsageT
 // ---------------------------------------------------------------------------
 // Codex rollouts.
 
-// Context Codex injects as user messages.
+// Context Codex injects as user messages. Codex Desktop also sends page opens,
+// plugin suggestions and answers to its own question cards this way.
 export const INJECTED_USER_TEXT =
-  /^\s*(<environment_context>|<user_instructions>|<turn_aborted>|# AGENTS\.md instructions)/;
+  /^\s*(<environment_context>|<user_instructions>|<turn_aborted>|<recommended_plugins>|<external_codex_apps_open_page>|<send_user_message_question_reply>|# AGENTS\.md instructions)/;
 
 /** Per-turn settings from `turn_context`; each read keeps the latest. */
 export interface TurnSettings {

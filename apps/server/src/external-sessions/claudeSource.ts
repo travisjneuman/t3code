@@ -323,6 +323,8 @@ export const makeClaudeSource = (desktopArchive?: ClaudeDesktopArchive): Externa
           updatedAtMs: head.mtimeMs,
           busy: live?.busy ?? false,
           ...(live === undefined ? {} : { process: { pid: live.pid } }),
+          // A head cut short may hold the prompt past its end, so only a whole file counts.
+          ...(firstPrompt === null && head.size <= HEAD_BYTES ? { empty: true as const } : {}),
           details: sessionDetails(id, {
             effort: latest.effort,
             gitBranches: branches.list(),

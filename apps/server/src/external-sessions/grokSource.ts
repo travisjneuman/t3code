@@ -16,6 +16,7 @@ import {
   asRecord,
   asString,
   clipMessage,
+  contentText,
   type ExternalSessionSource,
   firstLine,
   isoTimestamp,
@@ -32,6 +33,29 @@ import { grokContextUsage, makeGrokInsights } from "./grokInsights.ts";
 
 const SESSION_FILES = new Set(["summary.json", "events.jsonl", "updates.jsonl"]);
 const EVENTS_TAIL_BYTES = 64 * 1024;
+// Read only for a session Grok has not titled. Its first prompt follows the
+// system prompt and reminders, which run to about 150 KB.
+const CHAT_HISTORY_BYTES = 512 * 1024;
+const USER_QUERY = /<user_query>([\s\S]*?)<\/user_query>/;
+// T3 Code wraps the typed request in its own instructions.
+const USER_REQUEST = /<user_request>([\s\S]*?)<\/user_request>/;
+
+/** A summary field, with blank treated as missing. */
+const summaryText = (value: unknown): string | null => {
+  const text = asString(value)?.trim() ?? "";
+  return text === "" ? null : text;
+};
+
+/** The typed prompt in a `chat_history.jsonl` record; null for any other record. */
+const promptText = (record: Record<string, unknown> | null): string | null => {
+  if (record?.type !== "user" || asString(record.synthetic_reason) !== null) return null;
+  const text = contentText(record.content, ["text"]);
+  const query = USER_QUERY.exec(text)?.[1];
+  // The first user record carries workspace info and rules, with no query.
+  if (query === undefined && text.trimStart().startsWith("<user_info>")) return null;
+  const prompt = (USER_REQUEST.exec(query ?? text)?.[1] ?? query ?? text).trim();
+  return prompt === "" ? null : prompt;
+};
 
 const decodeCwd = (encoded: string): string | null => {
   try {
@@ -102,14 +126,24 @@ export const makeGrokSource = (): ExternalSessionSource => {
         const signals = parseJsonObject(
           (yield* readText(NodePath.join(path, "signals.json"))) ?? "",
         );
+        let title = summaryText(summary?.generated_title) ?? summaryText(summary?.session_summary);
+        let empty = false;
+        if (title === null) {
+          const chat = yield* readLines(NodePath.join(path, "chat_history.jsonl"), {
+            maxBytes: CHAT_HISTORY_BYTES,
+          });
+          for (const line of chat?.lines ?? []) {
+            title = promptText(parseJsonObject(line));
+            if (title !== null) break;
+          }
+          // A launch with no prompt yet holds only the system prompt and reminders.
+          // A history cut short may hold the prompt past the read.
+          empty = title === null && chat !== null && chat.size <= CHAT_HISTORY_BYTES;
+        }
         return [
           {
             id,
-            title: firstLine(
-              asString(summary?.generated_title) ??
-                asString(summary?.session_summary) ??
-                "Untitled session",
-            ),
+            title: firstLine(title ?? "Untitled session"),
             cwd: asString(info?.cwd) ?? decodeCwd(NodePath.basename(NodePath.dirname(path))),
             model,
             origin: summary?.session_kind === "headless" ? "Headless" : "CLI",
@@ -119,6 +153,7 @@ export const makeGrokSource = (): ExternalSessionSource => {
               events?.mtimeMs ?? 0,
             ),
             busy,
+            ...(empty ? { empty: true as const } : {}),
             details: sessionDetails(id, {
               effort: asString(summary?.reasoning_effort),
               // Yolo mode approves every tool call without asking.

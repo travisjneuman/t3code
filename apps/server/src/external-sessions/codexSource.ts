@@ -80,6 +80,25 @@ const toolDetail = (name: string, payload: Record<string, unknown>): string | nu
 const patchFiles = (patch: string): string =>
   [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map((m) => m[1]).join(", ");
 
+// Codex Desktop and the IDE extension put attachments and editor context ahead
+// of the typed prompt, which follows the last request heading.
+const CONTEXT_PREAMBLE = /^\s*# (?:Files mentioned by the user|Context from my IDE setup):/;
+const REQUEST_HEADING = /^## My request(?: for Codex)?:/gm;
+const IMAGE_ATTACHMENT = /<image\b[^>]*>[\s\S]*?<\/image>|\[Image #\d+\]/g;
+
+/** The typed prompt in a user message, for a title; null when it holds none. */
+const promptText = (text: string): string | null => {
+  let prompt = text;
+  if (CONTEXT_PREAMBLE.test(text)) {
+    const headings = [...text.matchAll(REQUEST_HEADING)];
+    const last = headings[headings.length - 1];
+    if (last?.index === undefined) return null;
+    prompt = text.slice(last.index + last[0].length);
+  }
+  prompt = prompt.replace(IMAGE_ATTACHMENT, "").trim();
+  return prompt === "" ? null : prompt;
+};
+
 /** What a rollout's records say so far, kept so a write reads only what it appended. */
 interface CodexTail {
   /** Byte offset read up to; always a line start. */
@@ -127,6 +146,11 @@ interface CodexHead {
   readonly cwd: string | null;
   readonly origin: string | null;
   readonly firstPrompt: string | null;
+  /**
+   * Any user message beyond injected context, even one with no title text (only
+   * an image). Assumed for a rollout longer than the head, whose prompt may lie past it.
+   */
+  readonly prompted: boolean;
   /** The first turn's settings, for a tail that holds no turn_context. */
   readonly turn: Readonly<TurnSettings>;
   readonly createdAt: string | null;
@@ -181,6 +205,7 @@ export const makeCodexSource = (): ExternalSessionSource => {
       const id = asString(meta.id) ?? ROLLOUT_FILE.exec(NodePath.basename(path))?.[1] ?? null;
       if (id === null) return null;
       let firstPrompt: string | null = null;
+      let prompted = false;
       let turn: TurnSettings | null = null;
       for (const line of slice.lines) {
         const record = parseJsonObject(line);
@@ -192,13 +217,20 @@ export const makeCodexSource = (): ExternalSessionSource => {
         if (firstPrompt !== null || payload?.type !== "message" || payload.role !== "user")
           continue;
         const text = contentText(payload.content, ["input_text"]);
-        if (text.trim() !== "" && !INJECTED_USER_TEXT.test(text)) firstPrompt = text;
+        if (INJECTED_USER_TEXT.test(text)) continue;
+        // An image-only message has no input_text yet is still a prompt.
+        const image =
+          Array.isArray(payload.content) &&
+          payload.content.some((block) => asRecord(block)?.type === "input_image");
+        if (text.trim() !== "" || image) prompted = true;
+        firstPrompt = promptText(text);
       }
       const head: CodexHead = {
         id,
         cwd: asString(meta.cwd),
         origin: originFor(originator, meta.source),
         firstPrompt,
+        prompted: prompted || slice.size > HEAD_BYTES,
         turn: turn ?? { model: null, effort: null, approval: null, sandbox: null },
         createdAt: asString(meta.timestamp),
         version: asString(meta.cli_version),
@@ -290,17 +322,17 @@ export const makeCodexSource = (): ExternalSessionSource => {
           sandbox: tail.turn.sandbox ?? head.turn.sandbox,
         };
         const tokens = tail.tokens;
+        const name = yield* threadName(head.id);
         return [
           {
             id: head.id,
-            title: firstLine(
-              (yield* threadName(head.id)) ?? head.firstPrompt ?? "Untitled session",
-            ),
+            title: firstLine(name ?? head.firstPrompt ?? "Untitled session"),
             cwd: head.cwd,
             model: turn.model,
             origin: head.origin,
             updatedAtMs: tail.mtimeMs,
             busy: tail.busy === true,
+            ...(name === null && !head.prompted ? { empty: true as const } : {}),
             details: sessionDetails(head.id, {
               effort: turn.effort,
               gitBranches: head.gitBranch === null ? null : [head.gitBranch],
