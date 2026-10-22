@@ -1,10 +1,17 @@
 /**
  * The composer's Agents preset picker: runs this thread (and the workers it
- * starts) under a preset instead of the project's Agents settings. Icon-only
- * while the thread uses the project's settings.
+ * starts) under a preset instead of the project's Agents settings. A thread
+ * without a choice shows the default preset. Icon-only while the thread uses
+ * the project's settings.
  * Fork add-on: agent instructions.
  */
-import { agentPresetList, type EnvironmentId } from "@t3tools/contracts";
+import {
+  AGENT_PROJECT_PRESET_ID,
+  type AgentPreset,
+  agentPresetForThread,
+  agentPresetList,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import { UsersIcon } from "lucide-react";
 import { memo } from "react";
 
@@ -21,36 +28,33 @@ import { Select, SelectItem, SelectPopup } from "../components/ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../hooks/useSettings";
 
-const PROJECT = "project";
-
 interface ThreadPresetProps {
   readonly environmentId: EnvironmentId;
   readonly threadId: string;
 }
 
-/** The presets, the thread's current one, and a setter; PROJECT means the project's settings. */
+/** The presets, the thread's current one, a setter, and item labels that mark the default. */
 function useThreadPreset({ environmentId, threadId }: ThreadPresetProps) {
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const presets = agentPresetList(settings);
-  const presetId = settings.agentThreadPresets[threadId] ?? "";
-  const preset = presets.find((candidate) => candidate.id === presetId);
+  const preset = agentPresetForThread(settings, [threadId]);
+  // Project settings is stored as a choice of its own so the default preset doesn't apply.
   const setPreset = (value: string | null) =>
-    // Records merge on save, so an empty string drops back to the project.
-    updateSettings({
-      agentThreadPresets: { [threadId]: value === PROJECT || !value ? "" : value },
-    });
-  return { presets, preset, setPreset };
+    updateSettings({ agentThreadPresets: { [threadId]: value || AGENT_PROJECT_PRESET_ID } });
+  const presetLabel = (candidate: AgentPreset) =>
+    candidate.id === settings.agentDefaultPresetId ? `${candidate.name} (default)` : candidate.name;
+  return { presets, preset, setPreset, presetLabel };
 }
 
 export const AgentThreadPresetControl = memo(function AgentThreadPresetControl(
   props: ThreadPresetProps & { size: ComposerControlSize; hidden: boolean },
 ) {
-  const { presets, preset, setPreset } = useThreadPreset(props);
+  const { presets, preset, setPreset, presetLabel } = useThreadPreset(props);
   const composerFloatingLayerProps = useComposerMenuProps();
   const [open, setOpen] = useComposerMenuState(props.hidden);
   const tooltip = preset
-    ? `Agents preset for this thread: ${preset.name}`
+    ? `Agents preset for this thread: ${presetLabel(preset)}`
     : "Agents preset: this thread uses the project's Agents settings";
 
   return (
@@ -60,7 +64,7 @@ export const AgentThreadPresetControl = memo(function AgentThreadPresetControl(
         <Select
           open={open}
           onOpenChange={setOpen}
-          value={preset?.id ?? PROJECT}
+          value={preset?.id ?? AGENT_PROJECT_PRESET_ID}
           onValueChange={setPreset}
         >
           <TooltipTrigger
@@ -74,12 +78,12 @@ export const AgentThreadPresetControl = memo(function AgentThreadPresetControl(
             </span>
           </TooltipTrigger>
           <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
-            <SelectItem value={PROJECT} hideIndicator>
+            <SelectItem value={AGENT_PROJECT_PRESET_ID} hideIndicator>
               Project settings
             </SelectItem>
             {presets.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id} hideIndicator>
-                {candidate.name}
+                {presetLabel(candidate)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -92,19 +96,19 @@ export const AgentThreadPresetControl = memo(function AgentThreadPresetControl(
 
 /** The same choice as radio items, for the composer's overflow menu. */
 export function AgentThreadPresetMenuItems(props: ThreadPresetProps) {
-  const { presets, preset, setPreset } = useThreadPreset(props);
+  const { presets, preset, setPreset, presetLabel } = useThreadPreset(props);
   return (
     <>
       <MenuDivider />
       <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Agents preset</div>
       <MenuRadioGroup
-        value={preset?.id ?? PROJECT}
+        value={preset?.id ?? AGENT_PROJECT_PRESET_ID}
         onValueChange={(value) => setPreset(typeof value === "string" ? value : null)}
       >
-        <MenuRadioItem value={PROJECT}>Project settings</MenuRadioItem>
+        <MenuRadioItem value={AGENT_PROJECT_PRESET_ID}>Project settings</MenuRadioItem>
         {presets.map((candidate) => (
           <MenuRadioItem key={candidate.id} value={candidate.id}>
-            {candidate.name}
+            {presetLabel(candidate)}
           </MenuRadioItem>
         ))}
       </MenuRadioGroup>

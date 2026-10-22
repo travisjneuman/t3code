@@ -15,9 +15,11 @@ provider-specific text.
   **Review-heavy** delegates when useful, reviews until clean, and keeps reviewers read-only. The
   built-ins change only those rows. **Save current** saves every Agents value for the picked scope
   under a name, on that server. With a preset you saved selected, it offers that name, so saving
-  replaces it; built-in presets can't be replaced. **Delete** removes a preset you saved. The row
-  keeps showing the preset you last applied, saved or picked. To make a preset your default,
-  apply it with **All projects** picked: those values are what every thread starts with.
+  replaces it; built-in presets can't be replaced. **Rename** renames a preset you saved; threads
+  using it keep it. **Delete** removes a preset you saved. The row keeps showing the preset you last
+  applied, saved or picked. **Set default** makes the selected preset, built-in or saved, the one
+  every thread on that server runs under until you pick another for it in the composer; the
+  preset list marks it **(default)**, and **Clear default** goes back to the project's settings.
 
 - **Delegation**: **When useful**, the default, has the thread's agent hand independent pieces of
   work to workers through the `delegate_task` tool and do small or sequential work itself.
@@ -101,8 +103,9 @@ its own settings.
 
 The people icon in the composer, next to the access mode, picks a preset for that thread only. Its
 agent, and any worker it starts, run under the preset's values on top of the project's settings.
-**Project settings** goes back to the project's values. The control shows the preset's name while
-one is picked. In a narrow composer it's in the **…** menu.
+A thread you haven't picked one for uses the default preset. **Project settings** keeps the thread
+on the project's values even when a default is set. The control shows the preset's name while one
+applies. In a narrow composer it's in the **…** menu.
 
 ## When agents pick up changes
 
@@ -112,7 +115,7 @@ or Pi thread that is already running keeps what it started with until its sessio
 example after T3 Code restarts. Antigravity doesn't receive agent instructions.
 
 Workers started with `delegate_task` get the same instructions as the agent that started them, and
-run under the preset of the nearest thread above them that has one.
+run under the preset of the nearest thread above them that has one, else the default preset.
 
 Keep additional instructions short. They're added to every agent's prompt, which costs context in
 every thread.

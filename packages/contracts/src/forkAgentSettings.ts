@@ -182,16 +182,22 @@ export const AgentPreset = Schema.Struct({
 });
 export type AgentPreset = typeof AgentPreset.Type;
 
+/** A thread's stored choice of the project's settings, so the default preset doesn't apply. */
+export const AGENT_PROJECT_PRESET_ID = "project";
+
 /**
- * Environment-only Agents settings: saved presets, and the preset each thread
- * runs under, keyed by thread id. An empty string means the project's
- * settings (records merge on save, so a key is cleared that way).
+ * Environment-only Agents settings: saved presets, the preset each thread
+ * runs under keyed by thread id, and the preset a thread without a choice runs
+ * under. A thread entry of `AGENT_PROJECT_PRESET_ID` means the project's
+ * settings; an empty string means no choice (records merge on save, so a key
+ * is cleared that way). An empty default means the project's settings.
  */
 export const AgentEnvironmentSettingsFields = {
   agentPresets: Schema.Array(AgentPreset).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   agentThreadPresets: Schema.Record(Schema.String, Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  agentDefaultPresetId: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 };
 
 /** `ServerSettings` fields: the project-scoped ones plus the environment-only ones. */
@@ -205,6 +211,7 @@ export const AgentSettingsPatchFields = {
   ...AgentSettingsOptionalFields,
   agentPresets: Schema.optionalKey(Schema.Array(AgentPreset)),
   agentThreadPresets: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  agentDefaultPresetId: Schema.optionalKey(Schema.String),
 };
 
 /** Every Agents setting can be overridden per project. */
@@ -276,19 +283,21 @@ export function agentPresetList(
 
 /**
  * The preset a thread runs under: its own choice, else the first ancestor's
- * (a worker follows its parent's). Pass the thread id first. Undefined means
- * the project's settings.
+ * (a worker follows its parent's), else the default preset. Pass the thread id
+ * first. Undefined means the project's settings.
  */
 export function agentPresetForThread(
   settings: AgentEnvironmentSettings,
   threadIds: ReadonlyArray<string | undefined>,
 ): AgentPreset | undefined {
+  const presets = agentPresetList(settings);
   for (const threadId of threadIds) {
     const presetId = threadId === undefined ? undefined : settings.agentThreadPresets[threadId];
     if (presetId === undefined || presetId === "") continue;
-    return agentPresetList(settings).find((preset) => preset.id === presetId);
+    if (presetId === AGENT_PROJECT_PRESET_ID) return undefined;
+    return presets.find((preset) => preset.id === presetId);
   }
-  return undefined;
+  return presets.find((preset) => preset.id === settings.agentDefaultPresetId);
 }
 
 /** Project-resolved settings with the thread's preset applied on top. */
@@ -363,10 +372,10 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
       : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed worker target" : "Default worker target"}: ${workerTarget(settings.agentWorkerModelSelection)}.`,
     review === null
       ? null
-      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed review worker target" : "Review workers (role \"review\")"}: ${workerTarget(review)}.`,
+      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed review worker target" : 'Review workers (role "review")'}: ${workerTarget(review)}.`,
     research === null
       ? null
-      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed research worker target" : "Research workers (role \"research\")"}: ${workerTarget(research)}.`,
+      : `- ${settings.agentWorkerModelSelectionFixed ? "Fixed research worker target" : 'Research workers (role "research")'}: ${workerTarget(research)}.`,
     settings.agentWorkerModelSelectionFixed
       ? "- Fixed targets apply to T3 delegate_task only. Set a role on every delegation and leave target out; T3 uses its role-specific selection or the general worker selection, enforces the configured provider, model, and options, and refuses conflicting or unconfigured targets. Provider-native subagents are separate."
       : anyTarget
