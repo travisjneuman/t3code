@@ -188,11 +188,24 @@ async function main() {
   try {
     await requireCleanCheckout();
     started = true;
-    const viteConfig = await fs.readFile(path.join(repoRoot, "apps/server/vite.config.ts"), "utf8");
-    const seaNodeVersion = /^const SEA_NODE_VERSION = ["'](\d+\.\d+\.\d+)["'];?$/mu.exec(
-      viteConfig,
-    )?.[1];
-    requireState(seaNodeVersion, "Cannot read SEA_NODE_VERSION from apps/server/vite.config.ts.");
+    // Upstream builds native executables only on the exact engines.node version
+    // (apps/server/vite.config.ts throws otherwise), and only exact versions have a
+    // nodejs.org dist directory for vp to download.
+    const rootPackage: unknown = JSON.parse(
+      await fs.readFile(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    const seaNodeVersion =
+      typeof rootPackage === "object" &&
+      rootPackage !== null &&
+      "engines" in rootPackage &&
+      typeof rootPackage.engines === "object" &&
+      rootPackage.engines !== null &&
+      "node" in rootPackage.engines &&
+      typeof rootPackage.engines.node === "string" &&
+      /^\d+\.\d+\.\d+$/u.test(rootPackage.engines.node)
+        ? rootPackage.engines.node
+        : undefined;
+    requireState(seaNodeVersion, "Cannot read an exact engines.node version from package.json.");
 
     await fs.mkdir(outputDir, { recursive: true, mode: 0o700 });
     requireState(
