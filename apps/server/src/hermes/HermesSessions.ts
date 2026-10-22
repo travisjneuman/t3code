@@ -1036,6 +1036,29 @@ const make = Effect.gen(function* () {
       effect.pipe(Effect.ensuring(forgetListings(input.instanceId))),
   );
 
+  /**
+   * A listed session and the compression segments before it, newest first.
+   * Hermes lists a compressed conversation as its newest segment but deletes
+   * one segment at a time, so deleting that alone lists the one before it.
+   * Its messages carry the chain as Hermes walks it, branches left out.
+   */
+  const chainOf = (connection: HermesApi.HermesConnection, id: string) =>
+    HermesApi.listMessages(connection, id).pipe(
+      Effect.map((messages) => [
+        ...new Set([
+          id,
+          ...messages
+            .flatMap((message) => (message.sessionId === null ? [] : [message.sessionId]))
+            .reverse(),
+        ]),
+      ]),
+      Effect.catchIf(
+        (error) => error.status === 404,
+        () => Effect.succeed([id]),
+      ),
+      Effect.mapError(fromApi),
+    );
+
   const deleteSessions: HermesSessions["Service"]["deleteSessions"] = Effect.fn(
     "HermesSessions.deleteSessions",
   )(
@@ -1047,30 +1070,33 @@ const make = Effect.gen(function* () {
         (id) => id,
         (id) =>
           Effect.gen(function* () {
-            yield* HermesApi.deleteSession(connection, id).pipe(
-              // Already gone in Hermes; the T3 side still goes.
-              Effect.catchIf(
-                (error) => error.status === 404,
-                () => Effect.void,
-              ),
-              Effect.mapError((error) =>
-                error.status === 409
-                  ? new HermesSessionsError({
-                      message: "Hermes is mid-turn in this session. Stop it, then delete.",
-                    })
-                  : fromApi(error),
-              ),
-            );
-            yield* archive.remove(input.instanceId, id);
-            const thread = bound.get(id);
-            if (thread === undefined) return;
-            yield* orchestrator
-              .dispatch({
-                type: "thread.delete",
-                commandId: yield* commandId("delete"),
-                threadId: thread.threadId,
-              })
-              .pipe(Effect.mapError(failed("Deleted in Hermes, but not the T3 thread.")));
+            // Newest first, so a refusal part way leaves the rest listed to delete again.
+            for (const sessionId of yield* chainOf(connection, id)) {
+              yield* HermesApi.deleteSession(connection, sessionId).pipe(
+                // Already gone in Hermes; the T3 side still goes.
+                Effect.catchIf(
+                  (error) => error.status === 404,
+                  () => Effect.void,
+                ),
+                Effect.mapError((error) =>
+                  error.status === 409
+                    ? new HermesSessionsError({
+                        message: "Hermes is mid-turn in this session. Stop it, then delete.",
+                      })
+                    : fromApi(error),
+                ),
+              );
+              yield* archive.remove(input.instanceId, sessionId);
+              const thread = bound.get(sessionId);
+              if (thread === undefined) continue;
+              yield* orchestrator
+                .dispatch({
+                  type: "thread.delete",
+                  commandId: yield* commandId("delete"),
+                  threadId: thread.threadId,
+                })
+                .pipe(Effect.mapError(failed("Deleted in Hermes, but not the T3 thread.")));
+            }
           }),
       );
     },

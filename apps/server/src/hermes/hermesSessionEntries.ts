@@ -127,12 +127,19 @@ export function sessionEntries(
   messages: ReadonlyArray<HermesApi.HermesMessage>,
   options: { readonly ended: boolean; readonly fallbackMs: number },
 ): HermesSessionEntry[] {
+  // Compression carries a session's last tool calls and their results into the
+  // next segment under the same call ids; the first copy is the original.
   const results = new Map<string, HermesApi.HermesMessage>();
   for (const message of messages) {
-    if (message.role === "tool" && message.toolCallId !== null) {
+    if (
+      message.role === "tool" &&
+      message.toolCallId !== null &&
+      !results.has(message.toolCallId)
+    ) {
       results.set(message.toolCallId, message);
     }
   }
+  const shownCalls = new Set<string>();
   const entries: HermesSessionEntry[] = [];
   let lastMs = options.fallbackMs;
   for (const message of messages) {
@@ -162,8 +169,10 @@ export function sessionEntries(
       });
     }
     for (const call of message.toolCalls) {
+      if (shownCalls.has(call.id)) continue;
       const result = results.get(call.id);
       if (result === undefined && !options.ended) continue;
+      shownCalls.add(call.id);
       entries.push(toolEntry(call, atMs, result));
     }
   }

@@ -263,6 +263,8 @@ export interface HermesToolCall {
 
 export interface HermesMessage {
   readonly id: string;
+  /** The segment that stored it; a compressed session's messages span its whole chain. */
+  readonly sessionId: string | null;
   readonly role: string;
   readonly content: string;
   readonly timestamp: number | null;
@@ -312,6 +314,7 @@ const decodeMessage = (entry: unknown, index: number): HermesMessage | undefined
   isRecord(entry) && typeof entry.role === "string"
     ? {
         id: entry.id === undefined ? `index-${index}` : String(entry.id),
+        sessionId: str(entry.session_id),
         role: entry.role,
         content: messageText(entry.content),
         timestamp: num(entry.timestamp),

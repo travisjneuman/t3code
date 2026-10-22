@@ -40,7 +40,8 @@ appear indented under it.
 
 **Archive** archives the session in Hermes too. Archived sessions are listed in **Settings ›
 Archived**, where **Unarchive** brings them back. **Delete** removes the session from Hermes and
-its T3 thread after one confirmation. A session that is still running can't be archived or
+its T3 thread after one confirmation, including the earlier parts of a conversation Hermes
+compressed into new sessions. A session that is still running can't be archived or
 deleted until it stops.
 
 A session from elsewhere shows in full: its messages, reasoning, and every tool call with its

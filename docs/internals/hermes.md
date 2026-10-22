@@ -70,6 +70,14 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
   can't be inserted between existing items, so new entries go after the latest run that started
   before them. Entries that fall inside a T3 run's window (with 30 s of clock slack each side) are
   skipped, because that run already streamed them live.
+- **A compressed conversation is one listed session over several segments.** Hermes lists only
+  the newest segment, and its messages endpoint returns the whole chain, root to tip. Compression
+  copies the last tool calls and their results into the next segment under the same call ids, so
+  the import keeps the first copy of each call; two entries with one key would write one event id
+  twice and fail the whole import. Hermes deletes one segment at a time, and deleting only the
+  newest would list the one before it, so Delete deletes every segment the messages name, newest
+  first. Hermes leaves branches and subagents out of that chain; Archive needs none of this,
+  because Hermes archives the whole chain itself.
 - **Threads from the first import are replaced, not patched.** The v1 import
   (`hermes-session-import:v1` ids) kept only user and assistant text under different ids. A v1 thread with no T3
   runs is rebuilt under `hermes:<instance>:<session>` with the full history, the provider binding
