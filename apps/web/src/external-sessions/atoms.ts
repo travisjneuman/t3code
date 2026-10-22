@@ -423,7 +423,7 @@ export const externalSessionListCutsAtom = Atom.make((get) => {
 
 /**
  * One page of a host's sessions past its live list's cut, read on request
- * (Browse older). Not live: the shelf holds the pages until the host's cut ends.
+ * (Load more). Not live: the shelf holds the pages until the host's cut ends.
  */
 export const externalSessionListOlder = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:list-older",

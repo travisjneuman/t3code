@@ -115,12 +115,22 @@ in T3, which binds an ordinary thread to that same session.
   ([`sessionHistory.ts`](../../apps/server/src/external-sessions/sessionHistory.ts)) and keeps
   only files named after the session id. The match is registered like a discovered session, so
   the existing watchers keep it current and it can be continued. The list still covers 14 days.
-- **The live list is cut at 60; older rows are paged on request.** `ExternalSessionListResult.total`
-  counts every listable session, so clients show "60 of N". `externalSessions.listOlder` is a
-  read-only request outside the live subscription. Its `{updatedAt, key}` cursor pages over the last
-  published order: newest first, ties by key, at whole milliseconds so a cursor read back from the
-  wire sorts where its session does. Loaded pages are client-only and static, and are dropped when
-  their host's cut ends.
+- **The live list carries 3 days; older rows are paged on request.** Each change re-sends the
+  live list, so it holds only the sessions updated in the last 3 days, at most 60: a prefix of the
+  full order. Discovery still covers 14 days. `ExternalSessionListResult.total` counts every
+  listable session, so `total > sessions.length` marks a cut host. `externalSessions.listOlder` is
+  a read-only request outside the live subscription. Its `{updatedAt, key}` cursor pages over the
+  last published order: newest first, ties by key, at whole milliseconds so a cursor read back from
+  the wire sorts where its session does. The client merges every host newest first and shows a row
+  only when no cut host could still have an unread session ahead of it (each cut host's unread rows
+  are older than its last loaded one), reading the next page from whichever host holds a wanted row
+  back. The first page also keeps the live rows it continued from, so a row aging out of the live
+  list never falls into a gap. Loaded pages are client-only and static, and are dropped when their
+  host's cut ends.
+- **Empty launches drop out.** A source marks a session with no real user prompt `empty` (Grok and
+  Claude launches nobody typed into, Codex runs with only injected context). The list shows it
+  while it is open or written within the hour, then hides it; a prompt brings it back with its
+  title.
 - **The transcript stream follows bytes, not files.** A session stream opens with the newest
   messages from at most 8 MB of the transcript's tail, then reads only the bytes appended after
   that. Messages are upserted by id, so a streamed reply grows in place. Each event is bounded on

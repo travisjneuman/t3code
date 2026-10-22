@@ -6,7 +6,8 @@ Codex threads stay listed until you archive them in Codex. Open one to follow it
 sessions are still found by search. Sessions running right now
 come first and stay in view even when you collapse the list; the header counts them as active.
 Each session takes one line; hover it for its folder, model and machine. Below the running ones
-are the sessions active in the last 24 hours, then **Earlier**, which starts collapsed. Runs that
+are the sessions active in the last 3 days from every machine, newest first; **Load more** adds
+the next 10. A session you opened but never typed into drops out after an hour. Runs that
 the sidebar's sync button starts to finish an upstream merge are named by when they started, such
 as **t3 100626 143205** for October 6, 2026 at 14:32:05. Subagents that T3 threads start are not
 listed here; they sit under their thread in the sidebar.

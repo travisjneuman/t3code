@@ -92,6 +92,9 @@ import { findSessionPaths } from "./sessionHistory.ts";
 import { makeSessionOutputsReader, readsSessionOutputs } from "./sessionOutputs.ts";
 
 const LIST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+// The live list carries only this much; older sessions come a page at a time
+// through `listOlder`, so each change re-sends a short list.
+const LIVE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const MAX_LISTED = 60;
 const RUNNING_MS = 60 * 1000;
 const IDLE_MS = 60 * 60 * 1000;
@@ -496,6 +499,8 @@ const make = Effect.gen(function* () {
 
     const isListed = (entry: Entry, now: number) =>
       (entry.source.listsUntilArchived === true || now - entry.info.updatedAtMs < LIST_WINDOW_MS) &&
+      // An empty launch shows while it is open or fresh, then drops out.
+      !(entry.info.empty === true && liveness(entry.info, now) === "recent") &&
       !owned.has(entry.info.id) &&
       !owned.has(entry.path) &&
       !(entry.info.cwd !== null && excludedRoots.some((root) => isUnder(entry.info.cwd!, root)));
@@ -550,8 +555,10 @@ const make = Effect.gen(function* () {
           ([key, entry]) => archive.get(key) === undefined && claudeArchivedAt(entry) === undefined,
         )
         .sort(listOrder);
+      // A prefix of `ordered`, so `listOlder` pages on from its last row.
+      const live = ordered.findIndex(([, entry]) => now - listedMs(entry) >= LIVE_WINDOW_MS);
       const sessions = ordered
-        .slice(0, MAX_LISTED)
+        .slice(0, Math.min(MAX_LISTED, live === -1 ? ordered.length : live))
         .map(([key, entry]) => toSummary(key, entry, now));
       const total = ordered.length;
       const current = yield* SubscriptionRef.get(list);

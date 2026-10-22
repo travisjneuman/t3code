@@ -35,6 +35,8 @@ export interface ExternalSessionInfo {
    * runs, liveness follows the process rather than file writes.
    */
   readonly process?: { readonly pid: number };
+  /** No real user prompt yet (an empty launch). The list hides it unless it is running. */
+  readonly empty?: true;
   /** Sent only on the session's own stream, never in the list. */
   readonly details: ExternalSessionDetails;
 }

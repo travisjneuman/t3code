@@ -71,9 +71,10 @@ import {
 } from "./atoms";
 
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-expanded";
-const EARLIER_EXPANDED_STORAGE_KEY = "t3code:sidebar:external-sessions-earlier-expanded";
-/** Sessions that moved within this long are Recent; older ones are Earlier. */
-const RECENT_MS = 24 * 60 * 60 * 1000;
+/** The expanded shelf first shows sessions that moved within this long. */
+const FIRST_VIEW_MS = 3 * 24 * 60 * 60 * 1000;
+/** Rows each Load more reveals. */
+const LOAD_MORE_ROWS = 10;
 
 /** Per-browser "Hide from list" keys from before archive; archived once, then removed. */
 const LEGACY_HIDDEN_STORAGE_KEY = "t3code:sidebar:external-sessions-hidden:v1";
@@ -200,12 +201,18 @@ function firstWithOpen(
   return open === undefined ? shown : [...shown, open];
 }
 
-/** A host's sessions past its live list's cut, paged in by Browse older. */
+/**
+ * A host's sessions past its live list's cut, paged in by Load more. The first
+ * page also keeps the live rows it continued from, so a row that later ages out
+ * of the live list does not fall into a gap.
+ */
 interface OlderPages {
   /** In the server's list order, newest first. */
   readonly entries: ReadonlyArray<ExternalSessionEntry>;
   readonly more: boolean;
   readonly loading: boolean;
+  /** The last read failed; only another Load more click retries it. */
+  readonly failed: boolean;
 }
 
 const NO_OLDER_PAGES: ReadonlyMap<EnvironmentId, OlderPages> = new Map();
@@ -238,12 +245,6 @@ function withOlderEntries(
   return merged.sort((left, right) => (timeByEntry.get(right) ?? 0) - (timeByEntry.get(left) ?? 0));
 }
 
-/** "60 of 214", prefixed with the host while more than one is connected. */
-function cutLabel(cut: ExternalSessionListCut, shown: number): string {
-  const count = `${shown} of ${cut.total}`;
-  return cut.environmentLabel === null ? count : `${cut.environmentLabel} ${count}`;
-}
-
 /** The provider's own session id: the key is `<driver>:<session id>`. */
 function nativeSessionId(sessionKey: string): string {
   return sessionKey.slice(sessionKey.indexOf(":") + 1);
@@ -263,11 +264,12 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
 
 /**
  * "Other Agents" shelf: sessions running outside T3 on the connected
- * environments, one line each. Running ones always show, even with the shelf
- * collapsed; expanded, the last day's follow, then a collapsible Earlier
- * group. Right-click a row for its actions, or the header to find archived
- * sessions; Cmd/Ctrl- and Shift-click select rows for bulk actions. Renders
- * nothing while no environment reports any.
+ * environments, one line each, every host merged newest first. Running ones
+ * always show, even with the shelf collapsed; expanded, the last three days'
+ * follow, and Load more reveals the next ten. Right-click a row for its
+ * actions, or the header to find archived sessions; Cmd/Ctrl- and Shift-click
+ * select rows for bulk actions. Renders nothing while no environment reports
+ * any.
  */
 export function ExternalSessionsSidebarSection() {
   const liveEntries = useAtomValue(externalSessionEntriesAtom);
@@ -278,11 +280,7 @@ export function ExternalSessionsSidebarSection() {
     anchor: null,
   });
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
-  const [earlierExpanded, setEarlierExpanded] = useLocalStorage(
-    EARLIER_EXPANDED_STORAGE_KEY,
-    false,
-    Schema.Boolean,
-  );
+  const [revealed, setRevealed] = useState(0);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -329,25 +327,36 @@ export function ExternalSessionsSidebarSection() {
     shownByHost.set(entry.environmentId, (shownByHost.get(entry.environmentId) ?? 0) + 1);
   }
 
-  // `nowMinute` is the UTC minute ("YYYY-MM-DDTHH:mm"); its ticks move sessions
-  // from Recent to Earlier as they age. Entries come newest first.
+  // `nowMinute` is the UTC minute ("YYYY-MM-DDTHH:mm"); its ticks age sessions
+  // out of the first view. Entries come newest first.
   const now = Date.parse(`${nowMinute}Z`);
-  const bands = {
-    active: [] as Array<ExternalSessionEntry>,
-    recent: [] as Array<ExternalSessionEntry>,
-    earlier: [] as Array<ExternalSessionEntry>,
-  };
-  for (const entry of entries) {
-    if (entry.session.liveness === "running") bands.active.push(entry);
-    else if (now - Date.parse(entry.session.updatedAt) < RECENT_MS) bands.recent.push(entry);
-    else bands.earlier.push(entry);
-  }
+  const active = entries.filter((entry) => entry.session.liveness === "running");
+  const rest = entries.filter((entry) => entry.session.liveness !== "running");
+  const firstViewCount = rest.findIndex((entry) => now - updatedAtMs(entry) >= FIRST_VIEW_MS);
+  const wanted = (firstViewCount === -1 ? rest.length : firstViewCount) + revealed;
+
+  // A cut host's unread sessions are all older than its last loaded one, so a
+  // row older than that could still have one of them ahead of it. Only rows
+  // at or after every such boundary are shown, which keeps the merge in order.
+  const hostsWithMore = cuts.flatMap((cut) => {
+    const pages = olderPages.get(cut.environmentId);
+    if (pages?.more === false || (shownByHost.get(cut.environmentId) ?? 0) >= cut.total) {
+      return [];
+    }
+    const last =
+      pages?.entries.at(-1) ??
+      liveEntries.findLast((entry) => entry.environmentId === cut.environmentId);
+    // With nothing loaded, its live list held nothing newer than the first view.
+    const hostBoundaryMs = last === undefined ? now - FIRST_VIEW_MS : updatedAtMs(last);
+    return [{ cut, pages, boundaryMs: hostBoundaryMs }];
+  });
+  const boundaryMs = Math.max(-Infinity, ...hostsWithMore.map((host) => host.boundaryMs));
+  const ordered = rest.findIndex((entry) => updatedAtMs(entry) < boundaryMs);
+  const shownRestCount = Math.min(wanted, ordered === -1 ? rest.length : ordered);
 
   // The rows in screen order: what Shift-click ranges over and bulk actions act on.
-  const shownEarlier = firstWithOpen(bands.earlier, earlierExpanded ? Infinity : 0, activeKey);
-  const shownEntries = expanded
-    ? [...bands.active, ...bands.recent, ...shownEarlier]
-    : bands.active;
+  const shownRest = firstWithOpen(rest, shownRestCount, activeKey);
+  const shownEntries = expanded ? [...active, ...shownRest] : active;
   const selectedEntries = () =>
     shownEntries.filter((entry) =>
       selection.keys.has(rowKey(entry.environmentId, entry.session.key)),
@@ -387,8 +396,10 @@ export function ExternalSessionsSidebarSection() {
     }
   }, [liveEntries, runArchive]);
 
-  const toggleExpanded = () => setExpanded((value) => !value);
-  const toggleEarlier = () => setEarlierExpanded((value) => !value);
+  const toggleExpanded = () => {
+    if (expanded) setRevealed(0);
+    setExpanded((value) => !value);
+  };
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -403,21 +414,24 @@ export function ExternalSessionsSidebarSection() {
       return new Map(current).set(entry.environmentId, { ...pages, entries: kept });
     });
 
-  // The cursor is the last session already shown: the live tail, then each page's last.
-  const browseOlder = async (cut: ExternalSessionListCut) => {
+  // The cursor is the last session already loaded: the live tail, then each page's last.
+  const loadOlder = async (cut: ExternalSessionListCut) => {
     const { environmentId } = cut;
     const pages = olderPages.get(environmentId);
     if (pages?.loading === true) return;
-    const last =
-      pages?.entries.at(-1) ??
-      liveEntries.findLast((entry) => entry.environmentId === environmentId);
-    if (last === undefined) return;
-    const before = { updatedAt: last.session.updatedAt, key: last.session.key };
+    const live = liveEntries.filter((entry) => entry.environmentId === environmentId);
+    const last = pages?.entries.at(-1) ?? live.at(-1);
+    // A host with no live rows pages from the top of its list.
+    const before =
+      last === undefined
+        ? { updatedAt: new Date(Date.now() + 1).toISOString(), key: "~" }
+        : { updatedAt: last.session.updatedAt, key: last.session.key };
     setOlderPages((current) =>
       new Map(current).set(environmentId, {
-        entries: current.get(environmentId)?.entries ?? [],
+        entries: current.get(environmentId)?.entries ?? live,
         more: true,
         loading: true,
+        failed: false,
       }),
     );
     const result = await runListOlder({ environmentId, input: { before } });
@@ -428,7 +442,7 @@ export function ExternalSessionsSidebarSection() {
       // Dropped meanwhile: the cut ended or the host went away.
       if (held === undefined) return current;
       if (result._tag === "Failure") {
-        return new Map(current).set(environmentId, { ...held, loading: false });
+        return new Map(current).set(environmentId, { ...held, loading: false, failed: true });
       }
       const page = result.value.sessions.map(
         (session: ExternalSessionSummary): ExternalSessionEntry => ({
@@ -441,6 +455,7 @@ export function ExternalSessionsSidebarSection() {
         entries: [...held.entries, ...page],
         more: result.value.more,
         loading: false,
+        failed: false,
       });
     });
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
@@ -451,6 +466,42 @@ export function ExternalSessionsSidebarSection() {
         description: failure instanceof Error ? failure.message : "An error occurred.",
       });
     }
+  };
+
+  // Fills the view up to `wanted` rows: the next page from each cut host whose
+  // boundary still holds a wanted row back. The key changes when a boundary
+  // moves or a read ends, so a host that needs several pages gets them in turn.
+  const target = rest[wanted - 1];
+  const holdingBack =
+    expanded && wanted > shownRestCount
+      ? hostsWithMore.filter(
+          ({ pages, boundaryMs: hostBoundaryMs }) =>
+            pages?.loading !== true &&
+            pages?.failed !== true &&
+            (target === undefined || hostBoundaryMs > updatedAtMs(target)),
+        )
+      : [];
+  const holdingBackKey = holdingBack
+    .map(({ cut, boundaryMs: hostBoundaryMs }) => `${cut.environmentId}@${hostBoundaryMs}`)
+    .join(",");
+  const loadOlderLatest = useStableCallback(loadOlder);
+  useEffect(() => {
+    for (const { cut } of holdingBack) void loadOlderLatest(cut);
+    // `holdingBackKey` names exactly what `holdingBack` would read.
+  }, [holdingBackKey, loadOlderLatest]);
+
+  const loadMore = () => {
+    setOlderPages((current) =>
+      [...current.values()].some((pages) => pages.failed)
+        ? new Map(
+            [...current].map(([environmentId, pages]) => [
+              environmentId,
+              { ...pages, failed: false },
+            ]),
+          )
+        : current,
+    );
+    setRevealed((count) => count + LOAD_MORE_ROWS);
   };
 
   const continueInT3 = async (entry: ExternalSessionEntry) => {
@@ -962,13 +1013,9 @@ export function ExternalSessionsSidebarSection() {
   };
 
   if (entries.length === 0) return null;
-  const activeCount = bands.active.length;
-  const cutText =
-    cuts.length === 0
-      ? null
-      : cuts
-          .map((cut) => cutLabel(cut, Math.min(shownByHost.get(cut.environmentId) ?? 0, cut.total)))
-          .join(" · ");
+  const activeCount = active.length;
+  const loadingOlder = hostsWithMore.some(({ pages }) => pages?.loading === true);
+  const canLoadMore = rest.length > shownRestCount || hostsWithMore.length > 0;
   const rowProps = {
     activeKey,
     selectedKeys: selection.keys,
@@ -1002,61 +1049,25 @@ export function ExternalSessionsSidebarSection() {
             ) : null
           }
         >
-          {`Other Agents (${entries.length})`}
+          {`Other Agents (${active.length + shownRest.length})`}
         </CollapsibleSectionHeader>
       </div>
       {/* Same hover timing as the thread list's cards. */}
       <TooltipProvider delay={150} closeDelay={0} timeout={400}>
-        <ExternalSessionRows entries={bands.active} {...rowProps} />
+        <ExternalSessionRows entries={active} {...rowProps} />
         {expanded ? (
           <>
-            <ExternalSessionRows entries={bands.recent} {...rowProps} />
-            {bands.earlier.length > 0 || cuts.length > 0 ? (
-              <div role="group" aria-label="Earlier">
-                <div className="mr-0.5 ml-2.5 h-5">
-                  <CollapsibleSectionHeader
-                    expanded={earlierExpanded}
-                    size="sidebar"
-                    onClick={toggleEarlier}
-                    onMouseDown={preventMouseFocus}
-                    accessory={
-                      cutText === null ? null : (
-                        <span title={cutText} className="min-w-0 truncate tabular-nums">
-                          {cutText}
-                        </span>
-                      )
-                    }
-                  >
-                    {`Earlier (${bands.earlier.length})`}
-                  </CollapsibleSectionHeader>
-                </div>
-                <ExternalSessionRows entries={shownEarlier} {...rowProps} />
-                {earlierExpanded
-                  ? cuts.map((cut) => {
-                      const pages = olderPages.get(cut.environmentId);
-                      const shown = shownByHost.get(cut.environmentId) ?? 0;
-                      if (pages?.more === false || shown >= cut.total) return null;
-                      return (
-                        <button
-                          key={cut.environmentId}
-                          type="button"
-                          disabled={pages?.loading === true}
-                          onClick={() => void browseOlder(cut)}
-                          onMouseDown={preventMouseFocus}
-                          className={AGENT_MORE_BUTTON_CLASS}
-                        >
-                          <span className="min-w-0 truncate">
-                            {pages?.loading === true
-                              ? "Loading older…"
-                              : cut.environmentLabel === null
-                                ? "Browse older"
-                                : `Browse older on ${cut.environmentLabel}`}
-                          </span>
-                        </button>
-                      );
-                    })
-                  : null}
-              </div>
+            <ExternalSessionRows entries={shownRest} {...rowProps} />
+            {canLoadMore ? (
+              <button
+                type="button"
+                disabled={loadingOlder}
+                onClick={loadMore}
+                onMouseDown={preventMouseFocus}
+                className={AGENT_MORE_BUTTON_CLASS}
+              >
+                <span className="min-w-0 truncate">{loadingOlder ? "Loading…" : "Load more"}</span>
+              </button>
             ) : null}
           </>
         ) : null}
