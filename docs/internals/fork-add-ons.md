@@ -39,6 +39,14 @@ children, so [`lineageTree.ts`](../../apps/web/src/subagents/lineageTree.ts) add
 for every live subagent below the thread and nests the rows into whole trees after upstream sorts
 them into sections. Workflow members are skipped because their workflow row lists them.
 
+Usage model rows are grouped the same way, after the merge:
+[`usageModelGroups.ts`](../../packages/shared/src/usageModelGroups.ts) wraps `mergeUsage` in
+the web's `mergeAnsweredUsage`, so the wire, the usage cache and mobile keep upstream's per-harness
+rows. The model `<tbody>` in `UsagePage.tsx` is replaced, not wrapped, by
+[`UsageModelBreakdown.tsx`](../../apps/web/src/components/usage/UsageModelBreakdown.tsx). Its
+deletion carries no marker, so an upstream sync that touches that table must port the change into
+the fork component rather than restore the deleted block.
+
 ## RPC scopes
 
 Each fork RPC group declares the scope of every method in its own `*_RPC_SCOPES` map, which the

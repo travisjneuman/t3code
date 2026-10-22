@@ -128,11 +128,11 @@ comparison add **Open comparison**. Rename stays one thread at a time.
 
 ## Other Agents across machines
 
-The Other Agents shelf lists each machine's 60 newest sessions. When a machine has more, the
-**Earlier** header shows "60 of N"; expand **Earlier** and choose **Browse older** to load the
-next 60. Nothing older loads until you ask. When more than one machine is connected, each session
-row and every Other Agents search result, in the sidebar and the command palette, names its
-machine.
+The Other Agents shelf merges every connected machine's sessions into one list, newest first.
+It first shows the last 3 days; **Load more** adds the next 10, whichever machine they ran on, back
+to the 14 days each machine lists (Codex threads stay until archived). When more than one machine
+is connected, each session row and every Other Agents search result, in the sidebar and the
+command palette, names its machine.
 
 If a machine doesn't answer a search, because it timed out, dropped its connection or runs an
 older server, the results header says how many were searched, such as "Other Agents (12) ·
@@ -196,3 +196,19 @@ The same holds in **OpenTelemetry export** in **Settings → Diagnostics**: an e
 progress is blue, and a check that could not run says **Check failed** in red, with the reason on
 the dot. **Settings → Archive** leaves out "No archived threads" when archived Other Agents or
 Hermes sessions are listed below it.
+
+## Usage shows one row per model
+
+In **Usage → Breakdown → Model**, a model counts once however it ran. When it ran through more
+than one route, such as Codex and Pi, or at a different context size, such as Claude Code's
+1M context, a sub-line under the row shows each route's cost and tokens, and the row's bar is
+split the same way. Opening the model lists the routes again with their cost per 1M tokens and
+cache hit rate. Pi's **Pi · OpenAI** route covers both an OpenAI API key and a ChatGPT sign-in,
+because Pi's transcripts don't say which one was used.
+
+Usage that no model can claim, such as Pi's tools and summaries, sits under **Not tied to a
+model** at the bottom, unranked.
+
+**Set price** saves the price under the model's own name, such as `gpt-6.1-sol`, so it covers
+every route of that model. A price saved for one exact route name, such as
+`openai-codex/gpt-6.1-sol`, still wins for that route.

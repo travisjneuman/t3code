@@ -371,6 +371,14 @@
       "types": "./src/usageMerge.ts",
       "import": "./src/usageMerge.ts"
     },
+    "./usageModelIdentity": {
+      "types": "./src/usageModelIdentity.ts",
+      "import": "./src/usageModelIdentity.ts"
+    },
+    "./usageModelGroups": {
+      "types": "./src/usageModelGroups.ts",
+      "import": "./src/usageModelGroups.ts"
+    },
     "./usageFormat": {
       "types": "./src/usageFormat.ts",
       "import": "./src/usageFormat.ts"

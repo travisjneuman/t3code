@@ -23,6 +23,13 @@ import {
   tokenTypeSegments,
 } from "./usageBreakdown";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
+import { UsageModelRouteTable } from "./UsageModelBreakdown"; // Fork add-on: one usage row per model.
+import {
+  usageModelBucketFilter, // Fork add-on: one usage row per model.
+  usageModelChartProviders, // Fork add-on
+  usageModelRouteSummary, // Fork add-on
+  usageModelTitle, // Fork add-on
+} from "./usageModelRows"; // Fork add-on
 
 export interface UsageChartWindow {
   readonly days: readonly string[];
@@ -48,11 +55,8 @@ export function UsageModelDialog({
   readonly onSetPrice: () => void;
   readonly onClose: () => void;
 }) {
-  const usage = mergeAnsweredUsage(
-    environments,
-    (bucket) => bucket.provider === model.provider && bucket.model === model.model,
-  );
-  const providers = [model.provider];
+  const usage = mergeAnsweredUsage(environments, usageModelBucketFilter(model)); // Fork add-on: one usage row per model.
+  const providers = usageModelChartProviders(model); // Fork add-on: one usage row per model.
   const presentation = PROVIDER_PRESENTATION[model.provider];
   const costUnknown = isModelCostUnknown(model);
   const hitRate = cacheHitRate(model);
@@ -79,10 +83,12 @@ export function UsageModelDialog({
               displayName={presentation.label}
               iconClassName="size-5"
             />
-            <DialogTitle>{model.model}</DialogTitle>
+            <DialogTitle>
+              {usageModelTitle(model) /* Fork add-on: one usage row per model. */}
+            </DialogTitle>
           </div>
           <DialogDescription>
-            {presentation.label}
+            {usageModelRouteSummary(model) /* Fork add-on: one usage row per model. */}
             {costUnknown ? "" : ` · ${formatPercent(model.costShare)} of cost`}
           </DialogDescription>
         </DialogHeader>
@@ -96,6 +102,8 @@ export function UsageModelDialog({
                 </div>
               ))}
             </div>
+
+            <UsageModelRouteTable model={model} /* Fork add-on: one usage row per model. */ />
 
             {/* Unpriced cost is unknown, not zero, so its trend shows tokens. */}
             <UsageProviderChart

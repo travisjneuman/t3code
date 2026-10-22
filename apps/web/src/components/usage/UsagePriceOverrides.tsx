@@ -560,6 +560,9 @@ export function UsagePriceOverrides({
               <p className="text-xs text-muted-foreground">
                 Blank cache rates use the input price. Enter 0 for free tokens. A mapped model’s
                 usage counts as the model it maps to.
+                {
+                  " A price for a model’s own name covers all its routes." /* Fork add-on: one price per model across routes. */
+                }
                 {selected.length > 1
                   ? " Mixed cells keep each environment’s rate until you edit them."
                   : ""}

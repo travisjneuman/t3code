@@ -15,6 +15,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { useState } from "react";
 
 import { mergeUsage, type EnvironmentUsage, type MergedUsage } from "@t3tools/shared/usageMerge";
+import { groupUsageModels } from "@t3tools/shared/usageModelGroups"; // Fork add-on: one usage row per model.
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "./presentation";
 import { serverEnvironment } from "./server";
@@ -104,7 +105,7 @@ export function mergeAnsweredUsage(
           },
         ],
   );
-  return mergeUsage(answered, USAGE_CONTRACT_VERSION);
+  return groupUsageModels(mergeUsage(answered, USAGE_CONTRACT_VERSION)); // Fork add-on: one usage row per model.
 }
 
 const NO_HIDDEN_PROVIDERS: ReadonlySet<UsageProviderKind> = new Set();
