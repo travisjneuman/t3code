@@ -179,6 +179,10 @@ async function main() {
     );
   }
 
+  // The build stamps versions into tracked files and expects HEAD to stay put.
+  // While this file exists, the session-end checkpoint hook and repo-sync pulls
+  // skip the checkout instead of committing the stamp or fast-forwarding it.
+  const holdFile = path.join(await git(["rev-parse", "--absolute-git-dir"]), "checkout-hold");
   const originals = new Map<string, Buffer>();
   const failures: unknown[] = [];
   let started = false;
@@ -188,6 +192,7 @@ async function main() {
   try {
     await requireCleanCheckout();
     started = true;
+    await fs.writeFile(holdFile, `${process.pid} ${new Date().toISOString()}\n`);
     // Upstream builds native executables only on the exact engines.node version
     // (apps/server/vite.config.ts throws otherwise), and only exact versions have a
     // nodejs.org dist directory for vp to download.
@@ -328,6 +333,11 @@ async function main() {
         await requireCleanCheckout(true);
       } catch (error) {
         failures.push(error);
+      }
+      try {
+        await fs.rm(holdFile, { force: true });
+      } catch (error) {
+        failures.push(new Error("Could not remove the checkout hold.", { cause: error }));
       }
     }
     process.off("SIGINT", onSigint);
