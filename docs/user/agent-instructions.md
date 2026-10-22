@@ -14,11 +14,14 @@ provider-specific text.
   **Solo** turns delegation off, **Orchestrator** always delegates and runs one review round, and
   **Review-heavy** delegates when useful, reviews until clean, and keeps reviewers read-only. The
   built-ins change only those rows. **Save current** saves every Agents value for the picked scope
-  under a name, on that server. With a preset you saved selected, it offers that name, so saving
+  under a name. Saved presets and the default are kept per server: saving, renaming, deleting or
+  changing the default copies your saved presets and the default to every connected server the
+  scope picker covers, so a thread on any of them can use them. With a preset you saved selected,
+  it offers that name, so saving
   replaces it; built-in presets can't be replaced. **Rename** renames a preset you saved; threads
   using it keep it. **Delete** removes a preset you saved. The row keeps showing the preset you last
   applied, saved or picked. **Set default** makes the selected preset, built-in or saved, the one
-  every thread on that server runs under until you pick another for it in the composer; the
+  every thread on those servers runs under until you pick another for it in the composer; the
   preset list marks it **(default)**, and **Clear default** goes back to the project's settings.
 
 - **Delegation**: **When useful**, the default, has the thread's agent hand independent pieces of

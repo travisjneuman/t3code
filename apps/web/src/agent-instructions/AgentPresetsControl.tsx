@@ -32,12 +32,33 @@ import {
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import { useUpdateEnvironmentSettings } from "../hooks/useSettings";
+import { serverEnvironment } from "../state/server";
+import { useAtomCommand } from "../state/use-atom-command";
 import { ChoiceSelect } from "./ChoiceSelect";
 
 function newPresetId(): string {
   // crypto.randomUUID needs a secure context, which a LAN origin may not be.
   return `user:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Merges saved presets into one environment's list. Each replaces the entry
+ * with its id, else the one with its name, so an environment never ends up
+ * with two presets of one name.
+ */
+function mergePresets(
+  current: readonly AgentPreset[],
+  incoming: readonly AgentPreset[],
+  removedId: string | undefined,
+): AgentPreset[] {
+  const next = current.filter((entry) => entry.id !== removedId);
+  for (const preset of incoming) {
+    const byId = next.findIndex((entry) => entry.id === preset.id);
+    const index = byId === -1 ? next.findIndex((entry) => entry.name === preset.name) : byId;
+    if (index === -1) next.push(preset);
+    else next[index] = preset;
+  }
+  return next;
 }
 
 /** Whether every value the preset sets equals the scope's current one. */
@@ -53,8 +74,8 @@ type NameDialog = "save" | "rename" | null;
 export function AgentPresetsControl() {
   const settings = useScopedSettings();
   const updateScoped = useUpdateScopedSettings();
-  const { target } = useSettingsScope();
-  const updateEnvironment = useUpdateEnvironmentSettings(target?.environmentId ?? null);
+  const { target, connectedEnvironments } = useSettingsScope();
+  const persist = useAtomCommand(serverEnvironment.updateSettings, "Agents preset update");
   const presets = agentPresetList(settings);
   // The last preset applied, saved or picked stays selected across visits, so
   // Save current offers to replace it after a value changes.
@@ -84,6 +105,32 @@ export function AgentPresetsControl() {
   const savedSelected =
     selected !== undefined && !isBuiltinAgentPreset(selected.id) ? selected : undefined;
 
+  // Presets are environment settings, but a thread can only use one its own
+  // environment has, so every write copies the shown environment's saved
+  // presets and default to each environment the scope covers.
+  const writeLibrary = (
+    saved: readonly AgentPreset[],
+    defaultPresetId: string,
+    removedId?: string,
+  ) => {
+    for (const environment of connectedEnvironments) {
+      if (!environment.serverConfig) continue;
+      void persist({
+        environmentId: environment.environmentId,
+        input: {
+          patch: {
+            agentPresets: mergePresets(
+              environment.serverConfig.settings.agentPresets,
+              saved,
+              removedId,
+            ),
+            agentDefaultPresetId: defaultPresetId,
+          },
+        },
+      });
+    }
+  };
+
   const savePreset = () => {
     const trimmed = trimmedName;
     if (trimmed === "" || nameIsBuiltin) return;
@@ -96,11 +143,12 @@ export function AgentPresetsControl() {
       name: trimmed,
       settings: values,
     };
-    updateEnvironment({
-      agentPresets: existing
+    writeLibrary(
+      existing
         ? settings.agentPresets.map((entry) => (entry.id === existing.id ? preset : entry))
         : [...settings.agentPresets, preset],
-    });
+      settings.agentDefaultPresetId,
+    );
     setSelectedId(preset.id);
     setDialog(null);
   };
@@ -108,11 +156,12 @@ export function AgentPresetsControl() {
   // The id stays, so threads on this preset and the default keep pointing at it.
   const renamePreset = () => {
     if (!savedSelected || nameInvalid) return;
-    updateEnvironment({
-      agentPresets: settings.agentPresets.map((entry) =>
+    writeLibrary(
+      settings.agentPresets.map((entry) =>
         entry.id === savedSelected.id ? { ...entry, name: trimmedName } : entry,
       ),
-    });
+      settings.agentDefaultPresetId,
+    );
     setDialog(null);
   };
 
@@ -164,7 +213,7 @@ export function AgentPresetsControl() {
         disabled={selected === undefined || target === null}
         onClick={() => {
           if (!selected) return;
-          updateEnvironment({ agentDefaultPresetId: isDefault ? "" : selected.id });
+          writeLibrary(settings.agentPresets, isDefault ? "" : selected.id);
         }}
       >
         {isDefault ? "Clear default" : "Set default"}
@@ -186,12 +235,11 @@ export function AgentPresetsControl() {
           size="xs"
           variant="ghost-destructive"
           onClick={() => {
-            updateEnvironment({
-              agentPresets: settings.agentPresets.filter(
-                (preset) => preset.id !== savedSelected.id,
-              ),
-              ...(isDefault ? { agentDefaultPresetId: "" } : {}),
-            });
+            writeLibrary(
+              settings.agentPresets.filter((preset) => preset.id !== savedSelected.id),
+              isDefault ? "" : settings.agentDefaultPresetId,
+              savedSelected.id,
+            );
             setSelectedId("");
           }}
         >
