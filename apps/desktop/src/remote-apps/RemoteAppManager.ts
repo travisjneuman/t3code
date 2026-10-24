@@ -83,6 +83,7 @@ import {
   buildRemoteAppPromptFillScript,
   buildRemoteAppSelectionScript,
   REMOTE_APP_ACTION_NOTICE_TIMEOUT_MS,
+  REMOTE_APP_DUET_RETURN_SCRIPT,
   REMOTE_APP_PAGE_WORLD_ID,
 } from "./RemoteAppPageScripts.ts";
 import { REMOTE_APP_VIEW_TOP_INSET, TITLEBAR_HEIGHT } from "./RemoteAppTypes.ts";
@@ -636,7 +637,7 @@ export const make = Effect.gen(function* () {
    * repaints its own design tokens, and its sidebar pinned to T3's width; a
    * site with no theme gets only the no-drag rule. Auth pages on other hosts
    * are left alone. ChatGPT also gets the interaction script that tidies its
-   * chrome. A side-panel page (no `view`) is too narrow for the sidebar pin and
+   * chrome, and Claude the Duet sidebar's way back to chat. A side-panel page (no `view`) is too narrow for the sidebar pin and
    * sits on the renderer's own background.
    */
   const applyRemoteTheme = Effect.fn("remote-app.applyTheme")(function* (
@@ -670,6 +671,15 @@ export const make = Effect.gen(function* () {
         }
         if (!themeable || !isThemeableRemoteAppSite(site)) return;
         if (view !== undefined) yield* applySidebarWidth(site, contents);
+        if (site === "claude") {
+          yield* Effect.tryPromise({
+            try: () =>
+              contents.executeJavaScriptInIsolatedWorld(REMOTE_APP_PAGE_WORLD_ID, [
+                { code: REMOTE_APP_DUET_RETURN_SCRIPT },
+              ]),
+            catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+          }).pipe(Effect.catch(() => Effect.void));
+        }
         if (site !== "chatgpt") return;
         yield* Effect.tryPromise({
           try: () => contents.executeJavaScript(buildRemoteAppInteractionScript()),

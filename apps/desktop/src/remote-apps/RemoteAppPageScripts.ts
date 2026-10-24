@@ -5,6 +5,8 @@
  * and keep no interval.
  */
 
+import { REMOTE_APP_SURFACE_ICON_SVGS } from "@t3tools/contracts";
+
 // Shared by every remote site; each document gets its own copy of the world.
 export const REMOTE_APP_PAGE_WORLD_ID = 1_101;
 
@@ -428,4 +430,157 @@ export const buildRemoteAppSelectionScript = (): string => `(() => {
   };
   const tree = walk(container, 0);
   return overflow || tree === null ? null : tree.children;
+})()`;
+
+// Claude's spark from the shared surface icon, drawn bare in Claude's brand
+// color the way Claude's sidebar draws the Duet mark.
+const CLAUDE_MARK_PATH = /<path d="([^"]+)"/.exec(REMOTE_APP_SURFACE_ICON_SVGS.claude)?.[1] ?? "";
+const CLAUDE_MARK_TRANSFORM =
+  /<g fill="#fff" transform="([^"]+)"/.exec(REMOTE_APP_SURFACE_ICON_SVGS.claude)?.[1] ?? "";
+
+/**
+ * Claude Duet (research preview, 2026-10) is its own app at claude.ai/duet:
+ * Claude's sidebar links to it, but Duet's sidebar has no way back, and the
+ * Claude tab has no back button. This adds a "Claude" row to Duet's sidebar,
+ * just above the account row, that opens a new chat.
+ *
+ * The row copies its size, padding, radius, and font from Duet's own channel
+ * row, and takes its colors from Claude's design tokens, which the T3 theme
+ * repaints. It retires itself once Duet's sidebar links to Claude on its own.
+ * Re-run on every document load and in-page navigation; it watches the DOM
+ * only while the page is on Duet, coalesced to one check per CHECK_MS.
+ *
+ * UNVERIFIED MARKUP (2026-10-23, read from the accessibility tree only): the
+ * channel row is a link to /duet and the account block holds the "Get the
+ * app" link and Claude's user menu button.
+ */
+export const REMOTE_APP_DUET_RETURN_SCRIPT = `(() => {
+  const existing = window.__t3codeDuetReturn;
+  if (existing) return existing.refresh();
+  const CHECK_MS = 150;
+  const LINK_ID = "t3code-duet-return";
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const isDuet = () => location.pathname === "/duet" || location.pathname.startsWith("/duet/");
+  const channelLink = () =>
+    document.querySelector('a[href="/duet"], a[href="https://claude.ai/duet"]');
+  const accountAnchor = () =>
+    document.querySelector('a[href*="/get-the-app"], [data-testid="user-menu-button"]');
+  const ownsClaudeLink = (root, link) =>
+    Array.from(
+      root.querySelectorAll('a[href="/"], a[href="/new"], a[href="/recents"], a[href^="/chat/"]'),
+    ).some((candidate) => candidate !== link);
+
+  const build = () => {
+    const link = document.createElement("a");
+    link.id = LINK_ID;
+    link.href = "/new";
+    const icon = document.createElementNS(SVG_NS, "svg");
+    icon.setAttribute("viewBox", "4 4 16 16");
+    icon.setAttribute("aria-hidden", "true");
+    icon.style.cssText = "flex:none";
+    const group = document.createElementNS(SVG_NS, "g");
+    group.setAttribute("fill", "#d97757");
+    group.setAttribute("transform", ${JSON.stringify(CLAUDE_MARK_TRANSFORM)});
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", ${JSON.stringify(CLAUDE_MARK_PATH)});
+    group.append(path);
+    icon.append(group);
+    const label = document.createElement("span");
+    label.textContent = "Claude";
+    label.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    link.append(icon, label);
+    const hover = (on) => {
+      link.style.background = on ? "var(--df-hover, rgba(127, 127, 127, 0.14))" : "transparent";
+    };
+    link.addEventListener("mouseenter", () => hover(true));
+    link.addEventListener("mouseleave", () => hover(false));
+    link.addEventListener("focus", () => hover(true));
+    link.addEventListener("blur", () => hover(false));
+    return link;
+  };
+
+  // Matches Duet's channel row, measured after insertion so the row lines up
+  // with it whatever padding the sidebar's own containers add.
+  const fit = (link, model) => {
+    const rect = model.getBoundingClientRect();
+    // A collapsed sidebar measures zero; fit again once it is back.
+    if (rect.width === 0) return false;
+    const style = getComputedStyle(model);
+    const modelIcon = model.querySelector("svg, img");
+    const iconSize = modelIcon ? Math.round(modelIcon.getBoundingClientRect().width) || 20 : 20;
+    link.style.cssText = [
+      "display:flex",
+      "align-items:center",
+      "box-sizing:border-box",
+      "text-decoration:none",
+      "color:var(--cds-text-primary, currentColor)",
+      "background:transparent",
+      "min-height:" + Math.round(rect.height) + "px",
+      "padding:" + style.padding,
+      "border-radius:" + style.borderRadius,
+      "gap:" + (style.columnGap === "normal" ? "8px" : style.columnGap),
+      "font-family:" + style.fontFamily,
+      "font-size:" + style.fontSize,
+      "line-height:" + style.lineHeight,
+      "margin:0",
+    ].join(";");
+    const icon = link.querySelector("svg");
+    if (icon) {
+      icon.setAttribute("width", String(iconSize));
+      icon.setAttribute("height", String(iconSize));
+    }
+    const own = link.getBoundingClientRect();
+    link.style.marginLeft = Math.round(rect.left - own.left) + "px";
+    link.style.marginRight = Math.round(own.right - rect.right) + "px";
+    return true;
+  };
+
+  let link = null;
+  let fitted = false;
+  let observer = null;
+  let timer = 0;
+
+  const remove = () => {
+    link?.remove();
+    observer?.disconnect();
+    observer = null;
+  };
+
+  const ensure = () => {
+    if (!isDuet()) return remove();
+    const model = channelLink();
+    const anchor = accountAnchor();
+    if (!model || !anchor) return;
+    // The account block is the anchor's highest ancestor that still stops
+    // short of the channel list; the row goes right above it.
+    let block = anchor;
+    while (block.parentElement && !block.parentElement.contains(model)) block = block.parentElement;
+    const column = block.parentElement;
+    if (!column) return;
+    link ??= build();
+    if (ownsClaudeLink(column, link)) return remove();
+    if (link.parentElement !== column || link.nextElementSibling !== block) {
+      column.insertBefore(link, block);
+      fitted = false;
+    }
+    if (!fitted) fitted = fit(link, model);
+  };
+
+  const schedule = () => {
+    if (timer !== 0) return;
+    timer = setTimeout(() => {
+      timer = 0;
+      ensure();
+    }, CHECK_MS);
+  };
+
+  const refresh = () => {
+    ensure();
+    if (!isDuet() || observer) return;
+    observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true });
+  };
+
+  window.__t3codeDuetReturn = { refresh };
+  refresh();
 })()`;
