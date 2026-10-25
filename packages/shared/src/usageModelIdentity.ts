@@ -59,9 +59,10 @@ function tierLabel(tier: string): string {
 }
 
 /**
- * Splits a raw usage model into its vendor model ID and context tier. Only
- * Claude's dated snapshots fold into the undated ID, because that is
- * Anthropic's documented alias form; every other suffix is a distinct model.
+ * Splits a raw usage model into its vendor model ID and context tier. Claude's
+ * dated snapshots fold into the undated ID, Anthropic's documented alias form.
+ * The Grok CLI reports `grok-N` as `grok-N-build` and its Fast tier as
+ * `grok-N-build-fast` (a speed, not a model). Every other suffix is a distinct model.
  */
 function parseModel(rawModel: string) {
   const bare = rawModel
@@ -70,7 +71,11 @@ function parseModel(rawModel: string) {
     .toLowerCase();
   const tierMatch = /\[([^\]]+)\]$/.exec(bare);
   const untiered = tierMatch === null ? bare : bare.slice(0, tierMatch.index);
-  const modelId = untiered.startsWith("claude-") ? untiered.replace(/-\d{8}$/, "") : untiered;
+  const modelId = untiered.startsWith("claude-")
+    ? untiered.replace(/-\d{8}$/, "")
+    : untiered.startsWith("grok-")
+      ? untiered.replace(/(\d)-build(?:-fast)?$/, "$1")
+      : untiered;
   const vendor = VENDOR_FAMILIES.find(([family]) => family.test(modelId))?.[1] ?? null;
   return { modelId, vendor, tier: tierMatch === null ? null : tierLabel(tierMatch[1]!) };
 }

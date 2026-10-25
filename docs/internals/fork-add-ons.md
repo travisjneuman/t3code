@@ -45,7 +45,9 @@ the web's `mergeAnsweredUsage`, so the wire, the usage cache and mobile keep ups
 rows. The model `<tbody>` in `UsagePage.tsx` is replaced, not wrapped, by
 [`UsageModelBreakdown.tsx`](../../apps/web/src/components/usage/UsageModelBreakdown.tsx). Its
 deletion carries no marker, so an upstream sync that touches that table must port the change into
-the fork component rather than restore the deleted block.
+the fork component rather than restore the deleted block. The Grok reader tags `grok-N-build-fast`
+as Fast speed without bumping upstream's scan-cache version, so Grok records cached before that
+change stay Standard until their file is re-read.
 
 ## RPC scopes
 

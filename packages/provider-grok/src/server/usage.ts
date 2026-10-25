@@ -173,7 +173,7 @@ function parseGrokRecord(parsed: unknown): readonly UsageRecord[] {
       sessionId,
       totals,
       reportedCostUsd,
-      speed: "standard",
+      speed: /-build-fast$/.test(entry.model) ? "fast" : "standard", // Fork add-on: Grok's Fast tier is a speed of grok-N.
       dedupeKey: promptId === null ? null : `${sessionId}:${promptId}:${entry.model}`,
     });
   }

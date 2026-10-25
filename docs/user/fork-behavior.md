@@ -204,7 +204,9 @@ than one route, such as Codex and Pi, or at a different context size, such as Cl
 1M context, a sub-line under the row shows each route's cost and tokens, and the row's bar is
 split the same way. Opening the model lists the routes again with their cost per 1M tokens and
 cache hit rate. Pi's **Pi · OpenAI** route covers both an OpenAI API key and a ChatGPT sign-in,
-because Pi's transcripts don't say which one was used.
+because Pi's transcripts don't say which one was used. The Grok CLI reports Grok 4.7 as
+`grok-4.7-build`, so its usage joins Pi's `xai/grok-4.7` under **Grok 4.7**, and its **Fast**
+variant counts as Fast speed of the same model.
 
 Usage that no model can claim, such as Pi's tools and summaries, sits under **Not tied to a
 model** at the bottom, unranked.
