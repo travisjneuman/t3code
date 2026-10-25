@@ -161,7 +161,7 @@ function SidebarUtilityItem({
   );
 }
 
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useT3SurfaceNavigate(useNavigate()); // Fork add-on: remote apps.
   const navigateToMainApp = useNavigateToMainApp();
   const { isMobile, setOpenMobile } = useSidebar();
