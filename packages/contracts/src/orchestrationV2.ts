@@ -1477,6 +1477,8 @@ export const OrchestrationV2TurnItem = Schema.Union([
     outputOmitted: Schema.optional(Schema.Boolean),
     outputIndicatesFailure: Schema.optional(Schema.Boolean),
     exitCode: Schema.optional(Schema.Int),
+    /** Set when the command is a monitor, so background work lists it as a monitor. */
+    monitor: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -2244,6 +2246,8 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     outputOmitted: Schema.optional(Schema.Boolean),
     outputIndicatesFailure: Schema.optional(Schema.Boolean),
     exitCode: Schema.optional(Schema.Int),
+    /** Set when the command is a monitor, so background work lists it as a monitor. */
+    monitor: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
@@ -3327,7 +3331,6 @@ export const OrchestrationV2ThreadBoundedSnapshot = Schema.Struct({
   historyCursor: Schema.NullOr(TrimmedNonEmptyString),
   hasMoreHistory: Schema.Boolean,
   latestLocalTurnOrdinal: Schema.NullOr(NonNegativeInt),
-  payloadBudgetExceeded: Schema.optional(Schema.Boolean),
   /**
    * Set only for clients that opted in: `projection.turnItems` omits the items
    * of local visible rows, which lead the full list. Clients must restore them
@@ -3411,7 +3414,6 @@ export const OrchestrationV2ThreadStreamItem = Schema.Union([
     historyCursor: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
     hasMoreHistory: Schema.optionalKey(Schema.Boolean),
     latestLocalTurnOrdinal: Schema.optionalKey(Schema.NullOr(NonNegativeInt)),
-    payloadBudgetExceeded: Schema.optionalKey(Schema.Boolean),
     turnItemsOmitLocalVisible: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
