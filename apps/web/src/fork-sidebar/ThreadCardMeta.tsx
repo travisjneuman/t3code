@@ -34,13 +34,13 @@ export function ThreadCardMeta(props: {
         {props.thread.branch ? (
           <>
             <ThreadWorktreeIndicator thread={props.thread} />
-            <span className="flex min-w-0 flex-1 text-muted-foreground/40">
+            <span className="flex min-w-0 flex-1 text-muted-foreground/40 redesign:text-inherit">
               <MiddleTruncate value={props.thread.branch} showTitle={false} />
             </span>
           </>
         ) : null}
       </span>
-      <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground/40">
+      <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground/40 redesign:text-inherit">
         {showsMachine ? (
           <>
             <EnvironmentMachineIcon
