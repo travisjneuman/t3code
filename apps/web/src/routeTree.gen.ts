@@ -218,7 +218,6 @@ export interface FileRoutesByFullPath {
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/compare/$environmentId': typeof ChatCompareEnvironmentIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
   '/settings/appearance': typeof ChatSettingsAppearanceRoute
   '/settings/archived': typeof ChatSettingsArchivedRoute
   '/settings/beta': typeof ChatSettingsBetaRoute
@@ -234,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/settings/snap-shot': typeof ChatSettingsSnapShotRoute
   '/settings/source-control': typeof ChatSettingsSourceControlRoute
   '/settings/storage': typeof ChatSettingsStorageRoute
+  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
@@ -250,7 +250,6 @@ export interface FileRoutesByTo {
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/compare/$environmentId': typeof ChatCompareEnvironmentIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
   '/settings/appearance': typeof ChatSettingsAppearanceRoute
   '/settings/archived': typeof ChatSettingsArchivedRoute
   '/settings/beta': typeof ChatSettingsBetaRoute
@@ -266,6 +265,7 @@ export interface FileRoutesByTo {
   '/settings/snap-shot': typeof ChatSettingsSnapShotRoute
   '/settings/source-control': typeof ChatSettingsSourceControlRoute
   '/settings/storage': typeof ChatSettingsStorageRoute
+  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -284,7 +284,6 @@ export interface FileRoutesById {
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/compare/$environmentId': typeof ChatCompareEnvironmentIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/_chat/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
   '/_chat/settings/appearance': typeof ChatSettingsAppearanceRoute
   '/_chat/settings/archived': typeof ChatSettingsArchivedRoute
   '/_chat/settings/beta': typeof ChatSettingsBetaRoute
@@ -300,6 +299,7 @@ export interface FileRoutesById {
   '/_chat/settings/snap-shot': typeof ChatSettingsSnapShotRoute
   '/_chat/settings/source-control': typeof ChatSettingsSourceControlRoute
   '/_chat/settings/storage': typeof ChatSettingsStorageRoute
+  '/_chat/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -318,7 +318,6 @@ export interface FileRouteTypes {
     | '/$environmentId/$threadId'
     | '/compare/$environmentId'
     | '/draft/$draftId'
-    | '/external/$environmentId/$sessionKey'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -334,6 +333,7 @@ export interface FileRouteTypes {
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/external/$environmentId/$sessionKey'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
@@ -350,7 +350,6 @@ export interface FileRouteTypes {
     | '/$environmentId/$threadId'
     | '/compare/$environmentId'
     | '/draft/$draftId'
-    | '/external/$environmentId/$sessionKey'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -366,6 +365,7 @@ export interface FileRouteTypes {
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/external/$environmentId/$sessionKey'
   id:
     | '__root__'
     | '/_chat'
@@ -383,7 +383,6 @@ export interface FileRouteTypes {
     | '/_chat/$environmentId/$threadId'
     | '/_chat/compare/$environmentId'
     | '/_chat/draft/$draftId'
-    | '/_chat/external/$environmentId/$sessionKey'
     | '/_chat/settings/appearance'
     | '/_chat/settings/archived'
     | '/_chat/settings/beta'
@@ -399,6 +398,7 @@ export interface FileRouteTypes {
     | '/_chat/settings/snap-shot'
     | '/_chat/settings/source-control'
     | '/_chat/settings/storage'
+    | '/_chat/external/$environmentId/$sessionKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
