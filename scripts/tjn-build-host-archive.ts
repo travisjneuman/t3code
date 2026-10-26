@@ -272,6 +272,10 @@ async function main() {
       originals.set(target, bytes);
       await fs.writeFile(target, text.replace(PACKAGE_VERSION_PATTERN, `$1${version}$2`));
     }
+    // The web build regenerates the route tree, and a merged copy can differ in route order;
+    // the Mac's build-fix commit records the regenerated one. Restore it like the stamps.
+    const routeTree = path.join(repoRoot, "apps/web/src/routeTree.gen.ts");
+    originals.set(routeTree, await fs.readFile(routeTree));
 
     await vp(["run", "--filter", "t3", "build"]);
     await vp(["run", "build:resource-monitor"]);
