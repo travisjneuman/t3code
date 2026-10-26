@@ -129,7 +129,9 @@ becoming `@volar/typescript@2.4.28(typescript@7.0.2)`) across every importer it
 owns, git keeps the fork-only importers' old references, and pnpm rejects the
 result with `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Fork hosts install the pushed
 merge commit from a clean checkout before the Mac build could fix it, so the
-lockfile has to be right in the merge commit itself.
+lockfile has to be right in the merge commit itself. For the same reason, any build
+fix the Mac makes leaves the hosts failed on the merge commit; once the fix commit is
+pushed, rerun host staging.
 
 The route tree is the opposite case. The web build regenerates `routeTree.gen.ts`, and
 a merged copy can differ from it in route order alone, so host builds restore it after
@@ -163,8 +165,10 @@ per marker, resolving renamed destinations to their original HEAD paths; a desti
 with its own deficit has no surplus. Obsolete lines need a non-empty reason.
 Valid dispositions cover only their source file's remaining
 deficit and are recorded in both sync and build-gated merge commit bodies. The build
-path rechecks the accepted explanations after build repairs, without another marker
-agent pass. Renames are followed; every marked line in a deleted file needs a validated
+repair agent answers in the same format for marked lines its fix removes, such as a fork
+import upstream now declares itself; its line numbers are HEAD's, since the build starts
+from the merge commit. Accepted entries go into the build-fix commit body, and the check
+runs without another marker agent pass. Renames are followed; every marked line in a deleted file needs a validated
 move or obsolescence explanation, even when unrelated files gained markers. Unexplained
 losses still abort. Counts and agent explanations detect possible loss; they do not
 prove behavior is preserved.

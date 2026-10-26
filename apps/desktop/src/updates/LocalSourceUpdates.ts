@@ -896,7 +896,7 @@ export const make = Effect.gen(function* () {
         "Glob",
       ],
       cwd: repo,
-      outputLimit: phase === "repairing" ? MARKER_REPORT_OUTPUT_LIMIT : COMMAND_OUTPUT_LIMIT,
+      outputLimit: phase === "resolving" ? COMMAND_OUTPUT_LIMIT : MARKER_REPORT_OUTPUT_LIMIT,
     }).pipe(
       Effect.timeoutOrElse({
         duration: MERGE_AGENT_TIMEOUT,
@@ -918,7 +918,7 @@ export const make = Effect.gen(function* () {
                   "merge",
                   `the Claude merge agent exited with code ${result.exitCode} during ${phase}; no further agent pass will run`,
                 )
-              : phase === "repairing" && result.stdoutTruncated
+              : phase !== "resolving" && result.stdoutTruncated
                 ? makeError("merge", "the merge agent's disposition report was too large to read")
                 : Effect.succeed(result.stdout),
           ),
@@ -1072,6 +1072,22 @@ export const make = Effect.gen(function* () {
       }),
     );
 
+  /** HEAD's marked lines in a file, as `HEAD:path:line:text` output and line numbers. */
+  const headMarkerLines = (repo: string, path: string) =>
+    gitMerge(repo, ["grep", "-n", "-F", "-e", FORK_MARKER, "HEAD", "--", path]).pipe(
+      Effect.map((result) => {
+        const prefix = `HEAD:${path}:`;
+        const lines = new Set(
+          result.stdout.split("\n").flatMap((line) => {
+            if (!line.startsWith(prefix)) return [];
+            const number = Number(line.slice(prefix.length).split(":", 1)[0]);
+            return Number.isSafeInteger(number) && number > 0 ? [number] : [];
+          }),
+        );
+        return { listing: result.stdout.trim(), lines };
+      }),
+    );
+
   /** One repair pass must restore or explicitly account for every detected marked-line loss. */
   const checkForkMarkers = Effect.fn("desktop.localSourceUpdates.checkForkMarkers")(function* (
     repo: string,
@@ -1092,23 +1108,13 @@ export const make = Effect.gen(function* () {
     }
     const originals = new Map<string, ReadonlySet<number>>();
     const sections = yield* Effect.forEach(lost, (entry) =>
-      gitMerge(repo, ["grep", "-n", "-F", "-e", FORK_MARKER, "HEAD", "--", entry.path]).pipe(
-        Effect.map((result) => {
-          const prefix = `HEAD:${entry.path}:`;
-          originals.set(
-            entry.path,
-            new Set(
-              result.stdout.split("\n").flatMap((line) => {
-                if (!line.startsWith(prefix)) return [];
-                const number = Number(line.slice(prefix.length).split(":", 1)[0]);
-                return Number.isSafeInteger(number) && number > 0 ? [number] : [];
-              }),
-            ),
-          );
+      headMarkerLines(repo, entry.path).pipe(
+        Effect.map(({ listing, lines }) => {
+          originals.set(entry.path, lines);
           const target = entry.currentPath
             ? `${entry.currentPath} (now ${entry.found} of ${entry.expected} marked lines)`
             : `${entry.path} (deleted by the merge; account for every original marked line with a moved or obsolete disposition, even if other files gained markers)`;
-          return `${target}. Original marked lines (HEAD:path:line:text):\n${result.stdout.trim()}`;
+          return `${target}. Original marked lines (HEAD:path:line:text):\n${listing}`;
         }),
       ),
     );
@@ -1491,7 +1497,7 @@ export const make = Effect.gen(function* () {
         .trim()
         .slice(0, 12);
       const buildEnv = { ...scratchEnv, T3CODE_FORK_BUILD: forkBuild };
-      yield* Effect.gen(function* () {
+      const repairReport = yield* Effect.gen(function* () {
         yield* stampReleaseVersion(repo, inspection.upstreamVersion);
         const firstBuild = yield* runCommand({
           operation: "build",
@@ -1500,21 +1506,21 @@ export const make = Effect.gen(function* () {
           cwd: repo,
           env: buildEnv,
         });
-        if (firstBuild.exitCode !== 0) {
-          // Upstream reshaped code the fork builds on; give the agent one pass at it.
-          yield* runMergeAgent(
-            repo,
-            "build-repair",
-            `The merged checkout no longer builds. Fix the code so it builds again. Build output (tail):\n${trimOutput(firstBuild)}`,
-          );
-          yield* runChecked({
-            operation: "build",
-            command: "vp",
-            args: buildArgs,
-            cwd: repo,
-            env: buildEnv,
-          });
-        }
+        if (firstBuild.exitCode === 0) return "";
+        // Upstream reshaped code the fork builds on; give the agent one pass at it.
+        const report = yield* runMergeAgent(
+          repo,
+          "build-repair",
+          `The merged checkout no longer builds. Fix the code so it builds again. The checkout starts at HEAD, so a line's number before your edits is its HEAD line. If the fix removes or moves a line marked ${FORK_MARKER} (such as a fork import upstream now declares itself), end your final response with one fenced json block: {"dispositions":[{"path":"<HEAD path>","line":<HEAD line number>,"status":"moved"|"obsolete","destination":"<current path, moved only>","reason":"<one sentence>"}]}. Never fake markers. Build output (tail):\n${trimOutput(firstBuild)}`,
+        );
+        yield* runChecked({
+          operation: "build",
+          command: "vp",
+          args: buildArgs,
+          cwd: repo,
+          env: buildEnv,
+        });
+        return report;
       }).pipe(Effect.ensuring(restoreReleaseVersion(repo)));
       const applicationBundlePath = yield* findAppBundle(outputDir);
       // Records the regenerated lockfile and agent fixes; the author comes from
@@ -1523,9 +1529,17 @@ export const make = Effect.gen(function* () {
       yield* gitMerge(repo, ["add", "-u"]);
       // A build repair must not introduce marker loss; the merge's own was settled before it.
       const { after, changes, lost } = yield* findLostMarkers(repo, markersBeforeBuild);
+      const originals = new Map<string, ReadonlySet<number>>();
+      if (repairReport) {
+        yield* Effect.forEach(lost, (entry) =>
+          headMarkerLines(repo, entry.path).pipe(
+            Effect.map(({ lines }) => originals.set(entry.path, lines)),
+          ),
+        );
+      }
       const finalAccounting = accountForMarkerLoss(
-        [],
-        new Map<string, ReadonlySet<number>>(),
+        parseMarkerDispositions(repairReport),
+        originals,
         markersBeforeBuild,
         after,
         lost,
@@ -1547,7 +1561,10 @@ export const make = Effect.gen(function* () {
             "--no-verify",
             "--no-edit",
             "-m",
-            `${BUILD_FIX_SUBJECT}${inspection.upstreamTag}`,
+            mergeCommitMessage(
+              `${BUILD_FIX_SUBJECT}${inspection.upstreamTag}`,
+              finalAccounting.accepted,
+            ),
           ],
           cwd: repo,
         });
