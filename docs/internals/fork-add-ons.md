@@ -49,6 +49,11 @@ the fork component rather than restore the deleted block. The Grok reader tags `
 as Fast speed without bumping upstream's scan-cache version, so Grok records cached before that
 change stay Standard until their file is re-read.
 
+The sidebar card's meta line is replaced the same way: `SidebarThreadRow.tsx` renders
+`ThreadCardMeta` instead of upstream's meta line, and upstream's `showsScratchMachine` is
+deleted without a marker. The card always names its machine, so the fork pins upstream's
+`metaLineEmpty` to `false`; port upstream meta-line changes into `ThreadCardMeta`.
+
 ## RPC scopes
 
 Each fork RPC group declares the scope of every method in its own `*_RPC_SCOPES` map, which the

@@ -131,6 +131,11 @@ result with `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Fork hosts install the pushe
 merge commit from a clean checkout before the Mac build could fix it, so the
 lockfile has to be right in the merge commit itself.
 
+The route tree is the opposite case. The web build regenerates `routeTree.gen.ts`, and
+a merged copy can differ from it in route order alone, so host builds restore it after
+building, as they do the version stamps, and the Mac's build-fix commit records the
+regenerated file. Without that, every host failed its post-build clean check.
+
 ## Agent fallback
 
 Conflicts outside the lockfile, and a merge that no longer builds (upstream
