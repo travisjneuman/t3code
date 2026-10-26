@@ -5,7 +5,6 @@ import { subscribeComposerDraftModelReconciliation } from "./composerDraftStore"
 import { environmentThreadShells } from "./state/threads";
 import { environmentShell } from "./state/shell";
 
-import { BrowserProfileReporter } from "./browser/BrowserProfileReporter";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { appAtomRegistry, AppAtomRegistryProvider } from "./rpc/atomRegistry";
@@ -29,7 +28,6 @@ export function AppRoot({ router }: { readonly router: AppRouter }) {
       <RemoteAppSync /* Fork add-on: remote apps. */ />
       <RouterProvider router={router} />
       <ElectronBrowserHost />
-      <BrowserProfileReporter />
       <QuitHoldOverlay />
     </AppAtomRegistryProvider>
   );
