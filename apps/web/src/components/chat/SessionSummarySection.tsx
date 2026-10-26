@@ -5,7 +5,7 @@ import { memo, type ReactNode } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { formatContextWindowTokens } from "../../lib/contextWindow";
-import { formatRelativeTimeLabel, formatRelativeTimeUntil } from "../../timestampFormat";
+import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import { StartTruncatedPath } from "../StartTruncatedPath";
 import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -159,6 +159,21 @@ export const SessionSummarySection = memo(function SessionSummarySection(props: 
   );
 });
 
+/** "2h" until the time, "soon" under 5s, null once it has passed or is unreadable. */
+function timeUntil(isoDate: string): string | null {
+  const date = parseTimestampDate(isoDate);
+  if (!date) return null;
+  const seconds = Math.floor((date.getTime() - Date.now()) / 1000);
+  if (seconds <= 0) return null;
+  if (seconds < 5) return "soon";
+  if (seconds < 60) return `in ${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return `in ${Math.floor(hours / 24)}d`;
+}
+
 /** "5-hour limit" / "37% · resets in 2h"; the reset drops once it has passed. */
 function formatRateLimit(limit: SessionRateLimit): {
   readonly label: string;
@@ -166,14 +181,8 @@ function formatRateLimit(limit: SessionRateLimit): {
 } {
   const label = /limit/i.test(limit.name) ? limit.name : `${limit.name} limit`;
   const percent = `${Math.round(limit.usedPercent)}%`;
-  const until = limit.resetsAt === undefined ? null : formatRelativeTimeUntil(limit.resetsAt);
-  const reset =
-    until === null || until.value === "Expired"
-      ? null
-      : until.value === "Soon"
-        ? "resets soon"
-        : `resets in ${until.value}`;
-  return { label, value: reset === null ? percent : `${percent} · ${reset}` };
+  const until = limit.resetsAt === undefined ? null : timeUntil(limit.resetsAt);
+  return { label, value: until === null ? percent : `${percent} · resets ${until}` };
 }
 
 /** Token totals for the whole session, measured by the provider. */

@@ -390,7 +390,8 @@ function SegmentTriggers({
             style={paceMark.tick}
           />
         ) : null}
-        <ForkPaceTick window={window} now={now} />{/* Fork add-on: pace line, under the labels. */}
+        <ForkPaceTick window={window} now={now} />
+        {/* Fork add-on: pace line, under the labels. */}
         <span
           aria-hidden
           className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-md text-3xs leading-none font-semibold text-foreground/80 tabular-nums @2xl/pool:hidden"
@@ -404,7 +405,15 @@ function SegmentTriggers({
               className="min-w-0 truncate font-medium text-foreground"
             />
           ) : null}
-          <span className="shrink-0 font-semibold text-foreground tabular-nums">{remaining}%</span>
+          <span
+            className={cn(
+              "shrink-0 font-semibold text-foreground tabular-nums",
+              // A single-account bar repeats the headline percentage.
+              !showAccountName && "redesign:hidden",
+            )}
+          >
+            {remaining}%
+          </span>
           {resetsIn || credits ? (
             <span className="ms-auto flex min-w-0 items-center gap-1.5 overflow-hidden rounded-sm bg-background/85 px-1.5 py-0.5 text-2xs whitespace-nowrap text-foreground tabular-nums">
               {resetsIn?.replace("resets in ", "↻ ") ?? ""}
