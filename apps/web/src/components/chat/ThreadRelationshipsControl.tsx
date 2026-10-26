@@ -54,7 +54,6 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { cn } from "../../lib/utils"; // Fork add-on: compact lineage agents
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import {

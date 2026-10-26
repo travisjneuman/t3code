@@ -1,6 +1,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Vite config runs before any Effect runtime.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeZlib from "node:zlib";
+import { fileURLToPath } from "node:url"; // Fork add-on: Windows host builds.
 
 import react from "@vitejs/plugin-react";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
@@ -322,10 +323,9 @@ export default defineConfig(() => {
     resolve: {
       tsconfigPaths: true,
       alias: {
-        "@betteroffice/fonts-cjk": new URL(
-          "./src/components/files/office/fonts-cjk.ts",
-          import.meta.url,
-        ).pathname,
+        "@betteroffice/fonts-cjk": /* Fork add-on: a URL pathname breaks Windows */ fileURLToPath(
+          new URL("./src/components/files/office/fonts-cjk.ts", import.meta.url), // Fork add-on
+        ), // Fork add-on
       },
       dedupe: ["react", "react-dom"],
     },
