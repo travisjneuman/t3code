@@ -1,9 +1,10 @@
 /**
- * Fork add-on: project links. Settings → Project rows that put one project on
- * several machines: link a folder project with one on another machine, unlink a
- * machine's copy, and add the project on a machine that doesn't have it yet.
- * Git projects already group by repository, so they only get Add on (the clone
- * or existing-checkout dialog); links are for folders without a repository.
+ * Fork add-on: project links. Rows in Settings → Project → Checkouts that put
+ * one project on several machines: link a folder project with one on another
+ * machine, unlink a machine's copy, and add the project on a machine that
+ * doesn't have it yet. Git projects already group by repository, so they only
+ * get Add on (the clone or existing-checkout dialog); links are for folders
+ * without a repository.
  */
 import { canCreateProjectInEnvironment } from "@t3tools/client-runtime/operations/projects";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -13,7 +14,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope, type EnvironmentId } from "@t3tools/contracts";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useAddProjectTargets } from "../../hooks/useAddProjectTargets";
 import { newProjectId, randomUUID } from "../../lib/utils";
@@ -63,12 +64,63 @@ const candidateLabel = (other: SidebarProjectSnapshot) =>
 const isFolderProject = (group: Pick<SidebarProjectSnapshot, "memberProjects">) =>
   group.memberProjects.every((member) => member.repositoryIdentity == null && !member.isScratch);
 
-export function ProjectMachineLinks({
+/** Unlink beside a checkout's Remove. Unlinking the second-to-last copy clears the last one too. */
+export function CheckoutUnlinkButton({
   group,
+  member,
   canEdit,
 }: {
   group: SidebarProjectSnapshot;
+  member: SidebarProjectGroupMember;
   canEdit: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const updateProject = useOrchestrationCommand(projectEnvironment.update, {
+    reportFailure: false,
+  });
+  if (!member.linkKey || !isFolderProject(group)) return null;
+  const linked = group.memberProjects.filter((other) => other.linkKey === member.linkKey);
+  const targets = linked.length <= 2 ? linked : [member];
+  const unlink = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      for (const target of targets) {
+        throwOnFailure(
+          await updateProject({
+            environmentId: target.environmentId,
+            input: { projectId: target.id, linkKey: null },
+          }),
+        );
+      }
+    } catch (error) {
+      reportError("Failed to unlink project", error);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={busy || !canEdit}
+      onClick={() => void unlink()}
+      aria-label={`Unlink ${member.workspaceRoot}`}
+    >
+      Unlink
+    </Button>
+  );
+}
+
+/** One Checkouts section: the panel's checkout rows, then link and add rows. */
+export function ProjectMachineLinks({
+  group,
+  canEdit,
+  checkoutRows,
+}: {
+  group: SidebarProjectSnapshot;
+  canEdit: boolean;
+  checkoutRows: ReactNode;
 }) {
   const { environments } = useEnvironments();
   const operable = useEnvironmentsWithScope(environments, AuthOrchestrationOperateScope);
@@ -101,7 +153,10 @@ export function ProjectMachineLinks({
     for (const member of members) await setLinkKey(member, linkKey);
   };
 
-  if (group.memberProjects.some((member) => member.isScratch)) return null;
+  const checkoutsOnly = checkoutRows ? (
+    <SettingsSection title="Checkouts">{checkoutRows}</SettingsSection>
+  ) : null;
+  if (group.memberProjects.some((member) => member.isScratch)) return checkoutsOnly;
   const folderProject = isFolderProject(group);
   const linkKey = group.memberProjects.find((member) => member.linkKey)?.linkKey ?? null;
   const memberEnvironments = new Set(group.memberProjects.map((member) => member.environmentId));
@@ -167,32 +222,11 @@ export function ProjectMachineLinks({
     });
 
   const showAddRows = folderProject ? missingEnvironments.length > 0 : gitTargets.length > 0;
-  if (!showAddRows && !(folderProject && (linkKey !== null || candidates.length > 0))) return null;
+  if (!showAddRows && candidates.length === 0) return checkoutsOnly;
 
   return (
-    <SettingsSection title="Other machines">
-      {folderProject && linkKey !== null
-        ? group.memberProjects.map((member) => (
-            <SettingsRow
-              key={member.physicalProjectKey}
-              title={`Linked on ${member.environmentLabel ?? "this machine"}`}
-              description={member.workspaceRoot}
-              control={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || !canEdit}
-                  onClick={() =>
-                    void run("Failed to unlink project", () => setLinkKey(member, null))
-                  }
-                  aria-label={`Unlink ${member.workspaceRoot}`}
-                >
-                  Unlink
-                </Button>
-              }
-            />
-          ))
-        : null}
+    <SettingsSection title="Checkouts">
+      {checkoutRows}
       {candidates.length > 0 ? (
         <SettingsRow
           title="Link with a project on another machine"

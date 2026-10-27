@@ -110,12 +110,12 @@ several machines. A thread's branch, when it has one, sits at the bottom left.
 
 Git projects already show as one project across machines when they share a repository. For a
 folder that isn't a git repository, open it in **Settings → Projects** and use **Link with a project
-on another machine** under **Other machines**: both then show as one project, each machine keeping
-its own folder, and project settings apply to both. **Unlink** next to a machine's folder splits it
-off again. Links are stored on each machine's server, so every client and device sees them; a
+on another machine** under **Checkouts**: both then show as one project, each machine keeping
+its own folder, and project settings apply to both. **Unlink** next to a machine's checkout splits it
+off again, and **Remove** removes that machine's copy. Links are stored on each machine's server, so every client and device sees them; a
 machine on an older release shows its copy on its own until it updates.
 
-**Other machines** also lists each connected machine that doesn't have the project yet. For a git
+**Checkouts** also lists each connected machine that doesn't have the project yet. For a git
 project, **Add…** opens [Add to another machine](thread-sidebar.md). For a folder project, enter the
 folder on that machine (it must already exist) and press **Add**; the new copy is linked
 automatically.

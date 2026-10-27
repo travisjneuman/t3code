@@ -46,7 +46,7 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
-import { ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on: project links
+import { CheckoutUnlinkButton, ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on: project links
 import { projectGroupTitleNeedsUpdate } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import { readUnloadedThreadCount } from "../../state/olderSettledShelf";
@@ -392,18 +392,27 @@ function ProjectDetail({
     else checkoutsByEnvironment.set(member.environmentId, [member]);
   }
   const checkoutRemoveButton = (member: SidebarProjectGroupMember) => (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={!editableIds.has(member.environmentId)}
-      onClick={() => void removeMembers([member])}
-      aria-label={`Remove checkout ${member.workspaceRoot}`}
-    >
-      Remove
-    </Button>
+    <div className="flex items-center gap-2">
+      {/* Fork add-on: project links */}
+      <CheckoutUnlinkButton
+        group={group}
+        member={member}
+        canEdit={editableIds.has(member.environmentId)}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={!editableIds.has(member.environmentId)}
+        onClick={() => void removeMembers([member])}
+        aria-label={`Remove checkout ${member.workspaceRoot}`}
+      >
+        Remove
+      </Button>
+    </div>
   );
-  const checkoutChoices = (
-    <SettingsSection title="Checkouts">
+  // Fork add-on: project links. The rows also render inside ProjectMachineLinks' section.
+  const checkoutRows = (
+    <>
       {Array.from(checkoutsByEnvironment, ([environmentId, members]) => {
         if (checkoutsByEnvironment.size === 1) {
           return members.map((member) => (
@@ -467,8 +476,9 @@ function ProjectDetail({
           </SettingsRow>
         );
       })}
-    </SettingsSection>
+    </>
   );
+  const checkoutChoices = <SettingsSection title="Checkouts">{checkoutRows}</SettingsSection>;
 
   return (
     <>
@@ -563,9 +573,18 @@ function ProjectDetail({
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
-        {hasMultipleCheckouts ? checkoutChoices : null}
-        {hasOtherMembers ? null : <ProjectMachineLinks group={group} canEdit={canEditGroup} />}{" "}
-        {/* Fork add-on: project links */}
+        {/* Fork add-on: project links. One Checkouts section with the link and add rows. */}
+        {hasOtherMembers ? (
+          hasMultipleCheckouts ? (
+            checkoutChoices
+          ) : null
+        ) : (
+          <ProjectMachineLinks
+            group={group}
+            canEdit={canEditGroup}
+            checkoutRows={hasMultipleCheckouts ? checkoutRows : null}
+          />
+        )}
         {representative.isScratch ? null /* Fork add-on: each server keeps one No project. */ : (
           <SettingsSection title="Danger">
             <SettingsRow
