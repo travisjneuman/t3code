@@ -34,7 +34,6 @@ import {
   useLocalStorage,
 } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
-import { useClientSettings } from "../hooks/useSettings";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { cn, isMacPlatform } from "../lib/utils";
 import {
@@ -44,11 +43,7 @@ import {
   AGENT_LINE_SELECTED_CLASS,
   AGENT_MORE_BUTTON_CLASS,
 } from "../sidebar-compact/agentLines";
-import {
-  AgentMoreIcon,
-  AgentSectionAccessory,
-  agentSectionLabel,
-} from "../sidebar-compact/AgentSectionParts";
+import { AgentMoreIcon, AgentSectionAccessory } from "../sidebar-compact/AgentSectionParts";
 import { readLocalApi } from "../localApi";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { waitForThreadShell } from "../state/entities";
@@ -288,7 +283,6 @@ export function ExternalSessionsSidebarSection() {
     anchor: null,
   });
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
-  const redesign = useClientSettings((s) => s.redesignEnabled);
   const [revealed, setRevealed] = useState(0);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -1048,7 +1042,6 @@ export function ExternalSessionsSidebarSection() {
             <AgentSectionAccessory
               count={active.length + shownRest.length}
               running={activeCount}
-              redesign={redesign}
               // At the narrowest sidebar the word drops out, so the chevron stays in view.
               runningSuffix={
                 <span className="sr-only @min-[14.5rem]/other-agents:not-sr-only">{" active"}</span>
@@ -1056,7 +1049,7 @@ export function ExternalSessionsSidebarSection() {
             />
           }
         >
-          {agentSectionLabel("Other Agents", active.length + shownRest.length, redesign)}
+          Other Agents
         </CollapsibleSectionHeader>
       </div>
       {/* Same hover timing as the thread list's cards. */}

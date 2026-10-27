@@ -11,11 +11,11 @@ export const AGENT_LINE_ICON_CLASS = "size-3 shrink-0";
 
 /** "Show more" / "Show less" under one of those lists, the same height as a line. */
 export const AGENT_MORE_BUTTON_CLASS =
-  "flex h-5 w-full cursor-pointer items-center gap-1.5 rounded-md px-(--sidebar-row-content-inset) text-left text-[10px] text-sidebar-muted-foreground/55 redesign:text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
+  "flex h-5 w-full cursor-pointer items-center gap-1.5 rounded-md px-(--sidebar-row-content-inset) text-left text-[10px] text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground";
 
 /** Upstream's thread-row active and selected states, light-mode ring included. */
 export const AGENT_LINE_ACTIVE_CLASS =
-  "bg-sidebar-row-active text-sidebar-foreground light:shadow-xs light:ring-1 light:ring-inset light:ring-sidebar-border/70 redesign:light:shadow-none";
+  "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70";
 
 export const AGENT_LINE_SELECTED_CLASS =
   "bg-sidebar-row-selected text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70";

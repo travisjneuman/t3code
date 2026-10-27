@@ -39,7 +39,6 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useScratchProject } from "../hooks/useScratchProject";
-import { useClientSettings } from "../hooks/useSettings";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { cn } from "../lib/utils";
@@ -50,11 +49,7 @@ import {
   AGENT_LINE_SELECTED_CLASS,
   AGENT_MORE_BUTTON_CLASS,
 } from "../sidebar-compact/agentLines";
-import {
-  AgentMoreIcon,
-  AgentSectionAccessory,
-  agentSectionLabel,
-} from "../sidebar-compact/AgentSectionParts";
+import { AgentMoreIcon, AgentSectionAccessory } from "../sidebar-compact/AgentSectionParts";
 import { readLocalApi } from "../localApi";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { waitForThreadShell } from "../state/entities";
@@ -331,7 +326,6 @@ export function HermesSidebarSection() {
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const { environments } = useEnvironments();
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
-  const redesign = useClientSettings((s) => s.redesignEnabled);
   const [extra, setExtra] = useState(0);
   const [listed, setListed] = useState<ReadonlyMap<string, Listed>>(new Map());
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -900,11 +894,10 @@ export function HermesSidebarSection() {
               <AgentSectionAccessory
                 count={rows.length}
                 running={runningCount}
-                redesign={redesign}
               />
             }
           >
-            {agentSectionLabel(sectionName, rows.length, redesign)}
+            {sectionName}
           </CollapsibleSectionHeader>
         </div>
         <button

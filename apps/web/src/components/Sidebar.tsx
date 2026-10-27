@@ -3271,26 +3271,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             olderSettledShelf.retry();
                             showMoreSettled();
                           }}
-                          className={cn(
-                            AGENT_MORE_BUTTON_CLASS,
-                            "disabled:cursor-default redesign:text-sidebar-muted-foreground",
-                          )} // Fork add-on: compact sidebar cards.
+                          className={cn(AGENT_MORE_BUTTON_CLASS, "disabled:cursor-default")} // Fork add-on: compact sidebar cards.
                         >
-                          {/* The New design keeps plus for "add" and uses a chevron to reveal more. */}
-                          <PlusIcon
-                            aria-hidden
-                            className={cn(
-                              AGENT_LINE_ICON_CLASS,
-                              "redesign:hidden",
-                            )} /* Fork add-on */
-                          />
-                          <ChevronDownIcon
-                            aria-hidden
-                            className={cn(
-                              AGENT_LINE_ICON_CLASS,
-                              "hidden redesign:block",
-                            )} /* Fork add-on */
-                          />
+                          {/* Plus means "add", so revealing more uses a chevron. */}
+                          <ChevronDownIcon aria-hidden className={AGENT_LINE_ICON_CLASS} /* Fork add-on */ />
                           {olderSettledShelf.loading
                             ? "Loading"
                             : olderSettledShelf.failed
