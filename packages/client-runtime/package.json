@@ -207,6 +207,10 @@
       "types": "./src/state/deviceHubAccess.ts",
       "default": "./src/state/deviceHubAccess.ts"
     },
+    "./state/remotePairing": {
+      "types": "./src/state/remotePairing.ts",
+      "default": "./src/state/remotePairing.ts"
+    },
     "./state/preview": {
       "types": "./src/state/preview.ts",
       "default": "./src/state/preview.ts"

@@ -83,8 +83,8 @@ the host the way process diagnostics do; it runs only while its dialog is open.
 ## Marker exceptions
 
 - JSON: `package.json`, `apps/server/package.json`, `apps/web/package.json`,
-  `packages/provider-core/package.json`, `packages/shared/package.json`, and
-  `apps/web/public/manifest.webmanifest`. `tsconfig.json` files accept comments, so their fork
+  `packages/client-runtime/package.json`, `packages/provider-core/package.json`,
+  `packages/shared/package.json`, and `apps/web/public/manifest.webmanifest`. `tsconfig.json` files accept comments, so their fork
   lines carry markers.
 - Generated output: `pnpm-lock.yaml` and `apps/web/src/routeTree.gen.ts`. Do not hand-mark
   package-manager or router output; regeneration would remove the markers. Never hand-edit the

@@ -139,6 +139,16 @@ older server, the results header says how many were searched, such as "Other Age
 searched 2 of 3 hosts", and its tooltip names the one that didn't answer. With no matches it reads
 "No matches · Studio didn't answer", so a missing machine is never mistaken for no matches.
 
+## Pair a phone with any connected machine
+
+A phone sees only the machines it is paired with, so threads started on another machine from the
+desktop app don't show on the phone until it pairs with that machine too. To pair without signing
+in to that machine's screen, open **Settings → Connections**, choose **Pair a device…** in the
+machine's **⋯** menu, and scan the QR code with the mobile app. The link works once, for a few
+minutes, and uses the machine's Tailscale HTTPS address when it has one, otherwise its tailnet or
+local network address, so the phone must be able to reach that address. The item appears only for
+a connected machine that reports its own addresses and when your connection may manage its access.
+
 ## Actions a connection can't run are hidden
 
 A connection paired with limited access, for example without operate or provider management

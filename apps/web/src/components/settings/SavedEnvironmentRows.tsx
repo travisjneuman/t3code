@@ -8,6 +8,7 @@ import {
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
+  AuthAccessWriteScope, // Fork add-on: pair remote devices.
   AuthRelayWriteScope,
   type EnvironmentId,
   connectReachabilityHelpUrl,
@@ -47,6 +48,10 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "..
 } from "~/host-release/hostRelease"; // Fork add-on: host releases.
 import { hostRowSubtitle, hostRowTooltipFacts } from "~/host-release/hostRowFacts"; // Fork add-on: row facts.
 import { HostBackupsDialog } from "~/host-release/HostBackupsDialog"; // Fork add-on: host backups.
+/* Fork add-on */ import {
+  RemotePairingDialog, // Fork add-on: pair remote devices.
+  pairingEndpointUrl, // Fork add-on: pair remote devices.
+} from "~/remote-pairing/RemotePairingDialog"; // Fork add-on: pair remote devices.
 import {
   resolveServerSelfUpdateCapability,
   supportsDesktopAppUpdate,
@@ -180,6 +185,8 @@ export function SavedBackendListRow({
   const releaseCheck = useHostReleaseCheck(); // Fork add-on: row facts.
   const hostEnvironment = environment.serverConfig?.environment; // Fork add-on: row facts.
   const [backupsOpen, setBackupsOpen] = useState(false); // Fork add-on: host backups.
+  const [pairingOpen, setPairingOpen] = useState(false); // Fork add-on: pair remote devices.
+  const pairingEndpoint = pairingEndpointUrl(environment.serverConfig?.directEndpoints); // Fork add-on: pair remote devices.
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -263,7 +270,8 @@ export function SavedBackendListRow({
               "me-0.5 size-1.5 shrink-0 rounded-full", // Fork add-on
               resumingServerUpdate ? "bg-info" : status.dotClassName, // Fork add-on
             )} // Fork add-on
-          />{" " /* Fork add-on */}
+          />
+          {" " /* Fork add-on */}
           <Tooltip>
             {/* The status can change while the tooltip is open, and base-ui only
                 re-measures the popup when the trigger's payload changes. */}
@@ -448,6 +456,11 @@ export function SavedBackendListRow({
           {isConnected && hostEnvironment?.capabilities.hostBackups === true ? ( // Fork add-on: host backups.
             <MenuItem onClick={() => setBackupsOpen(true)}>Backups…</MenuItem> // Fork add-on
           ) : /* Fork add-on */ null}
+          {isConnected && // Fork add-on: pair remote devices.
+          pairingEndpoint !== null && // Fork add-on
+          readEnvironmentScope(environmentId, AuthAccessWriteScope) ? ( // Fork add-on
+            <MenuItem onClick={() => setPairingOpen(true)}>Pair a device…</MenuItem> // Fork add-on
+          ) : /* Fork add-on */ null}
           <MenuSeparator />
           <MenuItem variant="destructive" onClick={() => onRemove(environment)}>
             {isRemoving ? "Removing…" : "Remove from this device…"}
@@ -459,6 +472,14 @@ export function SavedBackendListRow({
           environmentId={environmentId} // Fork add-on
           serverLabel={environment.label} // Fork add-on
           onClose={() => setBackupsOpen(false)} // Fork add-on
+        /> // Fork add-on
+      ) : /* Fork add-on */ null}
+      {pairingOpen && pairingEndpoint !== null ? ( // Fork add-on: pair remote devices.
+        <RemotePairingDialog // Fork add-on
+          environmentId={environmentId} // Fork add-on
+          serverLabel={environment.label} // Fork add-on
+          endpointUrl={pairingEndpoint} // Fork add-on
+          onClose={() => setPairingOpen(false)} // Fork add-on
         /> // Fork add-on
       ) : /* Fork add-on */ null}
     </EnvironmentRow>
