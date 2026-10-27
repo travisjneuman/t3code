@@ -1,5 +1,6 @@
 import type { ModelPreferences } from "@t3tools/contracts/settings";
 import {
+  agentSettingsPatchReplacements, // Fork add-on: agent instructions.
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_TEXT_GENERATION_MODEL,
   DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
@@ -600,6 +601,7 @@ export function applyServerSettingsPatch(
     ...(patch.reviewGuideModelSelection !== undefined
       ? { reviewGuideModelSelection: patch.reviewGuideModelSelection }
       : {}),
+    ...agentSettingsPatchReplacements(current, patch), // Fork add-on: agent instructions.
     ...(automaticGitFetchInterval !== undefined ? { automaticGitFetchInterval } : {}),
     ...(providerHealthRefreshInterval !== undefined ? { providerHealthRefreshInterval } : {}),
   };

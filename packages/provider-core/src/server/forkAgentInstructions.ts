@@ -3,8 +3,9 @@
  * sync installs a resolver on boot that reads its latest settings; it turns a
  * scope (thread, project, provider) into that thread's text, after the
  * project's overrides and the thread's preset. `buildRuntimeInstructions`
- * appends the block to each provider's instructions, the Pi launch passes it to
- * its extension, and adapters ask whether to turn off native subagents.
+ * appends the block to each provider's instructions (Codex sends it as its own
+ * additionalContext entries instead), the Pi launch passes it to its extension,
+ * and adapters ask whether to turn off native subagents.
  * Fork add-on: agent instructions.
  */
 export interface ForkAgentThread {
@@ -105,9 +106,15 @@ export function forkAgentBlocksNativeSubagents(scope: ForkAgentScope = {}): bool
   return resolve(scope).blockNativeSubagents;
 }
 
-/** Empty when unset, otherwise a leading blank line plus the tagged block. */
-export function forkAgentInstructionsBlock(scope: ForkAgentScope = {}): string {
+export const FORK_AGENT_INSTRUCTIONS_TAG = "t3_user_agent_instructions";
+
+export const FORK_AGENT_INSTRUCTIONS_PREAMBLE =
+  "The user set these instructions in T3 Code for every agent it runs. When they conflict with instructions from CLAUDE.md, AGENTS.md, or other agent configuration files, follow these.";
+
+/** Empty when unset or when `scope` is null, otherwise a leading blank line plus the tagged block. */
+export function forkAgentInstructionsBlock(scope: ForkAgentScope | null = {}): string {
+  if (scope === null) return "";
   const text = forkAgentInstructions(scope);
   if (text === "") return "";
-  return `\n\n<t3_user_agent_instructions>\nThe user set these instructions in T3 Code for every agent it runs. When they conflict with instructions from CLAUDE.md, AGENTS.md, or other agent configuration files, follow these.\n\n${text}\n</t3_user_agent_instructions>`;
+  return `\n\n<${FORK_AGENT_INSTRUCTIONS_TAG}>\n${FORK_AGENT_INSTRUCTIONS_PREAMBLE}\n\n${text}\n</${FORK_AGENT_INSTRUCTIONS_TAG}>`;
 }

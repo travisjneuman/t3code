@@ -9,6 +9,7 @@ import * as NetAddress from "effect/net/NetAddress";
 
 import * as ServerConfig from "./config.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import { isVpnTunnelEntry } from "./environment/vpnTunnelInterfaces.ts"; // Fork add-on: VPN tunnels never advertised as LAN.
 
 export interface HeadlessServeAccessInfo {
   readonly connectionString: string;
@@ -45,7 +46,7 @@ export const formatHostForUrl = (host: string): string =>
  * it stays listed.
  */
 export const VIRTUAL_INTERFACE =
-  /^(docker|br-|veth|virbr|vmnet|vboxnet|vEthernet|podman|cni|flannel|cali|lxcbr|lxdbr|bridge[1-9]\d\d)/;
+  /^(docker|br-|veth|virbr|vmnet|vboxnet|vEthernet \((?:WSL|Default Switch)|podman|cni|flannel|cali|lxcbr|lxdbr|bridge[1-9]\d\d)/; // Fork add-on: a Hyper-V external switch carries the LAN.
 
 /**
  * Loopback or private-range IPv4 (LAN, tailnet, CGNAT), not link-local, in
@@ -102,6 +103,7 @@ const resolveHeadlessConnectionHost = (
     (entry) =>
       !entry.internal &&
       isIpv4Family(entry.family) &&
+      !(privateNetworkOnly && isVpnTunnelEntry(entry)) && // Fork add-on: VPN tunnels never advertised as LAN.
       (!privateNetworkOnly || isPrivateNetworkAddress(entry.address)),
   );
   // A tailnet or other CGNAT address reaches fewer devices than the LAN one.

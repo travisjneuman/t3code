@@ -10,7 +10,7 @@ export function buildRuntimeInstructions(runtime: {
   readonly model?: string | undefined;
   readonly modelName?: string | undefined;
   readonly reasoningEffort?: string | undefined;
-  readonly agentScope?: ForkAgentScope | undefined; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope | null | undefined; // Fork add-on: agent instructions; null leaves the block out.
 }): string {
   const harness = toSingleLine(runtime.harness);
   const model = toSingleLine(runtime.model ?? "");

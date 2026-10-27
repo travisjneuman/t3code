@@ -15,6 +15,9 @@ import {
   type AgentReviewRounds,
   type AgentVerification,
   type AgentWorkerWorkspace,
+  agentPresetForThread,
+  agentPresetOverriddenKeys,
+  AGENT_PROJECT_SCOPED_SETTING_KEYS,
   DEFAULT_AGENT_DELEGATION_DEPTH,
   DEFAULT_AGENT_PARALLEL_WORKERS,
   MAX_AGENT_DELEGATION_DEPTH,
@@ -51,6 +54,28 @@ import { ChoiceSelect } from "./ChoiceSelect";
 import { ParallelWorkersControl } from "./ParallelWorkersControl";
 import { ProviderInstructionsControl } from "./ProviderInstructionsControl";
 import { WorkerModelControl } from "./WorkerModelControl";
+
+const SETTING_LABELS: Record<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number], string> = {
+  agentDelegationMode: "Delegation",
+  agentWorkerModelSelection: "Worker model",
+  agentWorkerModelSelectionFixed: "Fixed worker targets",
+  agentReviewWorkerModelSelection: "Review worker model",
+  agentResearchWorkerModelSelection: "Research worker model",
+  agentMaxParallelWorkers: "Parallel workers",
+  agentMaxDelegationDepth: "Delegation depth",
+  agentReadOnlyReviewers: "Read-only reviewers",
+  agentReviewRounds: "Review rounds",
+  agentOrchestratorOwnsGit: "Orchestrator handles git",
+  agentVerification: "Verification",
+  agentPushPolicy: "Commit and push",
+  agentWorkerWorkspace: "Worker workspace",
+  agentWorkerTimeLimitMinutes: "Worker time limit",
+  agentBlockNativeSubagents: "Block native subagents",
+  agentAutonomy: "Autonomy",
+  agentReportStyle: "Report style",
+  agentInstructions: "Additional instructions",
+  agentProviderInstructions: "Provider instructions",
+};
 
 const DELEGATION_OPTIONS: ReadonlyArray<readonly [AgentDelegationMode, string]> = [
   ["off", "Off"],
@@ -179,12 +204,27 @@ export function AgentInstructionsSettingsSection() {
     settings.agentWorkerModelSelection ?? settings.defaultModelSelection,
   );
   const modelControl = { providers, entries, modelDisabledReason };
+  const defaultPreset = agentPresetForThread(settings, []);
+  const defaultOverrides =
+    defaultPreset === undefined ? [] : agentPresetOverriddenKeys(defaultPreset, settings);
 
   return (
     <SettingsSection id="agents" title="Agents">
       <SettingsRow
         {...searchableSetting("agent-presets")}
-        description="Apply a named set of the values below to the scope picked above, or save the current values as one. Pick a preset for one thread from the composer."
+        description={
+          <>
+            Apply a named set of the values below to the scope picked above, or save the current
+            values as one. Pick a preset for one thread from the composer. Running Claude and Pi
+            sessions, and Block native subagents, pick up changes when a session starts.
+            {defaultOverrides.length > 0 ? (
+              <span className="mt-1 block text-warning-foreground">
+                Threads without a preset choice run under the default preset, {defaultPreset?.name},
+                which replaces: {defaultOverrides.map((key) => SETTING_LABELS[key]).join(", ")}.
+              </span>
+            ) : null}
+          </>
+        }
         control={<AgentPresetsControl />}
       />
 
@@ -247,9 +287,7 @@ export function AgentInstructionsSettingsSection() {
             control={
               <Switch
                 mixed={mixedFixedWorkerTargets}
-                checked={
-                  mixedFixedWorkerTargets ? false : settings.agentWorkerModelSelectionFixed
-                }
+                checked={mixedFixedWorkerTargets ? false : settings.agentWorkerModelSelectionFixed}
                 onCheckedChange={(checked) =>
                   updateSettings({ agentWorkerModelSelectionFixed: Boolean(checked) })
                 }

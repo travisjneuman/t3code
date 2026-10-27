@@ -3175,9 +3175,6 @@ export const OrchestrationV2Command = Schema.Union([
     workspaceStrategy: Schema.optional(OrchestrationV2ThreadLaunchWorkspaceStrategy),
     // Defaults to settled_only; fire-and-forget wakes require always.
     completionWake: Schema.optional(Schema.Literals(["always", "settled_only"])),
-    workerWorkspace: /* Fork add-on */ Schema.optional(
-      Schema.Struct({ branch: TrimmedNonEmptyString, worktreePath: TrimmedNonEmptyString }), // Fork add-on
-    ), // Fork add-on: agent instructions.
     createdAt: Schema.optional(Schema.DateTimeUtc),
   }),
   Schema.Struct({

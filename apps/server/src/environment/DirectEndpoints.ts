@@ -24,6 +24,7 @@ import {
   isWildcardHost,
   VIRTUAL_INTERFACE,
 } from "../startupAccess.ts";
+import { isVpnTunnelEntry } from "./vpnTunnelInterfaces.ts"; // Fork add-on: VPN tunnels never advertised as LAN.
 
 type NetworkInterfacesMap = ReturnType<typeof NodeOS.networkInterfaces>;
 
@@ -69,6 +70,7 @@ export function resolveBoundEndpoints(input: {
           (entry) =>
             !entry.internal && entry.family === "IPv4" && isAdvertisableAddress(entry.address),
         )
+        .filter((entry) => !isVpnTunnelEntry(entry)) // Fork add-on: VPN tunnels never advertised as LAN.
         .map((entry) => entry.address)
     : [input.host!].filter(isAdvertisableAddress);
   return [...new Set(addresses)]

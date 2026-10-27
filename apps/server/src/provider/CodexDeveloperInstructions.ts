@@ -7,6 +7,8 @@ import {
   T3_CODE_ORCHESTRATION_SECTIONS,
 } from "@t3tools/provider-core/server/orchestrationInstructions";
 
+import { codexForkAgentContext } from "./codexForkAgentContext.ts"; // Fork add-on: agent instructions.
+
 /** Codex silently truncates additionalContext values over 1,000 tokens, counted as UTF-8 bytes / 4. */
 export const CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES = 4_000;
 
@@ -58,8 +60,9 @@ export function buildCodexAdditionalContext(
     ),
     t3_code_runtime: {
       kind: "application",
-      value: buildRuntimeInstructions({ harness: "Codex", ...runtime }),
+      value: buildRuntimeInstructions({ harness: "Codex", ...runtime, agentScope: null }), // Fork add-on: agent instructions get their own entries.
     },
     ...(tools ? { t3_code_tools: { kind: "application", value: tools } } : {}),
+    ...codexForkAgentContext(runtime.agentScope, CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES), // Fork add-on: agent instructions.
   };
 }

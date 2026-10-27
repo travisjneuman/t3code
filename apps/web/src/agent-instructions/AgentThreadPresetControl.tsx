@@ -1,8 +1,8 @@
 /**
  * The composer's Agents preset picker: runs this thread (and the workers it
  * starts) under a preset instead of the project's Agents settings. A thread
- * without a choice shows the default preset. Icon-only while the thread uses
- * the project's settings.
+ * without a choice shows its parent's or root's, else the default preset.
+ * Icon-only while the thread uses the project's settings.
  * Fork add-on: agent instructions.
  */
 import {
@@ -11,7 +11,9 @@ import {
   agentPresetForThread,
   agentPresetList,
   type EnvironmentId,
+  type ThreadId,
 } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { UsersIcon } from "lucide-react";
 import { memo } from "react";
 
@@ -27,10 +29,11 @@ import { MenuRadioGroup, MenuRadioItem, MenuSeparator as MenuDivider } from "../
 import { Select, SelectItem, SelectPopup } from "../components/ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../hooks/useSettings";
+import { useQuietThreadShell } from "../state/entities";
 
 interface ThreadPresetProps {
   readonly environmentId: EnvironmentId;
-  readonly threadId: string;
+  readonly threadId: ThreadId;
 }
 
 /** The presets, the thread's current one, a setter, and item labels that mark the default. */
@@ -38,7 +41,13 @@ function useThreadPreset({ environmentId, threadId }: ThreadPresetProps) {
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const presets = agentPresetList(settings);
-  const preset = agentPresetForThread(settings, [threadId]);
+  // The server walks every ancestor; the parent and root cover the usual depths.
+  const lineage = useQuietThreadShell(scopeThreadRef(environmentId, threadId))?.lineage;
+  const preset = agentPresetForThread(settings, [
+    threadId,
+    lineage?.parentThreadId ?? undefined,
+    lineage?.rootThreadId ?? undefined,
+  ]);
   // Project settings is stored as a choice of its own so the default preset doesn't apply.
   const setPreset = (value: string | null) =>
     updateSettings({ agentThreadPresets: { [threadId]: value || AGENT_PROJECT_PRESET_ID } });

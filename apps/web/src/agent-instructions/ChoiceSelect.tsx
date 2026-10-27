@@ -1,6 +1,6 @@
 /**
  * A small Select for the Agents rows that pick one of a few labeled values.
- * A null value shows "Mixed" across scope targets.
+ * A null value shows "Mixed" across scope targets, or `emptyLabel`.
  * Fork add-on: agent instructions.
  */
 import {
@@ -15,11 +15,13 @@ export function ChoiceSelect<T extends string>({
   value,
   options,
   ariaLabel,
+  emptyLabel = "Mixed",
   onChange,
 }: {
   readonly value: T | null;
   readonly options: ReadonlyArray<readonly [value: T, label: string]>;
   readonly ariaLabel: string;
+  readonly emptyLabel?: string;
   readonly onChange: (value: T) => void;
 }) {
   const labelOf = (candidate: string | null) =>
@@ -33,7 +35,7 @@ export function ChoiceSelect<T extends string>({
       }}
     >
       <SelectTrigger size="sm" aria-label={ariaLabel}>
-        <SelectValue>{(current: string | null) => labelOf(current) ?? "Mixed"}</SelectValue>
+        <SelectValue>{(current: string | null) => labelOf(current) ?? emptyLabel}</SelectValue>
       </SelectTrigger>
       <SelectPopup align="end" alignItemWithTrigger={false}>
         {options.map(([option, label]) => (

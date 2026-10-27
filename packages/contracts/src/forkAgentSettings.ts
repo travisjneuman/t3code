@@ -43,7 +43,7 @@ const PersistedParallelWorkers = Schema.NullOr(AgentMaxParallelWorkers).pipe(
 
 export const MIN_AGENT_DELEGATION_DEPTH = 1;
 export const MAX_AGENT_DELEGATION_DEPTH = 6;
-export const DEFAULT_AGENT_DELEGATION_DEPTH = 2;
+export const DEFAULT_AGENT_DELEGATION_DEPTH = 1;
 /**
  * Levels of workers below the thread's agent. Its workers are level 1; at
  * depth 1 they cannot delegate, at depth 2 they may start workers that cannot.
@@ -189,8 +189,8 @@ export const AGENT_PROJECT_PRESET_ID = "project";
  * Environment-only Agents settings: saved presets, the preset each thread
  * runs under keyed by thread id, and the preset a thread without a choice runs
  * under. A thread entry of `AGENT_PROJECT_PRESET_ID` means the project's
- * settings; an empty string means no choice (records merge on save, so a key
- * is cleared that way). An empty default means the project's settings.
+ * settings. A patch clears a thread's choice with an empty string, and the
+ * entry is dropped. An empty default means the project's settings.
  */
 export const AgentEnvironmentSettingsFields = {
   agentPresets: Schema.Array(AgentPreset).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -248,6 +248,79 @@ export const AGENT_NULLABLE_PROJECT_SETTING_KEYS = [
 export const AgentSettings = Schema.Struct(AgentSettingsFields);
 export type AgentSettings = typeof AgentSettings.Type;
 
+/** Every Agents value at its default. */
+export const AGENT_SETTING_DEFAULTS: AgentSettings = Schema.decodeSync(AgentSettings)({});
+
+export const AGENT_MODEL_SELECTION_KEYS = [
+  "agentWorkerModelSelection",
+  "agentReviewWorkerModelSelection",
+  "agentResearchWorkerModelSelection",
+] as const satisfies ReadonlyArray<keyof typeof AgentSettingsFields>;
+
+export function isAgentModelSelectionKey(key: string): boolean {
+  return (AGENT_MODEL_SELECTION_KEYS as ReadonlyArray<string>).includes(key);
+}
+
+/**
+ * What a settings patch replaces instead of deep-merging: worker model
+ * selections whole, so a new model doesn't keep the previous one's options,
+ * and the thread preset choices without the cleared (empty) ones.
+ */
+export function agentSettingsPatchReplacements(
+  current: Pick<AgentEnvironmentSettings, "agentThreadPresets">,
+  patch: Partial<Pick<AgentSettings, (typeof AGENT_MODEL_SELECTION_KEYS)[number]>> & {
+    readonly agentThreadPresets?: Readonly<Record<string, string>>;
+  },
+): Partial<
+  Pick<AgentSettings, (typeof AGENT_MODEL_SELECTION_KEYS)[number]> &
+    Pick<AgentEnvironmentSettings, "agentThreadPresets">
+> {
+  return {
+    ...Object.fromEntries(
+      AGENT_MODEL_SELECTION_KEYS.filter((key) => patch[key] !== undefined).map((key) => [
+        key,
+        patch[key],
+      ]),
+    ),
+    ...(patch.agentThreadPresets === undefined
+      ? {}
+      : {
+          agentThreadPresets: Object.fromEntries(
+            Object.entries({ ...current.agentThreadPresets, ...patch.agentThreadPresets }).filter(
+              ([, presetId]) => presetId !== "",
+            ),
+          ),
+        }),
+  };
+}
+
+const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** The values in `settings` that differ from `base`, as a preset stores them. */
+export function agentSettingsDifferences(
+  settings: Pick<AgentSettings, (typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]>,
+  base: Pick<
+    AgentSettings,
+    (typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]
+  > = AGENT_SETTING_DEFAULTS,
+): AgentPreset["settings"] {
+  return Object.fromEntries(
+    AGENT_PROJECT_SCOPED_SETTING_KEYS.filter((key) => !sameValue(settings[key], base[key])).map(
+      (key) => [key, settings[key]],
+    ),
+  );
+}
+
+/** The keys a preset sets to a value other than the one `settings` already has. */
+export function agentPresetOverriddenKeys(
+  preset: AgentPreset,
+  settings: Pick<AgentSettings, (typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]>,
+): ReadonlyArray<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]> {
+  return AGENT_PROJECT_SCOPED_SETTING_KEYS.filter(
+    (key) => key in preset.settings && !sameValue(preset.settings[key], settings[key]),
+  );
+}
+
 export const AgentEnvironmentSettings = Schema.Struct(AgentEnvironmentSettingsFields);
 export type AgentEnvironmentSettings = typeof AgentEnvironmentSettings.Type;
 
@@ -295,7 +368,9 @@ export function agentPresetForThread(
     const presetId = threadId === undefined ? undefined : settings.agentThreadPresets[threadId];
     if (presetId === undefined || presetId === "") continue;
     if (presetId === AGENT_PROJECT_PRESET_ID) return undefined;
-    return presets.find((preset) => preset.id === presetId);
+    // A choice of a deleted preset counts as no choice.
+    const chosen = presets.find((preset) => preset.id === presetId);
+    if (chosen !== undefined) return chosen;
   }
   return presets.find((preset) => preset.id === settings.agentDefaultPresetId);
 }
@@ -363,8 +438,10 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
   return [
     settings.agentDelegationMode === "always"
       ? "- You orchestrate: plan, brief workers, review their results, and integrate. Hand all implementation, research, and review work to workers; do only small fixes yourself."
-      : "- Delegate work that splits into independent pieces; do small or sequential work yourself. Review every worker's result.",
-    "- Delegate with the t3-code delegate_task tool, not native subagents.",
+      : "- Delegate work that splits into independent pieces, with native subagents or delegate_task as T3's subagent rules say; do small or sequential work yourself. Review every worker's result.",
+    settings.agentDelegationMode === "always"
+      ? "- Delegate with the t3-code delegate_task tool, not native subagents. This replaces T3's native-first subagent rule in this thread."
+      : null,
     settings.agentWorkerModelSelection === null
       ? settings.agentWorkerModelSelectionFixed
         ? "- No general worker target is configured. Fixed mode refuses delegation for roles without a role-specific target."
@@ -397,7 +474,7 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
       ? null
       : `- T3 stops a worker that runs longer than ${settings.agentWorkerTimeLimitMinutes} ${settings.agentWorkerTimeLimitMinutes === 1 ? "minute" : "minutes"}; size each task to finish well inside that.`,
     worktrees
-      ? "- Each worker gets its own git worktree and branch, made from your current commit. Uncommitted changes are not in it, so commit what workers need first. Workers commit only to their own branch and never push; merge their branches when you review them."
+      ? '- delegate_task defaults to isolation "worktree" here: each worker gets its own git worktree and branch, made from your current commit. Uncommitted changes are not in it, so commit what workers need first. Workers commit only to their own branch and never push; merge their branches when you review them.'
       : "- Workers share one checkout: give every brief non-overlapping file ownership.",
     !ownsGit || worktrees
       ? null
@@ -405,7 +482,7 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
         ? "- Workers never commit or push."
         : "- You handle git and publishing; workers never commit or push.",
     settings.agentMaxDelegationDepth === 1
-      ? "- If your task came from delegate_task, do it yourself and never delegate."
+      ? null
       : `- If your task came from delegate_task, you may delegate pieces that clearly split off, under these same rules, up to ${settings.agentMaxDelegationDepth} levels of workers in all. The top of your task says whether you may.`,
   ];
 }

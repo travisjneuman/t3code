@@ -6,6 +6,8 @@
  */
 import {
   AGENT_PROJECT_SCOPED_SETTING_KEYS,
+  agentPresetForThread,
+  applyAgentThreadPreset,
   buildAgentInstructionsText,
   PROVIDER_DISPLAY_NAMES,
 } from "@t3tools/contracts";
@@ -26,7 +28,9 @@ import {
 } from "../components/ui/dialog";
 
 export function AgentInstructionsPreview() {
-  const settings = useScopedSettings();
+  // A thread without a preset choice runs under the default preset, so show that.
+  const settings = applyAgentThreadPreset(useScopedSettings(), []);
+  const defaultPreset = agentPresetForThread(settings, []);
   const mixed = useScopedSettingsMixed(AGENT_PROJECT_SCOPED_SETTING_KEYS);
   const text = buildAgentInstructionsText(settings);
   const providerTexts = Object.entries(settings.agentProviderInstructions).filter(
@@ -44,7 +48,10 @@ export function AgentInstructionsPreview() {
               ? "The selected targets differ; this is the first one. "
               : "For the scope picked above. "}
             Read-only review and research workers also get a read-only line at the top of their
-            task. A thread running under a preset gets that preset's values instead.
+            task.{" "}
+            {defaultPreset
+              ? `This includes the default preset, ${defaultPreset.name}, which threads without a preset choice run under. A thread that picks another preset gets its values instead.`
+              : "A thread running under a preset gets that preset's values instead."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">

@@ -2,10 +2,10 @@
  * What the Agents settings enforce on `delegate_task`, beyond the instructions
  * agents read: the worker target for the task's role when the agent leaves it
  * out, the read-only line for review and research workers, the parallel worker
- * limit across every level, the delegation depth, a git worktree per worker,
- * and the worker time limit. Applies only while the parent's Delegation setting (after
- * project overrides and the thread's preset) is not Off, so Off keeps upstream
- * behavior.
+ * limit across every level, the delegation depth, upstream's worktree isolation
+ * as the default for workers, and the worker time limit. Applies only while the
+ * parent's Delegation setting (after project overrides and the thread's preset)
+ * is not Off, so Off keeps upstream behavior.
  * Fork add-on: agent instructions; see docs/user/agent-instructions.md.
  */
 import {
@@ -24,15 +24,10 @@ import {
   type ServerProvider,
   type ThreadId,
 } from "@t3tools/contracts";
-import { WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
-import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 
-import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { resolveThreadAgentSettings } from "./AgentInstructionsSync.ts";
 
@@ -110,6 +105,9 @@ function fixedTargetFailure(role: string | undefined, configured: boolean): Orch
   });
 }
 
+const WORKTREE_WORKER_LINE =
+  "You work in your own git worktree and branch, made from the orchestrator's current commit. Commit your work to this branch; do not push or switch branches.";
+
 /** The line T3 puts at the top of a worker's task about delegating further. */
 export function workerDepthLine(settings: AgentSettings, workerDepth: number): string {
   const remaining = settings.agentMaxDelegationDepth - workerDepth;
@@ -119,9 +117,9 @@ export function workerDepthLine(settings: AgentSettings, workerDepth: number): s
 }
 
 /**
- * The target and task `delegate_task` dispatches. A retry of an accepted
- * delegation (`isRetry`) skips the limits: its dispatch only replays the
- * recorded result.
+ * The target, task and isolation `delegate_task` dispatches. A retry of an
+ * accepted delegation (`isRetry`) skips the limits: its dispatch only replays
+ * the recorded result.
  */
 export function applyDelegationPolicy(input: {
   readonly settings: AgentSettings;
@@ -131,12 +129,16 @@ export function applyDelegationPolicy(input: {
   readonly request: OrchestratorMcpDelegateTaskInput;
   readonly isRetry: boolean;
 }): Effect.Effect<
-  Pick<OrchestratorMcpDelegateTaskInput, "target" | "task">,
+  Pick<OrchestratorMcpDelegateTaskInput, "target" | "task" | "isolation">,
   OrchestratorMcpFailure
 > {
   const { settings, parent, level, request } = input;
   if (settings.agentDelegationMode === "off") {
-    return Effect.succeed({ target: request.target, task: request.task });
+    return Effect.succeed({
+      target: request.target,
+      task: request.task,
+      isolation: request.isolation,
+    });
   }
   const workerDepth = level.depth + 1;
   if (!input.isRetry) {
@@ -195,10 +197,16 @@ export function applyDelegationPolicy(input: {
             ...(options === undefined ? {} : { options }),
           };
   }
+  // An explicit isolation, "shared" included, wins over the Worker workspace setting.
+  const isolation =
+    request.isolation ?? (settings.agentWorkerWorkspace === "worktree" ? "worktree" : undefined);
+  const readOnly = agentWorkerIsReadOnly(settings, request.role);
   return Effect.succeed({
     target,
+    isolation,
     task: [
-      agentWorkerIsReadOnly(settings, request.role) ? AGENT_READ_ONLY_WORKER_LINE : null,
+      isolation === "worktree" && !readOnly ? WORKTREE_WORKER_LINE : null,
+      readOnly ? AGENT_READ_ONLY_WORKER_LINE : null,
       workerDepthLine(settings, workerDepth),
       request.task,
     ]
@@ -212,19 +220,10 @@ type DelegationParent = Pick<OrchestrationV2ThreadProjection, "thread" | "subage
 /** The checked request plus what the later steps need. */
 export interface PreparedDelegation extends Pick<
   OrchestratorMcpDelegateTaskInput,
-  "target" | "task"
+  "target" | "task" | "isolation"
 > {
   readonly settings: AgentSettings;
   readonly isRetry: boolean;
-}
-
-/** A worker's own worktree, or nothing for a shared checkout. */
-export interface WorkerWorkspace {
-  readonly task: string;
-  /** Spread into the `delegated_task.request` command. */
-  readonly command: { readonly workerWorkspace?: { branch: string; worktreePath: string } };
-  /** Removes the worktree when the dispatch fails. */
-  readonly discard: Effect.Effect<void>;
 }
 
 const orchestrationFailure = (message: string) =>
@@ -232,10 +231,7 @@ const orchestrationFailure = (message: string) =>
 
 export const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
-  const projects = yield* ProjectService.ProjectService;
-  const git = yield* GitWorkflow.GitWorkflowService;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
-  const crypto = yield* Crypto.Crypto;
 
   const readThread = (threadId: ThreadId) =>
     threadManagement
@@ -314,62 +310,6 @@ export const make = Effect.gen(function* () {
     });
 
   /**
-   * Runs just before the dispatch. With Worker workspace set to Worktree, makes
-   * a worktree and branch from the parent checkout's HEAD for the worker.
-   */
-  const provisionWorkspace = (
-    prepared: PreparedDelegation,
-    parent: DelegationParent,
-  ): Effect.Effect<WorkerWorkspace, OrchestratorMcpFailure> =>
-    Effect.gen(function* () {
-      const shared: WorkerWorkspace = { task: prepared.task, command: {}, discard: Effect.void };
-      if (
-        prepared.isRetry ||
-        prepared.settings.agentDelegationMode === "off" ||
-        prepared.settings.agentWorkerWorkspace !== "worktree"
-      ) {
-        return shared;
-      }
-      const project = yield* projects.getById(parent.thread.projectId).pipe(
-        Effect.mapError(() => orchestrationFailure("Unable to read the thread's project.")),
-        Effect.flatMap(
-          Option.match({
-            onNone: () => Effect.fail(orchestrationFailure("The thread's project was not found.")),
-            onSome: Effect.succeed,
-          }),
-        ),
-      );
-      const cwd = parent.thread.worktreePath ?? project.workspaceRoot;
-      const uuid = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
-      const created = yield* git
-        .createWorktree({
-          cwd,
-          refName: "HEAD",
-          newRefName: `${WORKTREE_BRANCH_PREFIX}/worker-${uuid.replaceAll("-", "").slice(0, 8)}`,
-          path: null,
-        })
-        .pipe(
-          Effect.mapError((error) =>
-            orchestrationFailure(
-              `Unable to create the worker's worktree (Settings, Agents, Worker workspace): ${error.message}`,
-            ),
-          ),
-        );
-      const { path: worktreePath, refName: branch } = created.worktree;
-      return {
-        task: `You work in your own git worktree on branch ${branch}, made from the orchestrator's current commit. Commit your work to this branch; do not push or switch branches.\n\n${prepared.task}`,
-        command: { workerWorkspace: { branch, worktreePath } },
-        discard: git
-          .removeWorktree({ cwd, path: worktreePath, force: true })
-          .pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("agent-instructions.worker-worktree.discard-failed", { cause }),
-            ),
-          ),
-      };
-    });
-
-  /**
    * With a Worker time limit, stops the worker's thread once it has run that
    * long. The timer lives in this server process, so a restart drops it.
    */
@@ -419,5 +359,5 @@ export const make = Effect.gen(function* () {
     );
   };
 
-  return { prepare, provisionWorkspace, startTimeLimit } as const;
+  return { prepare, startTimeLimit } as const;
 });

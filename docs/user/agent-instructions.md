@@ -13,21 +13,25 @@ provider-specific text.
 - **Presets**: pick a preset and click **Apply** to copy its values into the scope you picked.
   **Solo** turns delegation off, **Orchestrator** always delegates and runs one review round, and
   **Review-heavy** delegates when useful, reviews until clean, and keeps reviewers read-only. The
-  built-ins change only those rows. **Save current** saves every Agents value for the picked scope
-  under a name. Saved presets and the default are kept per server: saving, renaming, deleting or
-  changing the default copies your saved presets and the default to every connected server the
-  scope picker covers, so a thread on any of them can use them. With a preset you saved selected,
-  it offers that name, so saving
-  replaces it; built-in presets can't be replaced. **Rename** renames a preset you saved; threads
-  using it keep it. **Delete** removes a preset you saved. The row keeps showing the preset you last
-  applied, saved or picked. **Set default** makes the selected preset, built-in or saved, the one
-  every thread on those servers runs under until you pick another for it in the composer; the
-  preset list marks it **(default)**, and **Clear default** goes back to the project's settings.
+  built-ins change only those rows. **Save current** saves, under a name, the Agents values for the
+  picked scope that differ from the defaults; applying it later changes only those rows and leaves
+  the rest. Saving or renaming copies that one preset to every connected server the scope picker
+  covers, so a thread on any of them can use it; each server keeps its other presets. With a preset
+  you saved selected, it offers that name, so saving replaces it; built-in presets can't be
+  replaced. **Rename** renames a preset you saved; threads using it keep it. **Delete** removes a
+  preset you saved from those servers, and threads that picked it go back to the default. The row
+  keeps showing the preset you last applied, saved or picked, marked **(edited)** once a value no
+  longer matches it, and shows **Custom** when no preset is selected or matches. **Set default**
+  makes the selected preset, built-in or saved, the one every thread on the shown server runs under
+  until you pick another for it in the composer; the preset list marks it **(default)**, and
+  **Clear default** goes back to the project's settings. While a default preset changes any row,
+  the Presets row names it and lists the rows it replaces, and **Preview** includes it.
 
 - **Delegation**: **When useful**, the default, has the thread's agent hand independent pieces of
-  work to workers through the `delegate_task` tool and do small or sequential work itself.
-  **Always** keeps the thread's agent to planning, review, and integration, and hands the rest to
-  workers. **Off** adds no delegation rules and T3 enforces nothing.
+  work to workers and do small or sequential work itself. It uses its own native subagents or the
+  `delegate_task` tool as T3's built-in rules say. **Always** keeps the thread's agent to planning,
+  review, and integration, and hands the rest to workers through `delegate_task` instead of native
+  subagents. **Off** adds no delegation rules and T3 enforces nothing.
 
 These rows show while Delegation is on:
 
@@ -50,14 +54,15 @@ These rows show while Delegation is on:
   with workers running is told to wait for one to finish, and one without is told to do that piece
   itself.
 - **Delegation depth**: how many levels of workers there can be. The thread's agent's workers are
-  level 1. At depth 1 they can't delegate; at the default of 2 they may start workers of their own,
+  level 1. At the default of 1 they can't delegate; at 2 they may start workers of their own,
   which can't go further. Workers decide for themselves whether to delegate, and the top of each
   worker's task says how many levels it has left. T3 refuses a delegation deeper than this.
 - **Worker workspace**: **Shared checkout** runs workers in the agent's own checkout, and the
-  agent gives each one separate files. **Worktree per worker** gives each new worker its own git worktree on a new
-  `t3/worker-…` branch made from the agent's current commit. Uncommitted changes aren't in it, so
-  the agent is told to commit what workers need first, and to merge their branches when it reviews
-  them. Workers commit only to their own branch and never push.
+  agent gives each one separate files. **Worktree per worker** makes workers use T3's own worktree
+  isolation unless the agent asks for a shared checkout: each new worker gets its own git worktree
+  and branch made from the agent's current commit, named like other new worktrees. Uncommitted
+  changes aren't in it, so the agent is told to commit what workers need first, and to merge their
+  branches when it reviews them. Workers commit only to their own branch and never push.
 - **Worker time limit**: T3 stops a worker that's still running after this long, and the agent
   sees it as stopped. Limits are kept in memory, so restarting T3 Code forgets the limits of
   workers already running.
@@ -115,7 +120,8 @@ applies. In a narrow composer it's in the **…** menu.
 Codex, Grok, Cursor, Muse, and OpenCode receive the current instructions with every turn, so a
 change applies from the next message. Claude and Pi get them when their session starts, so a Claude
 or Pi thread that is already running keeps what it started with until its session restarts, for
-example after T3 Code restarts. Antigravity doesn't receive agent instructions.
+example after T3 Code restarts. **Block native subagents** likewise applies when a session starts.
+Antigravity doesn't receive agent instructions.
 
 Workers started with `delegate_task` get the same instructions as the agent that started them, and
 run under the preset of the nearest thread above them that has one, else the default preset.

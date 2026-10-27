@@ -66,6 +66,14 @@ itself on its next update, including one started from the app; T3 restarts one e
 After each update the service also restarts its launcher onto the new version if needed, then
 removes the older versions and the update's leftovers by itself.
 
+## Full-tunnel VPN addresses aren't offered as LAN addresses
+
+A machine on a full-tunnel VPN (Proton VPN, WireGuard, OpenVPN) has a private address on the
+tunnel that no other device can reach. T3 leaves such tunnel addresses out of the addresses a
+server advertises and pairs with, and keeps the Tailscale address. On Windows, a Hyper-V external
+switch that carries the machine's network connection counts as its LAN adapter; only the WSL and
+Default Switch adapters are skipped.
+
 ## Tailscale HTTPS needs HTTPS certificates
 
 [Tailscale HTTPS](remote-access.md#tailscale-https) needs **HTTPS Certificates** turned on for your

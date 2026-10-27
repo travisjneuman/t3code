@@ -2176,7 +2176,7 @@ const make = Effect.gen(function* () {
             parent,
             target: policy.target, // Fork add-on: agent instructions.
             providers,
-            skipProjectEnablementFilter: isRetryOfAcceptedDelegation,
+            skipProjectEnablementFilter: false, // Fork add-on: agent instructions.
           });
       const runtimeMode = isRetryOfAcceptedDelegation // Fork add-on
         ? parent.thread.runtimeMode // Fork add-on
@@ -2185,7 +2185,7 @@ const make = Effect.gen(function* () {
         ? parent.thread.interactionMode // Fork add-on
         : yield* resolveInteractionMode(parent.thread.interactionMode, input.interactionMode);
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
-      if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
+      if (policy.isolation /* Fork add-on */ === "worktree" && !isRetryOfAcceptedDelegation) {
         const project = yield* requireProject(parent.thread.projectId);
         const base = yield* gitDriver
           .resolveCommit({
@@ -2214,13 +2214,6 @@ const make = Effect.gen(function* () {
         }
         workspaceStrategy = { type: "worktree", baseRef: base.commitSha, startFromOrigin: false };
       }
-      // Fork add-on: agent instructions. An explicit `isolation: "worktree"`
-      // request uses upstream's prepared worktree; otherwise the Worker
-      // workspace setting decides.
-      const workspace = // Fork add-on
-        workspaceStrategy === undefined // Fork add-on
-          ? yield* forkPolicy.provisionWorkspace(policy, parent) // Fork add-on
-          : { task: policy.task, command: {}, discard: Effect.void }; // Fork add-on
       // ThreadManagementService.dispatch is the chokepoint for this command
       // type's own enablement check, using the same command id and its
       // receipt-replay exemption, so no separate assert runs here.
@@ -2233,8 +2226,7 @@ const make = Effect.gen(function* () {
           parentThreadId: scope.thread.threadId,
           parentRunId: parentRun.id,
           parentNodeId: parentRun.rootNodeId,
-          task: taskPrompt({ ...input, task: workspace.task }), // Fork add-on: agent instructions.
-          ...workspace.command, // Fork add-on: agent instructions.
+          task: taskPrompt({ ...input, task: policy.task }), // Fork add-on: agent instructions.
           ...(input.title === undefined ? {} : { title: input.title }),
           modelSelection: target.modelSelection,
           runtimeMode,
@@ -2246,7 +2238,6 @@ const make = Effect.gen(function* () {
           completionWake: input.mode === "wait" ? "settled_only" : "always",
         })
         .pipe(
-          Effect.tapError(() => workspace.discard), // Fork add-on: agent instructions.
           Effect.mapError((error) =>
             error._tag === "ThreadManagementProviderInstanceDisabledError"
               ? threadManagementFailure(error)

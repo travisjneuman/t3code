@@ -1,14 +1,16 @@
 /**
  * The Agents "Presets" row: apply a named set of Agents values to the scope
  * picked above, save the current values as a preset, make one the default for
- * threads without a choice, or rename or delete a saved one. Saved presets and
- * the default live in the environment's settings, next to the built-ins.
+ * threads without a choice, or rename or delete a saved one. A preset holds only
+ * the values that differ from the defaults, and applying it leaves the rest.
+ * Saved presets and the default live in the environment's settings, next to the
+ * built-ins.
  * Fork add-on: agent instructions.
  */
 import {
-  AGENT_PROJECT_SCOPED_SETTING_KEYS,
   type AgentPreset,
   agentPresetList,
+  agentSettingsDifferences,
   BUILTIN_AGENT_PRESETS,
   isBuiltinAgentPreset,
 } from "@t3tools/contracts";
@@ -41,24 +43,11 @@ function newPresetId(): string {
   return `user:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/**
- * Merges saved presets into one environment's list. Each replaces the entry
- * with its id, else the one with its name, so an environment never ends up
- * with two presets of one name.
- */
-function mergePresets(
-  current: readonly AgentPreset[],
-  incoming: readonly AgentPreset[],
-  removedId: string | undefined,
-): AgentPreset[] {
-  const next = current.filter((entry) => entry.id !== removedId);
-  for (const preset of incoming) {
-    const byId = next.findIndex((entry) => entry.id === preset.id);
-    const index = byId === -1 ? next.findIndex((entry) => entry.name === preset.name) : byId;
-    if (index === -1) next.push(preset);
-    else next[index] = preset;
-  }
-  return next;
+/** One environment's list with `preset` in place of the entry with its id, or added. */
+function upsertPreset(current: readonly AgentPreset[], preset: AgentPreset): AgentPreset[] {
+  return current.some((entry) => entry.id === preset.id)
+    ? current.map((entry) => (entry.id === preset.id ? preset : entry))
+    : [...current, preset];
 }
 
 /** Whether every value the preset sets equals the scope's current one. */
@@ -88,10 +77,9 @@ export function AgentPresetsControl() {
   const [name, setName] = useState("");
   const selected =
     presets.find((preset) => preset.id === selectedId) ??
-    // Saved presets set every value, so one that matches is the scope's own.
     settings.agentPresets.find((preset) => presetMatches(preset, settings)) ??
-    BUILTIN_AGENT_PRESETS.find((preset) => presetMatches(preset, settings)) ??
-    presets[0];
+    BUILTIN_AGENT_PRESETS.find((preset) => presetMatches(preset, settings));
+  const edited = selected !== undefined && !presetMatches(selected, settings);
   const trimmedName = name.trim();
   const nameIsBuiltin = BUILTIN_AGENT_PRESETS.some(
     (preset) => preset.name.toLowerCase() === trimmedName.toLowerCase(),
@@ -105,50 +93,64 @@ export function AgentPresetsControl() {
   const savedSelected =
     selected !== undefined && !isBuiltinAgentPreset(selected.id) ? selected : undefined;
 
-  // Presets are environment settings, but a thread can only use one its own
-  // environment has, so every write copies the shown environment's saved
-  // presets and default to each environment the scope covers.
-  const writeLibrary = (
-    saved: readonly AgentPreset[],
-    defaultPresetId: string,
-    removedId?: string,
-  ) => {
+  // A thread can only use a preset its own environment has, so a saved or
+  // renamed preset is copied by id to each environment the scope covers. Each
+  // environment keeps its own default and its other presets.
+  const copyPreset = (preset: AgentPreset) => {
     for (const environment of connectedEnvironments) {
       if (!environment.serverConfig) continue;
       void persist({
         environmentId: environment.environmentId,
         input: {
           patch: {
-            agentPresets: mergePresets(
-              environment.serverConfig.settings.agentPresets,
-              saved,
-              removedId,
-            ),
-            agentDefaultPresetId: defaultPresetId,
+            agentPresets: upsertPreset(environment.serverConfig.settings.agentPresets, preset),
           },
         },
       });
     }
   };
 
+  // Threads that chose the deleted preset go back to their default.
+  const deletePreset = (id: string) => {
+    for (const environment of connectedEnvironments) {
+      if (!environment.serverConfig) continue;
+      const current = environment.serverConfig.settings;
+      if (!current.agentPresets.some((preset) => preset.id === id)) continue;
+      void persist({
+        environmentId: environment.environmentId,
+        input: {
+          patch: {
+            agentPresets: current.agentPresets.filter((preset) => preset.id !== id),
+            agentThreadPresets: Object.fromEntries(
+              Object.entries(current.agentThreadPresets)
+                .filter(([, presetId]) => presetId === id)
+                .map(([threadId]) => [threadId, ""]),
+            ),
+            ...(current.agentDefaultPresetId === id ? { agentDefaultPresetId: "" } : {}),
+          },
+        },
+      });
+    }
+  };
+
+  const setDefault = (presetId: string) => {
+    if (!target) return;
+    void persist({
+      environmentId: target.environmentId,
+      input: { patch: { agentDefaultPresetId: presetId } },
+    });
+  };
+
   const savePreset = () => {
     const trimmed = trimmedName;
     if (trimmed === "" || nameIsBuiltin) return;
-    const values = Object.fromEntries(
-      AGENT_PROJECT_SCOPED_SETTING_KEYS.map((key) => [key, settings[key]]),
-    ) as AgentPreset["settings"];
     const existing = settings.agentPresets.find((preset) => preset.name === trimmed);
     const preset: AgentPreset = {
       id: existing?.id ?? newPresetId(),
       name: trimmed,
-      settings: values,
+      settings: agentSettingsDifferences(settings),
     };
-    writeLibrary(
-      existing
-        ? settings.agentPresets.map((entry) => (entry.id === existing.id ? preset : entry))
-        : [...settings.agentPresets, preset],
-      settings.agentDefaultPresetId,
-    );
+    copyPreset(preset);
     setSelectedId(preset.id);
     setDialog(null);
   };
@@ -156,12 +158,7 @@ export function AgentPresetsControl() {
   // The id stays, so threads on this preset and the default keep pointing at it.
   const renamePreset = () => {
     if (!savedSelected || nameInvalid) return;
-    writeLibrary(
-      settings.agentPresets.map((entry) =>
-        entry.id === savedSelected.id ? { ...entry, name: trimmedName } : entry,
-      ),
-      settings.agentDefaultPresetId,
-    );
+    copyPreset({ ...savedSelected, name: trimmedName });
     setDialog(null);
   };
 
@@ -175,12 +172,13 @@ export function AgentPresetsControl() {
           (preset) =>
             [
               preset.id,
-              preset.id === settings.agentDefaultPresetId
-                ? `${preset.name} (default)`
-                : preset.name,
+              `${preset.name}${preset.id === settings.agentDefaultPresetId ? " (default)" : ""}${
+                edited && preset.id === selected?.id ? " (edited)" : ""
+              }`,
             ] as const,
         )}
         ariaLabel="Preset"
+        emptyLabel="Custom"
         onChange={setSelectedId}
       />
       <Button
@@ -213,7 +211,7 @@ export function AgentPresetsControl() {
         disabled={selected === undefined || target === null}
         onClick={() => {
           if (!selected) return;
-          writeLibrary(settings.agentPresets, isDefault ? "" : selected.id);
+          setDefault(isDefault ? "" : selected.id);
         }}
       >
         {isDefault ? "Clear default" : "Set default"}
@@ -235,11 +233,7 @@ export function AgentPresetsControl() {
           size="xs"
           variant="ghost-destructive"
           onClick={() => {
-            writeLibrary(
-              settings.agentPresets.filter((preset) => preset.id !== savedSelected.id),
-              isDefault ? "" : settings.agentDefaultPresetId,
-              savedSelected.id,
-            );
+            deletePreset(savedSelected.id);
             setSelectedId("");
           }}
         >
@@ -260,7 +254,7 @@ export function AgentPresetsControl() {
             <DialogDescription>
               {dialog === "rename"
                 ? "Threads using this preset, and the default, keep using it under the new name."
-                : "Saves every Agents value for the scope picked above. A saved preset with the same name is replaced; built-in presets can't be."}
+                : "Saves the Agents values for the scope picked above that differ from the defaults; applying the preset leaves the others as they are. A saved preset with the same name is replaced; built-in presets can't be."}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
