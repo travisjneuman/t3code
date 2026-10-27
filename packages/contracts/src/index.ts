@@ -72,6 +72,7 @@ export * from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
 export * from "./threadExchanges.ts"; // Fork add-on: save to notes, compare agents.
 export * from "./hostBackups.ts"; // Fork add-on: host backups.
 export * from "./existingCheckout.ts"; // Fork add-on: existing checkout.
+export * from "./threadRetention.ts"; // Fork add-on: thread retention.
 export * from "./previewCapture.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";

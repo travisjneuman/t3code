@@ -138,6 +138,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers hostBackups.list.
   existingCheckout: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers existingCheckout.find.
   existingCheckoutFolder: Schema.optionalKey(Schema.Boolean), // Fork add-on: existingCheckout.find takes a folder to check.
+  threadRetention: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers threadRetention.storage and runs thread retention.
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

@@ -67,6 +67,7 @@ import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
 import * as ModelReferenceRepair from "./provider/ModelReferenceRepair.ts"; // Fork add-on: retired model repair.
+import * as ThreadRetention from "./thread-retention/ThreadRetention.ts"; // Fork add-on: thread retention.
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
@@ -619,6 +620,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ReplayMarkers.layer,
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),
   ModelReferenceRepair.layer, // Fork add-on: retired model repair.
+  ThreadRetention.layer.pipe(Layer.provide(ProjectionStoreV2.layer)), // Fork add-on: thread retention.
 ).pipe(
   Layer.provideMerge(layerOrchestrationApplication),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),

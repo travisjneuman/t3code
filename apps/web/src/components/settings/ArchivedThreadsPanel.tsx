@@ -19,6 +19,7 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { ThreadStorageBytes } from "../../thread-retention/ThreadRetentionSections"; // Fork add-on: thread retention.
 
 export function ArchivedThreadsPanel() {
   const { scope, groups: projectGroups, environments } = useSettingsScope();
@@ -242,6 +243,8 @@ export function ArchivedThreadsPanel() {
                     Archived <RelativeTime timestamp={thread.archivedAt ?? thread.createdAt} />
                     {" \u00b7 Created "}
                     <RelativeTime timestamp={thread.createdAt} />
+                    <ThreadStorageBytes environmentId={thread.environmentId} threadId={thread.id} />
+                    {/* Fork add-on: thread retention. */}
                   </span>
                 }
                 control={

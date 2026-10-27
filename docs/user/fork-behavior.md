@@ -158,6 +158,19 @@ notes, and hand back or move back for continued threads. Threads in one project 
 project settings; threads on one branch and worktree add a new thread there; the two sides of one
 comparison add **Open comparison**. Rename stays one thread at a time.
 
+## Settled and archived threads clean themselves up
+
+Each machine moves threads along on its own: a thread that has been settled for 7 days is archived,
+and one that has been archived for 7 days is deleted. A deleted thread's history is removed from
+disk a day later. Pinned threads, subagents, and threads with running work, pending requests or an
+enabled scheduled task are never moved. Change either number of days, or turn a step off, in
+**Settings → Archive → Retention**. Unarchive or un-settle a thread to keep it.
+
+**Settings → Archive** also shows how much disk space each machine's T3 Code data uses (its database
+and attachments), split into settled, archived and other threads, and the size of each settled and
+archived thread. Settled threads are listed there too, with **Unsettle**, **Archive** and
+**Delete**, including older ones the sidebar's Settled shelf hasn't loaded.
+
 ## Other Agents across machines
 
 The Other Agents shelf merges every connected machine's sessions into one list, newest first.

@@ -14,6 +14,7 @@ import * as MaintenanceQueueRpc from "./maintenance-queue/MaintenanceQueueRpc.ts
 import * as SaveToNotesRpc from "./save-to-notes/SaveToNotesRpc.ts";
 import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts";
 import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts";
+import * as ThreadRetentionRpc from "./thread-retention/ThreadRetentionRpc.ts";
 
 export const makeHandlers = Effect.gen(function* () {
   return {
@@ -26,5 +27,6 @@ export const makeHandlers = Effect.gen(function* () {
     ...(yield* MaintenanceQueueRpc.makeHandlers),
     ...(yield* HostBackupsRpc.makeHandlers),
     ...(yield* ExistingCheckoutRpc.makeHandlers),
+    ...(yield* ThreadRetentionRpc.makeHandlers),
   };
 });

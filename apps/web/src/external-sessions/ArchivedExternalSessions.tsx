@@ -32,6 +32,7 @@ import { Button } from "../components/ui/button";
 import { toastManager } from "../components/ui/toast";
 import { WorkspacePageContainer } from "../components/WorkspacePageContainer";
 import { ArchivedHermesSessions } from "../hermes/ArchivedHermesSessions"; // Fork add-on: Hermes provider.
+import { ThreadRetentionSections } from "../thread-retention/ThreadRetentionSections"; // Fork add-on: thread retention.
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
@@ -69,6 +70,7 @@ export function ArchivedThreadsPanel() {
           "[&:has(>[data-archived-external-sessions]>*)>[data-settings-page-scroll]]:hidden",
       )}
     >
+      <ThreadRetentionSections />
       <UpstreamArchivedThreadsPanel />
       <ArchivedExternalSessions flushTop={!t3ArchiveEmpty} />
     </div>

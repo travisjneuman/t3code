@@ -271,6 +271,7 @@ export const make = Effect.gen(function* () {
       hostBackups: true, // Fork add-on: host backups.
       existingCheckout: true, // Fork add-on: existing checkout.
       existingCheckoutFolder: true, // Fork add-on: existing checkout.
+      threadRetention: true, // Fork add-on: thread retention.
     },
   };
 

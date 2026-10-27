@@ -37,6 +37,10 @@ import { ModelSelection } from "./modelSelection.ts";
   AgentSettingsPatchFields, // Fork add-on
 } from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
 import { CodexHiddenModelsSettingFields } from "./forkCodexSettings.ts"; // Fork add-on: Codex hidden models.
+import {
+  ThreadRetentionSettingsFields,
+  ThreadRetentionSettingsPatchFields,
+} from "./threadRetention.ts"; // Fork add-on: thread retention.
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -1220,6 +1224,7 @@ export const ServerSettings = Schema.Struct({
   notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
   ...AgentServerSettingsFields, // Fork add-on: agent instructions.
+  ...ThreadRetentionSettingsFields, // Fork add-on: thread retention.
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1547,6 +1552,7 @@ export const ServerSettingsPatch = Schema.Struct({
   notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
   ...AgentSettingsPatchFields, // Fork add-on: agent instructions.
+  ...ThreadRetentionSettingsPatchFields, // Fork add-on: thread retention.
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),

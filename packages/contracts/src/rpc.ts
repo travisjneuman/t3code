@@ -390,6 +390,7 @@ import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on: Hermes
 import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
 import { HostBackupsRpcs } from "./hostBackups.ts"; // Fork add-on: host backups.
 import { ExistingCheckoutRpcs } from "./existingCheckout.ts"; // Fork add-on: existing checkout.
+import { ThreadRetentionRpcs } from "./threadRetention.ts"; // Fork add-on: thread retention.
 
 export const WS_METHODS = {
   projectsList: "projects.list",
@@ -2146,4 +2147,5 @@ export const WsRpcGroup = RpcGroup.make(
   ...MaintenanceQueueRpcs, // Fork add-on: maintenance queue.
   ...HostBackupsRpcs, // Fork add-on: host backups.
   ...ExistingCheckoutRpcs, // Fork add-on: existing checkout.
+  ...ThreadRetentionRpcs, // Fork add-on: thread retention.
 ).middleware(RpcScopeAuthorization);

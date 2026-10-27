@@ -15,6 +15,7 @@ import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import { SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS } from "../../save-to-notes/saveToNotesSettingsSearch"; // Fork add-on: save to notes.
 import { AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS } from "../../agent-instructions/agentInstructionsSettingsSearch"; // Fork add-on: agent instructions.
+import { THREAD_RETENTION_SETTINGS_SEARCH_ITEMS } from "../../thread-retention/threadRetentionSettingsSearch"; // Fork add-on: thread retention.
 import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
@@ -1110,6 +1111,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
+  ...THREAD_RETENTION_SETTINGS_SEARCH_ITEMS, // Fork add-on: thread retention.
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
