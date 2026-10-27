@@ -108,6 +108,7 @@ import { CodexSetupSection, CodexManagedRuntimeFields } from "./CodexSetupSectio
 import { readCodexSetupMode } from "./CodexSetupSection.logic";
 import { providerClients } from "./providerDriverMeta";
 import { searchableSetting } from "./settingsSearch";
+import { CompactIdleThreadsRow } from "./SettingsPanels";
 import {
   backgroundActivityOverrideSettings,
   buildProviderInstanceUpdatePatch,
@@ -1113,7 +1114,7 @@ export function EnvironmentProviderSettings({
               <PolicyTooltip>
                 This interval is configured here, then the shared Background activity policy decides
                 whether provider probes may run when the timer fires. Custom intervals appear as
-                Advanced in General settings.
+                Advanced in Maintenance settings.
               </PolicyTooltip>
             </span>
           }
@@ -1178,6 +1179,7 @@ export function EnvironmentProviderSettings({
             </div>
           }
         />
+        <CompactIdleThreadsRow />
       </SettingsSection>
       {isAddInstanceDialogOpen && !readOnly ? (
         <AddProviderInstanceDialog
