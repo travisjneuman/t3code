@@ -41,7 +41,6 @@ import {
 } from "../ui/dialog";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { SettingsPageContainer } from "./settingsLayout";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 
 const SEARCHES_PER_MACHINE = 2;
@@ -56,12 +55,10 @@ const close = () => useFindCheckouts.setState({ open: false });
 
 export function FindCheckoutsButton() {
   return (
-    <SettingsPageContainer>
-      <Button variant="outline" size="xs" className="self-start" onClick={openFindCheckouts}>
-        <FolderSearchIcon />
-        Find projects on other machines
-      </Button>
-    </SettingsPageContainer>
+    <Button variant="outline" size="xs" className="self-start" onClick={openFindCheckouts}>
+      <FolderSearchIcon />
+      Find projects on other machines
+    </Button>
   );
 }
 

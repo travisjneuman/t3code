@@ -26,8 +26,6 @@ import {
   CircleDashedIcon,
   ClockIcon,
   CpuIcon,
-  MinusIcon,
-  PlusIcon,
 } from "lucide-react";
 import { memo, useState, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 
@@ -46,10 +44,12 @@ import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
 import type { ProviderInstanceEntry } from "../providerInstances";
 import {
+  AGENT_LINE_ACTIVE_CLASS,
   AGENT_LINE_CLASS,
   AGENT_LINE_ICON_CLASS,
   AGENT_MORE_BUTTON_CLASS,
 } from "../sidebar-compact/agentLines";
+import { AgentMoreIcon } from "../sidebar-compact/AgentSectionParts";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 
@@ -406,7 +406,7 @@ function SidebarSubagentRows(props: {
                 onClick={() => setShowAll(true)}
                 className={AGENT_MORE_BUTTON_CLASS}
               >
-                <PlusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
+                <AgentMoreIcon />
                 {`Show ${hiddenCount} more`}
               </button>
             </li>
@@ -417,7 +417,7 @@ function SidebarSubagentRows(props: {
                 onClick={() => setShowAll(false)}
                 className={AGENT_MORE_BUTTON_CLASS}
               >
-                <MinusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
+                <AgentMoreIcon less />
                 Show less
               </button>
             </li>
@@ -484,7 +484,7 @@ const SubagentLine = memo(function SubagentLine(props: {
                 AGENT_LINE_CLASS,
                 "pe-(--sidebar-row-content-inset)",
                 props.isActive
-                  ? "bg-sidebar-row-active text-sidebar-foreground"
+                  ? AGENT_LINE_ACTIVE_CLASS
                   : running
                     ? "text-sidebar-foreground hover:bg-sidebar-row-hover"
                     : "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
@@ -509,7 +509,10 @@ const SubagentLine = memo(function SubagentLine(props: {
           )}
           <span className="min-w-0 flex-1 truncate">{thread.title}</span>
           {running ? (
-            <CircleDashedIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-info")} />
+            <CircleDashedIcon
+              aria-hidden
+              className={cn(AGENT_LINE_ICON_CLASS, "text-info-foreground")}
+            />
           ) : (
             <>
               {status === "Failed" ? (
@@ -528,7 +531,7 @@ const SubagentLine = memo(function SubagentLine(props: {
             ) : null}
             <div className="flex min-w-0 items-center gap-2">
               {running ? (
-                <CircleDashedIcon className="size-3 shrink-0 text-info" />
+                <CircleDashedIcon className="size-3 shrink-0 text-info-foreground" />
               ) : (
                 <ClockIcon className="size-3 shrink-0 stroke-muted-foreground" />
               )}

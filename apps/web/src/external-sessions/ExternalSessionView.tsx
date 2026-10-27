@@ -627,7 +627,7 @@ function ExternalSessionComposerBlock(props: {
                     />
                     <SessionChip tooltip={LIVENESS_DESCRIPTION[summary.liveness]}>
                       {summary.liveness === "running" ? (
-                        <CircleDashedIcon aria-hidden className="text-info" />
+                        <CircleDashedIcon aria-hidden className="text-info-foreground" />
                       ) : null}
                       {LIVENESS_LABEL[summary.liveness]}
                     </SessionChip>

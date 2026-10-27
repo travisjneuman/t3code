@@ -26,7 +26,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, MinusIcon, PinIcon, PlusIcon } from "lucide-react";
+import { CircleDashedIcon, PinIcon, PlusIcon } from "lucide-react";
 import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -39,14 +39,22 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useScratchProject } from "../hooks/useScratchProject";
+import { useClientSettings } from "../hooks/useSettings";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { cn } from "../lib/utils";
 import {
+  AGENT_LINE_ACTIVE_CLASS,
   AGENT_LINE_CLASS,
   AGENT_LINE_ICON_CLASS,
+  AGENT_LINE_SELECTED_CLASS,
   AGENT_MORE_BUTTON_CLASS,
 } from "../sidebar-compact/agentLines";
+import {
+  AgentMoreIcon,
+  AgentSectionAccessory,
+  agentSectionLabel,
+} from "../sidebar-compact/AgentSectionParts";
 import { readLocalApi } from "../localApi";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { waitForThreadShell } from "../state/entities";
@@ -323,6 +331,7 @@ export function HermesSidebarSection() {
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const { environments } = useEnvironments();
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
+  const redesign = useClientSettings((s) => s.redesignEnabled);
   const [extra, setExtra] = useState(0);
   const [listed, setListed] = useState<ReadonlyMap<string, Listed>>(new Map());
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -888,18 +897,14 @@ export function HermesSidebarSection() {
             onClick={() => setExpanded((value) => !value)}
             onMouseDown={preventMouseFocus}
             accessory={
-              runningCount > 0 ? (
-                <span
-                  title={`${runningCount} active`}
-                  className="inline-flex shrink-0 items-center gap-1 text-info tabular-nums"
-                >
-                  <CircleDashedIcon aria-hidden className="size-3 shrink-0" />
-                  {runningCount}
-                </span>
-              ) : null
+              <AgentSectionAccessory
+                count={rows.length}
+                running={runningCount}
+                redesign={redesign}
+              />
             }
           >
-            {`${sectionName} (${rows.length})`}
+            {agentSectionLabel(sectionName, rows.length, redesign)}
           </CollapsibleSectionHeader>
         </div>
         <button
@@ -938,7 +943,7 @@ export function HermesSidebarSection() {
                 onClick={() => setExtra((value) => value + 1)}
                 className={AGENT_MORE_BUTTON_CLASS}
               >
-                <PlusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
+                <AgentMoreIcon />
                 Load more
               </button>
             </li>
@@ -946,7 +951,7 @@ export function HermesSidebarSection() {
           {expanded && extra > 0 ? (
             <li className="list-none">
               <button type="button" onClick={() => setExtra(0)} className={AGENT_MORE_BUTTON_CLASS}>
-                <MinusIcon aria-hidden className={AGENT_LINE_ICON_CLASS} />
+                <AgentMoreIcon less />
                 Show less
               </button>
             </li>
@@ -990,11 +995,13 @@ const HermesLine = memo(function HermesLine(props: {
   const className = cn(
     AGENT_LINE_CLASS,
     "px-(--sidebar-row-content-inset)",
-    props.isActive || props.isSelected
-      ? "bg-sidebar-row-active text-sidebar-foreground"
-      : row.thread === null
-        ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-        : "text-sidebar-foreground hover:bg-sidebar-row-hover",
+    props.isActive
+      ? AGENT_LINE_ACTIVE_CLASS
+      : props.isSelected
+        ? AGENT_LINE_SELECTED_CLASS
+        : row.thread === null
+          ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+          : "text-sidebar-foreground hover:bg-sidebar-row-hover",
   );
   const content = (
     <>
@@ -1007,7 +1014,7 @@ const HermesLine = memo(function HermesLine(props: {
       <span className="min-w-0 flex-1 truncate">{row.title}</span>
       {status !== null ? (
         <span aria-hidden title={status} className="flex shrink-0">
-          <CircleDashedIcon className="size-3 text-info" />
+          <CircleDashedIcon className="size-3 text-info-foreground" />
         </span>
       ) : (
         <>

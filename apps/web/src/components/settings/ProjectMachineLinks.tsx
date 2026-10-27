@@ -55,6 +55,11 @@ function reportError(title: string, error: unknown) {
   );
 }
 
+const candidateLabel = (other: SidebarProjectSnapshot) =>
+  `${other.displayName} · ${other.memberProjects
+    .map((member) => member.environmentLabel ?? "machine")
+    .join(", ")}`;
+
 const isFolderProject = (group: Pick<SidebarProjectSnapshot, "memberProjects">) =>
   group.memberProjects.every((member) => member.repositoryIdentity == null && !member.isScratch);
 
@@ -199,14 +204,17 @@ export function ProjectMachineLinks({
                 onValueChange={(value) => setCandidateKey(value || null)}
               >
                 <SelectTrigger size="sm" className="w-44" aria-label="Project to link">
-                  <SelectValue placeholder="Choose a project" />
+                  <SelectValue placeholder="Choose a project">
+                    {(key: string) => {
+                      const other = candidates.find((option) => option.projectKey === key);
+                      return other ? candidateLabel(other) : "Choose a project";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
                   {candidates.map((other) => (
                     <SelectItem key={other.projectKey} value={other.projectKey}>
-                      {`${other.displayName} · ${other.memberProjects
-                        .map((member) => member.environmentLabel ?? "machine")
-                        .join(", ")}`}
+                      {candidateLabel(other)}
                     </SelectItem>
                   ))}
                 </SelectPopup>
@@ -235,7 +243,7 @@ export function ProjectMachineLinks({
                     size="sm"
                     className="w-full sm:w-56"
                     aria-label={`Folder on ${environment.label}`}
-                    placeholder={representative.workspaceRoot}
+                    placeholder="Folder path"
                     value={paths[environment.environmentId] ?? ""}
                     onChange={(event) => {
                       const value = event.currentTarget.value;

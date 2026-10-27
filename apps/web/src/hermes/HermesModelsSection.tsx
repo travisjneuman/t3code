@@ -149,6 +149,7 @@ export function HermesModelsSection(props: {
           type="button"
           size="xs"
           variant="ghost-muted"
+          className="redesign:-me-2" // Fork add-on: match upstream's flush header buttons.
           disabled={loading}
           onClick={() => void load()}
         >

@@ -9,14 +9,14 @@ export const SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS = [
   {
     id: "save-to-notes-notes-folder",
     title: "Notes folder",
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "environment-defaults",
     searchTerms: ["save to notes summary vault obsidian markdown folder path"],
   },
   {
     id: "save-to-notes-saved-threads-folder",
     title: "Saved threads folder",
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "environment-defaults",
     searchTerms: ["save to notes full copy transcript prompts answers folder path"],
   },

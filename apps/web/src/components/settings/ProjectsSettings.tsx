@@ -47,13 +47,13 @@ export function ProjectsSettings() {
       ) : unavailable ? (
         unavailable
       ) : (
-        <>
-          {/* Fork add-on: find checkouts. */}
-          <SettingsScopeNotice target="project">
+        // Fork add-on: find checkouts. One container, so the scope sentence renders once.
+        <SettingsPageContainer>
+          <SettingsScopeNotice inline target="project">
             Choose a project to manage its name, icon, checkouts and actions.
           </SettingsScopeNotice>
-          <FindCheckoutsButton /> {/* Fork add-on: find checkouts. */}
-        </>
+          <FindCheckoutsButton />
+        </SettingsPageContainer>
       )}
     </div>
   );

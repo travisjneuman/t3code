@@ -24,7 +24,6 @@ export function useCompareBanner(
         {
           id: `compare-agents:${threadId}`,
           variant: "info",
-          compact: true,
           icon: <Columns2Icon />,
           title: "Part of a comparison. Messages sent here go to this agent only.",
           actions: (

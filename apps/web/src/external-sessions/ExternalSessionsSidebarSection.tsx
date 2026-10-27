@@ -34,13 +34,21 @@ import {
   useLocalStorage,
 } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { useClientSettings } from "../hooks/useSettings";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { cn, isMacPlatform } from "../lib/utils";
 import {
+  AGENT_LINE_ACTIVE_CLASS,
   AGENT_LINE_CLASS,
   AGENT_LINE_ICON_CLASS,
+  AGENT_LINE_SELECTED_CLASS,
   AGENT_MORE_BUTTON_CLASS,
 } from "../sidebar-compact/agentLines";
+import {
+  AgentMoreIcon,
+  AgentSectionAccessory,
+  agentSectionLabel,
+} from "../sidebar-compact/AgentSectionParts";
 import { readLocalApi } from "../localApi";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { waitForThreadShell } from "../state/entities";
@@ -280,6 +288,7 @@ export function ExternalSessionsSidebarSection() {
     anchor: null,
   });
   const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
+  const redesign = useClientSettings((s) => s.redesignEnabled);
   const [revealed, setRevealed] = useState(0);
   const nowMinute = useNowMinute();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -1036,20 +1045,18 @@ export function ExternalSessionsSidebarSection() {
           onClick={toggleExpanded}
           onMouseDown={preventMouseFocus}
           accessory={
-            // At the narrowest sidebar the word drops out, so the chevron stays in view.
-            activeCount > 0 ? (
-              <span
-                title={`${activeCount} active`}
-                className="inline-flex shrink-0 items-center gap-1 text-info tabular-nums"
-              >
-                <CircleDashedIcon aria-hidden className="size-3 shrink-0" />
-                {activeCount}
+            <AgentSectionAccessory
+              count={active.length + shownRest.length}
+              running={activeCount}
+              redesign={redesign}
+              // At the narrowest sidebar the word drops out, so the chevron stays in view.
+              runningSuffix={
                 <span className="sr-only @min-[14.5rem]/other-agents:not-sr-only">{" active"}</span>
-              </span>
-            ) : null
+              }
+            />
           }
         >
-          {`Other Agents (${active.length + shownRest.length})`}
+          {agentSectionLabel("Other Agents", active.length + shownRest.length, redesign)}
         </CollapsibleSectionHeader>
       </div>
       {/* Same hover timing as the thread list's cards. */}
@@ -1066,6 +1073,7 @@ export function ExternalSessionsSidebarSection() {
                 onMouseDown={preventMouseFocus}
                 className={AGENT_MORE_BUTTON_CLASS}
               >
+                <AgentMoreIcon />
                 <span className="min-w-0 truncate">{loadingOlder ? "Loading…" : "Load more"}</span>
               </button>
             ) : null}
@@ -1145,7 +1153,7 @@ function ExternalSessionHoverCard(props: { entry: ExternalSessionEntry; nowMinut
         ) : null}
         <div className="flex min-w-0 items-center gap-2">
           {session.liveness === "running" ? (
-            <CircleDashedIcon className="size-3 shrink-0 text-info" />
+            <CircleDashedIcon className="size-3 shrink-0 text-info-foreground" />
           ) : (
             <ClockIcon className="size-3 shrink-0 stroke-muted-foreground" />
           )}
@@ -1213,9 +1221,9 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
                 AGENT_LINE_CLASS,
                 "px-(--sidebar-row-content-inset)",
                 props.isActive
-                  ? "bg-sidebar-row-active text-sidebar-foreground"
+                  ? AGENT_LINE_ACTIVE_CLASS
                   : props.isSelected
-                    ? "bg-sidebar-row-selected text-sidebar-foreground"
+                    ? AGENT_LINE_SELECTED_CLASS
                     : session.liveness === "recent"
                       ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-row-hover",
@@ -1236,7 +1244,10 @@ const ExternalSessionLine = memo(function ExternalSessionLine(props: {
             </span>
           ) : null}
           {running ? (
-            <CircleDashedIcon aria-hidden className={cn(AGENT_LINE_ICON_CLASS, "text-info")} />
+            <CircleDashedIcon
+              aria-hidden
+              className={cn(AGENT_LINE_ICON_CLASS, "text-info-foreground")}
+            />
           ) : (
             <span className="shrink-0 tabular-nums text-secondary-label">
               {compactTimeLabel(session.updatedAt, props.nowMinute)}
