@@ -162,14 +162,21 @@ comparison add **Open comparison**. Rename stays one thread at a time.
 
 Each machine moves threads along on its own: a thread that has been settled for 7 days is archived,
 and one that has been archived for 7 days is deleted. A deleted thread's history is removed from
-disk a day later. Pinned threads, subagents, and threads with running work, pending requests or an
-enabled scheduled task are never moved. Change either number of days, or turn a step off, in
+disk a day later. Pinned threads, and threads with running work, pending requests or an enabled
+scheduled task, are never moved. Change either number of days, or turn a step off, in
 **Settings → Archive → Retention**. Unarchive or un-settle a thread to keep it.
+
+Subagent and coworker threads go with the thread that started them. Archiving, unarchiving or
+deleting a thread, by hand or by retention, does the same to its subagent threads at every depth.
+A subagent that is still working, pinned or scheduled is left alone until it is free, and it also
+holds its parent back from automatic archiving and deleting.
 
 **Settings → Archive** also shows how much disk space each machine's T3 Code data uses (its database
 and attachments), split into settled, archived and other threads, and the size of each settled and
-archived thread. Settled threads are listed there too, with **Unsettle**, **Archive** and
-**Delete**, including older ones the sidebar's Settled shelf hasn't loaded.
+archived thread, its subagent threads included, with how many it has. Settled threads are listed
+there too, with **Unsettle**, **Archive** and **Delete**, including older ones the sidebar's Settled
+shelf hasn't loaded. Archived threads follow under their own heading, grouped by project; a subagent
+thread is listed only when it was archived without its parent.
 
 ## Other Agents across machines
 

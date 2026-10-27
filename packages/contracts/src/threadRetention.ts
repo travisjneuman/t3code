@@ -46,7 +46,9 @@ export const ThreadRetentionStorageThread = Schema.Struct({
   settledAt: Schema.NullOr(IsoDateTime),
   archivedAt: Schema.NullOr(IsoDateTime),
   updatedAt: IsoDateTime,
+  /** Bytes include the thread's subagent threads, counted here. */
   bytes: NonNegativeInt,
+  subagentCount: Schema.optionalKey(NonNegativeInt),
 });
 export type ThreadRetentionStorageThread = typeof ThreadRetentionStorageThread.Type;
 

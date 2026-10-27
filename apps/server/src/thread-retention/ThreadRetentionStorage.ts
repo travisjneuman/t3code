@@ -1,6 +1,7 @@
 /**
  * What stored threads cost on disk, for the retention settings. Runs only when a client asks,
- * with one grouped read per table and a short cache. Fork add-on: thread retention.
+ * with one grouped read per table and a short cache. Subagent threads count toward their
+ * owner's row. Fork add-on: thread retention.
  *
  * @module thread-retention/ThreadRetentionStorage
  */
@@ -25,6 +26,7 @@ import {
   toSafeThreadAttachmentSegment,
 } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
+import { indexThreadFamilies } from "./threadFamily.ts";
 
 export class ThreadRetentionStorage extends Context.Service<
   ThreadRetentionStorage,
@@ -43,6 +45,14 @@ interface ThreadRow {
   readonly settled_override: string | null;
   readonly settled_at: string | null;
   readonly relationship: string | null;
+  readonly parent_thread_id: string | null;
+}
+
+interface OwnerTotal {
+  readonly row: ThreadRow;
+  readonly state: "settled" | "archived";
+  bytes: number;
+  subagents: number;
 }
 
 interface BytesRow {
@@ -69,7 +79,8 @@ const make = Effect.gen(function* () {
       SELECT thread_id, project_id, title, updated_at, archived_at, deleted_at,
         json_extract(payload_json, '$.settledOverride') AS settled_override,
         json_extract(payload_json, '$.settledAt') AS settled_at,
-        json_extract(payload_json, '$.lineage.relationshipToParent') AS relationship
+        json_extract(payload_json, '$.lineage.relationshipToParent') AS relationship,
+        json_extract(payload_json, '$.lineage.parentThreadId') AS parent_thread_id
       FROM orchestration_v2_projection_threads
     `;
     // Purge keeps thread.created and the last thread.deleted, so deleted threads count the rest.
@@ -142,7 +153,8 @@ const make = Effect.gen(function* () {
       if (threadId !== undefined) add(threadId, file.bytes);
     }
 
-    const threads: Array<ThreadRetentionStorageThread> = [];
+    const families = indexThreadFamilies(db.threads);
+    const owners = new Map<string, OwnerTotal>();
     let settledBytes = 0;
     let archivedBytes = 0;
     let otherThreadsBytes = 0;
@@ -155,29 +167,38 @@ const make = Effect.gen(function* () {
         continue;
       }
       const bytes = projected + (events?.bytes ?? 0);
+      const owner = families.row(families.ownerOf(thread.thread_id));
       const state =
-        thread.relationship === "subagent"
+        owner === undefined || owner.deleted_at !== null || owner.relationship === "subagent"
           ? null
-          : thread.archived_at !== null
+          : owner.archived_at !== null
             ? "archived"
-            : thread.settled_override === "settled"
+            : owner.settled_override === "settled"
               ? "settled"
               : null;
-      if (state === null) {
+      if (owner === undefined || state === null) {
         otherThreadsBytes += bytes;
         continue;
       }
       if (state === "archived") archivedBytes += bytes;
       else settledBytes += bytes;
+      const total = owners.get(owner.thread_id) ?? { row: owner, state, bytes: 0, subagents: 0 };
+      total.bytes += bytes;
+      if (owner.thread_id !== thread.thread_id) total.subagents += 1;
+      owners.set(owner.thread_id, total);
+    }
+    const threads: Array<ThreadRetentionStorageThread> = [];
+    for (const { row, state, bytes, subagents } of owners.values()) {
       threads.push({
-        threadId: ThreadId.make(thread.thread_id),
-        projectId: ProjectId.make(thread.project_id),
-        title: thread.title,
+        threadId: ThreadId.make(row.thread_id),
+        projectId: ProjectId.make(row.project_id),
+        title: row.title,
         state,
-        settledAt: thread.settled_at,
-        archivedAt: thread.archived_at,
-        updatedAt: thread.updated_at,
+        settledAt: row.settled_at,
+        archivedAt: row.archived_at,
+        updatedAt: row.updated_at,
         bytes,
+        ...(subagents > 0 ? { subagentCount: subagents } : {}),
       });
     }
     threads.sort((a, b) => b.bytes - a.bytes);

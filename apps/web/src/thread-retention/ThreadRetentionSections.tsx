@@ -3,7 +3,8 @@
  * (archive settled threads, delete archived ones), and the settled threads with
  * their sizes. Settled threads come from the storage listing, not the sidebar,
  * because older ones are not loaded on a cold connect. Mounted by the archive
- * wrapper in external-sessions/ArchivedExternalSessions.tsx. Fork add-on: thread retention.
+ * wrapper in external-sessions/ArchivedExternalSessions.tsx. Sizes include each thread's
+ * subagent threads, which follow their parent. Fork add-on: thread retention.
  */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -19,6 +20,7 @@ import {
   MIN_THREAD_RETENTION_DAYS,
   THREAD_RETENTION_WS_METHODS,
   type EnvironmentId,
+  type OrchestrationV2ThreadShell,
   type ThreadId,
   type ThreadRetentionStorageResult,
   type ThreadRetentionStorageThread,
@@ -121,6 +123,13 @@ function reportFailure(title: string, result: AtomCommandResult<unknown, unknown
 }
 
 const countLabel = (count: number) => (count === 1 ? "1 thread" : `${count} threads`);
+
+const sizeLabel = (thread: ThreadRetentionStorageThread) => {
+  const subagents = thread.subagentCount ?? 0;
+  const size = formatBytes(thread.bytes);
+  if (subagents === 0) return size;
+  return `${size} · ${subagents === 1 ? "1 subagent" : `${subagents} subagents`}`;
+};
 
 const totalBytes = (storage: ThreadRetentionStorageResult) =>
   storage.databaseBytes + storage.attachmentsBytes;
@@ -321,14 +330,14 @@ function ThreadRetentionSettingsSection() {
       <RetentionRows
         settingKey="threadRetentionArchiveSettledAfterDays"
         searchId="thread-retention-archive-settled"
-        description="Settled threads untouched for this long move to the archive. Pinned threads, subagents and threads with running or scheduled work stay."
+        description="Settled threads untouched for this long move to the archive, with their subagent threads. Pinned threads and threads with running or scheduled work stay."
         daysTitle="Days settled before archiving"
         daysDescription="Counted from when the thread settled. Any new activity un-settles it."
       />
       <RetentionRows
         settingKey="threadRetentionDeleteArchivedAfterDays"
         searchId="thread-retention-delete-archived"
-        description="Archived threads older than this are deleted, and their history is purged from disk a day later."
+        description="Archived threads older than this are deleted with their subagent threads, and their history is purged from disk a day later."
         daysTitle="Days archived before deleting"
         daysDescription="Unarchive a thread to keep it."
       />
@@ -442,7 +451,7 @@ function SettledThreadRow({
         <span className="block truncate">
           {context ? `${context} · ` : null}
           Settled <RelativeTime timestamp={thread.settledAt ?? thread.updatedAt} />
-          {` · ${formatBytes(thread.bytes)}`}
+          {` · ${sizeLabel(thread)}`}
         </span>
       }
       control={
@@ -488,18 +497,49 @@ function SettledThreadRow({
   );
 }
 
-const threadBytesByResult = new WeakMap<ThreadRetentionStorageResult, Map<ThreadId, number>>();
+const threadsByResult = new WeakMap<
+  ThreadRetentionStorageResult,
+  Map<ThreadId, ThreadRetentionStorageThread>
+>();
 
-function threadBytes(storage: ThreadRetentionStorageResult, threadId: ThreadId) {
-  let byThread = threadBytesByResult.get(storage);
+function storageThread(storage: ThreadRetentionStorageResult, threadId: ThreadId) {
+  let byThread = threadsByResult.get(storage);
   if (byThread === undefined) {
-    byThread = new Map(storage.threads.map((thread) => [thread.threadId, thread.bytes]));
-    threadBytesByResult.set(storage, byThread);
+    byThread = new Map(storage.threads.map((thread) => [thread.threadId, thread]));
+    threadsByResult.set(storage, byThread);
   }
   return byThread.get(threadId) ?? null;
 }
 
-/** " · 1.2 MB" after an archived thread's dates, once that machine's storage has been measured. */
+/**
+ * Archived subagent threads are listed under their parent's row, not on their own, when the
+ * parent is archived too. One archived alone still shows so it can be unarchived.
+ */
+export function hideArchivedSubagents<
+  Thread extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">,
+>(threads: ReadonlyArray<Thread>): ReadonlyArray<Thread> {
+  const archivedIds = new Set<string>(threads.map((thread) => thread.id));
+  return threads.filter(
+    (thread) =>
+      thread.lineage.relationshipToParent !== "subagent" ||
+      thread.lineage.parentThreadId === null ||
+      !archivedIds.has(thread.lineage.parentThreadId),
+  );
+}
+
+/** Page-level title over the upstream per-project archived groups. */
+export function ArchivedThreadsHeading() {
+  return (
+    <div className="flex min-h-7 items-center px-3 sm:px-4">
+      <h2 className="text-base font-semibold text-foreground">Archived threads</h2>
+    </div>
+  );
+}
+
+/**
+ * " · 1.2 MB · 3 subagents" after an archived thread's dates, once that machine's storage has
+ * been measured.
+ */
 export function ThreadStorageBytes({
   environmentId,
   threadId,
@@ -512,6 +552,6 @@ export function ThreadStorageBytes({
     environments.find((environment) => environment.environmentId === environmentId)?.serverConfig
       ?.environment.capabilities.threadRetention === true;
   const storage = useEnvironmentQuery(capable ? storageQueryFor(environmentId) : null).data;
-  const bytes = storage ? threadBytes(storage, threadId) : null;
-  return bytes === null ? null : <>{` · ${formatBytes(bytes)}`}</>;
+  const thread = storage ? storageThread(storage, threadId) : null;
+  return thread === null ? null : <>{` · ${sizeLabel(thread)}`}</>;
 }
