@@ -137,6 +137,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   serverBrowser: Schema.optionalKey(Schema.Boolean),
   hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers hostBackups.list.
   existingCheckout: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers existingCheckout.find.
+  existingCheckoutFolder: Schema.optionalKey(Schema.Boolean), // Fork add-on: existingCheckout.find takes a folder to check.
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

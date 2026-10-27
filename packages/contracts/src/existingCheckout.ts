@@ -16,6 +16,8 @@ export const EXISTING_CHECKOUT_WS_METHODS = {
 export const ExistingCheckoutFindInput = Schema.Struct({
   /** The source project's `repositoryGroupingKeyOf` key. */
   repositoryKey: TrimmedNonEmptyString,
+  /** Checks only this folder, a path on that machine, instead of searching. */
+  folder: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type ExistingCheckoutFindInput = typeof ExistingCheckoutFindInput.Type;
 

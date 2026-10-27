@@ -5,7 +5,10 @@ import {
   getCloneDestinationPath,
   getCloneDirectoryName,
 } from "@t3tools/client-runtime/operations/projects";
-import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
+import {
+  createEnvironmentRpcQueryAtomFamily,
+  executeAtomQuery,
+} from "@t3tools/client-runtime/state/runtime";
 import {
   EXISTING_CHECKOUT_WS_METHODS,
   type EnvironmentId,
@@ -36,6 +39,7 @@ import {
 } from "../lib/addProjectToMachine";
 import { formatBytes } from "../lib/formatBytes";
 import { newProjectId } from "../lib/utils";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useProject } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import { projectEnvironment } from "../state/projects";
@@ -108,10 +112,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     (protocol === "ssh" ? sshUrl : protocol === "https" ? httpsUrl : null) ?? sourceUrl;
 
   const targetEnvironment = environments.find((env) => env.environmentId === target?.environmentId);
-  const defaultPath = getCloneDestinationPath(
-    getAddProjectInitialQuery(targetEnvironment?.serverConfig?.settings.addProjectBaseDirectory),
-    getCloneDirectoryName(sourceUrl),
+  const baseDirectory = getAddProjectInitialQuery(
+    targetEnvironment?.serverConfig?.settings.addProjectBaseDirectory,
   );
+  const defaultPath = getCloneDestinationPath(baseDirectory, getCloneDirectoryName(sourceUrl));
   const [pathOverride, setPathOverride] = useState<string | null>(null);
   const destinationPath = pathOverride ?? defaultPath;
 
@@ -137,10 +141,16 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     existingCheckout.error === null;
   const foundRoot = existingCheckout.data?.repositoryRoot ?? null;
   const [cloneInstead, setCloneInstead] = useState(false);
-  const addExisting = foundRoot !== null && !cloneInstead;
+  // A checkout the search cannot reach, such as one outside the add-project folder.
+  const canCheckFolder =
+    repositoryKey !== null &&
+    targetEnvironment?.serverConfig?.environment.capabilities.existingCheckoutFolder === true;
+  const [useOwnFolder, setUseOwnFolder] = useState(false);
+  const addExisting = useOwnFolder || (foundRoot !== null && !cloneInstead);
   const [existingPathOverride, setExistingPathOverride] = useState<string | null>(null);
   const existingPath =
-    existingPathOverride ?? (foundRoot ? joinSubdirectory(foundRoot, subdirectory) : "");
+    existingPathOverride ??
+    (foundRoot ? joinSubdirectory(foundRoot, subdirectory) : useOwnFolder ? baseDirectory : "");
   const folderPath = addExisting ? existingPath : destinationPath;
 
   const canListFiles = source?.serverConfig?.environment.capabilities.ignoredFileListing === true;
@@ -217,11 +227,22 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     const projectId = newProjectId();
     try {
       if (addExisting) {
+        const workspaceRoot =
+          canCheckFolder && repositoryKey !== null
+            ? await checkedWorkspaceRoot({
+                environmentId: target.environmentId,
+                repositoryKey,
+                folder: folderPath.trim(),
+                subdirectory,
+                repositoryName: project.repositoryIdentity?.displayName ?? project.title,
+                machine: target.label,
+              })
+            : folderPath.trim();
         await addExistingCheckout({
           environmentId: target.environmentId,
           projectId,
           title: project.title,
-          workspaceRoot: folderPath.trim(),
+          workspaceRoot,
         });
       } else {
         await addProjectToMachine({
@@ -303,6 +324,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                       if (!value) return;
                       setTargetId(value);
                       setCloneInstead(false);
+                      setUseOwnFolder(false);
                       setExistingPathOverride(null);
                     }}
                     items={targets.map((t) => ({ value: t.environmentId, label: t.label }))}
@@ -386,9 +408,29 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     type="button"
                     variant="link"
                     size="xs"
-                    onClick={() => setCloneInstead(!cloneInstead)}
+                    onClick={() => {
+                      setCloneInstead(addExisting);
+                      setUseOwnFolder(false);
+                    }}
                   >
                     {addExisting ? "Clone a new copy instead" : "Use it instead"}
+                  </Button>
+                </p>
+              ) : canCheckFolder ? (
+                <p className="flex flex-wrap items-center gap-x-1 text-muted-foreground text-xs">
+                  {useOwnFolder
+                    ? "Enter the folder of the checkout already there."
+                    : `No checkout found where ${target?.label ?? "that machine"} keeps projects.`}
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    onClick={() => {
+                      setUseOwnFolder(!useOwnFolder);
+                      setExistingPathOverride(null);
+                    }}
+                  >
+                    {useOwnFolder ? "Clone a new copy instead" : "Use a folder already there"}
                   </Button>
                 </p>
               ) : null}
@@ -469,6 +511,44 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
       </DialogPopup>
     </Dialog>
   );
+}
+
+/**
+ * Checks the folder on the other machine is a checkout of this repository. Naming its top folder
+ * adds the same subfolder the source project uses. Fork add-on: existing checkout.
+ */
+async function checkedWorkspaceRoot(input: {
+  readonly environmentId: EnvironmentId;
+  readonly repositoryKey: string;
+  readonly folder: string;
+  readonly subdirectory: string;
+  readonly repositoryName: string;
+  readonly machine: string;
+}): Promise<string> {
+  const result = await executeAtomQuery(
+    appAtomRegistry,
+    existingCheckoutQuery({
+      environmentId: input.environmentId,
+      input: { repositoryKey: input.repositoryKey, folder: input.folder },
+    }),
+    { label: "Check existing checkout", reportFailure: false, refresh: true },
+  );
+  if (result._tag === "Failure") throw new Error("Could not check that folder.");
+  const root = result.value.repositoryRoot;
+  if (root === null) {
+    throw new Error(
+      `${input.folder} is not a checkout of ${input.repositoryName} on ${input.machine}.`,
+    );
+  }
+  return comparablePath(root) === comparablePath(input.folder)
+    ? joinSubdirectory(root, input.subdirectory)
+    : input.folder;
+}
+
+/** Windows paths compare without regard to case or slash direction. */
+function comparablePath(path: string) {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  return /^[a-z]:|\\/i.test(trimmed) ? trimmed.replaceAll("\\", "/").toLowerCase() : trimmed;
 }
 
 /**
