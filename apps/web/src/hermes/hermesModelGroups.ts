@@ -13,7 +13,7 @@ import {
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 
-import { getTriggerDisplayModelLabel, type ModelEsque } from "../components/chat/providerIconUtils";
+import { getTriggerDisplayModelName, type ModelEsque } from "../components/chat/providerIconUtils";
 import { HERMES_DRIVER, hermesModelProvider } from "./hermesSessions";
 
 const GROUP_KEY_PREFIX = "hermes-group:";
@@ -136,5 +136,5 @@ export function hermesComposerTriggerLabel(
     return `${agentName} · Default`;
   }
   const option = options.find((candidate) => candidate.slug === model);
-  return `${agentName} · ${option ? getTriggerDisplayModelLabel(option) : model}`;
+  return `${agentName} · ${option ? getTriggerDisplayModelName(option, HERMES_DRIVER) : model}`;
 }
