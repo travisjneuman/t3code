@@ -12,6 +12,7 @@ import type { EnvironmentProject } from "./models.ts";
 import { normalizeProjectPathForComparison } from "./projects.ts";
 
 const SCRATCH_PROJECT_SCOPE_KEY = "\0no-project";
+const LINKED_PROJECT_KEY_PREFIX = "\0link:"; // Fork add-on: project links
 
 export interface ProjectGroupingSettings {
   readonly sidebarProjectGroupingMode: SidebarProjectGroupingMode;
@@ -130,7 +131,7 @@ function deriveLogicalProjectKey(
   project: Pick<
     EnvironmentProject,
     "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
-  >,
+  > & { readonly linkKey?: string | null }, // Fork add-on: project links
   options?: {
     readonly groupingMode?: SidebarProjectGroupingMode;
     readonly groupScratchProjects?: boolean;
@@ -141,6 +142,7 @@ function deriveLogicalProjectKey(
   if (groupingMode === "separate") {
     return derivePhysicalProjectKey(project);
   }
+  if (project.linkKey) return `${LINKED_PROJECT_KEY_PREFIX}${project.linkKey}`; // Fork add-on
 
   return (
     deriveRepositoryScopedKey(project, groupingMode) ??

@@ -16,6 +16,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlSchema from "effect/sql/SqlSchema";
+import { makeProjectLinks } from "../persistence/ProjectLinks.ts"; // Fork add-on: project links
 
 export class ProjectStoreV2Error extends Schema.TaggedError<ProjectStoreV2Error>()(
   "ProjectStoreV2Error",
@@ -36,6 +37,7 @@ export const ProjectRow = Schema.Struct({
   defaultModelSelection: Schema.NullOr(ModelSelection),
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
   autoPull: Schema.Boolean,
+  linkKey: Schema.optional(Schema.NullOr(Schema.String)), // Fork add-on: project links
   faviconPath: Schema.NullOr(Schema.String),
   projectIcon: Schema.NullOr(StoredProjectIcon),
   scripts: Schema.Array(ProjectScript),
@@ -62,6 +64,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     defaultModelSelection: row.defaultModelSelection,
     defaultThreadEnvMode: row.defaultThreadEnvMode,
     autoPull: row.autoPull,
+    linkKey: row.linkKey ?? null, // Fork add-on: project links
     faviconPath: row.faviconPath,
     projectIcon: row.projectIcon,
     scripts: row.scripts,
@@ -100,6 +103,7 @@ export class ProjectStoreV2 extends Context.Service<
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const encodeRow = Schema.encodeEffect(ProjectDbRow);
+  const projectLinks = yield* makeProjectLinks; // Fork add-on: project links
 
   const selectRows = SqlSchema.findAll({
     Request: Schema.Struct({
@@ -117,6 +121,7 @@ export const make = Effect.gen(function* () {
         default_model_selection_json AS "defaultModelSelection",
         default_thread_env_mode AS "defaultThreadEnvMode",
         auto_pull AS "autoPull",
+        ${projectLinks.linkKeyColumn} AS "linkKey", -- Fork add-on: project links
         favicon_path AS "faviconPath",
         project_icon_json AS "projectIcon",
         scripts_json AS "scripts",
@@ -223,6 +228,7 @@ export const make = Effect.gen(function* () {
           defaultModelSelection: payload.defaultModelSelection,
           defaultThreadEnvMode: payload.defaultThreadEnvMode ?? null,
           autoPull: false,
+          linkKey: null, // Fork add-on: project links
           faviconPath: payload.faviconPath ?? null,
           projectIcon: payload.projectIcon ?? null,
           scripts: payload.scripts,
@@ -258,6 +264,7 @@ export const make = Effect.gen(function* () {
         ...(payload.scripts === undefined ? {} : { scripts: payload.scripts }),
         updatedAt: payload.updatedAt,
       }).pipe(mapError("apply"));
+      yield* projectLinks.apply(payload).pipe(mapError("apply")); // Fork add-on: project links
     },
   );
 

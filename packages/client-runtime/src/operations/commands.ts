@@ -57,6 +57,7 @@ export interface UpdateProjectInput extends CommandMetadata {
   readonly workspaceRoot?: string;
   readonly defaultModelSelection?: ModelSelection | null;
   readonly autoPull?: boolean;
+  readonly linkKey?: string | null; // Fork add-on
   readonly projectIcon?: ProjectIconOverride | null;
   readonly faviconPath?: string | null;
   readonly defaultThreadEnvMode?: ThreadEnvMode | null;
@@ -373,6 +374,7 @@ export const updateProject = Effect.fn("EnvironmentCommands.updateProject")(func
       ? {}
       : { defaultModelSelection: input.defaultModelSelection }),
     ...(input.autoPull === undefined ? {} : { autoPull: input.autoPull }),
+    ...(input.linkKey === undefined ? {} : { linkKey: input.linkKey }), // Fork add-on
     ...(input.projectIcon === undefined ? {} : { projectIcon: input.projectIcon }),
     ...(input.faviconPath === undefined ? {} : { faviconPath: input.faviconPath }),
     ...(input.defaultThreadEnvMode === undefined

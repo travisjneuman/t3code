@@ -8,9 +8,10 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { comparePairOf, compareThreadIds, type EnvironmentId } from "@t3tools/contracts";
 import { useMatch, type useNavigate } from "@tanstack/react-router";
-import { ArchiveIcon, Columns2Icon, PencilIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, Columns2Icon, FolderSearchIcon, PencilIcon, Trash2Icon } from "lucide-react";
 
 import { type CommandPaletteActionItem, ITEM_ICON_CLASS } from "../components/CommandPalette.logic";
+import { openFindCheckouts } from "../components/settings/FindCheckoutsDialog";
 import { useRemoteAppPanelPaletteItems } from "../remote-apps/panel/remoteAppPanelPalette";
 import { useThreadShell } from "../state/entities";
 import { startCompareRename } from "./compareRenameStore";
@@ -145,5 +146,16 @@ export function useCompareAgentsPaletteItems(input: {
     });
   }
   items.push(...remoteAppPanelItems);
+  // Find checkouts rides along here too, for the same reason.
+  items.push({
+    kind: "action",
+    value: "action:find-checkouts",
+    searchTerms: ["find projects", "other machines", "existing checkout", "add checkout", "scan"],
+    title: "Find projects on other machines…",
+    icon: <FolderSearchIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      openFindCheckouts();
+    },
+  });
   return items;
 }

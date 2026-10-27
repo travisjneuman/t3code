@@ -106,6 +106,30 @@ Every thread card in the sidebar names the machine the thread runs on, the one p
 on**, centered at its bottom, even when the thread is in a project, since one project can live on
 several machines. A thread's branch, when it has one, sits at the bottom left.
 
+## One project on several machines
+
+Git projects already show as one project across machines when they share a repository. For a
+folder that isn't a git repository, open it in **Settings → Projects** and use **Link with a project
+on another machine** under **Other machines**: both then show as one project, each machine keeping
+its own folder, and project settings apply to both. **Unlink** next to a machine's folder splits it
+off again. Links are stored on each machine's server, so every client and device sees them; a
+machine on an older release shows its copy on its own until it updates.
+
+**Other machines** also lists each connected machine that doesn't have the project yet. For a git
+project, **Add…** opens [Add to another machine](thread-sidebar.md). For a folder project, enter the
+folder on that machine (it must already exist) and press **Add**; the new copy is linked
+automatically.
+
+To pick up git projects you already have checked out on other machines, use **Find projects on
+other machines** in **Settings → Projects**, or the same command in the command palette. It
+searches each connected machine that lacks a project, in its add-project folder and beside its
+other projects, lists what it found for you to tick, and adds those folders. It never clones; a
+project it didn't find gets an **Add on…** shortcut. The search reads each machine's disk, so it
+only runs when you press **Search**.
+
+**No project** shows once in Settings and the command palette, as in the sidebar, and can't be
+removed: every machine keeps its own.
+
 ## Subagents sit under their thread
 
 A thread that started subagents, through `delegate_task` or the provider's own subagent tool, shows

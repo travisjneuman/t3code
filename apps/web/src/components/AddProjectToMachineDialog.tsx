@@ -80,7 +80,7 @@ const close = () => useRequest.setState({ request: null });
 
 // Fork add-on: existing checkout. Idle TTL 0: it reads the other machine's disk, so it runs only
 // while the dialog is open and is read fresh each time.
-const existingCheckoutQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+export const existingCheckoutQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:existing-checkout:find",
   tag: EXISTING_CHECKOUT_WS_METHODS.find,
   idleTtlMs: 0,
@@ -555,7 +555,7 @@ function comparablePath(path: string) {
  * A project can be rooted below its repository's top folder. The clone lands
  * at the top, so copied files keep the same path below it.
  */
-function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: string) {
+export function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: string) {
   if (!repositoryRoot) return "";
   const prefix = repositoryRoot.replace(/[\\/]+$/, "");
   const rest = workspaceRoot.slice(prefix.length);
@@ -565,7 +565,7 @@ function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: 
 }
 
 /** Uses the found folder's own separator, since the other machine may be Windows. */
-function joinSubdirectory(root: string, subdirectory: string) {
+export function joinSubdirectory(root: string, subdirectory: string) {
   if (!subdirectory) return root;
   const separator = root.includes("\\") ? "\\" : "/";
   return `${root.replace(/[\\/]+$/, "")}${separator}${subdirectory.replaceAll("/", separator)}`;

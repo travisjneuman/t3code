@@ -17,6 +17,7 @@ export function useSettingsProjectGroups() {
   const labels = new Map(environments.map((entry) => [entry.environmentId, entry.label]));
   return buildSidebarProjectSnapshots({
     projects,
+    groupScratchProjects: true, // Fork add-on: one No project, as in the sidebar
     settings: { sidebarProjectGroupingMode, sidebarProjectGroupingOverrides },
     primaryEnvironmentId,
     resolveEnvironmentLabel: (id) => labels.get(id) ?? null,

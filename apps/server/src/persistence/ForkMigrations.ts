@@ -18,6 +18,7 @@ import * as Migrator from "effect/sql/Migrator";
 
 import ForkMigration0001 from "./ForkMigrations/001_SessionInsightsReports.ts";
 import ForkMigration0002 from "./ForkMigrations/002_SessionInsightsOutputs.ts";
+import ForkMigration0003 from "./ForkMigrations/003_ProjectLinks.ts";
 
 const FORK_MIGRATIONS_TABLE = "fork_sql_migrations";
 
@@ -25,6 +26,7 @@ const FORK_MIGRATIONS_TABLE = "fork_sql_migrations";
 const forkMigrationEntries = [
   [1, "SessionInsightsReports", ForkMigration0001],
   [2, "SessionInsightsOutputs", ForkMigration0002],
+  [3, "ProjectLinks", ForkMigration0003],
 ] as const;
 
 const loader = Migrator.fromRecord(

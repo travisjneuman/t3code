@@ -81,6 +81,7 @@ export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<Environ
   });
   const unsortedProjectGroups = buildSidebarProjectSnapshots({
     projects: clientSettings.sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
+    groupScratchProjects: true, // Fork add-on: one No project, as in the sidebar
     settings: projectGroupingSettings,
     primaryEnvironmentId,
     resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,

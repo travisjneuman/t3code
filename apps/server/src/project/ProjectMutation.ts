@@ -35,6 +35,7 @@ export const projectMutationOperation = Effect.fn("projectMutationOperation")(fu
           ? {}
           : { defaultModelSelection: mutation.defaultModelSelection }),
         ...(mutation.autoPull === undefined ? {} : { autoPull: mutation.autoPull }),
+        ...(mutation.linkKey === undefined ? {} : { linkKey: mutation.linkKey }), // Fork add-on
         ...(mutation.projectIcon === undefined ? {} : { projectIcon: mutation.projectIcon }),
         ...(mutation.faviconPath === undefined ? {} : { faviconPath: mutation.faviconPath }),
         ...(mutation.defaultThreadEnvMode === undefined
