@@ -23,6 +23,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
+import { createChatCanvasStore } from "../components/chat/canvasStore";
 import { ExpandedImageDialog } from "../components/chat/ExpandedImageDialog";
 import {
   type ExpandedImagePreview,
@@ -95,6 +96,7 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
     stopFollowing,
   } = useTimelineLiveFollow(hasEntries);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
+  const [canvasStore] = useState(createChatCanvasStore);
 
   const openThread = (target: ThreadId) =>
     void navigate({
@@ -133,7 +135,12 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
         </Button>
       </div>
       <div className="relative flex min-h-0 min-w-0 flex-1">
-        <ChatCanvas composerOverlayElement={null}>
+        <ChatCanvas
+          store={canvasStore}
+          threadRef={null}
+          preview={null}
+          composerOverlayElement={null}
+        >
           <div className="relative flex min-h-0 flex-1 flex-col bg-background">
             <MessagesTimeline
               isWorking={isWorking}

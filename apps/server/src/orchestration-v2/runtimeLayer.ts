@@ -393,7 +393,7 @@ export const layerProduction = Layer.mergeAll(
       /* Fork add-on */ Layer.mergeAll(
         layerProjectService, // Fork add-on
         layerOrchestratorProvided, // Fork add-on
-        layerEventSinkProvided, // Fork add-on
+        layerEventSink, // Fork add-on
         layerEventStoreProvided, // Fork add-on
         IdAllocator.layer, // Fork add-on
         ProviderSessionRuntime.layer, // Fork add-on
@@ -404,7 +404,7 @@ export const layerProduction = Layer.mergeAll(
     /* Fork add-on */ Layer.provide(
       /* Fork add-on */ Layer.mergeAll(
         layerOrchestratorProvided, // Fork add-on
-        layerEventSinkProvided, // Fork add-on
+        layerEventSink, // Fork add-on
         layerManagedProjectFoldersProvided, // Fork add-on
         IdAllocator.layer, // Fork add-on
         TurnItemPositionStore.layer, // Fork add-on

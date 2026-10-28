@@ -15,6 +15,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
+  AuthOrchestrationOperateScope,
   compareThreadIds,
   type ContextMenuItem,
   type EnvironmentId,
@@ -38,12 +39,11 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { readLocalApi } from "../localApi";
 import {
+  readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
-  readEnvironmentSupportsPinning,
-  readEnvironmentSupportsSettlement,
-  readEnvironmentSupportsSnooze,
   readThreadShell,
 } from "../state/entities";
+import { readEnvironmentScope } from "../state/session";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import { type ComparePair, comparePromptOf, renamedCompareTitle } from "./comparePairs";
@@ -217,15 +217,17 @@ export function useComparePairMenu(input: {
       const { sides, lead, prompt } = pair;
       const refs = sides.map((side) => side.ref);
       const now = new Date();
+      const configLoaded = readEnvironmentServerConfigLoaded(environmentId);
       const supports = {
-        settlement: readEnvironmentSupportsSettlement(environmentId),
+        settlement: configLoaded,
         autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(environmentId),
-        snooze: readEnvironmentSupportsSnooze(environmentId),
-        pinning: readEnvironmentSupportsPinning(environmentId),
+        snooze: configLoaded,
+        pinning: configLoaded,
         titleRegeneration: false,
       };
-      const snoozePresets = resolveSnoozePresets(now, timestampFormat);
+      const snoozePresets = resolveSnoozePresets(now, timestampFormat, environmentId);
       const items = buildThreadActionMenuItems({
+        canOperate: readEnvironmentScope(environmentId, AuthOrchestrationOperateScope),
         branch: null,
         projectFilter: null,
         isPinned: lead.pinnedAt != null,

@@ -50,12 +50,7 @@ import {
 } from "../lib/attachmentUploadQueue";
 import { cn, randomUUID } from "../lib/utils";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
-import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  type ProviderInstanceEntry,
-  sortProviderInstanceEntries,
-} from "../providerInstances";
+import { type ProviderInstanceEntry, providerInstanceEntriesFor } from "../providerInstances";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
 import {
   compareFollowUpPermissionAtom,
@@ -71,9 +66,7 @@ export function useCompareProviders(environmentId: EnvironmentId) {
   const settings = useEnvironmentSettings(environmentId);
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
-  const entries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
-  );
+  const entries = providerInstanceEntriesFor(providers, settings, null);
   return { settings, providers, entries };
 }
 

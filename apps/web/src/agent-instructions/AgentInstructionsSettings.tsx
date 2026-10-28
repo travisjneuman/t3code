@@ -41,10 +41,8 @@ import {
 import { Switch } from "../components/ui/switch";
 import { Textarea } from "../components/ui/textarea";
 import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
+  providerInstanceEntriesFor,
   resolveDefaultProviderModelSelection,
-  sortProviderInstanceEntries,
 } from "../providerInstances";
 import { useEnvironmentProviders } from "../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../state/server";
@@ -190,13 +188,7 @@ export function AgentInstructionsSettingsSection() {
   const providers =
     (environment ? providersByEnvironment.get(environment.environmentId) : undefined) ??
     EMPTY_SERVER_PROVIDERS;
-  const entries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(
-      deriveProviderInstanceEntries(providers),
-      settings,
-      target?.projectId ?? null,
-    ),
-  );
+  const entries = providerInstanceEntriesFor(providers, settings, target?.projectId ?? null);
   const modelDisabledReason = useScopedModelDisabledReason(settings, entries);
   const delegating = mixedDelegation || settings.agentDelegationMode !== "off";
   const workerSeed = resolveDefaultProviderModelSelection(

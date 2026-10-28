@@ -28,6 +28,7 @@ import {
 import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
 
 import { ChatCanvas } from "../components/chat/ChatCanvas";
+import { createChatCanvasStore } from "../components/chat/canvasStore";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
@@ -210,6 +211,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
   // The docked block floats over the timeline; keep the end clear of it.
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null);
   const [overlayHeight, setOverlayHeight] = useState(0);
+  const [canvasStore] = useState(createChatCanvasStore);
   const measureOverlayOnAttach = useStableCallback((element: HTMLDivElement | null) => {
     setOverlayElement(element);
     if (element !== null) setOverlayHeight(Math.round(element.offsetHeight));
@@ -238,7 +240,12 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
             controls={sidePanel.headerControls}
           />
           <div className="relative flex min-h-0 min-w-0 flex-1">
-            <ChatCanvas composerOverlayElement={overlayElement}>
+            <ChatCanvas
+              store={canvasStore}
+              threadRef={null}
+              preview={null}
+              composerOverlayElement={overlayElement}
+            >
               <div className="relative flex min-h-0 flex-1 flex-col bg-background">
                 <MessagesTimeline
                   isWorking={running}
