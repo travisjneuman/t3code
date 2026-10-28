@@ -247,6 +247,16 @@ function RootRouteErrorView({ error }: ErrorComponentProps) {
         <Button size="sm" onClick={() => void router.invalidate()}>
           Try again
         </Button>
+        {/* Fork add-on: leave a crashing route instead of being stuck on it. */}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            router.history.canGoBack() ? router.history.back() : void router.navigate({ to: "/" })
+          }
+        >
+          Go back
+        </Button>
         <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
           Reload app
         </Button>

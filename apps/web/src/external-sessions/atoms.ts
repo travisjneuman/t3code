@@ -200,7 +200,7 @@ export const externalSessionOriginIsLocalAtom = Atom.family((environmentId: Envi
       presentation !== null &&
       resolveRemoteOpenState({
         target: presentation.entry.target,
-        sshAlias: null,
+        sshTarget: null,
         remoteOpenTargets: undefined,
         isDesktopRenderer: window.desktopBridge !== undefined,
       }).mode === "local-exec"
