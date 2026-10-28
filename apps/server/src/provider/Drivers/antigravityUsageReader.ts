@@ -108,21 +108,29 @@ function withRateModel(record: UsageRecord): UsageRecord {
   return rateModel === record.model ? record : { ...record, rateModel };
 }
 
-function modelName(name: string, id: number): string {
-  if (name) {
-    const normalized = name
+const EFFORT_SUFFIX = /\s*\((low|medium|high)\)\s*$/i;
+
+function modelName(name: string, displayName: string, id: number): string {
+  // Newer CLIs put a codename (gemini-3.8-flash-n) in the name field; the display name carries the picked effort.
+  const source = EFFORT_SUFFIX.test(displayName) ? displayName : name || displayName;
+  if (source) {
+    const effort = EFFORT_SUFFIX.exec(source)?.[1]?.toLowerCase();
+    const normalized = source
       .toLowerCase()
       .replace(/\s*\([^)]*\)\s*$/, "")
       .replaceAll(" ", "-");
-    if (normalized.startsWith("claude-")) {
-      return normalized
-        .replace(/^claude-(4(?:\.\d+)?)-(sonnet|opus|haiku)/, "claude-$2-$1")
-        .replaceAll(".", "-");
-    }
-    return normalized;
+    const base = normalized.startsWith("claude-")
+      ? normalized
+          .replace(/^claude-(4(?:\.\d+)?)-(sonnet|opus|haiku)/, "claude-$2-$1")
+          .replaceAll(".", "-")
+      : normalized;
+    return effort === undefined ? base : `${base}-${effort}`;
   }
   return MODEL_IDS[id] ?? (id > 0 ? `antigravity-model-${id}` : "");
 }
+
+const isPlaceholderModel = (model: string) =>
+  model === "antigravity-unknown" || model.startsWith("antigravity-model-");
 
 interface Metadata {
   model: string;
@@ -147,7 +155,8 @@ function metadata(bytes: Uint8Array, step: boolean): Metadata {
   }
   return {
     model: modelName(
-      textAt(model, step ? 12 : 19) || textAt(model, step ? 8 : 21),
+      textAt(model, step ? 12 : 19),
+      textAt(model, step ? 8 : 21),
       numberAt(model, step ? 1 : 3),
     ),
     timestampMs: step
@@ -272,6 +281,14 @@ function usageCandidates(
 ): UsageCandidate[] {
   const records: UsageCandidate[] = [];
   const generationModels = new Map(generations.map(({ idx, entry }) => [idx, entry.model]));
+  // Step and generation rows need not share an idx; their usage still carries the same numeric model id.
+  const generationModelsById = new Map<number, string>();
+  for (const { entry } of generations) {
+    for (const usage of entry.usages) {
+      const id = numberAt(usage, 1);
+      if (id > 0 && entry.model) generationModelsById.set(id, entry.model);
+    }
+  }
   for (const [source, entries] of [
     ["step", steps],
     ["generation", generations],
@@ -306,7 +323,8 @@ function usageCandidates(
             MODEL_IDS[numberAt(usage, 1)] ||
             entry.model ||
             (source === "step" ? generationModels.get(idx) : "") ||
-            modelName("", numberAt(usage, 1)) ||
+            generationModelsById.get(numberAt(usage, 1)) ||
+            modelName("", "", numberAt(usage, 1)) ||
             "antigravity-unknown",
           totals,
           reportedCostUsd: null,
@@ -377,12 +395,11 @@ export const readAntigravityUsage = Effect.fn("readAntigravityUsage")(function* 
     const y = source.record.totals;
     target.record = {
       ...first.record,
-      model:
-        first.record.model === "antigravity-unknown"
-          ? first === target
-            ? source.record.model
-            : target.record.model
-          : first.record.model,
+      model: isPlaceholderModel(first.record.model)
+        ? first === target
+          ? source.record.model
+          : target.record.model
+        : first.record.model,
       timestampMs: bestTime.record.timestampMs,
       totals: {
         uncachedInputTokens: Math.max(x.uncachedInputTokens, y.uncachedInputTokens),
