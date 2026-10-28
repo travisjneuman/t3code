@@ -82,8 +82,9 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   return (
     <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5" /* Fork add-on */>
       <div
-        role="button"
-        tabIndex={0}
+        role="treeitem"
+        tabIndex={-1}
+        data-sidebar-row={`draft:${draftId}`}
         aria-label={accessibility.label}
         aria-current={accessibility.current}
         data-testid="sidebar-draft-row"

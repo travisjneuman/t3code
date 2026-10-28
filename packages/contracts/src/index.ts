@@ -41,6 +41,7 @@ export * from "./guestShare.ts";
 export * from "./guestStream.ts";
 export * from "./applicationEvent.ts";
 export * from "./orchestratorMcp.ts";
+export * from "./peerLink.ts";
 export * from "./threadMetadataMcp.ts";
 export * from "./threadPullRequest.ts";
 export * from "./threadSearch.ts";
@@ -74,7 +75,6 @@ export * from "./hostBackups.ts"; // Fork add-on: host backups.
 export * from "./existingCheckout.ts"; // Fork add-on: existing checkout.
 export * from "./threadRetention.ts"; // Fork add-on: thread retention.
 export * from "./previewCapture.ts";
-export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";
 export * from "./worktreeMcp.ts";
