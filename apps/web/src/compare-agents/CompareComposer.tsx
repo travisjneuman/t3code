@@ -31,11 +31,7 @@ import {
   resolveComposerInteractionMode,
 } from "../components/ChatView.logic";
 import { ComposerFooterModeControls } from "../components/chat/ComposerFooterControls";
-import {
-  ComposerControl,
-  ComposerControlIcon,
-  ComposerControlSeparator,
-} from "../components/chat/ComposerControl";
+import { ComposerControl, ComposerControlIcon } from "../components/chat/ComposerControl";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
 import { runtimeModeConfig, runtimeModeOptions } from "../components/chat/runtimeModeConfig";
@@ -494,7 +490,6 @@ export function CompareComposer(props: {
                 disabled={pending !== null}
                 onChange={setLeftChoice}
               />
-              <ComposerControlSeparator size="xs" />
               <SideModel
                 label="Right"
                 projection={right}

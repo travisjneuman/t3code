@@ -3070,7 +3070,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           model: turnInput.modelSelection.model,
           agentScope: { thread: turnInput.appThread, provider: OPENCODE_PROVIDER }, // Fork add-on: agent instructions.
         }),
-        t3OrchestrationSystemPrompt(mcpAvailable),
+        t3OrchestrationSystemPrompt(mcpAvailable, mcpSession?.capabilities?.has("device") === true),
       ]
         .filter((part) => part !== undefined && part.length > 0)
         .join("\n\n");

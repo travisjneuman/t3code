@@ -39,6 +39,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       [...appAtomRegistry.get(environmentPresentations.presentationsAtom)].map(
         ([environmentId, presentation]) => ({ ...presentation, environmentId }),
       ),
+    primaryEnvironmentId: () => appAtomRegistry.get(primaryEnvironmentIdAtom),
     registry: appAtomRegistry,
     handleNewThread,
   });
@@ -109,9 +110,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       "chat.newWithoutProject": (event) => {
         const { activeThread, activeDraftThread } = readThreadContext();
         const environmentId = scratch.scratchEnvironmentId(
-          activeThread?.environmentId ??
-            activeDraftThread?.environmentId ??
-            appAtomRegistry.get(primaryEnvironmentIdAtom),
+          activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null,
         );
         if (environmentId === null) return;
         claim(event);
@@ -119,21 +118,23 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       },
       "chat.new": (event) => {
         // Fork add-on: like the sidebar's New thread button, start in No project.
-        if (!getClientSettings().legacySidebarEnabled) {
+        if (!getClientSettings().legacySidebarEnabled) { // Fork add-on
           const { activeThread, activeDraftThread } = readThreadContext(); // Fork add-on
-          const scratchTarget = scratch.scratchEnvironmentId(
+          const scratchTarget = scratch.scratchEnvironmentId( // Fork add-on
             activeThread?.environmentId ?? // Fork add-on
               activeDraftThread?.environmentId ?? // Fork add-on
               appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on
           ); // Fork add-on
-          if (scratchTarget !== null) {
+          if (scratchTarget !== null) { // Fork add-on
             claim(event); // Fork add-on
             void scratch.startScratchThread(scratchTarget); // Fork add-on
             return; // Fork add-on
           } // Fork add-on
         } // Fork add-on
-        // Pre-hydration settings are the defaults, where the legacy sidebar is off.
-        if (!getClientSettings().legacySidebarEnabled && readProjectGroupCount() > 1) {
+        // The boring sidebar's folders already show the context, so it starts in
+        // the current project like the legacy sidebar did.
+        const { boringSidebarEnabled, legacySidebarEnabled } = getClientSettings();
+        if (!boringSidebarEnabled && !legacySidebarEnabled && readProjectGroupCount() > 1) {
           claim(event);
           openCommandPalette({ open: "new-thread-in" });
           return;

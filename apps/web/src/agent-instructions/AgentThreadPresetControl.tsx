@@ -19,7 +19,6 @@ import { memo } from "react";
 
 import {
   ComposerControlIcon,
-  ComposerControlSeparator,
   ComposerSelectControl,
   type ComposerControlSize,
 } from "../components/chat/ComposerControl";
@@ -68,7 +67,6 @@ export const AgentThreadPresetControl = memo(function AgentThreadPresetControl(
 
   return (
     <>
-      <ComposerControlSeparator size={props.size} />
       <Tooltip>
         <Select
           open={open}
