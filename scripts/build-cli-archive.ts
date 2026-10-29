@@ -531,7 +531,8 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
   });
 
   const executablePath = path.join(contentDir, executableName);
-  if (input.platform === "linux") {
+  // Fork add-on: fleet hosts run the archive they build against their own libatomic; Arch lacks dpkg and patchelf.
+  if (input.platform === "linux" && process.env.T3CODE_FORK_BUILD === undefined) {
     yield* bundleLinuxLibatomic({ repoRoot, contentDir, executablePath });
   }
   // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
