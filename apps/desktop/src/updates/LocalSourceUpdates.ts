@@ -1,4 +1,9 @@
 import { UPSTREAM_SYNC_PROMPT_PREFIX, type DesktopSourceSyncProgress } from "@t3tools/contracts";
+import {
+  buildEnvironmentCaptureCommand,
+  listLoginShellCandidates,
+  mergePathEntries,
+} from "@t3tools/shared/shell";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
@@ -36,6 +41,9 @@ const ANSI_PATTERN = /\u001b\[[0-9;]*m/gu;
 const SOURCE_REPOSITORY_PATH_ENV = "T3CODE_SOURCE_REPOSITORY_PATH";
 // A repository sync script that pushes with `push-safe`; without it, plain git pushes.
 const SYNC_RUNNER_ENV = "TJN_REPO_SYNC_RUNNER";
+// The Claude CLI and vp are on the login shell's PATH, not launchd's.
+const LOGIN_SHELL_ENV_NAMES = ["PATH", SYNC_RUNNER_ENV] as const;
+const LOGIN_SHELL_TIMEOUT = "30 seconds";
 const UPSTREAM_REPOSITORY = "pingdotgg/t3code";
 const UPSTREAM_REMOTE_URL = "https://github.com/pingdotgg/t3code.git";
 // The scheme, user, and host of a GitHub remote: https, ssh, scp-style, or git protocol.
@@ -454,6 +462,17 @@ function describePaths(paths: ReadonlyArray<string>): string {
 const describeLostMarkers = (lost: ReadonlyArray<LostForkMarkers>): string =>
   describePaths(lost.map((entry) => entry.currentPath ?? entry.path));
 
+// Reads one value printed by buildEnvironmentCaptureCommand.
+const readCapturedEnvironmentValue = (output: string, name: string): string | undefined => {
+  const start = `__T3CODE_ENV_${name}_START__`;
+  const startIndex = output.indexOf(start);
+  if (startIndex === -1) return undefined;
+  const endIndex = output.indexOf(`__T3CODE_ENV_${name}_END__`, startIndex + start.length);
+  if (endIndex === -1) return undefined;
+  const value = output.slice(startIndex + start.length, endIndex).trim();
+  return value.length > 0 ? value : undefined;
+};
+
 export function resolveMacApplicationBundlePath(
   executablePath: string,
   resolvePath: (path: string, ...segments: ReadonlyArray<string>) => string,
@@ -634,6 +653,37 @@ export const make = Effect.gen(function* () {
     }
     return result;
   });
+
+  // The startup shell probe gives up after 5 seconds and is cached, so one slow
+  // launch leaves the app on launchd's PATH, where claude and vp are missing.
+  // Sync and update re-read the login shell until one read succeeds.
+  const loginShellLoadedRef = yield* Ref.make(false);
+  const loadLoginShellEnvironment = Effect.fn("desktop.localSourceUpdates.loadLoginShell")(
+    function* () {
+      if (yield* Ref.get(loginShellLoadedRef)) return;
+      for (const shell of listLoginShellCandidates(environment.platform, process.env.SHELL)) {
+        const result = yield* runCommand({
+          operation: "configuration",
+          command: shell,
+          args: ["-ilc", buildEnvironmentCaptureCommand(shell, LOGIN_SHELL_ENV_NAMES)],
+          cwd: environment.homeDirectory,
+        }).pipe(
+          Effect.timeoutOption(LOGIN_SHELL_TIMEOUT),
+          Effect.orElseSucceed(() => Option.none<CommandResult>()),
+        );
+        const output = Option.getOrUndefined(result)?.stdout ?? "";
+        const shellPath = readCapturedEnvironmentValue(output, "PATH");
+        if (!shellPath) continue;
+        const merged = mergePathEntries(shellPath, process.env.PATH, environment.platform);
+        if (merged) process.env.PATH = merged;
+        const runner = readCapturedEnvironmentValue(output, SYNC_RUNNER_ENV);
+        if (runner && !process.env[SYNC_RUNNER_ENV]?.trim()) process.env[SYNC_RUNNER_ENV] = runner;
+        yield* Ref.set(loginShellLoadedRef, true);
+        return;
+      }
+      yield* Effect.logWarning("local source updates could not read the login shell PATH");
+    },
+  );
 
   const inspect = Effect.gen(function* () {
     const repo = yield* requireRepositoryPath;
@@ -1370,6 +1420,7 @@ export const make = Effect.gen(function* () {
 
   const syncAndBuild = Effect.gen(function* () {
     yield* requireIdleCheckout("build");
+    yield* loadLoginShellEnvironment();
     const inspection = yield* inspect;
     const repo = inspection.repositoryPath;
     const merging = inspection.behind > 0;
@@ -1603,6 +1654,7 @@ export const make = Effect.gen(function* () {
   const syncUpstream = (agent: boolean) =>
     Effect.gen(function* () {
       yield* requireIdleCheckout("merge");
+      yield* loadLoginShellEnvironment();
       const inspection = yield* inspect;
       const repo = inspection.repositoryPath;
       const git = (args: ReadonlyArray<string>) =>

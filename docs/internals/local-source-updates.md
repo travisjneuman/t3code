@@ -176,7 +176,11 @@ prove behavior is preserved.
 For a source update with a build, nothing is committed or pushed unless the build
 passes; sidebar sync has no build gate. The merge commit skips hooks so the formatter
 cannot rewrite upstream files. The Claude CLI must be installed and signed in where
-the desktop app can find it on `PATH`. Optional environment overrides in that app's
+the desktop app can find it on `PATH`. The desktop's startup shell probe gives up
+after five seconds and is cached, and a launch where it timed out keeps launchd's
+`PATH`, which has neither `claude` nor `vp`. So sync and update re-read `PATH` and
+`TJN_REPO_SYNC_RUNNER` from the login shell (30-second limit) until one read
+succeeds in that app session. Optional environment overrides in that app's
 environment apply to each conflict, marker-repair, and build-repair agent run:
 
 - `T3CODE_MERGE_AGENT_MODEL` passes `--model <model>`.
