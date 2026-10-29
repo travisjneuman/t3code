@@ -189,14 +189,18 @@ export function collectHostUpdateTargets(
   hostUpdateTarget: string | null,
   check?: HostReleaseCheck,
 ): ReturnType<typeof collectServerUpdateTargets> {
-  if (hostUpdateTarget !== null) return collectServerUpdateTargets(machines, hostUpdateTarget);
-  if (check?.status !== "failed") return { targets: [], skipped: [] };
+  // Boot services install the locally staged archive; only npm installs wait for publication.
+  if (hostUpdateTarget !== null) {
+    return collectServerUpdateTargets(machines, hostUpdateTarget, true);
+  }
+  if (check?.status !== "failed") return { targets: [], skipped: [], waitForNpm: [] };
   const reason = checkFailure(check.reason);
   return {
     targets: [],
     skipped: machines
       .filter((machine) => !machine.hostedByThisApp)
       .map(({ environmentId, label }) => ({ environmentId, label, reason })),
+    waitForNpm: [],
   };
 }
 

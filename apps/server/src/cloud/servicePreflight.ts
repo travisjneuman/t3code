@@ -1,4 +1,5 @@
-import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts";
+import { BUILD_MIGRATION_HEAD, recordedMigrations } from "../persistence/databaseMigrationHead.ts";
+import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts"; // Fork add-on: service version includes the fork build.
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
 export type ServicePreflightResult =
@@ -18,7 +19,7 @@ export function runServicePreflight(input: {
   readonly launcherProtocol: number;
   readonly version?: string;
 }): ServicePreflightResult {
-  const version = input.version ?? SERVICE_RUNTIME_VERSION;
+  const version = input.version ?? SERVICE_RUNTIME_VERSION; // Fork add-on: fork build suffix.
   if (input.launcherProtocol !== SERVICE_LAUNCHER_PROTOCOL) {
     return {
       status: "blocked",
@@ -34,7 +35,32 @@ export function runServicePreflight(input: {
     };
   }
 
+  const newer = newerRecordedMigrations(input.databasePath);
+  if (newer === null) {
+    return {
+      status: "blocked",
+      version,
+      reason: `Could not read this database to confirm t3@${version} supports it.`,
+    };
+  }
+  if (newer.length > 0) {
+    return {
+      status: "blocked",
+      version,
+      reason: `This database has migrations that t3@${version} does not know: ${newer.join(", ")}. A newer build wrote them, and running t3@${version} on this database is not safe. Stay on the newer release, or wait for a release that includes these migrations.`,
+    };
+  }
+
   return { status: "ready", version, launcherProtocol: SERVICE_LAUNCHER_PROTOCOL };
+}
+
+/** Migrations a newer build recorded, or null when the database exists but cannot be read.
+ * Startup already handles renamed ids this build knows. */
+function newerRecordedMigrations(databasePath: string): ReadonlyArray<string> | null {
+  const recorded = recordedMigrations(databasePath);
+  return recorded === null
+    ? null
+    : recorded.filter(({ id }) => id > BUILD_MIGRATION_HEAD).map(({ id, name }) => `${id}_${name}`);
 }
 
 export function decodeServicePreflightResult(value: unknown): ServicePreflightResult | undefined {
