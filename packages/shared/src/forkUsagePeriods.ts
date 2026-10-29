@@ -1,7 +1,7 @@
 /**
  * Window lengths for providers that report a weekly or monthly reset but not
- * how long the window is (Grok, Cursor), so their bars get the even-spending
- * line too. Fork add-on: pace line.
+ * how long the window is (Grok, Cursor), so their bars get the even-pace mark
+ * and pace icon too. Fork add-on: pace for weekly and monthly windows.
  *
  * @module forkUsagePeriods
  */

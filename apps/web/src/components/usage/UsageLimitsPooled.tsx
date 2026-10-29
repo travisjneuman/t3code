@@ -46,7 +46,6 @@ import {
   resetCreditsSummary,
   useResetCredit,
 } from "./UsageLimits";
-import { ForkPaceTick } from "./ForkPaceTick"; // Fork add-on: pace line.
 
 function accountInitials(email: string): string {
   const [local = "", domain = ""] = email.split("@");
@@ -391,8 +390,6 @@ function SegmentTriggers({
             style={paceMark.tick}
           />
         ) : null}
-        <ForkPaceTick window={window} now={now} />
-        {/* Fork add-on: pace line, under the labels. */}
         <span
           aria-hidden
           className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-md text-3xs leading-none font-semibold text-foreground/80 tabular-nums @2xl/pool:hidden"
