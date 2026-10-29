@@ -69,9 +69,15 @@ in both maps.
 
 ## Host release source and backups
 
-The descriptor's `releaseSource` comes from the build's release repository plus the
-`T3CODE_RELEASE_BASE_URL` override (`cliReleaseSourceOf`). It is display and gating data only; a
-server always installs from its own base. Bulk update gating is in
+Host release discovery uses the validated `T3CODE_RELEASE_REPOSITORY=owner/name` first; otherwise
+it derives the repository from `T3CODE_RELEASE_BASE_URL` only when that is
+`https://github.com/<owner>/<name>/releases/download`, falling back to `travisjneuman/t3code`.
+Downloads default to `https://github.com/<resolved>/releases/download`;
+`T3CODE_RELEASE_BASE_URL` remains the download override, including custom HTTPS mirrors. No-env
+behavior and the owner's existing GitHub download base are unchanged. `cliReleaseSourceOf`
+reflects the resolved repository and download base in the descriptor's `releaseSource`, used only
+for display and gating; a server installs from its own base. Mobile still defaults to the owner's
+repository even when the host uses another source. Bulk update gating is in
 `host-release/hostReleaseSource.ts`, and the single-update warning reads the live config at click
 time (`hostReleaseGuard.ts`), so every `ServerUpdateAction` caller gets it without new props. The
 HTTPS mirror check is the one function `cliReleaseBaseUrlProblem`, called by `t3 update`,
@@ -79,6 +85,16 @@ self-update, boot-service install and the SSH runner script; release downloads a
 768 MB, counted as they stream whenever the declared length can't bound the body.
 `hostBackups.list` is a read under `diagnostics:read`, because backup names and versions describe
 the host the way process diagnostics do; it runs only while its dialog is open.
+
+## MCP hub
+
+[`forkMcp.ts`](../../apps/server/src/cli/forkMcp.ts) adds `t3 mcp token` and `t3 mcp stdio`,
+registered by two marked lines in `binCli.ts`. Tokens go through the same `SessionStore.issue`
+grant shape as `issueMcpClientSession` (subject, method, `mcpClientScopes`, runtime ceiling, bot
+client), so MCP tool restrictions and Sharing & access revocation apply unchanged; only the TTL
+is configurable, because OAuth's issuer fixes it at 30 days. Keep the two in step if upstream
+changes the OAuth grant. `stdio` wraps `runAcpMcpStdioBridge` and takes the token only from
+`T3_MCP_TOKEN`. User guide: [MCP hub](../user/mcp-hub.md).
 
 ## Marker exceptions
 

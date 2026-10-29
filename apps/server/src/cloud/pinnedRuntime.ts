@@ -112,6 +112,7 @@ interface PinnedRuntimeInstallInput {
   readonly arch: string;
   readonly httpClient: HttpClient.HttpClient;
   readonly releaseBaseUrl?: string | undefined;
+  readonly releaseRepository?: string | undefined; // Fork add-on
   readonly onProgress?: (progress: PinnedRuntimeProgress) => void;
 }
 
@@ -185,7 +186,11 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
   // Fork add-on: a fork build (`<version>+<build>`) ships in that nightly's release; validate
   // rejects an archive whose runtime id differs.
   const releaseVersion = input.version.split("+", 1)[0] ?? input.version;
-  const baseUrl = cliReleaseDownloadBaseUrl(releaseVersion, input.releaseBaseUrl);
+  const baseUrl = /* Fork add-on */ cliReleaseDownloadBaseUrl(
+    releaseVersion, // Fork add-on
+    input.releaseBaseUrl, // Fork add-on
+    input.releaseRepository, // Fork add-on
+  ); // Fork add-on
   const fileName = cliArchiveFileName(releaseVersion, platformKey);
 
   input.onProgress?.({ stage: "download", received: 0, total: undefined });

@@ -3,6 +3,66 @@
 
 export type CliReleaseSource = "fork" | "upstream" | "custom";
 
+export const CLI_RELEASE_REPOSITORY_ENV = "T3CODE_RELEASE_REPOSITORY";
+const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code";
+
+export function cliReleaseRepositoryProblem(repository: string | undefined): string | undefined {
+  const trimmed = repository?.trim();
+  if (!trimmed) return undefined;
+  const match = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/([A-Za-z0-9._-]{1,100})$/.exec(
+    trimmed,
+  );
+  return match && match[2] !== "." && match[2] !== ".."
+    ? undefined
+    : "T3CODE_RELEASE_REPOSITORY must be a GitHub owner/name. Fix or remove it, then try again.";
+}
+
+export function cliReleaseRepositoryOf(
+  repository: string | undefined,
+  baseUrl: string | undefined = undefined,
+): string {
+  const problem = cliReleaseRepositoryProblem(repository);
+  if (problem) throw new Error(problem);
+  if (repository?.trim()) return repository.trim();
+  const fromBase = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/releases\/download\/*$/.exec(
+    baseUrl?.trim() ?? "",
+  )?.[1];
+  return fromBase && fromBase === fromBase.trim() && cliReleaseRepositoryProblem(fromBase) === undefined
+    ? fromBase
+    : CLI_RELEASE_REPOSITORY;
+}
+
+const cliReleaseDefaultBaseUrl = (repository: string) =>
+  `https://github.com/${repository}/releases/download`;
+
+export function cliReleaseSourceOf(
+  baseUrl: string | undefined,
+  repository: string = CLI_RELEASE_REPOSITORY,
+) {
+  return classifyCliReleaseBaseUrl(baseUrl?.trim() || cliReleaseDefaultBaseUrl(repository));
+}
+
+export function cliReleaseDownloadBaseUrl(
+  version: string,
+  baseUrl: string | undefined = undefined,
+  repository: string = CLI_RELEASE_REPOSITORY,
+): string {
+  return `${(baseUrl?.trim() || cliReleaseDefaultBaseUrl(repository)).replace(/\/+$/, "")}/v${version}`;
+}
+
+export function cliReleaseIndexPageUrl(
+  page: number,
+  repository: string = CLI_RELEASE_REPOSITORY,
+): string {
+  return `https://api.github.com/repos/${repository}/releases?per_page=100&page=${page}`;
+}
+
+export function cliReleaseChannelOf(version: string) {
+  // Fork host builds append `+<fork build>`, which keeps the channel.
+  const channel = /^[^-+]+-(nightly|preview)\.\d{8}\.\d+(?:\+[0-9A-Za-z.-]+)?$/.exec(version)?.[1];
+  return channel === "nightly" || channel === "preview" ? channel : "stable";
+}
+
 const FORK_RELEASE_BASE_URL = "https://github.com/travisjneuman/t3code/releases/download";
 const UPSTREAM_RELEASE_BASE_URL = "https://github.com/pingdotgg/t3code/releases/download";
 

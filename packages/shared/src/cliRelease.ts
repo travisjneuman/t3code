@@ -1,7 +1,7 @@
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { classifyCliReleaseBaseUrl } from "./cliReleaseGuards.ts"; // Fork add-on: release source.
+import * as ReleaseGuards from "./cliReleaseGuards.ts"; // Fork add-on
 import { compareSemverVersions } from "./semver.ts";
 
 export * from "./cliReleaseGuards.ts"; // Fork add-on: release source, HTTPS and download-size guards.
@@ -44,17 +44,12 @@ export function cliArchiveFileName(version: string, platformKey: CliArchivePlatf
   return `t3-${version}-${platformKey}.${platformKey.startsWith("win32") ? "zip" : "tar.gz"}`;
 }
 
-const CLI_RELEASE_DEFAULT_BASE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases/download`;
-
-export function cliReleaseSourceOf(baseUrl: string | undefined /* Fork add-on */) {
-  return classifyCliReleaseBaseUrl(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL); // Fork add-on
-} // Fork add-on
-
 export function cliReleaseDownloadBaseUrl(
   version: string,
-  baseUrl: string | undefined = CLI_RELEASE_DEFAULT_BASE_URL,
+  baseUrl: string | undefined = undefined, // Fork add-on
+  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on
 ): string {
-  return `${(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL).replace(/\/+$/, "")}/v${version}`;
+  return ReleaseGuards.cliReleaseDownloadBaseUrl(version, baseUrl, repository); // Fork add-on
 }
 
 export function parseChecksums(text: string): ReadonlyMap<string, string> {
@@ -108,8 +103,11 @@ export function acceptsTrackSwitchRelease(
 }
 
 /** Page until the channel matches; nightlies can push preview/stable releases past the first page. */
-export function cliReleaseIndexPageUrl(page: number): string {
-  return `https://api.github.com/repos/${CLI_RELEASE_REPOSITORY}/releases?per_page=100&page=${page}`;
+export function cliReleaseIndexPageUrl(
+  page: number,
+  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on
+): string {
+  return ReleaseGuards.cliReleaseIndexPageUrl(page, repository); // Fork add-on
 }
 
 /** Draft assets are not downloadable. */

@@ -1,6 +1,9 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   CLI_RELEASE_BASE_URL_ENV,
+  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on
+  cliReleaseRepositoryOf, // Fork add-on
+  cliReleaseRepositoryProblem, // Fork add-on
   CLI_RELEASE_CHANNELS,
   cliReleaseBaseUrlProblem, // Fork add-on: HTTPS-only release mirrors.
   cliReleaseIndexPageUrl,
@@ -58,12 +61,24 @@ const RELEASE_INDEX_MAX_PAGES = 10;
 
 export const resolveNewestVersion = Effect.fn("cli.update.resolve_newest")(function* (
   channel: CliReleaseChannel,
+  repository?: string, // Fork add-on
 ) {
   const httpClient = yield* HttpClient.HttpClient;
   const environment = yield* HostProcess.Environment;
+  const repositoryOverride = repository ?? environment[CLI_RELEASE_REPOSITORY_ENV]; // Fork add-on
+  const repositoryProblem = cliReleaseRepositoryProblem(repositoryOverride); // Fork add-on
+  if (repositoryProblem /* Fork add-on */) {
+    return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on
+  } // Fork add-on
+  const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
+    repositoryOverride, // Fork add-on
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
+  ); // Fork add-on
   const githubToken = environment.GH_TOKEN?.trim() || environment.GITHUB_TOKEN?.trim() || undefined;
   for (let page = 1; page <= RELEASE_INDEX_MAX_PAGES; page += 1) {
-    const request = HttpClientRequest.get(cliReleaseIndexPageUrl(page)).pipe(
+    const request = HttpClientRequest.get(
+      cliReleaseIndexPageUrl(page, releaseRepository), // Fork add-on
+    ).pipe(
       HttpClientRequest.setHeader("Accept", "application/vnd.github+json"),
     );
     const authenticatedRequest =
@@ -305,6 +320,16 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
 
   const mirrorProblem = cliReleaseBaseUrlProblem(environment[CLI_RELEASE_BASE_URL_ENV]); // Fork add-on: HTTPS-only release mirrors.
   if (mirrorProblem) return yield* new CliUpdateError({ reason: mirrorProblem }); // Fork add-on
+  const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
+    environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on
+  ); // Fork add-on
+  if (repositoryProblem /* Fork add-on */) {
+    return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on
+  } // Fork add-on
+  const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
+    environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
+  ); // Fork add-on
 
   const currentVersion = packageJson.version;
   const channel = input.channel ?? cliReleaseChannelOf(currentVersion);
@@ -317,7 +342,7 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   progress.status("Checking for updates...");
   const targetVersion = yield* (
     input.requestedVersion === undefined
-      ? resolveNewestVersion(channel)
+      ? resolveNewestVersion(channel, releaseRepository) // Fork add-on
       : Effect.succeed(input.requestedVersion)
   ).pipe(Effect.ensuring(Effect.sync(progress.finish)));
   const targetChannel = cliReleaseChannelOf(targetVersion);
@@ -434,6 +459,7 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
     platform,
     arch,
     releaseBaseUrl: environment[CLI_RELEASE_BASE_URL_ENV]?.trim() || undefined,
+    releaseRepository, // Fork add-on
     validate: (paths) =>
       runner
         .run({

@@ -10,6 +10,7 @@ import * as NetService from "@t3tools/shared/Net";
 import { SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts";
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
+import { mcpCommand } from "./cli/forkMcp.ts"; // Fork add-on: MCP hub
 import { environmentCommand } from "./cli/environment.ts";
 import { appCommand } from "./cli/app.ts";
 import { browserCommand } from "./cli/browser.ts";
@@ -76,6 +77,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       appCommand,
       pairCommand,
       authCommand,
+      mcpCommand, // Fork add-on: MCP hub
       environmentCommand,
       browserCommand,
       projectCommand,

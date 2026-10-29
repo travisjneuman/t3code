@@ -12,7 +12,12 @@ import * as Path from "effect/Path";
 import { HttpClient } from "effect/http";
 import * as Schema from "effect/Schema";
 
-import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
+import {
+  CLI_RELEASE_BASE_URL_ENV,
+  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on
+  cliReleaseRepositoryOf, // Fork add-on
+  cliReleaseRepositoryProblem, // Fork add-on
+} from "@t3tools/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
 import { releaseMirrorCheckStep, rotateBootServiceLog } from "./bootServiceGuards.ts"; // Fork add-on: mirror check, bounded log.
@@ -529,6 +534,9 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   const releaseBaseUrl = Option.getOrUndefined(
     yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option),
   );
+  const releaseRepositoryOverride = /* Fork add-on */ Option.getOrUndefined(
+    yield* Config.String(CLI_RELEASE_REPOSITORY_ENV).pipe(Config.option), // Fork add-on
+  ); // Fork add-on
   const homeDir = yield* Config.String("HOME").pipe(Config.withDefault(""));
   const installerPath = yield* Config.String("PATH").pipe(Config.withDefault(""));
   const runningInsideService =
@@ -721,6 +729,16 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     yield* rotateBootServiceLog(fs, logPath); // Fork add-on: bounded service log.
     const mirrorStep = releaseMirrorCheckStep(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
     if (mirrorStep) return yield* new BootServiceCommandError({ step: mirrorStep }); // Fork add-on
+    const repositoryProblem = cliReleaseRepositoryProblem(releaseRepositoryOverride); // Fork add-on
+    if (repositoryProblem /* Fork add-on */) {
+      return yield* /* Fork add-on */ new BootServiceCommandError({
+        step: `checking the release repository: ${repositoryProblem}`, // Fork add-on
+      }); // Fork add-on
+    } // Fork add-on
+    const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
+      releaseRepositoryOverride, // Fork add-on
+      releaseBaseUrl, // Fork add-on
+    ); // Fork add-on
 
     if (manager.kind === "systemd") {
       yield* requireSystemdPrerequisites.pipe(Effect.tapError(logFailure));
@@ -736,6 +754,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       platform,
       arch,
       releaseBaseUrl,
+      releaseRepository, // Fork add-on
       validate: (runtime) =>
         runner
           .run({

@@ -16,7 +16,7 @@ export function hostReleaseSourceOf(environment: {
 const SOURCE_LABELS: Record<HostReleaseSource, string> = {
   fork: "locally staged fork builds",
   upstream: "upstream releases",
-  custom: "custom mirror",
+  custom: "custom release source",
   unknown: "source unknown",
 };
 
@@ -26,7 +26,7 @@ export function hostReleaseSourceLabel(source: HostReleaseSource): string {
 
 const BULK_SKIP_REASONS: Record<Exclude<HostReleaseSource, "fork">, string> = {
   upstream: "updates from upstream releases",
-  custom: "updates from a custom mirror",
+  custom: "updates from a custom release source",
   unknown: "update source unknown (older server, update it from its row once)",
 };
 
@@ -47,7 +47,7 @@ export function nonForkUpdateWarning(
     case "upstream":
       return `${serverLabel} installs upstream T3 Code releases, not this fork's. Updating fetches the upstream build of t3@${targetVersion}, if one exists. Update anyway?`;
     case "custom":
-      return `${serverLabel} installs releases from a custom mirror (T3CODE_RELEASE_BASE_URL). Updating fetches t3@${targetVersion} from that mirror. Update anyway?`;
+      return `${serverLabel} installs releases from a custom release source. Updating fetches t3@${targetVersion} from that source. Update anyway?`;
     case "unknown":
       return `${serverLabel} runs an older server that doesn't report where it installs releases from. If it isn't a fork build, updating may fetch a different build of t3@${targetVersion} or fail. Update anyway?`;
   }

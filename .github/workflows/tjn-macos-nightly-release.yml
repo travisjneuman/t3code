@@ -22,7 +22,8 @@ jobs:
   publish:
     # This workflow is fork-specific and must never publish from upstream.
     if: >-
-      github.repository == 'travisjneuman/t3code' &&
+      github.repository != 'pingdotgg/t3code' &&
+      (github.repository == 'travisjneuman/t3code' || vars.T3CODE_FORK_NIGHTLY_RELEASE == 'true') &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: macos-14
     timeout-minutes: 45

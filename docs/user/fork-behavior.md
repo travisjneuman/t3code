@@ -3,6 +3,13 @@
 A few upstream features behave differently in this fork. The upstream guides describe T3 Code as
 released; this page lists the differences.
 
+## Outside agents without OAuth can connect
+
+[Outside agents](outside-agents.md) says agents without OAuth support cannot connect. In this
+fork, `t3 mcp token` issues a revocable token with an access level you choose, for agents that
+take a URL and an `Authorization` header, and `t3 mcp stdio` serves agents that only speak stdio.
+See [Use T3 Code as an MCP hub](mcp-hub.md).
+
 ## New threads start without a project
 
 The sidebar's new thread button and `mod+n` (`chat.new`) start a thread
@@ -12,45 +19,49 @@ project with your [new-thread defaults](thread-sidebar.md#start-a-thread), Shift
 or press `mod+shift+n` (`chat.newLocal`). `chat.newWithoutProject` (`mod+alt+n`) always starts
 without a project.
 
-## Connected servers follow published fork releases
+## Connected fork hosts follow the desktop app's local builds
 
-In the web and desktop clients, connected servers running the fork update to the newest published,
-non-draft fork release on the app's channel that is no newer than the app itself. Releases are
-compared by version, not by publication order. A release built from a newer fork commit at the
-same upstream version also counts as an update; rows show it as the version plus `(fork <commit>)`.
-The desktop app's own server is never compared with a host release: it ships inside the app, so
-it offers a server update only when its version differs from the app's.
+Fork hosts update only to the version the source-built desktop app's last successful host build
+staged. **Update** pushes the fork, then builds the Mac app and every host listed in your private
+host inventory in parallel, from the same commit; each host builds and stages its own server
+([fork host builds](../operations/fork-host-releases.md)). Without that inventory, host builds are
+off and **Update** only builds the app. Once every configured host has staged the build, the app
+queues each connected boot-service fork host for that version, waiting until its sessions are
+idle. List every host you connect in the inventory: a connected host outside it is offered the
+same version without having staged it. If a host build fails, a notice names the log and offers
+**Retry** for the same commit. Rows show a fork build as the version plus `(fork <commit>)`. The
+desktop app's own server is never compared with a host build: it ships inside the app, so it
+offers a server update only when its version differs from the app's.
 
-A desktop app built from the fork's source keeps the hosts in step with it. A source sync pushes
-the fork, which pulls the new code onto every host. **Update** pushes before it starts building and
-publishes a host release, so the hosts build as soon as you click it, alongside the app. It then updates each
-connected fork host right away, even to a release newer than the app, without waiting for the host
-to be idle. If publishing fails, an error notice names the log and offers **Retry**. Each host is updated once per
-release, so after a failed update, use the server's update action instead.
-
-Use **Update everything** or the server's update action to update a server now. If the release
-cannot be found, no server update is offered; the app does not ask a server to install an
-unpublished version. Boot-service installations use release archives. npm-based servers still
-need that version to be available on npm before they can update.
+Use **Update everything** or the server's update action to update a server now. Until a staged
+build exists, no fork host update is offered, and web clients without the desktop app never offer
+one. npm-based servers still need that version to be available on npm before they can update.
 
 If **Update everything** cannot start a server's update, for example because that server is
 already updating or its connection dropped, the server is listed as failed and **Retry** offers it
 again, instead of being counted as updated.
 
-Each server reports where it installs releases from: fork releases, upstream releases, or a custom
-mirror set with `T3CODE_RELEASE_BASE_URL`, which must use `https://`. **Settings → Connections**
-shows it with the version and channel on every host row, and the row's tooltip adds when the
-server started. **Update everything** and **Update all** update only fork hosts and list the
-others with the reason; a host's own update action still works but asks first. A server too old to
-report its source counts as unknown: update it once from its row. If the release check fails,
-Connections shows **Couldn't check fork releases** with the reason, such as the GitHub rate limit
-or being offline, and a **Retry**. A host's **Backups…** menu item lists the backups the host
+Each server discovers releases in the repository set by `T3CODE_RELEASE_REPOSITORY`, validated as
+`owner/name`. If unset, it derives the repository from `T3CODE_RELEASE_BASE_URL` only when that is
+`https://github.com/<owner>/<name>/releases/download`; otherwise it uses `travisjneuman/t3code`.
+Downloads default to `https://github.com/<resolved>/releases/download`.
+`T3CODE_RELEASE_BASE_URL` overrides downloads and supports a custom HTTPS mirror. With neither
+variable set, or only the owner's existing GitHub download base, behavior is unchanged.
+
+Each server reports its release source: fork releases, upstream releases, or a custom release
+source.
+**Settings → Connections** shows it with the version and channel on every host row, and the row's
+tooltip adds when the server started. **Update everything** and **Update all** update only fork
+hosts and list the others with the reason; a host's own update action still works but asks first.
+A server too old to report its source counts as unknown: update it once from its row. Fork hosts
+are offered only the version from the desktop app's last successful host build; if that build failed,
+Connections shows **Local host build failed** with the reason. A host's **Backups…** menu item lists the backups the host
 tooling keeps and the version each would restore; restoring stays a host-side step.
 
-The native mobile client's release check works differently: it uses the connected server's channel
-and the first matching non-draft release in the release listing, not the web/desktop version cap
-or version sorting. It offers that release only if it is newer than the server. Mobile updates do
-not use the web client's maintenance queue and may interrupt running threads.
+The native mobile client's release check still defaults to `travisjneuman/t3code`, even when the
+host uses another source. It uses the connected server's channel and the first matching non-draft
+release in the release listing, and offers that release only if it is newer than the server. Mobile updates do not use the web client's maintenance
+queue and may interrupt running threads.
 
 The legacy sidebar's update button updates only the desktop app, not connected servers or
 providers. It asks for confirmation before installing, but skips the standard sidebar's fresh

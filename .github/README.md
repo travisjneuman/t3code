@@ -133,8 +133,8 @@ A Mac app you build yourself updates from the checkout it was built from instead
 
 - Every 30 minutes the app merges any new official nightly into the checkout's `main`.
 - **Sync & Build** builds the merged source on your Mac. **Restart & Install** then swaps in the new app.
-- When needed, Claude Code fixes merge conflicts and build breaks. Nothing is committed unless the build succeeds.
-- The merge is pushed to your fork (`origin`) when you can write to it, and never to the official repository. Without write access, the merge and build still finish locally.
+- When needed, Claude Code fixes merge conflicts and build breaks. Build fixes are committed only after a successful build.
+- The merge is committed and a push to your fork (`origin`) is attempted before building, so configured fork hosts can build the same commit. It never pushes to the official repository; without write access, the local build can continue. A failed build leaves the merge in place and the installed app unchanged.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/fork-updating.md#update-from-source)
 
@@ -170,6 +170,7 @@ Fork-specific docs, plus the fork's two front doors that list every user guide a
 | Need / keywords                                   | Open                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Every user guide by task                          | [User guides](https://github.com/travisjneuman/t3code/blob/main/docs/user/README.md)                                                                                                                                                                                                                  |
+| MCP hub, OAuth, header-only and stdio agents       | [MCP hub guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/mcp-hub.md) |
 | Every internals note, maintainer runbooks         | [Internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/README.md)                                                                                                                                                                                                               |
 | Web apps tabs: ChatGPT, Claude, Grok, Gemini      | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/desktop-remote-apps.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/remote-apps.md)                                                                                                       |
 | Other Agents, continue or hand back a session     | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/other-agents.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/external-sessions.md) · [session search](https://github.com/travisjneuman/t3code/blob/main/docs/internals/session-search.md) |

@@ -50,9 +50,13 @@ the checkout's `main`, keeps the fork's additions, and builds the app on this Ma
 files.
 
 Conflicts and build breaks that the merge can't settle on its own go to Claude Code, so install it
-and sign in where the app can find it. Nothing is committed unless the new build succeeds. If the
-merge or build still fails, the checkout is left as it was before the update and the message lists
-the files involved.
+and sign in where the app can find it. The merge is committed and a push is attempted before
+building, so configured fork hosts can build the same commit alongside this Mac. If the build
+fails, the merge stays in place and the installed app is unchanged; the app attempts to stash
+tracked repair edits as `local source update: unbuilt fixes`. Build fixes are committed only after
+a successful build. If merging fails, the app attempts to abort the merge. Follow any cleanup
+instructions in the error message and preserve any files it reports as left in the checkout before
+retrying.
 
 The app also checks for a new nightly a minute after it starts and every 30 minutes after that.
 When one is out, it merges that nightly into `main` without building, and the update button then
@@ -72,8 +76,13 @@ is in the middle of another merge.
 ### Pushing the merge
 
 After a merge, the app pushes `main` to `origin`, and only when you can write to it. If the push
-fails, the local merge and build still complete, and the update reports that the push was
-skipped. It never pushes to `upstream`.
+fails, the update reports the skipped push; the local merge stays in place and the build can
+continue. It never pushes to `upstream`.
+
+Fleet builds are optional and off without private `~/.config/t3code-fork/hosts.json`; its optional
+top-level `"repository": "owner/name"` setting defaults to the checkout's `origin` ([setup](../operations/fork-host-releases.md)).
+
+Other forks can enable upstream sync and nightly releases with repository variables `T3CODE_FORK_UPSTREAM_SYNC=true` and `T3CODE_FORK_NIGHTLY_RELEASE=true`, respectively; both exclude `pingdotgg/t3code`.
 
 ## Release feed
 
@@ -81,6 +90,10 @@ When source updates are off, for example on another platform or after the checko
 the app updates from GitHub Releases only if its build named a repository, as `owner/name`, in
 `T3CODE_DESKTOP_UPDATE_REPOSITORY` or `GITHUB_REPOSITORY`. A local build without either has no
 release feed; update it by pulling and building again.
+
+For release-based server updates, set `T3CODE_RELEASE_REPOSITORY=owner/name` or
+`T3CODE_RELEASE_BASE_URL=https://github.com/<owner>/<name>/releases/download` on the host;
+update discovery follows that source.
 
 ## Updates wait for active sessions
 

@@ -1,10 +1,11 @@
 # Fork host builds and updates
 
-The fork builds its headless Windows and Linux servers on each configured host. When the user presses
-**Update** in the desktop app, the Mac app build and remote host builds start in parallel for the same
-commit, before the new Mac app is installed. Ordinary repository pushes, pulls, commits, startup and
-reconnects do not start a build. No hosted build, GitHub release, tag, or archive transfer is part of
-this workflow.
+Fleet builds are optional and stay off when `~/.config/t3code-fork/hosts.json` is absent; desktop
+source updates still work without a fleet. With that private inventory present and local source
+updates enabled, **Update** starts the Mac app build and each configured Windows or Linux host's
+server build in parallel for the same commit, before the new Mac app is installed. Ordinary repository
+pushes, pulls, commits, startup and reconnects do not start a build. No hosted build, GitHub release,
+tag, or archive transfer is part of this workflow.
 
 ## Private host configuration
 
@@ -13,6 +14,13 @@ identities, connection details, credentials, or local paths. Each entry under `h
 alias, operating system, canonical checkout, T3 home, separate build cache, Node argv prefix,
 environment, login-shell setting, and service definition. Use absolute paths and keep each host cache
 separate from its checkout and T3 home.
+
+The version 1 inventory accepts an optional top-level `repository` string in GitHub `owner/name`
+form. If omitted, the coordinator resolves it once from the Mac checkout's `origin` fetch URL.
+HTTPS, `git@github.com:owner/name.git`, and `ssh://git@github.com/owner/name.git` origins are supported.
+The Mac checkout's origin fetch and push URLs must both identify that repository; each host's origin
+must identify it too. Legacy release downloads and service release-base matching use the same
+resolved repository. The expected upstream remains `pingdotgg/t3code`.
 
 Older inventories may still contain `buildHosts` or `stageFrom`. The local build flow ignores both:
 every configured host builds its own native server in its own checkout. Remove those legacy fields

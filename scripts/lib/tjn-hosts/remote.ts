@@ -29,6 +29,7 @@ export interface Host {
 }
 export interface HostConfig {
   version: 1;
+  repository?: string;
   hosts: Record<string, Host>;
   // Retained for old private inventories; local builds use every configured host.
   buildHosts?: Record<"win32-x64" | "linux-x64", string[]>;
@@ -68,6 +69,7 @@ export interface Snapshot {
 }
 export interface Request {
   host: Host;
+  repository: string;
   action:
     | "ready"
     | "inspect"
@@ -99,6 +101,23 @@ export function requireState(condition: unknown, message: string): asserts condi
 }
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+export function validateRepository(value: unknown): string {
+  requireState(
+    typeof value === "string" &&
+      !/[\r\n\0]/.test(value) &&
+      /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9_.-]+$/.test(value) &&
+      ![".", ".."].includes(value.split("/")[1]!),
+    "Repository must be a GitHub owner/name.",
+  );
+  return value.toLowerCase();
+}
+export function githubRepository(url: string): string | undefined {
+  const match =
+    /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/]+\/[^/]+?)(?:\.git)?$/.exec(
+      url,
+    );
+  return match === null ? undefined : validateRepository(match[1]);
 }
 export function version(value: unknown): string {
   requireState(
@@ -840,7 +859,7 @@ async function backup(host: Host, before: Snapshot) {
   }
   return destination;
 }
-async function rewrittenService(host: Host, target: string, upstream: boolean) {
+async function rewrittenService(host: Host, target: string, upstream: boolean, repository: string) {
   const old = await fs.readFile(host.service.file, "utf8");
   const named = launcher(old, host);
   const nextEntry = currentRuntime(host).entryPath;
@@ -850,6 +869,14 @@ async function rewrittenService(host: Host, target: string, upstream: boolean) {
   );
   let next = old.replace(named.entry, nextEntry);
   if (upstream) {
+    const releaseBase = `https://github.com/${repository}/releases/download`.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&",
+    );
+    const releaseLine = new RegExp(
+      `^(?:set\\s+"?T3CODE_RELEASE_BASE_URL=${releaseBase}"?|Environment="?T3CODE_RELEASE_BASE_URL=${releaseBase}"?)\\s*$`,
+      "i",
+    );
     const lines = next.split(/(?<=\n)/);
     next = lines
       .filter((line) => {
@@ -860,9 +887,7 @@ async function rewrittenService(host: Host, target: string, upstream: boolean) {
           return true;
         }
         requireState(
-          /^(?:set\s+"?T3CODE_RELEASE_BASE_URL=https:\/\/github\.com\/travisjneuman\/t3code\/releases\/download"?|Environment="?T3CODE_RELEASE_BASE_URL=https:\/\/github\.com\/travisjneuman\/t3code\/releases\/download"?)\s*$/i.test(
-            line.trim(),
-          ),
+          releaseLine.test(line.trim()),
           "Release-base environment line is not a standalone fork URL; refusing to rewrite it.",
         );
         return false;
@@ -1013,7 +1038,7 @@ async function deliver(request: Request) {
   try {
     const archive = path.join(cache, name);
     const sha256 = await downloadVerified(
-      `https://github.com/travisjneuman/t3code/releases/download/v${releaseVersion(v)}`,
+      `https://github.com/${request.repository}/releases/download/v${releaseVersion(v)}`,
       name,
       archive,
     );
@@ -1136,7 +1161,7 @@ async function maintain(request: Request) {
       "Rollback target must be older than activeVersion.",
     );
   }
-  const serviceContents = await rewrittenService(host, target, !pruning);
+  const serviceContents = await rewrittenService(host, target, !pruning, request.repository);
   requireState(
     !(await exists(path.join(host.t3Home, "runtime", ".service-state.host-maintenance"))),
     "An unfinished maintenance state file exists; resolve it before maintenance.",
@@ -1284,9 +1309,7 @@ async function buildArchive(request: Request) {
   );
   requireState((await git("status", "--porcelain")) === "", "Build checkout is dirty.");
   requireState(
-    /^(?:https:\/\/github\.com\/|git@github\.com:)travisjneuman\/t3code(?:\.git)?$/.test(
-      await git("remote", "get-url", "origin"),
-    ),
+    githubRepository(await git("remote", "get-url", "origin")) === request.repository,
     "Build checkout origin is not the fork.",
   );
   await git("fetch", "origin", "main");
@@ -1439,6 +1462,7 @@ async function buildAndStage(request: Request) {
   }
 }
 export async function runHost(request: Request) {
+  validateRepository(request.repository);
   requireState(
     process.platform === request.host.os && process.arch === "x64",
     "Configured host OS/architecture does not match the executing host.",

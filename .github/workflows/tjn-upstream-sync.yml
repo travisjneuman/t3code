@@ -19,7 +19,9 @@ jobs:
   sync:
     # This workflow is intentionally fork-specific. It must never try to sync
     # the upstream repository to itself if the file is ever copied upstream.
-    if: github.repository == 'travisjneuman/t3code'
+    if: >-
+      github.repository != 'pingdotgg/t3code' &&
+      (github.repository == 'travisjneuman/t3code' || vars.T3CODE_FORK_UPSTREAM_SYNC == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

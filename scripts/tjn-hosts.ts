@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   compareVersions,
+  githubRepository,
   isUpdateTarget,
   powershellArgs,
   psQuote,
@@ -15,6 +16,7 @@ import {
   requireState,
   run,
   shellQuote,
+  validateRepository,
   version,
   type Host,
   type HostConfig,
@@ -23,7 +25,6 @@ import {
 } from "./lib/tjn-hosts/remote.ts";
 import { beginRun, heldLocks, runSummary, type Journal, type Step } from "./lib/tjn-hosts/runs.ts";
 
-const REPOSITORY = "travisjneuman/t3code";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CONFIG = path.join(homedir(), ".config", "t3code-fork", "hosts.json");
 const FLEET_RESULT_FILE = path.join(
@@ -88,12 +89,19 @@ function text(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && !/[\r\n\0]/.test(value);
 }
 
-async function config(): Promise<HostConfig> {
+type ResolvedHostConfig = HostConfig & { repository: string };
+
+async function config(): Promise<ResolvedHostConfig> {
   const value: unknown = JSON.parse(await fs.readFile(CONFIG, "utf8"));
   requireState(
     record(value) && value.version === 1 && record(value.hosts),
     "Unsupported hosts.json shape; expected version 1 and hosts.",
   );
+  const repository =
+    value.repository === undefined
+      ? githubRepository(await git("remote", "get-url", "origin"))
+      : validateRepository(value.repository);
+  requireState(repository !== undefined, "Mac checkout origin must name a GitHub repository.");
   const hosts = value.hosts;
   requireState(Object.keys(hosts).length > 0, "No hosts configured.");
   for (const [name, raw] of Object.entries(hosts)) {
@@ -163,7 +171,7 @@ async function config(): Promise<HostConfig> {
       "Service file cannot be inside live userdata.",
     );
   }
-  return value as unknown as HostConfig;
+  return { ...value, repository } as unknown as ResolvedHostConfig;
 }
 
 const git = (...args: string[]) => run("git", args, { cwd: ROOT });
@@ -179,9 +187,9 @@ const shippedFilesAt = async (sha: string) =>
   (await git("diff", "--name-only", sha, "--", ...SHIPPED_PATHS)) === "";
 const gh = (...args: string[]) => run("gh", args, { cwd: ROOT });
 
-async function releases(): Promise<Release[]> {
+async function releases(repository: string): Promise<Release[]> {
   const pages: unknown = JSON.parse(
-    await gh("api", `repos/${REPOSITORY}/releases?per_page=100`, "--paginate", "--slurp"),
+    await gh("api", `repos/${repository}/releases?per_page=100`, "--paginate", "--slurp"),
   );
   requireState(Array.isArray(pages) && pages.every(Array.isArray), "Invalid release listing.");
   const list: unknown[] = pages.flat();
@@ -271,15 +279,19 @@ async function remoteSource() {
 }\n`;
 }
 
-async function remote(host: Host, request: Omit<Request, "host">): Promise<unknown> {
-  const output = await run("ssh", remoteCommand(host, { ...request, host }), {
+async function remote(
+  host: Host,
+  repository: string,
+  request: Omit<Request, "host" | "repository">,
+): Promise<unknown> {
+  const output = await run("ssh", remoteCommand(host, { ...request, host, repository }), {
     input: await remoteSource(),
   });
   return JSON.parse(output);
 }
 
-async function snapshot(host: Host): Promise<Snapshot> {
-  const value = await remote(host, { action: "inspect" });
+async function snapshot(host: Host, repository: string): Promise<Snapshot> {
+  const value = await remote(host, repository, { action: "inspect" });
   requireState(
     record(value) &&
       record(value.state) &&
@@ -301,7 +313,7 @@ interface LocalBuildPlan {
   targetVersion: string;
 }
 
-async function localBuildPreflight(sha: string): Promise<LocalBuildPlan> {
+async function localBuildPreflight(sha: string, repository: string): Promise<LocalBuildPlan> {
   requireState(/^[a-f0-9]{40}$/.test(sha), "Expected a full lowercase commit SHA.");
   requireState((await git("branch", "--show-current")) === "main", "Mac checkout is not on main.");
   requireState(await shippedFilesAt(sha), "The host build tools differ from the requested commit.");
@@ -310,9 +322,7 @@ async function localBuildPreflight(sha: string): Promise<LocalBuildPlan> {
     ["remote", "get-url", "--push", "origin"],
   ]) {
     requireState(
-      /^(?:https:\/\/github\.com\/|git@github\.com:)travisjneuman\/t3code(?:\.git)?$/.test(
-        await git(...args),
-      ),
+      githubRepository(await git(...args)) === repository,
       "Origin must fetch and push only the fork.",
     );
   }
@@ -400,7 +410,7 @@ async function writeResultFile(file: string, commit: string, targetVersion: stri
   }
 }
 
-async function buildLocal(cfg: HostConfig, sha: string, resultPath: string) {
+async function buildLocal(cfg: ResolvedHostConfig, sha: string, resultPath: string) {
   const hosts = Object.keys(cfg.hosts);
   const failures: string[] = [];
   const completed: string[] = [];
@@ -419,6 +429,7 @@ async function buildLocal(cfg: HostConfig, sha: string, resultPath: string) {
         mutates: true,
         does: [
           remoteShown(cfg.hosts[name]!, {
+            repository: cfg.repository,
             action: "build-and-stage",
             version: "<nightly>+<requested-sha-12>",
             sha,
@@ -437,7 +448,7 @@ async function buildLocal(cfg: HostConfig, sha: string, resultPath: string) {
       },
     ]);
     await journal.step(null, "clear-result", () => clearResultFile(resultPath));
-    const plan = await journal.step(null, "preflight", () => localBuildPreflight(sha));
+    const plan = await journal.step(null, "preflight", () => localBuildPreflight(sha, cfg.repository));
 
     // Each host builds in its own checkout, so one slow host should not hold the others back.
     await Promise.all(
@@ -446,7 +457,7 @@ async function buildLocal(cfg: HostConfig, sha: string, resultPath: string) {
         try {
           console.log(`${name}: building and staging ${plan.targetVersion} from ${sha}.`);
           const value = await journal.step(name, "build-and-stage", () =>
-            remote(host, {
+            remote(host, cfg.repository, {
               action: "build-and-stage",
               version: plan.targetVersion,
               sha: plan.sha,
@@ -530,16 +541,17 @@ interface Maintenance {
 // Read-only host inspection. Rollback additionally needs a verified legacy release receipt.
 async function maintenancePreflight(
   command: MaintenanceCommand,
-  cfg: HostConfig,
+  cfg: ResolvedHostConfig,
   selected: string[],
   target: string | undefined,
 ): Promise<Maintenance[]> {
-  const releaseInfo = command === "rollback" ? currentRelease(await releases()) : undefined;
+  const releaseInfo =
+    command === "rollback" ? currentRelease(await releases(cfg.repository)) : undefined;
   const current = releaseInfo === undefined ? undefined : releaseId(releaseInfo);
   const work: Maintenance[] = [];
   for (const name of selected) {
     const host = cfg.hosts[name]!;
-    const before = await snapshot(host);
+    const before = await snapshot(host, cfg.repository);
     if (command === "prune") {
       work.push({ name, host, before, target: before.state.activeVersion });
       continue;
@@ -594,6 +606,7 @@ function maintenanceSteps(
   command: MaintenanceCommand,
   work: Maintenance[],
   explicitTarget: boolean,
+  repository: string,
 ): Step[] {
   return work.map(({ name, host, before, target }): Step => {
     const hp = hostPath(host);
@@ -607,6 +620,7 @@ function maintenanceSteps(
       mutates: true,
       does: [
         remoteShown(host, {
+          repository,
           action: command,
           version: target,
           expected: "<preflight snapshot>",
@@ -646,12 +660,17 @@ function maintenanceSteps(
   });
 }
 
-async function maintain(command: MaintenanceCommand, work: Maintenance[], journal: Journal) {
+async function maintain(
+  command: MaintenanceCommand,
+  work: Maintenance[],
+  journal: Journal,
+  repository: string,
+) {
   let completed = 0;
   for (const item of work) {
     try {
       const result = await journal.step(item.name, command, () =>
-        remote(item.host, {
+        remote(item.host, repository, {
           action: command,
           version: item.target,
           expected: item.before,
@@ -812,7 +831,7 @@ async function main() {
     // Host state stays readable when the GitHub listing is down.
     let failed = false;
     try {
-      const published = await releases();
+      const published = await releases(cfg.repository);
       console.log(
         JSON.stringify({
           forkReleases: published.map((item) => ({ tag: item.tag_name, draft: item.draft })),
@@ -830,7 +849,7 @@ async function main() {
     }
     for (const [name, host] of Object.entries(cfg.hosts)) {
       try {
-        console.log(JSON.stringify({ host: name, ...(await snapshot(host)) }));
+        console.log(JSON.stringify({ host: name, ...(await snapshot(host, cfg.repository)) }));
       } catch (error) {
         failed = true;
         console.error(`${name}: ${error instanceof Error ? error.message : String(error)}`);
@@ -858,7 +877,7 @@ async function main() {
         ...work.map((item) => `${item.name}: ${item.before.state.activeVersion} -> ${item.target}`),
       ],
       selected,
-      maintenanceSteps(maintenance, work, target !== undefined),
+      maintenanceSteps(maintenance, work, target !== undefined, cfg.repository),
     );
     return;
   }
@@ -866,8 +885,8 @@ async function main() {
     const work = await journal.step(null, "preflight", () =>
       maintenancePreflight(maintenance, cfg, selected, target),
     );
-    journal.plan(maintenanceSteps(maintenance, work, target !== undefined));
-    await maintain(maintenance, work, journal);
+    journal.plan(maintenanceSteps(maintenance, work, target !== undefined, cfg.repository));
+    await maintain(maintenance, work, journal, cfg.repository);
   });
 }
 

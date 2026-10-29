@@ -85,6 +85,7 @@ graph LR
 ### Other agents
 
 - [Outside agents](outside-agents.md): agents T3 did not start, over MCP.
+- [MCP hub](mcp-hub.md): fork add-on; connect OAuth, header-only, and stdio agents with revocable access.
 - [Sessions from other agents](other-agents.md): fork add-on; follow and continue outside sessions.
 - [Compare agents](compare-agents.md): fork add-on; one prompt, two models.
 - [Agent instructions](agent-instructions.md): fork add-on; delegation and agent rules as settings.

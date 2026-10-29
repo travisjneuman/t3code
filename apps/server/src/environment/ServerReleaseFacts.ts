@@ -5,7 +5,13 @@
  * @module environment/ServerReleaseFacts
  */
 import type { ServerReleaseSource } from "@t3tools/contracts";
-import { CLI_RELEASE_BASE_URL_ENV, cliReleaseSourceOf } from "@t3tools/shared/cliRelease";
+import {
+  CLI_RELEASE_BASE_URL_ENV,
+  CLI_RELEASE_REPOSITORY_ENV,
+  cliReleaseRepositoryOf,
+  cliReleaseRepositoryProblem,
+  cliReleaseSourceOf,
+} from "@t3tools/shared/cliRelease";
 import * as Config from "effect/Config";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -20,7 +26,15 @@ export const readServerReleaseFacts = Effect.gen(function* () {
     Effect.map(Option.getOrUndefined),
     Effect.orElseSucceed(() => undefined),
   );
-  const releaseSource: ServerReleaseSource = cliReleaseSourceOf(baseUrlOverride);
+  const repositoryOverride = yield* Config.String(CLI_RELEASE_REPOSITORY_ENV).pipe(
+    Config.option,
+    Effect.map(Option.getOrUndefined),
+    Effect.orElseSucceed(() => undefined),
+  );
+  const releaseSource: ServerReleaseSource =
+    cliReleaseRepositoryProblem(repositoryOverride) === undefined
+      ? cliReleaseSourceOf(baseUrlOverride, cliReleaseRepositoryOf(repositoryOverride, baseUrlOverride))
+      : "custom";
   const startedAt = DateTime.formatIso(yield* DateTime.now);
   return {
     releaseSource,

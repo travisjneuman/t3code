@@ -101,7 +101,16 @@ const make = Effect.gen(function* () {
   const queuedCommitRef = yield* Ref.make<string | null>(null);
 
   const repo = Option.getOrUndefined(localSourceUpdates.repositoryPath);
-  const enabled = (yield* localSourceUpdates.enabled) && repo !== undefined;
+  const inventoryPath = environment.path.join(
+    environment.homeDirectory,
+    ".config",
+    "t3code-fork",
+    "hosts.json",
+  );
+  const enabled =
+    (yield* localSourceUpdates.enabled) &&
+    repo !== undefined &&
+    (yield* fileSystem.exists(inventoryPath).pipe(Effect.orElseSucceed(() => false)));
   const recordPath = environment.path.join(environment.stateDir, RECORD_FILE);
   const logPath = environment.path.join(environment.stateDir, LOG_FILE);
   const exitPath = environment.path.join(environment.stateDir, EXIT_FILE);
