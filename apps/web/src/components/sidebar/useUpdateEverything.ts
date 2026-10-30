@@ -8,7 +8,6 @@ import { useHostReleaseCheck } from "~/host-release/hostRelease"; // Fork add-on
 import { skippedAsFailed } from "~/host-release/hostRelease"; // Fork add-on: skipped updates stay retryable.
 import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
 import { useEnvironments } from "~/state/environments";
-import { useNpmReleasePublished } from "~/state/npmRelease";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { environmentUpdateStatesAtom } from "~/state/server";
 import { environmentSessionStatesAtom } from "~/state/session";
@@ -23,7 +22,6 @@ import {
   collectUpdateEverythingResult,
   describeUpdateEverything,
   runUpdateEverything,
-  type SkippedMachine,
   type UpdateRunMachine,
 } from "./updateEverything.logic";
 import {
@@ -71,29 +69,10 @@ export function useUpdateEverything(
     canMaintain: canUpdateServer(sessionStates[index]!),
     updateState: updateStates[index]!,
   }));
-  // A track switch's target came from npm already.
-  const {
-    targets: behindServers,
-    skipped: unreachable,
-    waitForNpm,
-  } = channelSwitch
-    ? { ...collectChannelSwitchTargets(machines, channelSwitch), waitForNpm: [] }
+  const { targets: servers, skipped } = channelSwitch
+    ? collectChannelSwitchTargets(machines, channelSwitch)
     : // Fork add-on: host builds: remote fork hosts move to the latest successfully staged target.
       collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck); // Fork add-on
-  const published = useNpmReleasePublished(waitForNpm.length > 0 ? targetVersion : null);
-  const servers = published
-    ? behindServers
-    : behindServers.filter((server) => !waitForNpm.includes(server));
-  const skipped: ReadonlyArray<SkippedMachine> = [
-    ...unreachable,
-    ...behindServers
-      .filter((server) => !servers.includes(server))
-      .map((server) => ({
-        environmentId: server.environmentId,
-        label: server.serverLabel,
-        reason: `t3@${targetVersion} is not on npm yet`,
-      })),
-  ];
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
   const moving = servers.filter((server) => server.trackOnly !== true);
   const restarts = collectRestartingMachines(machines, moving, localUpdateVersion !== null);

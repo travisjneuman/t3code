@@ -1,9 +1,10 @@
 import { REMOTE_APP_SITE_INFO } from "@t3tools/contracts";
 import { ChevronDownIcon } from "lucide-react";
-import { useRef } from "react";
+import type { MouseEvent } from "react";
 
 import { Button } from "~/components/ui/button";
 import { T3Wordmark } from "~/components/T3Wordmark";
+import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
 
 import { RemoteAppSiteIcon } from "./RemoteAppSiteIcon";
@@ -11,6 +12,21 @@ import { RemoteAppSendToThreadHost } from "./RemoteAppSendToThreadHost";
 import { activeRemoteAppSite, unreadRemoteAppSites } from "./remoteAppState";
 import { useAvailableRemoteAppSites } from "./useRemoteAppSites";
 import { useRemoteAppState } from "./useRemoteAppState";
+
+const SWITCHER_WIDTH_PROPERTY = "--remote-app-switcher-width";
+
+/** `remoteAppSurface.css` starts the sidebar header's back/forward buttons after the switcher. */
+function publishSwitcherWidth(element: HTMLElement) {
+  const root = document.documentElement;
+  const unobserve = observeResize(element, ([entry]) => {
+    const width = entry?.borderBoxSize[0]?.inlineSize ?? element.offsetWidth;
+    root.style.setProperty(SWITCHER_WIDTH_PROPERTY, `${width}px`);
+  });
+  return () => {
+    unobserve();
+    root.style.removeProperty(SWITCHER_WIDTH_PROPERTY);
+  };
+}
 
 /**
  * The titlebar's surface switcher. It also hosts the receiver for text sent
@@ -20,7 +36,6 @@ import { useRemoteAppState } from "./useRemoteAppState";
 export function RemoteAppSwitcher() {
   const { state, bridge } = useRemoteAppState();
   const { sites } = useAvailableRemoteAppSites();
-  const triggerRef = useRef<HTMLButtonElement>(null);
   if (bridge === undefined) return null;
   const site = activeRemoteAppSite(state);
   const siteLabel = site === undefined ? undefined : REMOTE_APP_SITE_INFO[site].label;
@@ -43,16 +58,18 @@ export function RemoteAppSwitcher() {
     return (
       <>
         {host}
-        <div className="[&_svg]:-mx-0.5 ml-[var(--workspace-titlebar-content-left)] flex h-7 max-w-44 shrink-0 items-center gap-1 border border-transparent px-2 font-medium text-foreground text-sm tracking-tight">
+        <div
+          ref={publishSwitcherWidth}
+          className="[&_svg]:-mx-0.5 ml-[var(--workspace-titlebar-content-left)] flex h-7 max-w-44 shrink-0 items-center gap-1 border border-transparent px-2 font-medium text-foreground text-sm tracking-tight"
+        >
           {current}
         </div>
       </>
     );
   }
 
-  const openMenu = () => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect === undefined) return;
+  const openMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
     void bridge.openSurfaceMenu({
       x: rect.left,
       y: rect.top,
@@ -65,7 +82,7 @@ export function RemoteAppSwitcher() {
     <>
       {host}
       <Button
-        ref={triggerRef}
+        ref={publishSwitcherWidth}
         aria-haspopup="menu"
         aria-label={`Switch app surface, currently ${siteLabel ?? "ndev.t3code"}${
           hasUnread ? ", a web app finished a reply" : ""

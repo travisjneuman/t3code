@@ -80,19 +80,27 @@ html[data-remote-app-surface="remote"] [data-slot="sidebar-wrapper"] .sidebar-st
 }
 
 /* The surface switcher sits at the titlebar content inset, so with the sidebar
-   collapsed the page headers start after it instead of underneath it. 5rem
-   covers the switcher's "T3 Code" label at any font size. */
+   collapsed the page headers start after it instead of underneath it.
+   `RemoteAppSwitcher` publishes its width; 5rem covers "T3 Code" until then. */
 html[data-remote-app-surface="t3code"]
   [data-slot="sidebar-wrapper"][data-sidebar-state="collapsed"]:has([data-remote-app-switcher])
   [data-slot="sidebar-inset"] {
   --workspace-titlebar-content-left: calc(
     var(--workspace-controls-left) + var(--workspace-titlebar-control-size) +
-      var(--workspace-titlebar-control-gap) * 2 + 5rem
+      var(--workspace-titlebar-control-gap) * 2 + var(--remote-app-switcher-width, 5rem)
   );
 }
 
 /* The surface switcher takes the sidebar brand's place in the desktop
-   titlebar, so the brand row (and its environment pill) is not shown. */
-html[data-remote-app-surface] div:has(> a[aria-label="Go to threads"]) {
+   titlebar. Upstream's brand link is hidden and the back/forward buttons and
+   environment pill after it start past the switcher instead. Matches the
+   link's accessible name, so an upstream rename brings the overlap back. */
+html[data-remote-app-surface] a[aria-label="T3 Code home"] {
   display: none;
+}
+
+html[data-remote-app-surface] div:has(> div > a[aria-label="T3 Code home"]) {
+  margin-left: calc(
+    var(--workspace-titlebar-content-left) + var(--remote-app-switcher-width, 5rem) + 0.25rem
+  );
 }

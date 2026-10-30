@@ -324,6 +324,9 @@ import {
   ServerRemoveKeybindingResult,
   ServerProviderUpdatedPayload,
   ServerSelfUpdateError,
+  ServerNpmRelease,
+  ServerNpmReleaseError,
+  ServerNpmReleaseInput,
   ServerSelfUpdateInput,
   ServerSelfUpdateProgressEvent,
   ServerSelfUpdateResult,
@@ -505,6 +508,7 @@ export const WS_METHODS = {
 
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
+  serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
@@ -756,6 +760,12 @@ const WsProviderInstallRemoveRpc = Rpc.make(WS_METHODS.providerInstallRemove, {
   payload: ProviderSetupInput,
   success: ProviderInstallState,
   error: ProviderSetupRpcError,
+});
+
+const WsServerGetNpmReleaseRpc = Rpc.make(WS_METHODS.serverGetNpmRelease, {
+  payload: ServerNpmReleaseInput,
+  success: Schema.NullOr(ServerNpmRelease),
+  error: Schema.Union([ServerNpmReleaseError, EnvironmentAuthorizationError]),
 });
 
 const WsServerUpdateServerRpc = Rpc.make(WS_METHODS.serverUpdateServer, {
@@ -1990,6 +2000,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProviderInstallSubscribeRpc,
   WsProviderInstallRemoveRpc,
   WsServerUpdateServerRpc,
+  WsServerGetNpmReleaseRpc,
   WsServerUpdateServerWithProgressRpc,
   WsServerCommitDesktopUpdateRpc,
   WsServerUpsertKeybindingRpc,
