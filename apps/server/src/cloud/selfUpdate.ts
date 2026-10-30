@@ -190,7 +190,10 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     }
     const mirrorProblem = cliReleaseBaseUrlProblem(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
     if (mirrorProblem) return yield* failWith(mirrorProblem); // Fork add-on
-    const repositoryProblem = cliReleaseRepositoryProblem(releaseRepositoryOverride); // Fork add-on
+    const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
+      releaseRepositoryOverride, // Fork add-on
+      releaseBaseUrl, // Fork add-on
+    ); // Fork add-on
     if (repositoryProblem) return yield* failWith(repositoryProblem); // Fork add-on
     const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
       releaseRepositoryOverride, // Fork add-on

@@ -66,7 +66,10 @@ export const resolveNewestVersion = Effect.fn("cli.update.resolve_newest")(funct
   const httpClient = yield* HttpClient.HttpClient;
   const environment = yield* HostProcess.Environment;
   const repositoryOverride = repository ?? environment[CLI_RELEASE_REPOSITORY_ENV]; // Fork add-on
-  const repositoryProblem = cliReleaseRepositoryProblem(repositoryOverride); // Fork add-on
+  const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
+    repositoryOverride, // Fork add-on
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
+  ); // Fork add-on
   if (repositoryProblem /* Fork add-on */) {
     return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on
   } // Fork add-on
@@ -322,6 +325,7 @@ const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   if (mirrorProblem) return yield* new CliUpdateError({ reason: mirrorProblem }); // Fork add-on
   const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
     environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
   ); // Fork add-on
   if (repositoryProblem /* Fork add-on */) {
     return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on

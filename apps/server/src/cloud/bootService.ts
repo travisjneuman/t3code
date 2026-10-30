@@ -729,7 +729,10 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     yield* rotateBootServiceLog(fs, logPath); // Fork add-on: bounded service log.
     const mirrorStep = releaseMirrorCheckStep(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
     if (mirrorStep) return yield* new BootServiceCommandError({ step: mirrorStep }); // Fork add-on
-    const repositoryProblem = cliReleaseRepositoryProblem(releaseRepositoryOverride); // Fork add-on
+    const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
+      releaseRepositoryOverride, // Fork add-on
+      releaseBaseUrl, // Fork add-on
+    ); // Fork add-on
     if (repositoryProblem /* Fork add-on */) {
       return yield* /* Fork add-on */ new BootServiceCommandError({
         step: `checking the release repository: ${repositoryProblem}`, // Fork add-on

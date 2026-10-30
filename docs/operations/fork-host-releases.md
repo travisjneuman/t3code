@@ -22,6 +22,9 @@ The Mac checkout's origin fetch and push URLs must both identify that repository
 must identify it too. Legacy release downloads and service release-base matching use the same
 resolved repository. The expected upstream remains `pingdotgg/t3code`.
 
+The desktop app checks for the inventory once at startup; restart it after creating or removing
+the file.
+
 Older inventories may still contain `buildHosts` or `stageFrom`. The local build flow ignores both:
 every configured host builds its own native server in its own checkout. Remove those legacy fields
 from the private inventory when convenient; the command does not require a config migration.

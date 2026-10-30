@@ -32,8 +32,11 @@ export const readServerReleaseFacts = Effect.gen(function* () {
     Effect.orElseSucceed(() => undefined),
   );
   const releaseSource: ServerReleaseSource =
-    cliReleaseRepositoryProblem(repositoryOverride) === undefined
-      ? cliReleaseSourceOf(baseUrlOverride, cliReleaseRepositoryOf(repositoryOverride, baseUrlOverride))
+    cliReleaseRepositoryProblem(repositoryOverride, baseUrlOverride) === undefined
+      ? cliReleaseSourceOf(
+          baseUrlOverride,
+          cliReleaseRepositoryOf(repositoryOverride, baseUrlOverride),
+        )
       : "custom";
   const startedAt = DateTime.formatIso(yield* DateTime.now);
   return {

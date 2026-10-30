@@ -45,8 +45,11 @@ Each server discovers releases in the repository set by `T3CODE_RELEASE_REPOSITO
 `owner/name`. If unset, it derives the repository from `T3CODE_RELEASE_BASE_URL` only when that is
 `https://github.com/<owner>/<name>/releases/download`; otherwise it uses `travisjneuman/t3code`.
 Downloads default to `https://github.com/<resolved>/releases/download`.
-`T3CODE_RELEASE_BASE_URL` overrides downloads and supports a custom HTTPS mirror. With neither
-variable set, or only the owner's existing GitHub download base, behavior is unchanged.
+`T3CODE_RELEASE_BASE_URL` overrides downloads and supports a custom HTTPS mirror. When both are set
+and the base is a GitHub releases URL, it must name the same repository, or updates stop with an
+error. With neither variable set, or only the owner's existing GitHub download base, behavior is
+unchanged. Servers the desktop app launches over SSH always download from `travisjneuman/t3code`;
+neither variable applies to them.
 
 Each server reports its release source: fork releases, upstream releases, or a custom release
 source.

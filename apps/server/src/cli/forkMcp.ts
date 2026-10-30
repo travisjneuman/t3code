@@ -16,13 +16,18 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
 import * as ServerConfig from "../config.ts";
 import { runAcpMcpStdioBridge } from "../mcp/AcpMcpStdioBridge.ts";
-import { readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
+import { isProcessAlive, readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import {
   authLocationFlags,
   type CliAuthLocationFlags,
   DurationFromString,
   resolveCliAuthConfig,
 } from "./config.ts";
+
+// OAuth trims client names to 100 characters and fixes its tokens at 30 days.
+const MAX_CLIENT_NAME_LENGTH = 100;
+const MAX_TOKEN_TTL = Duration.days(365);
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 const runWithMcpSessions = Effect.fn("cli.mcp.runWithMcpSessions")(function* <A, E>(
   flags: CliAuthLocationFlags,
@@ -46,7 +51,7 @@ const runWithMcpSessions = Effect.fn("cli.mcp.runWithMcpSessions")(function* <A,
 const tokenCommand = Command.make("token", {
   ...authLocationFlags,
   name: Flag.String("name").pipe(
-    Flag.withSchema(TrimmedNonEmptyString),
+    Flag.withSchema(TrimmedNonEmptyString.check(Schema.isMaxLength(MAX_CLIENT_NAME_LENGTH))),
     Flag.withDescription("Name shown for this agent in Sharing & access."),
   ),
   access: Flag.Literals("access", [...AuthMcpClientAccess.literals, "supervised"]).pipe(
@@ -58,8 +63,9 @@ const tokenCommand = Command.make("token", {
         Schema.check(
           Schema.makeFilter(
             (duration) =>
-              Number.isFinite(Duration.toMillis(duration)) && Duration.toMillis(duration) > 0,
-            { expected: "a finite, positive duration" },
+              Duration.toMillis(duration) > 0 &&
+              Duration.toMillis(duration) <= Duration.toMillis(MAX_TOKEN_TTL),
+            { expected: "a positive duration of at most 365d" },
           ),
         ),
       ),
@@ -114,12 +120,17 @@ const stdioCommand = Command.make("stdio", {
         Schema.check(
           Schema.makeFilter(
             (url) =>
-              (url.protocol === "http:" || url.protocol === "https:") &&
+              // The bearer token travels in plain text over http, so only loopback may use it.
+              (url.protocol === "https:" ||
+                (url.protocol === "http:" && LOOPBACK_HOSTNAMES.has(url.hostname))) &&
               url.username === "" &&
               url.password === "" &&
               url.search === "" &&
               url.hash === "",
-            { expected: "an HTTP(S) MCP URL without credentials, a query, or a fragment" },
+            {
+              expected:
+                "an https MCP URL (http only for loopback) without credentials, a query, or a fragment",
+            },
           ),
         ),
       ),
@@ -132,8 +143,8 @@ const stdioCommand = Command.make("stdio", {
   Command.withHandler(
     Effect.fn("cli.mcp.stdio")(
       function* (flags) {
-        const secret = yield* Config.Redacted("T3_MCP_TOKEN");
-        const token = Redacted.value(secret).trim();
+        const secret = yield* Config.option(Config.Redacted("T3_MCP_TOKEN"));
+        const token = Option.isSome(secret) ? Redacted.value(secret.value).trim() : "";
         if (token.length === 0 || /\s/.test(token)) {
           return yield* new CliError.UserError({
             cause: "T3_MCP_TOKEN must contain a bearer token without the Bearer prefix.",
@@ -146,7 +157,8 @@ const stdioCommand = Command.make("stdio", {
           const logLevel = yield* GlobalFlag.LogLevel;
           const config = yield* resolveCliAuthConfig(flags, logLevel);
           const runtime = yield* readPersistedServerRuntimeState(config.serverRuntimeStatePath);
-          if (Option.isNone(runtime)) {
+          // A dead server's port may be reused; never send the token to whoever holds it now.
+          if (Option.isNone(runtime) || !isProcessAlive(runtime.value.pid)) {
             return yield* new CliError.UserError({
               cause: "No local environment runtime was found. Start the environment or pass --url.",
             });

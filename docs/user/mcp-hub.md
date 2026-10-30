@@ -89,8 +89,11 @@ stdio to the running environment's HTTP MCP server:
 }
 ```
 
+`--url` must use HTTPS unless it points at `127.0.0.1`, `localhost`, or `[::1]`.
+
 Omit `--url` when the client runs on the environment's host. The bridge then
-connects to the address and port the running server recorded for itself. Use the
+connects to the address and port the running server recorded for itself, and
+refuses to start when that server is no longer running. Use the
 same data-directory setting as the server. The bridge prints
 only MCP messages to standard output; it never accepts a token as an argument.
 
@@ -109,9 +112,10 @@ an agent cannot start or steer a thread above it. Provider-specific behavior is
 described in [Permission modes](permission-modes.md).
 
 Tokens expire after **30 days** by default. Set a different lifetime with
-`--ttl`, for example `--ttl 7d`. Issue a new token when one expires.
+`--ttl`, for example `--ttl 7d`, up to `365d`. Issue a new token when one expires.
 
-Each token appears as a named client under **Settings → Sharing & access**.
+Each token appears as a named client under **Settings → Sharing & access**; an
+open page shows it after a refresh.
 Revoke it there to cut off its access, or run `t3 auth session revoke <session-id>`
 on the host using the same data-directory setting. OAuth-approved agents appear
 in the same list.

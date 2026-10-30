@@ -6,30 +6,44 @@ export type CliReleaseSource = "fork" | "upstream" | "custom";
 export const CLI_RELEASE_REPOSITORY_ENV = "T3CODE_RELEASE_REPOSITORY";
 const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code";
 
-export function cliReleaseRepositoryProblem(repository: string | undefined): string | undefined {
+const GITHUB_REPOSITORY = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/([A-Za-z0-9._-]{1,100})$/;
+
+const isGithubRepository = (value: string) => {
+  const name = GITHUB_REPOSITORY.exec(value)?.[2];
+  return name !== undefined && name !== "." && name !== "..";
+};
+
+/** The `owner/name` a `https://github.com/<owner>/<name>/releases/download` base points at. */
+const githubReleaseRepositoryOf = (baseUrl: string | undefined): string | undefined => {
+  const fromBase = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/releases\/download\/*$/i.exec(
+    baseUrl?.trim() ?? "",
+  )?.[1];
+  return fromBase !== undefined && isGithubRepository(fromBase) ? fromBase : undefined;
+};
+
+/** Discovery reads the repository while downloads read the base, so a GitHub base must agree. */
+export function cliReleaseRepositoryProblem(
+  repository: string | undefined,
+  baseUrl: string | undefined = undefined,
+): string | undefined {
   const trimmed = repository?.trim();
   if (!trimmed) return undefined;
-  const match = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/([A-Za-z0-9._-]{1,100})$/.exec(
-    trimmed,
-  );
-  return match && match[2] !== "." && match[2] !== ".."
+  if (!isGithubRepository(trimmed)) {
+    return "T3CODE_RELEASE_REPOSITORY must be a GitHub owner/name. Fix or remove it, then try again.";
+  }
+  const fromBase = githubReleaseRepositoryOf(baseUrl);
+  return fromBase === undefined || fromBase.toLowerCase() === trimmed.toLowerCase()
     ? undefined
-    : "T3CODE_RELEASE_REPOSITORY must be a GitHub owner/name. Fix or remove it, then try again.";
+    : `T3CODE_RELEASE_REPOSITORY (${trimmed}) and T3CODE_RELEASE_BASE_URL (${fromBase}) name different repositories. Make them match or remove one, then try again.`;
 }
 
 export function cliReleaseRepositoryOf(
   repository: string | undefined,
   baseUrl: string | undefined = undefined,
 ): string {
-  const problem = cliReleaseRepositoryProblem(repository);
+  const problem = cliReleaseRepositoryProblem(repository, baseUrl);
   if (problem) throw new Error(problem);
-  if (repository?.trim()) return repository.trim();
-  const fromBase = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/releases\/download\/*$/.exec(
-    baseUrl?.trim() ?? "",
-  )?.[1];
-  return fromBase && fromBase === fromBase.trim() && cliReleaseRepositoryProblem(fromBase) === undefined
-    ? fromBase
-    : CLI_RELEASE_REPOSITORY;
+  return repository?.trim() || githubReleaseRepositoryOf(baseUrl) || CLI_RELEASE_REPOSITORY;
 }
 
 const cliReleaseDefaultBaseUrl = (repository: string) =>
