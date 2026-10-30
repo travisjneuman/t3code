@@ -104,3 +104,15 @@ html[data-remote-app-surface] div:has(> div > a[aria-label="T3 Code home"]) {
     var(--workspace-titlebar-content-left) + var(--remote-app-switcher-width, 5rem) + 0.25rem
   );
 }
+
+/* Upstream sizes the sidebar's minimum width from a hidden probe of the brand
+   and history buttons. Measure the wider switcher in its place, so the forward
+   button is not clipped at the narrowest sidebar. */
+html[data-remote-app-surface] div[aria-hidden="true"] > div:has(> span > svg[aria-label="T3"]) {
+  padding-left: calc(var(--remote-app-switcher-width, 5rem) + 0.25rem);
+  gap: 0;
+}
+
+html[data-remote-app-surface] div[aria-hidden="true"] > div > span:has(> svg[aria-label="T3"]) {
+  display: none;
+}
