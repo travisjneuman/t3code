@@ -77,6 +77,7 @@ import {
 } from "./providerPolicy.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { OrchestrationProjectShell } from "./orchestrationProject.ts";
+import { OrchestrationV2OmittedSubagents } from "./forkShellSubagents.ts"; // Fork add-on: nested subagents.
 import {
   TurnTokenUsage,
   ToolActivitySurface,
@@ -2185,6 +2186,7 @@ export const OrchestrationV2ShellSnapshot = Schema.Struct({
   ...OrchestrationV2ThreadShellSnapshot.fields,
   projects: Schema.Array(OrchestrationProjectShell),
   olderSettled: Schema.optionalKey(OrchestrationV2OlderSettledThreads),
+  omittedSubagents: Schema.optionalKey(Schema.Array(OrchestrationV2OmittedSubagents)), // Fork add-on: nested subagents.
 });
 export type OrchestrationV2ShellSnapshot = typeof OrchestrationV2ShellSnapshot.Type;
 

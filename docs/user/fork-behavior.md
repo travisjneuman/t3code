@@ -154,7 +154,9 @@ them. Collapsed, the thread still lists the subagents that are running and the o
 like the Other Agents and Hermes shelves; one shown without its parent is not indented. Expanded,
 the first three are listed, plus any that are running or open, and **Show more** lists the rest.
 They stay there after they finish. Hover one for its provider, model and status; open it to
-review its work, or right-click it to archive or delete it.
+review its work, or right-click it to archive or delete it. The count includes idle subagents the
+server leaves out of the sidebar to keep it light; expanding the thread loads them. An older
+settled thread that loads later as you page through Settled counts only the subagents already loaded.
 
 The thread details **Lineage** section lists every subagent below the thread too, not only the
 ones it started directly, each indented under the agent that started it, newest first. A tree

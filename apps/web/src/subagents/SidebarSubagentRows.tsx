@@ -3,7 +3,9 @@
  * under their top-level thread's sidebar row, one line each, in whichever
  * section that row sits. They stay after they finish so they can be reviewed,
  * archived or deleted. A toggle on the parent's row shows all of them or only
- * the running ones; running only is the default. Fork add-on: nested subagents.
+ * the running ones; running only is the default. Its count includes the idle
+ * subagents the shell leaves out, which load when the row is expanded.
+ * Fork add-on: nested subagents.
  */
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
@@ -52,11 +54,17 @@ import {
 import { AgentMoreIcon } from "../sidebar-compact/AgentSectionParts";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
+import {
+  omittedSubagentsUnder,
+  useOmittedSubagentFamilies,
+  useOmittedSubagentKeys,
+} from "./omittedSubagents";
 
 /** Parents whose subagents are shown; every other parent hides them. */
 const EXPANDED_STORAGE_KEY = "t3code:sidebar:subagents-expanded";
 const ExpandedKeysSchema = Schema.Array(Schema.String);
 const NO_KEYS: ReadonlyArray<string> = [];
+const NO_ROWS: ReadonlyArray<SidebarSubagent> = [];
 /** Subagents listed before "Show more". */
 const SHOWN_BEFORE_MORE = 3;
 /** Deeper subagents than this indent no further. */
@@ -144,6 +152,11 @@ export function useSidebarSubagents(input: {
   const { threads } = input;
   const groups = groupSubagents(threads);
   const [expandedKeys] = useLocalStorage(EXPANDED_STORAGE_KEY, NO_KEYS, ExpandedKeysSchema);
+  const omitted = useOmittedSubagentKeys();
+  const rowKeys = (parentKey: string) => (groups.get(parentKey) ?? NO_ROWS).map((row) => row.key);
+  useOmittedSubagentFamilies(
+    expandedKeys.filter((key) => [key, ...rowKeys(key)].some((parent) => omitted.has(parent))),
+  );
   const nowMinute = useNowMinute();
   const { archiveThread, deleteThread } = useThreadActions();
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
@@ -223,7 +236,10 @@ export function useSidebarSubagents(input: {
     },
   );
 
-  const count = (parentKey: string) => groups.get(parentKey)?.length ?? 0;
+  const count = (parentKey: string) => {
+    const keys = rowKeys(parentKey);
+    return keys.length + omittedSubagentsUnder(omitted, parentKey, keys).length;
+  };
 
   const render = (parentKey: string): ReactNode[] => {
     const subagents = groups.get(parentKey);

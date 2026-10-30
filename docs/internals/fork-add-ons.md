@@ -38,6 +38,10 @@ The Lineage panel's nesting follows the same shape: upstream's relationship shel
 children, so [`lineageTree.ts`](../../apps/web/src/subagents/lineageTree.ts) adds its own selector
 for every live subagent below the thread and nests the rows into whole trees after upstream sorts
 them into sections. Workflow members are skipped because their workflow row lists them.
+The sidebar count can't come from the client's rows, since `omitIdleSubagents` shells leave idle
+leaf subagents out. The subscriber snapshot names them in a fork `omittedSubagents` field
+([`forkShellSubagents.ts`](../../packages/contracts/src/forkShellSubagents.ts)), grouped by a parent
+it sends; removals drop ids client side, and expanding a row mounts its thread family for the rows.
 
 Usage model rows are grouped the same way, after the merge:
 [`usageModelGroups.ts`](../../packages/shared/src/usageModelGroups.ts) wraps `mergeUsage` in
