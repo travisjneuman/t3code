@@ -7,6 +7,7 @@ import { cn } from "~/lib/utils";
 const spinnerVariants = cva("motion-safe:visible-animate-spin", {
   variants: {
     size: {
+      "2xs": "size-2.5", // Fork add-on: compact lineage agents
       xs: "size-3",
       sm: "size-3.5",
       md: "size-4",
