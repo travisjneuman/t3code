@@ -231,6 +231,13 @@ Built-in providers other than Codex and Claude, such as Cursor, OpenCode, Muse C
 a delete button in their settings under **Settings → Providers**. Deleting one clears its settings,
 turns it off and takes it out of the list. To bring it back, choose it under **Add provider**.
 
+## Claude updates follow Claude's own release channel
+
+Claude Code installed with Anthropic's native installer updates itself with `claude update`, which
+reads Anthropic's release channel. That channel can trail the npm package by a few days, so T3 Code
+offers a Claude update only when the channel has one. Set `autoUpdatesChannel` to `stable` in
+Claude's `settings.json` to follow the stable channel instead of the latest one.
+
 ## Codex can show hidden models
 
 OpenAI keeps some models out of the Codex picker, such as older or long-context versions. To list
