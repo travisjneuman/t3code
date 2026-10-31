@@ -279,14 +279,19 @@ export const make = Effect.gen(function* () {
 
   /** Runs before the target is resolved; refuses what the settings forbid. */
   const prepare = (input: {
-    readonly parent: DelegationParent;
+    readonly parent: Pick<OrchestrationV2ThreadProjection, "thread">;
     readonly request: OrchestratorMcpDelegateTaskInput;
     readonly providers: ReadonlyArray<ServerProvider>;
     readonly isRetry: boolean;
   }): Effect.Effect<PreparedDelegation, OrchestratorMcpFailure> =>
     Effect.gen(function* () {
-      const chain = yield* subagentChain(input.parent);
-      const top = chain[chain.length - 1] ?? input.parent;
+      // The caller's projection omits subagents (upstream loads them per task), so read them here.
+      const parent: DelegationParent = {
+        thread: input.parent.thread,
+        subagents: (yield* readThread(input.parent.thread.id)).subagents,
+      };
+      const chain = yield* subagentChain(parent);
+      const top = chain[chain.length - 1] ?? parent;
       const value = yield* serverSettings.getSettings.pipe(
         Effect.mapError(() => orchestrationFailure("Unable to read server settings.")),
       );
@@ -302,6 +307,7 @@ export const make = Effect.gen(function* () {
           : yield* activeWorkersUnder(top);
       const policy = yield* applyDelegationPolicy({
         ...input,
+        parent,
         providers: input.providers,
         settings,
         level: { depth: chain.length - 1, activeWorkers },
