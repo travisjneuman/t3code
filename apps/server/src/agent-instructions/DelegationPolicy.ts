@@ -134,6 +134,15 @@ export function applyDelegationPolicy(input: {
 > {
   const { settings, parent, level, request } = input;
   if (settings.agentDelegationMode === "off") {
+    if (!input.isRetry) {
+      return Effect.fail(
+        new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message:
+            "Delegation is off for this thread (the Solo preset, or Settings, Agents, Delegation). Do this task yourself; do not start workers or native subagents.",
+        }),
+      );
+    }
     return Effect.succeed({
       target: request.target,
       task: request.task,

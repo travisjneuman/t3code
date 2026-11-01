@@ -10,18 +10,22 @@ Open **Settings → General** and find **Agents**. **Preview** on the **What age
 shows the exact text these settings produce for the scope you picked, including any
 provider-specific text.
 
-- **Presets**: pick a preset and click **Apply** to copy its values into the scope you picked.
-  **Solo** turns delegation off, **Orchestrator** always delegates and runs one review round, and
-  **Review-heavy** delegates when useful, reviews until clean, and keeps reviewers read-only. The
-  built-ins change only those rows. **Save current** saves, under a name, the Agents values for the
-  picked scope that differ from the defaults; applying it later changes only those rows and leaves
-  the rest. Saving or renaming copies that one preset to every connected server the scope picker
-  covers, so a thread on any of them can use it; each server keeps its other presets. With a preset
-  you saved selected, it offers that name, so saving replaces it; built-in presets can't be
-  replaced. **Rename** renames a preset you saved; threads using it keep it. **Delete** removes a
-  preset you saved from those servers, and threads that picked it go back to the default. The row
-  keeps showing the preset you last applied, saved or picked, marked **(edited)** once a value no
-  longer matches it, and shows **Custom** when no preset is selected or matches. **Set default**
+- **Presets**: picking a preset sets its values in the scope you picked. **Solo** has the agent
+  work alone, **Orchestrator** always delegates and runs one review round, and **Review-heavy**
+  delegates when useful, reviews until clean, and keeps reviewers read-only. A preset always sets
+  every delegation row (Delegation, the worker models, Fixed worker targets, Parallel workers,
+  Delegation depth, Worker workspace, Worker time limit, Review rounds, Read-only reviewers,
+  Orchestrator handles git, and Block native subagents), using the default for any it doesn't
+  store, so switching presets never keeps the previous one's workers. Built-in presets leave the
+  worker models and Fixed worker targets as they are. The other rows change only where the preset
+  stores a value. Once you change a row, the preset shows **(edited)**: **Save** writes the change
+  back to the preset you saved, **Revert** puts its values back, and **Save as…** saves the
+  current values under a new name (a saved preset with the same name is replaced; built-in presets
+  can't be). Saving or renaming copies that one preset to every connected server the scope picker
+  covers, so a thread on any of them can use it; each server keeps its other presets. **Rename**
+  renames a preset you saved; threads using it keep it. **Delete** removes a preset you saved from
+  those servers, and threads that picked it go back to the default. The row shows **Custom** when
+  no preset is selected or matches. **Set default**
   makes the selected preset, built-in or saved, the one every thread on the shown server runs under
   until you pick another for it in the composer; the preset list marks it **(default)**, and
   **Clear default** goes back to the project's settings. While a default preset changes any row,
@@ -31,7 +35,9 @@ provider-specific text.
   work to workers and do small or sequential work itself. It uses its own native subagents or the
   `delegate_task` tool as T3's built-in rules say. **Always** keeps the thread's agent to planning,
   review, and integration, and hands the rest to workers through `delegate_task` instead of native
-  subagents. **Off** adds no delegation rules and T3 enforces nothing.
+  subagents. **Off (work alone)** has the agent do everything itself, even where `CLAUDE.md` or
+  `AGENTS.md` says to delegate: T3 refuses `delegate_task` with a message telling the agent so, and
+  turns off native subagents as **Block native subagents** does.
 
 These rows show while Delegation is on:
 
@@ -44,9 +50,7 @@ These rows show while Delegation is on:
   for each worker role, and rejects a delegation that requests a different target. A role-specific
   model takes precedence; other roles use Worker model. Delegations without a configured target
   are refused. This setting is project-scoped and can be saved in an Agents preset. It does not
-  change the thread's main model or provider-native subagents. A selected saved preset can override
-  both the fixed-target setting and worker selections for that thread; built-in presets leave those
-  values unchanged.
+  change the thread's main model or provider-native subagents.
 - **Parallel workers**: the most workers running at once under one thread's agent, counting
   workers that workers start. The default is 12; pick another count, or **Custom…** to type one
   from 1 to 30. Each worker is a full agent process, so every worker adds memory use (the row
@@ -83,8 +87,8 @@ These rows always show:
 - **Commit and push**: **Never** leaves changes uncommitted for you; **After each change** commits
   and pushes each verified change. **Project rules** adds nothing.
 - **Block native subagents**: agents use only T3's `delegate_task`, never their harness's own
-  subagents. T3 turns off Claude's Agent and Task tools and Codex's multi-agent feature; other
-  providers are told the rule.
+  subagents. T3 turns off Claude's Agent, Task, and Workflow tools and Codex's multi-agent feature;
+  other providers are told the rule.
 - **Autonomy**: **Work without asking** has agents make reasonable calls and list them in the
   report; **Ask before risky steps** has them ask before committing, pushing, deleting, or
   anything that reaches outside your machine; **Ask before any change** has them describe each
@@ -110,18 +114,21 @@ its own settings.
 ## A preset for one thread
 
 The people icon in the composer, next to the access mode, picks a preset for that thread only. Its
-agent, and any worker it starts, run under the preset's values on top of the project's settings.
-A thread you haven't picked one for uses the default preset. **Project settings** keeps the thread
+agent, and any worker it starts, run under the preset's values on top of the project's settings,
+with every delegation row set as picking the preset in Settings would. You can switch it while the
+thread runs; see below for when each provider picks it up. A thread you haven't picked one for uses the default preset. **Project settings** keeps the thread
 on the project's values even when a default is set. The control shows the preset's name while one
 applies. In a narrow composer it's in the **…** menu.
 
 ## When agents pick up changes
 
 Codex, Grok, Cursor, Muse, and OpenCode receive the current instructions with every turn, so a
-change applies from the next message. Claude and Pi get them when their session starts, so a Claude
-or Pi thread that is already running keeps what it started with until its session restarts, for
-example after T3 Code restarts. **Block native subagents** likewise applies when a session starts.
-Antigravity doesn't receive agent instructions.
+change applies from the next message. Claude restarts its session, keeping the conversation, on
+the next message after a change; while it has background work running it keeps the old
+instructions until that finishes, but still can't start native subagents once they're turned off.
+Pi gets them when its session starts. Codex's multi-agent feature is turned off when its session
+starts. Wherever delegation is off, T3 refuses `delegate_task` from the next call. Antigravity
+doesn't receive agent instructions.
 
 Workers started with `delegate_task` get the same instructions as the agent that started them, and
 run under the preset of the nearest thread above them that has one, else the default preset.

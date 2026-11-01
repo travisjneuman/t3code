@@ -4,7 +4,7 @@
  * server builds the instructions every provider receives from these rows and
  * enforces the worker target, worker limit, delegation depth, worker worktrees
  * and time limits on delegate_task; each row takes project overrides through
- * the settings scope picker. Presets copy a named set of these values in.
+ * the settings scope picker. Picking a preset copies a named set of these values in.
  * Fork add-on: agent instructions.
  */
 import {
@@ -76,7 +76,7 @@ const SETTING_LABELS: Record<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number],
 };
 
 const DELEGATION_OPTIONS: ReadonlyArray<readonly [AgentDelegationMode, string]> = [
-  ["off", "Off"],
+  ["off", "Off (work alone)"],
   ["auto", "When useful"],
   ["always", "Always"],
 ];
@@ -206,9 +206,10 @@ export function AgentInstructionsSettingsSection() {
         {...searchableSetting("agent-presets")}
         description={
           <>
-            Apply a named set of the values below to the scope picked above, or save the current
-            values as one. Pick a preset for one thread from the composer. Running Claude and Pi
-            sessions, and Block native subagents, pick up changes when a session starts.
+            Picking a preset sets the values below for the scope picked above. Save writes your
+            changes back to the picked preset; Save as makes a new one. Pick a preset for one thread
+            from the composer. Claude picks up changes on its next message; Pi, and Codex's own
+            subagents, when a session starts.
             {defaultOverrides.length > 0 ? (
               <span className="mt-1 block text-warning-foreground">
                 Threads without a preset choice run under the default preset, {defaultPreset?.name},
@@ -224,7 +225,7 @@ export function AgentInstructionsSettingsSection() {
         serverScoped
         settingKeys={["agentDelegationMode"]}
         {...searchableSetting("agent-delegation")}
-        description="How the thread's agent hands work to other agents with delegate_task. These rules win over conflicting CLAUDE.md or AGENTS.md rules."
+        description="How the thread's agent hands work to other agents. Off has it work alone: T3 refuses delegate_task and turns off native subagents. These rules win over conflicting CLAUDE.md or AGENTS.md rules."
         resetAction={
           settings.agentDelegationMode !== "auto" ? (
             <SettingResetButton

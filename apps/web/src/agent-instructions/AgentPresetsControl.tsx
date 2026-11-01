@@ -1,15 +1,12 @@
 /**
- * The Agents "Presets" row: apply a named set of Agents values to the scope
- * picked above, save the current values as a preset, make one the default for
- * threads without a choice, or rename or delete a saved one. A preset holds only
- * the values that differ from the defaults, and applying it leaves the rest.
- * Saved presets and the default live in the environment's settings, next to the
- * built-ins.
+ * The Agents "Presets" row. Picking a preset applies agentPresetValues to the picked scope;
+ * saved presets copy by id to every connected environment so threads there can use them.
  * Fork add-on: agent instructions.
  */
 import {
   type AgentPreset,
   agentPresetList,
+  agentPresetValues,
   agentSettingsDifferences,
   BUILTIN_AGENT_PRESETS,
   isBuiltinAgentPreset,
@@ -50,10 +47,10 @@ function upsertPreset(current: readonly AgentPreset[], preset: AgentPreset): Age
     : [...current, preset];
 }
 
-/** Whether every value the preset sets equals the scope's current one. */
+/** Whether every value applying the preset sets equals the scope's current one. */
 function presetMatches(preset: AgentPreset, settings: object): boolean {
   const current = settings as Readonly<Record<string, unknown>>;
-  return Object.entries(preset.settings).every(
+  return Object.entries(agentPresetValues(preset)).every(
     ([key, value]) => JSON.stringify(current[key]) === JSON.stringify(value),
   );
 }
@@ -66,8 +63,8 @@ export function AgentPresetsControl() {
   const { target, connectedEnvironments } = useSettingsScope();
   const persist = useAtomCommand(serverEnvironment.updateSettings, "Agents preset update");
   const presets = agentPresetList(settings);
-  // The last preset applied, saved or picked stays selected across visits, so
-  // Save current offers to replace it after a value changes.
+  // The last preset picked or saved stays selected across visits, so Save
+  // writes back to it after a value changes.
   const [selectedId, setSelectedId] = useLocalStorage(
     `t3code:agent-preset-selection:${target?.environmentId ?? "none"}`,
     "",
@@ -141,6 +138,11 @@ export function AgentPresetsControl() {
     });
   };
 
+  const applyPreset = (preset: AgentPreset) => {
+    updateScoped(agentPresetValues(preset));
+    setSelectedId(preset.id);
+  };
+
   const savePreset = () => {
     const trimmed = trimmedName;
     if (trimmed === "" || nameIsBuiltin) return;
@@ -179,31 +181,38 @@ export function AgentPresetsControl() {
         )}
         ariaLabel="Preset"
         emptyLabel="Custom"
-        onChange={setSelectedId}
-      />
-      <Button
-        size="xs"
-        variant="outline"
-        disabled={selected === undefined}
-        onClick={() => {
-          if (!selected) return;
-          updateScoped(selected.settings);
-          setSelectedId(selected.id);
+        onChange={(id) => {
+          const preset = presets.find((entry) => entry.id === id);
+          if (preset) applyPreset(preset);
         }}
-      >
-        Apply
-      </Button>
+      />
+      {selected && edited ? (
+        <Button size="xs" variant="outline" onClick={() => applyPreset(selected)}>
+          Revert
+        </Button>
+      ) : null}
+      {savedSelected ? (
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={!edited}
+          onClick={() =>
+            copyPreset({ ...savedSelected, settings: agentSettingsDifferences(settings) })
+          }
+        >
+          Save
+        </Button>
+      ) : null}
       <Button
         size="xs"
         variant="outline"
         disabled={target === null}
         onClick={() => {
-          // Built-ins can't change, so only a saved preset is offered for replacing.
-          setName(savedSelected?.name ?? "");
+          setName("");
           setDialog("save");
         }}
       >
-        Save current
+        Save as…
       </Button>
       <Button
         size="xs"
@@ -254,7 +263,7 @@ export function AgentPresetsControl() {
             <DialogDescription>
               {dialog === "rename"
                 ? "Threads using this preset, and the default, keep using it under the new name."
-                : "Saves the Agents values for the scope picked above that differ from the defaults; applying the preset leaves the others as they are. A saved preset with the same name is replaced; built-in presets can't be."}
+                : "Saves the Agents values for the scope picked above. Picking the preset later sets every delegation row to them, and the other rows only where they differ from the defaults. A saved preset with the same name is replaced; built-in presets can't be."}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>

@@ -6,6 +6,7 @@
  * Fork add-on: agent instructions; see docs/user/agent-instructions.md.
  */
 import {
+  agentBlocksNativeSubagents,
   type AgentSettings,
   applyAgentThreadPreset,
   buildAgentInstructionsText,
@@ -47,7 +48,7 @@ function makeResolver(settings: ServerSettingsValues) {
     const resolved = resolveThreadAgentSettings(settings, scope.projectId, scope.threadIds);
     const result = {
       text: buildAgentInstructionsText(resolved, scope.provider),
-      blockNativeSubagents: resolved.agentBlockNativeSubagents,
+      blockNativeSubagents: agentBlocksNativeSubagents(resolved),
     };
     cache.set(key, result);
     return result;

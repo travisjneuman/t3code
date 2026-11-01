@@ -10,8 +10,8 @@ import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
 
 /**
- * How the thread's agent hands out work through `delegate_task`. `off` adds no
- * delegation rules, `auto` delegates independent pieces and keeps small work,
+ * How the thread's agent hands out work through `delegate_task`. `off` has it
+ * work alone, `auto` delegates independent pieces and keeps small work,
  * `always` keeps the agent to planning, review and integration.
  */
 export const AgentDelegationMode = Schema.Literals(["off", "auto", "always"]);
@@ -311,14 +311,63 @@ export function agentSettingsDifferences(
   );
 }
 
+/**
+ * The delegation rows a preset always sets: the ones it doesn't store take
+ * their defaults, so switching presets never keeps the previous preset's
+ * workers. The policy rows (verification, git, autonomy, reports, instructions)
+ * change only when the preset stores them.
+ */
+export const AGENT_PRESET_PROFILE_KEYS = [
+  "agentDelegationMode",
+  "agentWorkerModelSelection",
+  "agentWorkerModelSelectionFixed",
+  "agentReviewWorkerModelSelection",
+  "agentResearchWorkerModelSelection",
+  "agentMaxParallelWorkers",
+  "agentMaxDelegationDepth",
+  "agentReadOnlyReviewers",
+  "agentReviewRounds",
+  "agentOrchestratorOwnsGit",
+  "agentWorkerWorkspace",
+  "agentWorkerTimeLimitMinutes",
+  "agentBlockNativeSubagents",
+] as const satisfies ReadonlyArray<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]>;
+
+// Built-in presets keep the configured worker targets.
+const AGENT_WORKER_TARGET_KEYS: ReadonlyArray<string> = [
+  ...AGENT_MODEL_SELECTION_KEYS,
+  "agentWorkerModelSelectionFixed",
+];
+
+/** The values applying `preset` sets: its stored values, plus defaults for the profile rows it leaves out. */
+export function agentPresetValues(preset: AgentPreset): AgentPreset["settings"] {
+  const builtin = isBuiltinAgentPreset(preset.id);
+  return {
+    ...Object.fromEntries(
+      AGENT_PRESET_PROFILE_KEYS.filter(
+        (key) => !(builtin && AGENT_WORKER_TARGET_KEYS.includes(key)),
+      ).map((key) => [key, AGENT_SETTING_DEFAULTS[key]]),
+    ),
+    ...preset.settings,
+  };
+}
+
 /** The keys a preset sets to a value other than the one `settings` already has. */
 export function agentPresetOverriddenKeys(
   preset: AgentPreset,
   settings: Pick<AgentSettings, (typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]>,
 ): ReadonlyArray<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]> {
+  const values = agentPresetValues(preset);
   return AGENT_PROJECT_SCOPED_SETTING_KEYS.filter(
-    (key) => key in preset.settings && !sameValue(preset.settings[key], settings[key]),
+    (key) => key in values && !sameValue(values[key], settings[key]),
   );
+}
+
+/** Whether harness-native subagents are turned off: the setting, or delegation off (Solo). */
+export function agentBlocksNativeSubagents(
+  settings: Pick<AgentSettings, "agentBlockNativeSubagents" | "agentDelegationMode">,
+): boolean {
+  return settings.agentBlockNativeSubagents || settings.agentDelegationMode === "off";
 }
 
 export const AgentEnvironmentSettings = Schema.Struct(AgentEnvironmentSettingsFields);
@@ -381,7 +430,7 @@ export function applyAgentThreadPreset<S extends AgentSettings & AgentEnvironmen
   threadIds: ReadonlyArray<string | undefined>,
 ): S {
   const preset = agentPresetForThread(settings, threadIds);
-  return preset === undefined ? settings : { ...settings, ...preset.settings };
+  return preset === undefined ? settings : { ...settings, ...agentPresetValues(preset) };
 }
 
 /** The worker roles that can have their own model. Other roles use the worker model. */
@@ -501,9 +550,11 @@ function policyLines(settings: AgentSettings): ReadonlyArray<string | null> {
       : settings.agentPushPolicy === "after-change"
         ? "- Commit and push each completed change once it is verified."
         : null,
-    settings.agentBlockNativeSubagents
-      ? "- Never use your harness's own subagent or task tools; T3 turns them off where it can."
-      : null,
+    settings.agentDelegationMode === "off"
+      ? "- Work alone: do every part of the task yourself. Do not start workers with delegate_task or with your harness's own subagent, task, or workflow tools, even where CLAUDE.md or AGENTS.md says to delegate; T3 refuses them."
+      : settings.agentBlockNativeSubagents
+        ? "- Never use your harness's own subagent or task tools; T3 turns them off where it can."
+        : null,
     settings.agentAutonomy === "autonomous"
       ? "- Work without stopping to ask. Make reasonable calls yourself and list them in your report."
       : settings.agentAutonomy === "ask-risky"

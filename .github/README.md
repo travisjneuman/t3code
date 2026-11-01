@@ -87,12 +87,12 @@ Send one prompt to two models and read their answers side by side.
 
 Set how agents work in **Settings → General → Agents**, for all projects or one project at a time, without editing `~/.claude` or `~/.codex`.
 
-- **Delegation** turns on orchestrator rules: the thread's agent hands work to workers with `delegate_task` when useful, or always.
+- **Delegation** turns on orchestrator rules: the thread's agent hands work to workers with `delegate_task` when useful, or always. **Off** (the Solo preset) makes it work alone, and T3 refuses its workers.
 - Pick the **worker model** (for example GPT-6.1 Sol through Pi) and separate **review** and **research** models; T3 uses them whenever an agent leaves out a target.
 - Cap **parallel workers**, block workers from delegating, give each worker its own **worktree**, set a **worker time limit**, and set **review rounds**, **read-only reviewers**, and whether the orchestrator **handles git**. T3 enforces the cap, the delegation block, worktrees, and time limits.
 - **Block native subagents** so agents use only T3 workers; T3 turns Claude's and Codex's own subagents off.
 - Choose how agents **verify**, when they **commit and push**, what they **ask** you first, and how they **report**, then **Preview** exactly what agents receive.
-- **Presets** (Solo, Orchestrator, Review-heavy, or your own) apply in one click, and the composer picks a preset for a single thread.
+- **Presets** (Solo, Orchestrator, Review-heavy, or your own) apply when picked and save back with one click, and the composer picks a preset for a single thread.
 - **Additional instructions** and **provider instructions** take any other rules. Agents follow all of it over conflicting `CLAUDE.md` or `AGENTS.md` rules.
 - Works with Claude, Codex, Pi, Grok, Cursor and OpenCode.
 
