@@ -149,6 +149,7 @@ export function ComposerControlsBar(props: {
     activeThreadId, // Fork add-on(agent-instructions)
   } = props;
   const accessMatchesDefault = compatibleRuntimeMode === defaultRuntimeMode;
+  const openBotThread = selectedProvider === OPENBOT_DRIVER; // Fork add-on(openbot): OpenBot's own delegation rules and access apply.
   const {
     accessDisplay,
     showModeBlock,
@@ -157,7 +158,7 @@ export function ComposerControlsBar(props: {
     overflowShowsPermissions,
     pickerOwnsModeShortcut,
   } = resolveComposerControlsOwnership({
-    matchesDefault: accessMatchesDefault || props.permissionsShownInStrip,
+    matchesDefault: accessMatchesDefault || props.permissionsShownInStrip || openBotThread, // Fork add-on(openbot)
     planModeUiEnabled,
     collapsed: composerControlsCollapsed,
     measuredHiddenBlockCount,
@@ -177,7 +178,7 @@ export function ComposerControlsBar(props: {
     planModeEnabled,
   });
   const effort = describeComposerEffort(traitsInput, props.effortDisplay, controlSize);
-  const agentPresetControl = activeThreadId ? ( // Fork add-on(agent-instructions)
+  const agentPresetControl = activeThreadId && !openBotThread ? ( // Fork add-on(agent-instructions)
     <AgentThreadPresetControl // Fork add-on(agent-instructions)
       environmentId={environmentId} // Fork add-on(agent-instructions)
       threadId={activeThreadId} // Fork add-on(agent-instructions)
@@ -259,7 +260,7 @@ export function ComposerControlsBar(props: {
         <ComposerPickerFooter
           traits={traitsInput}
           runtimeMode={compatibleRuntimeMode}
-          runtimeModeOptions={compatibleRuntimeModeOptions}
+          runtimeModeOptions={openBotThread ? [] : compatibleRuntimeModeOptions} // Fork add-on(openbot)
           onRuntimeModeChange={handleRuntimeModeChange}
         />
       }
@@ -348,7 +349,7 @@ export function ComposerControlsBar(props: {
             // Permissions join the overflow only when their normal home is in it.
             showPermissions={overflowShowsPermissions}
             forkMenuContent /* Fork add-on(agent-instructions) */={
-              activeThreadId && hiddenRestingBlockIds.length > 0 ? ( // Fork add-on(agent-instructions)
+              activeThreadId && !openBotThread && hiddenRestingBlockIds.length > 0 ? ( // Fork add-on(agent-instructions)
                 <AgentThreadPresetMenuItems // Fork add-on(agent-instructions)
                   environmentId={environmentId} // Fork add-on(agent-instructions)
                   threadId={activeThreadId} // Fork add-on(agent-instructions)

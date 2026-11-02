@@ -355,6 +355,7 @@ import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { observeResize } from "~/lib/observeResize";
 import { resolveHermesChatPresentation } from "../fork-chat/hermesChatPresentation"; // Fork add-on(hermes)
+import { OPENBOT_DRIVER } from "../openbot/openbotSessions"; // Fork add-on(openbot)
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
@@ -3798,7 +3799,7 @@ export default function ChatView(props: ChatViewProps) {
                                 }
                                 availableEnvironments={logicalProjectEnvironments}
                                 fixedRunLocation={hermesFixedRunLocation} // Fork add-on(hermes)
-                                {...(isServerThread
+                                {...(isServerThread || selectedProvider === OPENBOT_DRIVER // Fork add-on(openbot): access is OpenBot's setting.
                                   ? {}
                                   : {
                                       trailing: (

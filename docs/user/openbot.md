@@ -40,8 +40,8 @@ to show them all. Collapsed, the section still shows the conversations that are 
 - Click a conversation to open it in T3 with its history, tool calls and reasoning included. It
   opens in the Scratch project, since OpenBot works in its own folders. Clicking it again later
   brings in whatever OpenBot added since.
-- Agents with Local scripts on are listed even before they have a conversation, so you can start
-  one from the sidebar.
+- An agent is listed once it has a conversation or a side thread. To start the first chat with an
+  agent that isn't listed yet, click **+** and pick it with the agent control.
 - Right-click for **Open**, **Copy conversation ID**, and, once opened, **Archive thread** and
   **Delete thread**. These act on the T3 thread only; the conversation stays in OpenBot. Opening
   it again brings back an archived thread.
@@ -82,7 +82,10 @@ message them.
 - The model picker's **Reasoning** sets the agent's reasoning effort the same way, for all of its
   conversations from your next message. It starts at the effort the agents on that model use. If
   a model doesn't offer the level you pick, OpenBot says which levels it does and T3 does not send.
-- Access, computer use and notifications can only be changed in OpenBot.
+- Access, computer use and notifications can only be changed in OpenBot, so OpenBot chats have no
+  permissions control.
+- OpenBot chats have no **Agents preset** control either. The agent you message delegates to other
+  agents under OpenBot's own rules, and T3 sends OpenBot only what you type.
 - A turn can't be stopped or steered from T3, because OpenBot offers no way to do that from
   outside. Stop it in OpenBot if you need to.
 - A conversation OpenBot is working on outside T3 shows **Running in OpenBot**. That state comes

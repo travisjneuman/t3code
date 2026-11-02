@@ -29,7 +29,8 @@ provider-specific text.
   makes the selected preset, built-in or saved, the one every thread on the shown server runs under
   until you pick another for it in the composer; the preset list marks it **(default)**, and
   **Clear default** goes back to the project's settings. While a default preset changes any row,
-  the Presets row names it and lists the rows it replaces, and **Preview** includes it.
+  the Presets row names it and lists the rows it replaces, and **Preview** includes it. OpenBot
+  chats don't use presets or these settings: OpenBot's own rules decide how its agents delegate.
 
 - **Delegation**: **When useful**, the default, has the thread's agent hand independent pieces of
   work to workers and do small or sequential work itself. It uses its own native subagents or the

@@ -14,6 +14,7 @@ import { memo } from "react";
 
 import { FORK_OWN_WORKSPACE_DRIVERS } from "../../forkOwnWorkspaceDrivers";
 import type { ContextWindowSnapshot } from "../../lib/contextWindow";
+import { OPENBOT_DRIVER } from "../../openbot/openbotSessions"; // Fork add-on(openbot)
 import { getProviderInstanceEntry } from "../../providerInstances";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import { useEnvironmentProviders } from "../../state/environments";
@@ -165,7 +166,8 @@ function ThreadSessionSummarySection(props: {
     (summary.sessionStatus === null || summary.sessionStatus === "stopped")
       ? RECORD_STATUS_PRESENTATION[record.status]
       : SESSION_STATUS_PRESENTATION[summary.sessionStatus ?? "none"];
-  const runtimeMode = runtimeModeConfig[summary.runtimeMode];
+  // Fork add-on(openbot): OpenBot sets access per agent, so T3's runtime mode would mislabel it.
+  const runtimeMode = driverKind === OPENBOT_DRIVER ? null : runtimeModeConfig[summary.runtimeMode];
   // The provider's record wins; T3's own readings fill in what it leaves out.
   const facts = mergeSessionRecord(
     record === null ? null : labelSessionRecordSettings(record),
@@ -197,8 +199,12 @@ function ThreadSessionSummarySection(props: {
     statusLabel: status.label,
     statusDotClassName: status.dotClassName,
     // T3 runs the thread, so its runtime mode and run count are the thread's own.
-    record: { ...facts, permissionMode: runtimeMode.label, turnCount: summary.turnCount },
-    permissionsIcon: runtimeMode.icon,
+    record: {
+      ...facts,
+      ...(runtimeMode === null ? {} : { permissionMode: runtimeMode.label }), // Fork add-on(openbot)
+      turnCount: summary.turnCount,
+    },
+    permissionsIcon: runtimeMode?.icon, // Fork add-on(openbot)
     updatedAt: summary.updatedAt,
     fallbackCost: contextWindow?.cost ? formatContextWindowCost(contextWindow.cost) : null,
     error: summary.sessionStatus === "error" ? summary.lastError : null,

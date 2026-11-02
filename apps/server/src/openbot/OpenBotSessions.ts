@@ -244,7 +244,18 @@ const make = Effect.gen(function* () {
       // The earlier chat stays in T3, under Settings › Archive.
       yield* Effect.forEach(superseded, archiveThread, { discard: true });
       const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
-      const conversations = withMainConversations(agents, threads).map(
+      const withSides = new Set(
+        threads.filter((thread) => thread.side).map((thread) => thread.agentId),
+      );
+      // An agent is listed once it has a conversation: messages, side threads or a T3 thread.
+      const held = withMainConversations(agents, threads).filter(
+        (thread) =>
+          thread.side ||
+          thread.messageCount > 0 ||
+          withSides.has(thread.agentId) ||
+          bound.has(thread.id),
+      );
+      const conversations = held.map(
         (thread): OpenBotConversationSummary => {
           const agent = agentsById.get(thread.agentId);
           const binding = bound.get(thread.id);
