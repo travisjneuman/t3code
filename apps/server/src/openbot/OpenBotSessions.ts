@@ -142,8 +142,10 @@ const make = Effect.gen(function* () {
         Effect.fail(new OpenBotSessionsError({ message: "The OpenBot settings are invalid." })),
       onSome: (decoded) => Effect.succeed(decoded),
     });
+    // A name left at the driver's own label says nothing; the SSH host does.
+    const displayName = instance.displayName?.trim();
     const label =
-      instance.displayName?.trim() ||
+      (displayName && displayName.toLowerCase() !== "openbot" ? displayName : undefined) ||
       (location.sshHost ? `OpenBot · ${location.sshHost}` : "OpenBot");
     return { location, label };
   });

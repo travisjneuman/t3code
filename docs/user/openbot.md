@@ -29,7 +29,7 @@ The **Usage** page shows the tokens and cost OpenBot records for each turn, by m
 
 Each OpenBot provider has its own section in the sidebar, above **Other Agents**. It is titled with
 the provider's name from **Settings › Providers**, or **OpenBot · <SSH host>** when OpenBot runs on
-another machine and you have not named it. It lists each agent's main conversation as
+another machine and its name is left as "OpenBot". It lists each agent's main conversation as
 **Name - Role**, newest first, with the agent's side threads nested under it like subagents. A
 side thread shows when it is running; click the count beside the agent to show them all. Collapsed,
 the section still shows the conversations that are running.
