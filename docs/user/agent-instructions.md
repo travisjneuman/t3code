@@ -36,8 +36,9 @@ provider-specific text.
   `delegate_task` tool as T3's built-in rules say. **Always** keeps the thread's agent to planning,
   review, and integration, and hands the rest to workers through `delegate_task` instead of native
   subagents. **Off (work alone)** has the agent do everything itself, even where `CLAUDE.md` or
-  `AGENTS.md` says to delegate: T3 refuses `delegate_task` with a message telling the agent so, and
-  turns off native subagents as **Block native subagents** does.
+  `AGENTS.md` says to delegate: T3 refuses `delegate_task`, to this environment or another one,
+  with a message telling the agent so, and turns off native subagents as **Block native
+  subagents** does.
 
 These rows show while Delegation is on:
 

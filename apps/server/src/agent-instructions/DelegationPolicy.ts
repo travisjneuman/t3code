@@ -3,9 +3,9 @@
  * agents read: the worker target for the task's role when the agent leaves it
  * out, the read-only line for review and research workers, the parallel worker
  * limit across every level, the delegation depth, upstream's worktree isolation
- * as the default for workers, and the worker time limit. Applies only while the
- * parent's Delegation setting (after project overrides and the thread's preset)
- * is not Off, so Off keeps upstream behavior.
+ * as the default for workers, and the worker time limit. When the parent's
+ * Delegation setting (after project overrides and the thread's preset) is Off,
+ * every new delegation is refused, to another environment too.
  * Fork add-on: agent instructions; see docs/user/agent-instructions.md.
  */
 import {
@@ -105,6 +105,19 @@ function fixedTargetFailure(role: string | undefined, configured: boolean): Orch
   });
 }
 
+const delegationOffFailure = () =>
+  new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message:
+      "Delegation is off for this thread (the Solo preset, or Settings, Agents, Delegation). Do this task yourself; do not start workers or native subagents.",
+  });
+
+const depthFailure = (maxDepth: number, workerDepth: number) =>
+  new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message: `Delegation depth reached: workers may go ${maxDepth} ${levelLabel(maxDepth)} deep and this would be level ${workerDepth} (Settings, Agents, Delegation depth). Do this task yourself.`,
+  });
+
 const WORKTREE_WORKER_LINE =
   "You work in your own git worktree and branch, made from the orchestrator's current commit. Commit your work to this branch; do not push or switch branches.";
 
@@ -135,13 +148,7 @@ export function applyDelegationPolicy(input: {
   const { settings, parent, level, request } = input;
   if (settings.agentDelegationMode === "off") {
     if (!input.isRetry) {
-      return Effect.fail(
-        new OrchestratorMcpFailure({
-          code: "capability_denied",
-          message:
-            "Delegation is off for this thread (the Solo preset, or Settings, Agents, Delegation). Do this task yourself; do not start workers or native subagents.",
-        }),
-      );
+      return Effect.fail(delegationOffFailure());
     }
     return Effect.succeed({
       target: request.target,
@@ -153,12 +160,7 @@ export function applyDelegationPolicy(input: {
   if (!input.isRetry) {
     const maxDepth = settings.agentMaxDelegationDepth;
     if (workerDepth > maxDepth) {
-      return Effect.fail(
-        new OrchestratorMcpFailure({
-          code: "capability_denied",
-          message: `Delegation depth reached: workers may go ${maxDepth} ${levelLabel(maxDepth)} deep and this would be level ${workerDepth} (Settings, Agents, Delegation depth). Do this task yourself.`,
-        }),
-      );
+      return Effect.fail(depthFailure(maxDepth, workerDepth));
     }
     const limit = settings.agentMaxParallelWorkers;
     if (level.activeWorkers >= limit) {
@@ -286,6 +288,38 @@ export const make = Effect.gen(function* () {
     return count(top.subagents, 1);
   };
 
+  /** `parent`'s worker chain up to the thread's agent, and the settings it delegates under. */
+  const resolveParent = Effect.fn("DelegationPolicy.resolveParent")(function* (
+    parent: DelegationParent,
+  ) {
+    const chain = yield* subagentChain(parent);
+    const top = chain[chain.length - 1] ?? parent;
+    const value = yield* serverSettings.getSettings.pipe(
+      Effect.mapError(() => orchestrationFailure("Unable to read server settings.")),
+    );
+    // Every ancestor's preset counts, nearest first, then a fork's source and the root.
+    const settings = resolveThreadAgentSettings(value, parent.thread.projectId, [
+      ...chain.map((entry) => entry.thread.id),
+      top.thread.lineage.parentThreadId ?? undefined,
+      parent.thread.lineage.rootThreadId,
+    ]);
+    return { chain, top, settings };
+  });
+
+  /**
+   * A task for another environment runs there as an ordinary thread under that
+   * environment's settings, so only Off and the depth are checked here.
+   */
+  const checkRemote = Effect.fn("DelegationPolicy.checkRemote")(function* (threadId: ThreadId) {
+    const { chain, settings } = yield* resolveParent(yield* readThread(threadId));
+    if (settings.agentDelegationMode === "off") {
+      return yield* Effect.fail(delegationOffFailure());
+    }
+    if (chain.length > settings.agentMaxDelegationDepth) {
+      return yield* Effect.fail(depthFailure(settings.agentMaxDelegationDepth, chain.length));
+    }
+  });
+
   /** Runs before the target is resolved; refuses what the settings forbid. */
   const prepare = (input: {
     readonly parent: Pick<OrchestrationV2ThreadProjection, "thread">;
@@ -299,17 +333,7 @@ export const make = Effect.gen(function* () {
         thread: input.parent.thread,
         subagents: (yield* readThread(input.parent.thread.id)).subagents,
       };
-      const chain = yield* subagentChain(parent);
-      const top = chain[chain.length - 1] ?? parent;
-      const value = yield* serverSettings.getSettings.pipe(
-        Effect.mapError(() => orchestrationFailure("Unable to read server settings.")),
-      );
-      // Every ancestor's preset counts, nearest first, then a fork's source and the root.
-      const settings = resolveThreadAgentSettings(value, input.parent.thread.projectId, [
-        ...chain.map((entry) => entry.thread.id),
-        top.thread.lineage.parentThreadId ?? undefined,
-        input.parent.thread.lineage.rootThreadId,
-      ]);
+      const { chain, top, settings } = yield* resolveParent(parent);
       const activeWorkers =
         input.isRetry || settings.agentDelegationMode === "off"
           ? 0
@@ -374,5 +398,5 @@ export const make = Effect.gen(function* () {
     );
   };
 
-  return { prepare, startTimeLimit } as const;
+  return { prepare, checkRemote, startTimeLimit } as const;
 });
