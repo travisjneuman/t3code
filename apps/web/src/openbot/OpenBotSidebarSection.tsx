@@ -1,7 +1,9 @@
 /**
- * OpenBot shelf above Other Agents: every OpenBot agent's conversations, read
- * from OpenBot's database, merged with the T3 threads opened from them. Side
- * threads and agents without Local scripts are watch-only. Fork add-on: OpenBot provider.
+ * OpenBot shelves above Other Agents, one per OpenBot instance: each agent's
+ * main conversation, read from OpenBot's database and merged with the T3
+ * threads opened from them, with its side threads nested under it like
+ * subagents. Side threads and agents without Local scripts are watch-only.
+ * Fork add-on: OpenBot provider.
  */
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -19,13 +21,22 @@ import {
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
-import { CircleDashedIcon, EyeIcon } from "lucide-react";
-import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
+import { ChevronRightIcon, CircleDashedIcon, EyeIcon } from "lucide-react";
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type SyntheticEvent,
+} from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import { CollapsibleSectionHeader } from "../components/ui/collapsible-section-header";
 import { useSidebar } from "../components/ui/sidebar";
 import { toastManager } from "../components/ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -54,7 +65,12 @@ import {
   runOpenBot,
 } from "./openbotSessions";
 
-const EXPANDED_STORAGE_KEY = "t3code:sidebar:openbot-expanded";
+/** Shelves the user collapsed, by target. */
+const COLLAPSED_STORAGE_KEY = "t3code:sidebar:openbot-collapsed";
+/** Agents whose side threads are all shown; the rest show only running ones. */
+const AGENTS_EXPANDED_STORAGE_KEY = "t3code:sidebar:openbot-agents-expanded";
+const KeysSchema = Schema.Array(Schema.String);
+const NO_KEYS: ReadonlyArray<string> = [];
 const WATCH_ONLY = "Watch-only: T3 sends only to an agent's main conversation, with Local scripts on";
 
 type MenuAction = "open" | "archive" | "delete" | "copy-id" | "refresh";
@@ -73,12 +89,33 @@ interface OpenBotRow {
   readonly conversation: OpenBotConversationSummary | null;
   readonly thread: EnvironmentThreadShell | null;
   readonly title: string;
+  /** The hover text: the agent and the thread for a side thread. */
+  readonly hint: string;
   readonly lastActiveAt: number;
   /** A T3 turn is running in it. */
   readonly running: boolean;
   /** OpenBot was working in it when last listed, outside T3. */
   readonly runningInOpenBot: boolean;
 }
+
+/** An agent's main conversation and the side threads nested under it. */
+interface OpenBotGroup {
+  readonly row: OpenBotRow;
+  readonly children: ReadonlyArray<OpenBotRow>;
+  readonly lastActiveAt: number;
+}
+
+interface OpenBotListing {
+  readonly label: string | undefined;
+  readonly conversations: ReadonlyArray<OpenBotConversationSummary>;
+}
+
+const agentLabel = (conversation: OpenBotConversationSummary) =>
+  conversation.agentTitle
+    ? `${conversation.agentName} - ${conversation.agentTitle}`
+    : conversation.agentName;
+
+const isBusy = (row: OpenBotRow) => row.running || row.runningInOpenBot;
 
 const targetKey = (target: OpenBotTarget) =>
   `${target.environmentId}\u0000${target.instanceId}`;
@@ -132,7 +169,16 @@ function mergeRows(
       instanceId: target.instanceId,
       conversation,
       thread: thread ?? null,
-      title: thread?.title ?? conversation.title,
+      title:
+        conversation.side === false
+          ? agentLabel(conversation)
+          : conversation.side === true
+            ? conversation.title
+            : (thread?.title ?? conversation.title),
+      hint:
+        conversation.side === true
+          ? `${agentLabel(conversation)} · ${conversation.title}`
+          : `${conversation.agentName} · ${thread?.title ?? conversation.title}`,
       lastActiveAt: Math.max(
         conversation.lastActiveAt,
         thread === undefined ? 0 : Date.parse(thread.updatedAt),
@@ -141,7 +187,7 @@ function mergeRows(
       runningInOpenBot: conversation.running,
     };
   });
-  // Threads OpenBot has not listed yet, such as one started from the model picker.
+  // Threads OpenBot no longer lists.
   for (const thread of threads) {
     if (claimed.has(thread.id)) continue;
     rows.push({
@@ -151,6 +197,7 @@ function mergeRows(
       conversation: null,
       thread,
       title: thread.title,
+      hint: thread.title,
       lastActiveAt: Date.parse(thread.updatedAt),
       running: threadRuntimeIsActive(thread.runtime),
       runningInOpenBot: false,
@@ -159,13 +206,56 @@ function mergeRows(
   return rows;
 }
 
+/** Side threads under their agent's main conversation; groups and children newest first. */
+function groupRows(rows: ReadonlyArray<OpenBotRow>): OpenBotGroup[] {
+  const mains = new Set<string>();
+  for (const row of rows) {
+    if (row.conversation !== null && row.conversation.side !== true) {
+      mains.add(row.conversation.agentId);
+    }
+  }
+  const parentOf = (row: OpenBotRow) =>
+    row.conversation?.side === true && mains.has(row.conversation.agentId)
+      ? row.conversation.agentId
+      : undefined;
+  const nested = (row: OpenBotRow) => parentOf(row) !== undefined;
+  const childrenOf = new Map<string, OpenBotRow[]>();
+  for (const row of rows) {
+    const agentId = parentOf(row);
+    if (agentId !== undefined) childrenOf.set(agentId, [...(childrenOf.get(agentId) ?? []), row]);
+  }
+  return rows
+    .filter((row) => !nested(row))
+    .map((row) => {
+      const children =
+        row.conversation === null
+          ? []
+          : (childrenOf.get(row.conversation.agentId) ?? []).toSorted(
+              (left, right) => right.lastActiveAt - left.lastActiveAt,
+            );
+      return {
+        row,
+        children,
+        lastActiveAt: Math.max(row.lastActiveAt, ...children.map((child) => child.lastActiveAt)),
+      };
+    })
+    .sort((left, right) => right.lastActiveAt - left.lastActiveAt);
+}
+
 export function OpenBotSidebarSection() {
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const { environments } = useEnvironments();
-  const [expanded, setExpanded] = useLocalStorage(EXPANDED_STORAGE_KEY, true, Schema.Boolean);
-  const [listed, setListed] = useState<
-    ReadonlyMap<string, ReadonlyArray<OpenBotConversationSummary>>
-  >(new Map());
+  const [collapsedKeys, setCollapsedKeys] = useLocalStorage(
+    COLLAPSED_STORAGE_KEY,
+    NO_KEYS,
+    KeysSchema,
+  );
+  const [expandedAgents, setExpandedAgents] = useLocalStorage(
+    AGENTS_EXPANDED_STORAGE_KEY,
+    NO_KEYS,
+    KeysSchema,
+  );
+  const [listed, setListed] = useState<ReadonlyMap<string, OpenBotListing>>(new Map());
   const [refreshNonce, setRefreshNonce] = useState(0);
   const openingRef = useRef(new Set<string>());
   const [opening, setOpening] = useState<ReadonlySet<string>>(new Set());
@@ -226,14 +316,17 @@ export function OpenBotSidebarSection() {
           { instanceId: target.instanceId },
           "Could not list OpenBot conversations",
         );
-        return [targetKey(target), result?.conversations ?? null] as const;
+        return [
+          targetKey(target),
+          result === null ? null : { label: result.label, conversations: result.conversations },
+        ] as const;
       }),
     ).then((results) => {
       if (cancelled) return;
       setListed((previous) => {
         const next = new Map(previous);
-        for (const [key, conversations] of results) {
-          if (conversations !== null) next.set(key, conversations);
+        for (const [key, listing] of results) {
+          if (listing !== null) next.set(key, listing);
         }
         return next;
       });
@@ -258,18 +351,24 @@ export function OpenBotSidebarSection() {
     });
     threadsByTarget.set(key, [...(threadsByTarget.get(key) ?? []), thread]);
   }
-  const rows = targets
-    .flatMap((target) =>
-      mergeRows(
-        target,
-        listed.get(targetKey(target)) ?? [],
-        threadsByTarget.get(targetKey(target)) ?? [],
-      ),
-    )
-    .sort((left, right) => right.lastActiveAt - left.lastActiveAt);
-  const isBusy = (row: OpenBotRow) => row.running || row.runningInOpenBot;
-  // Collapsed, the shelf still lists what is running, like Other Agents.
-  const visibleRows = expanded ? rows : rows.filter(isBusy);
+  const sections = targets.map((target) => {
+    const key = targetKey(target);
+    const listing = listed.get(key);
+    const rows = mergeRows(target, listing?.conversations ?? [], threadsByTarget.get(key) ?? []);
+    const providerName = serverConfigs
+      .get(target.environmentId)
+      ?.providers.find((provider) => provider.instanceId === target.instanceId)?.displayName;
+    return {
+      key,
+      label: listing?.label ?? providerName ?? "OpenBot",
+      rows,
+      groups: groupRows(rows),
+    };
+  });
+  const isActiveRow = (row: OpenBotRow) =>
+    row.thread !== null && activeThreadKey === `${row.environmentId}\u0000${row.thread.id}`;
+  const toggleKey = (keys: ReadonlyArray<string>, key: string) =>
+    keys.includes(key) ? keys.filter((each) => each !== key) : [...keys, key];
   const refresh = () => setRefreshNonce((value) => value + 1);
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
@@ -399,7 +498,10 @@ export function OpenBotSidebarSection() {
   const handleContextMenu = useStableCallback((row: OpenBotRow, position: MenuPosition) => {
     void showRowMenu(row, position);
   });
-  const handleClick = useStableCallback((row: OpenBotRow, event: MouseEvent) => {
+  const handleToggleChildren = useStableCallback((row: OpenBotRow) => {
+    setExpandedAgents((keys) => toggleKey(keys, row.key));
+  });
+  const handleClick = useStableCallback((row: OpenBotRow, event: SyntheticEvent) => {
     if (row.thread === null) {
       event.preventDefault();
       void openRow(row);
@@ -429,45 +531,83 @@ export function OpenBotSidebarSection() {
 
   if (targets.length === 0) return null;
 
+  const renderLine = (row: OpenBotRow, children?: ReadonlyArray<OpenBotRow>) => (
+    <OpenBotLine
+      key={row.key}
+      row={row}
+      isActive={isActiveRow(row)}
+      isOpening={opening.has(row.key)}
+      nowMinute={nowMinute}
+      childCount={children?.length ?? 0}
+      childrenExpanded={expandedAgents.includes(row.key)}
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      onToggleChildren={handleToggleChildren}
+    />
+  );
+
   return (
-    <section aria-label="OpenBot" className="mt-1">
-      <div
-        className="mx-0.5 flex h-5 items-center gap-0.5"
-        onContextMenu={(event) => void handleHeaderContextMenu(event)}
-      >
-        <div className="min-w-0 flex-1">
-          <CollapsibleSectionHeader
-            expanded={expanded}
-            size="sidebar"
-            onClick={() => setExpanded((value) => !value)}
-            onMouseDown={preventMouseFocus}
-            accessory={
-              <AgentSectionAccessory count={rows.length} running={rows.filter(isBusy).length} />
-            }
-          >
-            OpenBot
-          </CollapsibleSectionHeader>
-        </div>
-      </div>
-      {expanded || visibleRows.length > 0 ? (
-        <ul className="flex flex-col">
-          {visibleRows.map((row) => (
-            <OpenBotLine
-              key={row.key}
-              row={row}
-              isActive={
-                row.thread !== null &&
-                activeThreadKey === `${row.environmentId}\u0000${row.thread.id}`
-              }
-              isOpening={opening.has(row.key)}
-              nowMinute={nowMinute}
-              onClick={handleClick}
-              onContextMenu={handleContextMenu}
-            />
-          ))}
-        </ul>
-      ) : null}
-    </section>
+    <>
+      {sections.map((section) => {
+        const expanded = !collapsedKeys.includes(section.key);
+        // Collapsed, the shelf still lists what is running, like Other Agents.
+        const groups = expanded
+          ? section.groups
+          : section.groups.filter(
+              (group) => isBusy(group.row) || group.children.some(isBusy),
+            );
+        return (
+          <section key={section.key} aria-label={section.label} className="mt-1">
+            <div
+              className="mx-0.5 flex h-5 items-center gap-0.5"
+              onContextMenu={(event) => void handleHeaderContextMenu(event)}
+            >
+              <div className="min-w-0 flex-1">
+                <CollapsibleSectionHeader
+                  expanded={expanded}
+                  size="sidebar"
+                  onClick={() => setCollapsedKeys((keys) => toggleKey(keys, section.key))}
+                  onMouseDown={preventMouseFocus}
+                  accessory={
+                    <AgentSectionAccessory
+                      count={section.rows.length}
+                      running={section.rows.filter(isBusy).length}
+                    />
+                  }
+                >
+                  {section.label}
+                </CollapsibleSectionHeader>
+              </div>
+            </div>
+            {groups.length > 0 ? (
+              <ul className="flex flex-col">
+                {groups.flatMap((group) => {
+                  const shownChildren = expandedAgents.includes(group.row.key)
+                    ? group.children
+                    : group.children.filter((child) => isBusy(child) || isActiveRow(child));
+                  return [
+                    renderLine(group.row, group.children),
+                    ...(shownChildren.length > 0
+                      ? [
+                          <li
+                            key={`${group.row.key}:children`}
+                            role="presentation"
+                            className="list-none ps-3"
+                          >
+                            <ul role="presentation" className="flex flex-col">
+                              {shownChildren.map((child) => renderLine(child))}
+                            </ul>
+                          </li>,
+                        ]
+                      : []),
+                  ];
+                })}
+              </ul>
+            ) : null}
+          </section>
+        );
+      })}
+    </>
   );
 }
 
@@ -487,8 +627,12 @@ const OpenBotLine = memo(function OpenBotLine(props: {
   isActive: boolean;
   isOpening: boolean;
   nowMinute: string;
-  onClick: (row: OpenBotRow, event: MouseEvent) => void;
+  /** Side threads nested under this row; a toggle shows them all. */
+  childCount: number;
+  childrenExpanded: boolean;
+  onClick: (row: OpenBotRow, event: SyntheticEvent) => void;
   onContextMenu: (row: OpenBotRow, position: MenuPosition) => void;
+  onToggleChildren: (row: OpenBotRow) => void;
 }) {
   const { row } = props;
   const status = row.running
@@ -499,7 +643,6 @@ const OpenBotLine = memo(function OpenBotLine(props: {
         ? "Running in OpenBot"
         : null;
   const watchOnly = row.conversation !== null && !row.conversation.sendable;
-  const agentName = row.conversation?.agentName;
   const className = cn(
     AGENT_LINE_CLASS,
     "px-(--sidebar-row-content-inset)",
@@ -518,6 +661,13 @@ const OpenBotLine = memo(function OpenBotLine(props: {
         iconClassName="size-3"
       />
       <span className="min-w-0 flex-1 truncate">{row.title}</span>
+      {props.childCount > 0 ? (
+        <ChildrenToggle
+          count={props.childCount}
+          expanded={props.childrenExpanded}
+          onToggle={() => props.onToggleChildren(row)}
+        />
+      ) : null}
       {watchOnly ? (
         <span aria-hidden title={WATCH_ONLY} className="flex shrink-0">
           <EyeIcon className="size-3 text-secondary-label" />
@@ -538,7 +688,7 @@ const OpenBotLine = memo(function OpenBotLine(props: {
     .filter((part) => part !== null)
     .join(", ");
   const common = {
-    title: agentName !== undefined ? `${agentName} · ${row.title}` : row.title,
+    title: row.hint,
     // The glyphs are aria-hidden, so the row's name carries them instead.
     "aria-label": label,
     "aria-current": props.isActive ? ("page" as const) : undefined,
@@ -561,10 +711,57 @@ const OpenBotLine = memo(function OpenBotLine(props: {
           {content}
         </Link>
       ) : (
-        <button type="button" {...common}>
+        // Not a <button>: the side-thread toggle nests inside it.
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            props.onClick(row, event);
+          }}
+          {...common}
+        >
           {content}
-        </button>
+        </div>
       )}
     </li>
   );
 });
+
+/** The subagent rows' chevron and count, for an agent's side threads. */
+function ChildrenToggle(props: { count: number; expanded: boolean; onToggle: () => void }) {
+  const label = `${props.expanded ? "Hide" : "Show"} ${props.count} ${
+    props.count === 1 ? "side thread" : "side threads"
+  }`;
+  // The row underneath opens on these; the toggle is not part of that.
+  const stop = (event: SyntheticEvent) => event.stopPropagation();
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            aria-expanded={props.expanded}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              props.onToggle();
+            }}
+            onPointerDown={stop}
+            onDoubleClick={stop}
+            onKeyDown={stop}
+            className={cn(
+              "-ms-1 inline-flex h-3.5 shrink-0 cursor-pointer items-center gap-0.5 rounded-sm px-1 text-[11px] leading-none tabular-nums outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              props.expanded ? "text-foreground/80" : "text-muted-foreground",
+            )}
+          />
+        }
+      >
+        <ChevronRightIcon aria-hidden className={cn("size-3", props.expanded && "rotate-90")} />
+        {props.count}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{label}</TooltipPopup>
+    </Tooltip>
+  );
+}

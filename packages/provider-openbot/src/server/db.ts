@@ -4,7 +4,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import { query, type OpenBotLocation, type OpenBotRow as Row } from "./host.ts";
+import { query, type OpenBotLocation, type OpenBotQuery, type OpenBotRow as Row } from "./host.ts";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -25,11 +25,26 @@ export const mainThreadId = (agentId: string) => `openbot-thread-${agentId}`;
 export const agentOfThread = (threadId: string) =>
   threadId.startsWith("openbot-thread-agent-") ? threadId.slice("openbot-thread-".length) : undefined;
 
+/** "Name - Role", or the name alone when the agent has no role. */
+export const agentLabel = (agent: { readonly name: string; readonly title: string | undefined }) =>
+  agent.title ? `${agent.name} - ${agent.title}` : agent.name;
+
+/** A T3 model slug for one of OpenBot's provider and model pairs: "codex/gpt-5". */
+export const modelSlug = (provider: string, model: string) => `${provider}/${model}`;
+/** The pair a slug names; undefined for anything else, such as an agent id from older threads. */
+export const parseModelSlug = (slug: string) => {
+  const slash = slug.indexOf("/");
+  return slash > 0 && slash < slug.length - 1
+    ? { provider: slug.slice(0, slash), model: slug.slice(slash + 1) }
+    : undefined;
+};
+
 export interface OpenBotAgentRecord {
   readonly id: string;
   readonly name: string;
   readonly title: string | undefined;
   readonly provider: string | undefined;
+  readonly model: string | undefined;
   readonly localScripts: boolean;
 }
 
@@ -44,87 +59,128 @@ export interface OpenBotThreadRecord {
   readonly messageCount: number;
 }
 
-/** Every agent, and every thread not archived in OpenBot, newest first. */
-export const readDirectory = (location: OpenBotLocation) =>
-  query(location, [
-    {
-      sql: `SELECT agent_id,
-                json_extract(agent_json, '$.name') AS name,
-                json_extract(agent_json, '$.title') AS title,
-                json_extract(agent_json, '$.provider') AS provider,
-                json_extract(agent_json, '$.allowAutomation') AS local_scripts
-           FROM projection_agents
-          ORDER BY sort_order`,
-    },
-    {
-      sql: `SELECT t.thread_id, t.agent_id, t.title, t.active_turn_id, t.updated_at,
-                a.outcome,
-                (SELECT COUNT(*) FROM projection_thread_messages m
-                  WHERE m.thread_id = t.thread_id) AS message_count
-           FROM projection_threads t
-           LEFT JOIN projection_agent_threads a ON a.thread_id = t.thread_id
-          WHERE a.archived_at IS NULL
-          ORDER BY t.updated_at DESC`,
-    },
-  ]).pipe(
-    Effect.map(([agentRows = [], threadRows = []]) => {
-      const agents = agentRows.flatMap((row: Row): Array<OpenBotAgentRecord> => {
-        const id = str(row.agent_id);
-        return id
-          ? [
-              {
-                id,
-                name: text(row.name) ?? id,
-                title: text(row.title),
-                provider: text(row.provider),
-                localScripts: row.local_scripts === 1,
-              },
-            ]
-          : [];
-      });
-      const threads = threadRows.flatMap((row: Row): Array<OpenBotThreadRecord> => {
-        const id = str(row.thread_id);
-        const agentId = str(row.agent_id);
-        if (!id || !agentId) return [];
-        return [
+const DIRECTORY_QUERIES: ReadonlyArray<OpenBotQuery> = [
+  {
+    sql: `SELECT agent_id,
+              json_extract(agent_json, '$.name') AS name,
+              json_extract(agent_json, '$.title') AS title,
+              json_extract(agent_json, '$.provider') AS provider,
+              json_extract(agent_json, '$.model') AS model,
+              json_extract(agent_json, '$.allowAutomation') AS local_scripts
+         FROM projection_agents
+        ORDER BY sort_order`,
+  },
+  {
+    sql: `SELECT t.thread_id, t.agent_id, t.title, t.active_turn_id, t.updated_at,
+              a.outcome,
+              (SELECT COUNT(*) FROM projection_thread_messages m
+                WHERE m.thread_id = t.thread_id) AS message_count
+         FROM projection_threads t
+         LEFT JOIN projection_agent_threads a ON a.thread_id = t.thread_id
+        WHERE a.archived_at IS NULL
+        ORDER BY t.updated_at DESC`,
+  },
+];
+
+const directoryFrom = (agentRows: ReadonlyArray<Row>, threadRows: ReadonlyArray<Row>) => {
+  const agents = agentRows.flatMap((row: Row): Array<OpenBotAgentRecord> => {
+    const id = str(row.agent_id);
+    return id
+      ? [
           {
             id,
-            agentId,
-            title: text(row.title) ?? "Untitled",
-            side: id !== mainThreadId(agentId),
-            running: row.active_turn_id !== null,
-            outcome: str(row.outcome),
-            updatedAt: str(row.updated_at) ?? "",
-            messageCount: Number(row.message_count ?? 0),
+            name: text(row.name) ?? id,
+            title: text(row.title),
+            provider: text(row.provider),
+            model: text(row.model),
+            localScripts: row.local_scripts === 1,
           },
-        ];
-      });
-      return { agents, threads };
+        ]
+      : [];
+  });
+  const threads = threadRows.flatMap((row: Row): Array<OpenBotThreadRecord> => {
+    const id = str(row.thread_id);
+    const agentId = str(row.agent_id);
+    if (!id || !agentId) return [];
+    return [
+      {
+        id,
+        agentId,
+        title: text(row.title) ?? "Untitled",
+        side: id !== mainThreadId(agentId),
+        running: row.active_turn_id !== null,
+        outcome: str(row.outcome),
+        updatedAt: str(row.updated_at) ?? "",
+        messageCount: Number(row.message_count ?? 0),
+      },
+    ];
+  });
+  return { agents, threads };
+};
+
+/** Every agent, and every thread not archived in OpenBot, newest first. */
+export const readDirectory = (location: OpenBotLocation) =>
+  query(location, DIRECTORY_QUERIES).pipe(
+    Effect.map(([agentRows = [], threadRows = []]) => directoryFrom(agentRows, threadRows)),
+  );
+
+const AGENT_NAMES: OpenBotQuery = {
+  sql: `SELECT agent_id, json_extract(agent_json, '$.name') AS name FROM projection_agents`,
+};
+
+const namesFrom = (rows: ReadonlyArray<Row>): ReadonlyMap<string, string> =>
+  new Map(
+    rows.flatMap((row: Row): Array<[string, string]> => {
+      const id = str(row.agent_id);
+      return id ? [[id, text(row.name) ?? id]] : [];
     }),
   );
 
-export const agentNames = (location: OpenBotLocation) =>
-  queryOne(
-    location,
-    `SELECT agent_id, json_extract(agent_json, '$.name') AS name FROM projection_agents`,
-  ).pipe(
-    Effect.map(
-      (rows) =>
-        new Map(
-          rows.flatMap((row: Row): Array<[string, string]> => {
-            const id = str(row.agent_id);
-            return id ? [[id, text(row.name) ?? id]] : [];
-          }),
-        ),
-    ),
+/**
+ * What a turn needs before it sends, in one read: agent names for exchanges, the newest event
+ * sequence (the turn reads only rows changed after it), and the agent's provider and model.
+ */
+export const turnContext = (location: OpenBotLocation, agentId: string) =>
+  query(location, [
+    AGENT_NAMES,
+    { sql: `SELECT MAX(last_event_sequence) AS sequence FROM projection_thread_messages` },
+    {
+      sql: `SELECT json_extract(agent_json, '$.provider') AS provider,
+                   json_extract(agent_json, '$.model') AS model
+              FROM projection_agents
+             WHERE agent_id = ?`,
+      params: [agentId],
+    },
+  ]).pipe(
+    Effect.map(([names = [], [sequence] = [], [agent] = []]) => ({
+      names: namesFrom(names),
+      sequence: Number(sequence?.sequence ?? 0),
+      provider: text(agent?.provider),
+      model: text(agent?.model),
+    })),
   );
 
-/** The newest event sequence in the database: a turn reads only rows changed after it. */
-export const maxSequence = (location: OpenBotLocation) =>
+/**
+ * The provider and model pairs OpenBot runs: those its agents use and those of its active
+ * provider sessions. OpenBot keeps its full catalog in memory and its API does not list it.
+ */
+export const readModels = (location: OpenBotLocation) =>
   queryOne(
     location,
-    `SELECT MAX(last_event_sequence) AS sequence FROM projection_thread_messages`,
-  ).pipe(Effect.map(([row]) => Number(row?.sequence ?? 0)));
+    `SELECT json_extract(agent_json, '$.provider') AS provider,
+            json_extract(agent_json, '$.model') AS model
+       FROM projection_agents
+     UNION
+     SELECT provider, model FROM projection_provider_sessions WHERE state = 'active'`,
+  ).pipe(
+    Effect.map((rows) =>
+      rows.flatMap((row: Row) => {
+        const provider = text(row.provider);
+        const model = text(row.model);
+        return provider && model && !provider.includes("/") ? [{ provider, model }] : [];
+      }),
+    ),
+  );
 
 export interface OpenBotMessageRow {
   readonly messageId: string;
@@ -138,39 +194,56 @@ export interface OpenBotMessageRow {
 
 const UNSETTLED = new Set(["pending", "queued", "running", "streaming", "in_progress"]);
 
+const messagesQuery = (threadId: string, afterSequence: number): OpenBotQuery => ({
+  sql: `SELECT message_id, author, status, item_type, created_at, last_event_sequence, message_json
+          FROM projection_thread_messages
+         WHERE thread_id = ? AND last_event_sequence > ?
+         ORDER BY created_at, ordinal`,
+  params: [threadId, afterSequence],
+});
+
+const messageRows = (rows: ReadonlyArray<Row>) =>
+  rows.flatMap((row: Row): Array<OpenBotMessageRow> => {
+    const messageId = str(row.message_id);
+    let body: unknown;
+    try {
+      body = JSON.parse(str(row.message_json) ?? "null");
+    } catch {
+      body = undefined;
+    }
+    if (!messageId || !isRecord(body)) return [];
+    return [
+      {
+        messageId,
+        author: str(row.author) ?? "",
+        itemType: str(row.item_type),
+        createdAt: str(row.created_at) ?? "",
+        sequence: Number(row.last_event_sequence ?? 0),
+        settled: !UNSETTLED.has(str(row.status) ?? ""),
+        body,
+      },
+    ];
+  });
+
 /** A thread's messages in OpenBot's order; only those changed after `afterSequence` when given. */
 export const readRows = (location: OpenBotLocation, threadId: string, afterSequence = -1) =>
-  queryOne(
-    location,
-    `SELECT message_id, author, status, item_type, created_at, last_event_sequence, message_json
-       FROM projection_thread_messages
-      WHERE thread_id = ? AND last_event_sequence > ?
-      ORDER BY created_at, ordinal`,
-    [threadId, afterSequence],
-  ).pipe(
-    Effect.map((rows) =>
-      rows.flatMap((row: Row): Array<OpenBotMessageRow> => {
-        const messageId = str(row.message_id);
-        let body: unknown;
-        try {
-          body = JSON.parse(str(row.message_json) ?? "null");
-        } catch {
-          body = undefined;
-        }
-        if (!messageId || !isRecord(body)) return [];
-        return [
-          {
-            messageId,
-            author: str(row.author) ?? "",
-            itemType: str(row.item_type),
-            createdAt: str(row.created_at) ?? "",
-            sequence: Number(row.last_event_sequence ?? 0),
-            settled: !UNSETTLED.has(str(row.status) ?? ""),
-            body,
-          },
-        ];
-      }),
-    ),
+  query(location, [messagesQuery(threadId, afterSequence)]).pipe(
+    Effect.map(([rows = []]) => messageRows(rows)),
+  );
+
+/** The directory and one thread's whole history, in one read. */
+export const readConversation = (location: OpenBotLocation, threadId: string) =>
+  query(location, [...DIRECTORY_QUERIES, messagesQuery(threadId, -1)]).pipe(
+    Effect.map(([agentRows = [], threadRows = [], rows = []]) => ({
+      ...directoryFrom(agentRows, threadRows),
+      rows: messageRows(rows),
+    })),
+  );
+
+/** A thread's whole history and the agent names its exchanges mention, in one read. */
+export const readHistory = (location: OpenBotLocation, threadId: string) =>
+  query(location, [messagesQuery(threadId, -1), AGENT_NAMES]).pipe(
+    Effect.map(([rows = [], names = []]) => ({ rows: messageRows(rows), names: namesFrom(names) })),
   );
 
 export type OpenBotEntry =

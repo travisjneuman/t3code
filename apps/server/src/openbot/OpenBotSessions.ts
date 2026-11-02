@@ -77,6 +77,39 @@ const failed = (message: string) => (cause: unknown) =>
 const fromOpenBot = (error: OpenBotApi.OpenBotError) =>
   new OpenBotSessionsError({ message: error.detail, cause: error });
 
+/** The agent's provider and model as a model slug; its id when OpenBot names no pair. */
+const agentModel = (agent: OpenBotDb.OpenBotAgentRecord) =>
+  agent.provider && agent.model ? OpenBotDb.modelSlug(agent.provider, agent.model) : agent.id;
+
+/**
+ * The threads, plus an empty main conversation for each agent that has none yet but has side
+ * threads to sit under it, or Local scripts on so T3 can start one.
+ */
+const withMainConversations = (
+  agents: ReadonlyArray<OpenBotDb.OpenBotAgentRecord>,
+  threads: ReadonlyArray<OpenBotDb.OpenBotThreadRecord>,
+): ReadonlyArray<OpenBotDb.OpenBotThreadRecord> => {
+  const listed = new Set(threads.map((thread) => thread.id));
+  const withSides = new Set(threads.filter((thread) => thread.side).map((thread) => thread.agentId));
+  const missing = agents.flatMap((agent): Array<OpenBotDb.OpenBotThreadRecord> => {
+    const id = OpenBotDb.mainThreadId(agent.id);
+    if (listed.has(id) || !(agent.localScripts || withSides.has(agent.id))) return [];
+    return [
+      {
+        id,
+        agentId: agent.id,
+        title: agent.name,
+        side: false,
+        running: false,
+        outcome: undefined,
+        updatedAt: "",
+        messageCount: 0,
+      },
+    ];
+  });
+  return missing.length === 0 ? threads : [...threads, ...missing];
+};
+
 const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -93,8 +126,8 @@ const make = Effect.gen(function* () {
       Effect.mapError(failed("Could not update the thread.")),
     );
 
-  /** Where the instance's OpenBot runs; only for an OpenBot instance. */
-  const locationOf = Effect.fn("OpenBotSessions.locationOf")(function* (
+  /** The instance's settings and section title; only for an OpenBot instance. */
+  const instanceOf = Effect.fn("OpenBotSessions.instanceOf")(function* (
     instanceId: ProviderInstanceId,
   ) {
     const settings = yield* serverSettings.getSettings.pipe(
@@ -104,11 +137,15 @@ const make = Effect.gen(function* () {
     if (instance === undefined || instance.driver !== OPENBOT_DRIVER) {
       return yield* new OpenBotSessionsError({ message: "That is not an OpenBot provider." });
     }
-    return yield* Option.match(decodeOpenBotSettings(instance.config ?? {}), {
+    const location = yield* Option.match(decodeOpenBotSettings(instance.config ?? {}), {
       onNone: () =>
         Effect.fail(new OpenBotSessionsError({ message: "The OpenBot settings are invalid." })),
       onSome: (decoded) => Effect.succeed(decoded),
     });
+    const label =
+      instance.displayName?.trim() ||
+      (location.sshHost ? `OpenBot · ${location.sshHost}` : "OpenBot");
+    return { location, label };
   });
 
   /** The live T3 thread bound to each OpenBot conversation of this instance. */
@@ -144,30 +181,34 @@ const make = Effect.gen(function* () {
 
   const list: OpenBotSessions["Service"]["list"] = Effect.fn("OpenBotSessions.list")(
     function* (input) {
-      const location = yield* locationOf(input.instanceId);
+      const { location, label } = yield* instanceOf(input.instanceId);
       const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
         Effect.mapError(fromOpenBot),
       );
       const bound = yield* boundThreads(input.instanceId);
       const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
-      const conversations = threads.map((thread): OpenBotConversationSummary => {
-        const agent = agentsById.get(thread.agentId);
-        const binding = bound.get(thread.id);
-        const lastActiveAt = Date.parse(thread.updatedAt);
-        return {
-          id: thread.id,
-          agentId: thread.agentId,
-          agentName: agent?.name ?? thread.agentId,
-          title: thread.title,
-          sendable: !thread.side && agent?.localScripts === true,
-          running: thread.running,
-          lastActiveAt: Number.isFinite(lastActiveAt) ? lastActiveAt : 0,
-          messageCount: thread.messageCount,
-          // An archived thread is taken up again by open, as a fresh pick.
-          threadId: binding === undefined || binding.archived ? null : binding.threadId,
-        };
-      });
-      return { conversations };
+      const conversations = withMainConversations(agents, threads).map(
+        (thread): OpenBotConversationSummary => {
+          const agent = agentsById.get(thread.agentId);
+          const binding = bound.get(thread.id);
+          const lastActiveAt = Date.parse(thread.updatedAt);
+          return {
+            id: thread.id,
+            agentId: thread.agentId,
+            agentName: agent?.name ?? thread.agentId,
+            ...(agent?.title === undefined ? {} : { agentTitle: agent.title }),
+            title: thread.title,
+            side: thread.side,
+            sendable: !thread.side && agent?.localScripts === true,
+            running: thread.running,
+            lastActiveAt: Number.isFinite(lastActiveAt) ? lastActiveAt : 0,
+            messageCount: thread.messageCount,
+            // An archived thread is taken up again by open, as a fresh pick.
+            threadId: binding === undefined || binding.archived ? null : binding.threadId,
+          };
+        },
+      );
+      return { label, conversations };
     },
   );
 
@@ -184,23 +225,20 @@ const make = Effect.gen(function* () {
     instanceId: ProviderInstanceId,
     conversationId: string,
   ) {
-    const location = yield* locationOf(instanceId);
-    const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
-      Effect.mapError(fromOpenBot),
+    const { location } = yield* instanceOf(instanceId);
+    const { agents, threads, rows } = yield* OpenBotDb.readConversation(
+      location,
+      conversationId,
+    ).pipe(Effect.mapError(fromOpenBot));
+    const thread = withMainConversations(agents, threads).find(
+      (candidate) => candidate.id === conversationId,
     );
-    const thread = threads.find((candidate) => candidate.id === conversationId);
-    if (thread === undefined) {
+    const agent = agents.find((candidate) => candidate.id === thread?.agentId);
+    if (thread === undefined || agent === undefined) {
       return yield* new OpenBotSessionsError({ message: "OpenBot has no such conversation." });
     }
-    const names = new Map(agents.map((agent) => [agent.id, agent.name]));
-    const rows = yield* OpenBotDb.readRows(location, conversationId).pipe(
-      Effect.mapError(fromOpenBot),
-    );
-    return {
-      thread,
-      agentName: names.get(thread.agentId) ?? thread.agentId,
-      entries: conversationEntries(rows, names),
-    };
+    const names = new Map(agents.map((each) => [each.id, each.name]));
+    return { thread, agent, entries: conversationEntries(rows, names) };
   });
 
   /** One write for a batch of new entries, each placed after the T3 run before it. */
@@ -251,10 +289,10 @@ const make = Effect.gen(function* () {
     readonly instanceId: ProviderInstanceId;
     readonly threadId: ThreadId;
     readonly conversation: OpenBotDb.OpenBotThreadRecord;
-    readonly agentName: string;
+    readonly agent: OpenBotDb.OpenBotAgentRecord;
     readonly entries: ReadonlyArray<OpenBotDb.OpenBotEntry>;
   }) {
-    const { instanceId, threadId, conversation, agentName, entries } = input;
+    const { instanceId, threadId, conversation, agent, entries } = input;
     const { projectId } = yield* managedFolders.ensureScratchProject.pipe(
       Effect.mapError(failed("The Scratch project is unavailable.")),
     );
@@ -272,10 +310,11 @@ const make = Effect.gen(function* () {
       creationSource: "server",
       id: threadId,
       projectId,
-      title: conversation.side ? `${agentName}: ${conversation.title}` : conversation.title,
+      title: conversation.side
+        ? `${agent.name}: ${conversation.title}`
+        : OpenBotDb.agentLabel(agent),
       providerInstanceId: instanceId,
-      // The model is the agent: each turn goes to the agent that owns this conversation.
-      modelSelection: { instanceId, model: conversation.agentId },
+      modelSelection: { instanceId, model: agentModel(agent) },
       runtimeMode: DEFAULT_RUNTIME_MODE,
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       branch: null,
@@ -362,14 +401,8 @@ const make = Effect.gen(function* () {
         orchestrator.getThreadRecords(threadId, ["runs", "turnItems"]),
       );
       if (Option.isNone(existing)) {
-        const { thread, agentName, entries } = yield* conversationOf(instanceId, conversationId);
-        return yield* createThread({
-          instanceId,
-          threadId,
-          conversation: thread,
-          agentName,
-          entries,
-        });
+        const { thread, agent, entries } = yield* conversationOf(instanceId, conversationId);
+        return yield* createThread({ instanceId, threadId, conversation: thread, agent, entries });
       }
       const records = existing.value;
       if (records.thread.deletedAt !== null) {
@@ -382,7 +415,19 @@ const make = Effect.gen(function* () {
       // A turn in flight writes its own items; the next open syncs the rest.
       if (records.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) return opened;
 
-      const { entries } = yield* conversationOf(instanceId, conversationId);
+      const { agent, entries } = yield* conversationOf(instanceId, conversationId);
+      // OpenBot's own model control moves the agent too; the picker shows where it is now.
+      const model = agentModel(agent);
+      if (records.thread.modelSelection.model !== model) {
+        yield* orchestrator
+          .dispatch({
+            type: "thread.model-selection.set",
+            commandId: yield* commandId("model"),
+            threadId,
+            modelSelection: { instanceId, model },
+          })
+          .pipe(Effect.ignore({ log: true }));
+      }
       const written = new Set(records.turnItems.map((item) => item.id));
       const shownText = new Set(
         records.turnItems.flatMap((item) =>

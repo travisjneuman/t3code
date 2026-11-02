@@ -140,6 +140,31 @@ export const getDelivery = (location: OpenBotLocation, agentId: string, delivery
     ),
   );
 
+/**
+ * Moves the agent to another provider and model, as its model control in OpenBot does. It
+ * applies to all of the agent's conversations from its next message. OpenBot answers 409 for a
+ * model its providers do not list, and for a provider change while the agent is working.
+ */
+export const setAgentModel = (
+  location: OpenBotLocation,
+  agentId: string,
+  provider: string,
+  model: string,
+) =>
+  request(location, "POST", `${agentPath(agentId)}/settings`, { provider, model }).pipe(
+    Effect.asVoid,
+    Effect.mapError(
+      (error) =>
+        new OpenBotError({
+          ...(error.status === undefined ? {} : { status: error.status }),
+          detail:
+            error.status === 409
+              ? `OpenBot would not move this agent to ${model}: ${error.detail.replace(/^.*? failed: /, "")}`
+              : error.detail,
+        }),
+    ),
+  );
+
 /** How many questions, approvals and browser takeovers wait for a person in OpenBot. */
 export const pendingCount = (location: OpenBotLocation, agentId: string) =>
   request(location, "GET", `${agentPath(agentId)}/pending`).pipe(

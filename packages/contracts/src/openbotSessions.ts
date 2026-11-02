@@ -24,7 +24,11 @@ export const OpenBotConversationSummary = Schema.Struct({
   id: TrimmedNonEmptyString,
   agentId: TrimmedNonEmptyString,
   agentName: Schema.String,
+  /** The agent's role in OpenBot, if it has one. */
+  agentTitle: Schema.optional(Schema.String),
   title: Schema.String,
+  /** A side thread, shown under its agent's main conversation. */
+  side: Schema.optional(Schema.Boolean),
   /** False for side threads and agents without Local scripts: T3 can show them, not message them. */
   sendable: Schema.Boolean,
   /** OpenBot is working in it right now. */
@@ -43,6 +47,8 @@ export const OpenBotSessionsListInput = Schema.Struct({
 export type OpenBotSessionsListInput = typeof OpenBotSessionsListInput.Type;
 
 export const OpenBotSessionsListResult = Schema.Struct({
+  /** The section title: the instance's own name, else where OpenBot runs. */
+  label: Schema.optional(Schema.String),
   /** Newest first. */
   conversations: Schema.Array(OpenBotConversationSummary),
 });

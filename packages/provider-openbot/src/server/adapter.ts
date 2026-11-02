@@ -570,8 +570,17 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           return thread;
         if (thread)
           return yield* protocolError("Open a new session to attach another OpenBot conversation");
-        // A new thread is the chosen agent's main conversation: Local scripts reach only that one.
-        nativeThreadId = requestedId ?? OpenBotDb.mainThreadId(args.modelSelection.model);
+        // Threads from before models were provider and model pairs carry the agent as the model.
+        const legacyAgent = args.modelSelection.model.startsWith("agent-")
+          ? args.modelSelection.model
+          : undefined;
+        const chosenId =
+          requestedId ?? (legacyAgent ? OpenBotDb.mainThreadId(legacyAgent) : undefined);
+        if (!chosenId)
+          return yield* protocolError(
+            "Open an OpenBot agent's conversation from the OpenBot section of the sidebar to message it.",
+          );
+        nativeThreadId = chosenId;
         const createdAt = yield* DateTime.now;
         thread = existing
           ? {
@@ -630,16 +639,20 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           return yield* protocolError("Model selection belongs to another OpenBot instance");
         const agentId = OpenBotDb.agentOfThread(nativeThreadId);
         if (!agentId) return yield* notSentError(WATCH_ONLY);
-        if (selection.model !== agentId)
-          return yield* notSentError(
-            "This thread is one OpenBot agent's conversation. Pick that agent, or start a new OpenBot thread to message another.",
-          );
         if (turnInput.message.attachments.length > 0)
           return yield* notSentError(
             "OpenBot's Local scripts take text only. Remove the attachments and send again.",
           );
         const text = turnInput.message.text.trim();
         if (!text) return yield* notSentError("OpenBot needs a text message");
+        const context = yield* OpenBotDb.turnContext(location, agentId).pipe(
+          Effect.mapError((error) => notSentError(error.detail, error)),
+        );
+        const chosen = OpenBotDb.parseModelSlug(selection.model);
+        if (chosen && (chosen.provider !== context.provider || chosen.model !== context.model))
+          yield* OpenBotApi.setAgentModel(location, agentId, chosen.provider, chosen.model).pipe(
+            Effect.mapError((error) => notSentError(error.detail, error)),
+          );
         const nativeId = String(turnInput.attemptId);
         const startedAt = yield* DateTime.now;
         const providerTurn: OrchestrationV2ProviderTurn = {
@@ -656,9 +669,6 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           startedAt,
           completedAt: null,
         };
-        const names = yield* OpenBotDb.agentNames(location).pipe(
-          Effect.orElseSucceed((): ReadonlyMap<string, string> => new Map()),
-        );
         const turn: ActiveTurn = {
           input: turnInput,
           providerTurn,
@@ -666,7 +676,7 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           agentId,
           nativeThreadId,
           sentAtMs: DateTime.toEpochMillis(startedAt),
-          names,
+          names: context.names,
           ordinals: new Map(),
           started: new Map(),
           done: yield* Deferred.make<void>(),
@@ -692,11 +702,10 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           yield* updateSession("running");
         }).pipe(eventPermit.withPermits(1));
         yield* Effect.gen(function* () {
-          const baseline = yield* openbot(OpenBotDb.maxSequence(location));
           const deliveryId = yield* OpenBotApi.sendMessage(location, agentId, text, nativeId).pipe(
             Effect.mapError((error) => notSentError(error.detail, error)),
           );
-          yield* follow(turn, deliveryId, baseline).pipe(Effect.forkIn(scope));
+          yield* follow(turn, deliveryId, context.sequence).pipe(Effect.forkIn(scope));
         }).pipe(
           Effect.onError((cause) => {
             const error = Cause.squash(cause);
@@ -714,8 +723,7 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
       const snapshot = Effect.fnUntraced(function* (current: OrchestrationV2ProviderThread) {
         const threadId = current.nativeThreadRef?.nativeId ?? nativeThreadId;
         if (!threadId) return yield* protocolError("OpenBot thread has no conversation");
-        const rows = yield* openbot(OpenBotDb.readRows(location, threadId));
-        const names = yield* openbot(OpenBotDb.agentNames(location));
+        const { rows, names } = yield* openbot(OpenBotDb.readHistory(location, threadId));
         const now = yield* DateTime.now;
         return {
           providerThread: current,

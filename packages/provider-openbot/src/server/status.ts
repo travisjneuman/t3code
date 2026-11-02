@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 
 import type { OpenBotSettings } from "../settings.ts";
 import { listAgents } from "./api.ts";
+import { modelSlug, readModels } from "./db.ts";
 
 const OPENBOT_PRESENTATION = {
   displayName: "OpenBot",
@@ -53,14 +54,21 @@ export const makePendingOpenBotProvider = Effect.fn("makePendingOpenBotProvider"
   );
 });
 
-/** Each agent with Local scripts on is a model: picking one is picking who to message. */
+const providerLabel = (provider: string) => provider.charAt(0).toUpperCase() + provider.slice(1);
+
+/**
+ * The models are OpenBot's provider and model pairs; picking one moves the thread's agent to it.
+ * Agents are not models: each T3 thread belongs to one agent, opened from the sidebar.
+ */
 export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus")(function* (
   settings: OpenBotSettings,
 ) {
   if (!settings.enabled) return yield* makePendingOpenBotProvider(settings);
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
-  return yield* listAgents(settings).pipe(
-    Effect.map((agents) =>
+  return yield* Effect.all([listAgents(settings), readModels(settings)], {
+    concurrency: "unbounded",
+  }).pipe(
+    Effect.map(([agents, models]) =>
       snapshotFor(
         settings,
         checkedAt,
@@ -73,9 +81,10 @@ export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus"
               message: "No OpenBot agent has Local scripts on. Turn them on in OpenBot to message an agent.",
             }
           : { installed: true, version: null, status: "ready", auth: { status: "authenticated" } },
-        agents.map((agent, index) => ({
-          slug: agent.id,
-          name: agent.name,
+        models.map((pair, index) => ({
+          slug: modelSlug(pair.provider, pair.model),
+          name: pair.model,
+          subProvider: providerLabel(pair.provider),
           isCustom: false,
           isDefault: index === 0,
           capabilities: null,
