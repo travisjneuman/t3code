@@ -2,6 +2,7 @@
  * Read-only reader for openbot.db, OpenBot's conversation of record. The
  * Local scripts API cannot read history, so T3 reads it here and never writes.
  */
+import { openBotAgentLabel } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { query, type OpenBotLocation, type OpenBotQuery, type OpenBotRow as Row } from "./host.ts";
@@ -25,9 +26,8 @@ export const mainThreadId = (agentId: string) => `openbot-thread-${agentId}`;
 export const agentOfThread = (threadId: string) =>
   threadId.startsWith("openbot-thread-agent-") ? threadId.slice("openbot-thread-".length) : undefined;
 
-/** "Name - Role", or the name alone when the agent has no role. */
 export const agentLabel = (agent: { readonly name: string; readonly title: string | undefined }) =>
-  agent.title ? `${agent.name} - ${agent.title}` : agent.name;
+  openBotAgentLabel(agent.name, agent.title);
 
 /** A T3 model slug for one of OpenBot's provider and model pairs: "codex/gpt-5". */
 export const modelSlug = (provider: string, model: string) => `${provider}/${model}`;

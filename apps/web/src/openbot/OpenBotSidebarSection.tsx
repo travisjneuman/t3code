@@ -16,6 +16,7 @@ import {
   type ContextMenuItem,
   type EnvironmentId,
   type OpenBotConversationSummary,
+  openBotAgentLabel,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
@@ -111,8 +112,12 @@ interface OpenBotListing {
 }
 
 const agentLabel = (conversation: OpenBotConversationSummary) =>
-  conversation.agentTitle
-    ? `${conversation.agentName} - ${conversation.agentTitle}`
+  openBotAgentLabel(conversation.agentName, conversation.agentTitle);
+
+/** The tooltip keeps the role in full. */
+const agentFullLabel = (conversation: OpenBotConversationSummary) =>
+  conversation.agentTitle?.trim()
+    ? `${conversation.agentName} - ${conversation.agentTitle.trim()}`
     : conversation.agentName;
 
 const isBusy = (row: OpenBotRow) => row.running || row.runningInOpenBot;
@@ -177,8 +182,10 @@ function mergeRows(
             : (thread?.title ?? conversation.title),
       hint:
         conversation.side === true
-          ? `${agentLabel(conversation)} · ${conversation.title}`
-          : `${conversation.agentName} · ${thread?.title ?? conversation.title}`,
+          ? `${agentFullLabel(conversation)} · ${conversation.title}`
+          : conversation.side === false
+            ? agentFullLabel(conversation)
+            : `${conversation.agentName} · ${thread?.title ?? conversation.title}`,
       lastActiveAt: Math.max(
         conversation.lastActiveAt,
         thread === undefined ? 0 : Date.parse(thread.updatedAt),

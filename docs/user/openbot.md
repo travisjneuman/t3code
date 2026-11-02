@@ -30,9 +30,10 @@ The **Usage** page shows the tokens and cost OpenBot records for each turn, by m
 Each OpenBot provider has its own section in the sidebar, above **Other Agents**. It is titled with
 the provider's name from **Settings › Providers**, or **OpenBot · <SSH host>** when OpenBot runs on
 another machine and its name is left as "OpenBot". It lists each agent's main conversation as
-**Name - Role**, newest first, with the agent's side threads nested under it like subagents. A
-side thread shows when it is running; click the count beside the agent to show them all. Collapsed,
-the section still shows the conversations that are running.
+**Name - Role**, newest first, with the role shortened to its initials (Chief Technology Officer is
+CTO, Chief of Staff is CoS; hover a row for the full role). The agent's side threads are nested
+under it like subagents. A side thread shows when it is running; click the count beside the agent
+to show them all. Collapsed, the section still shows the conversations that are running.
 
 - Click a conversation to open it in T3 with its history, tool calls and reasoning included. It
   opens in the Scratch project, since OpenBot works in its own folders. Clicking it again later

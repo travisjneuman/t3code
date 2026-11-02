@@ -41,6 +41,27 @@ export const OpenBotConversationSummary = Schema.Struct({
 });
 export type OpenBotConversationSummary = typeof OpenBotConversationSummary.Type;
 
+const MINOR_ROLE_WORDS = new Set(["of", "and", "the", "for", "to", "in"]);
+
+/** A role of two or more words as its initials, minor words in lower case: "Chief of Staff" is "CoS". */
+const abbreviateOpenBotRole = (role: string) => {
+  const words = role.trim().split(/\s+/);
+  if (words.length < 2) return role.trim();
+  return words
+    .filter((word) => word !== "&")
+    .map((word) => {
+      const initial = word.charAt(0);
+      return MINOR_ROLE_WORDS.has(word.toLowerCase())
+        ? initial.toLowerCase()
+        : initial.toUpperCase();
+    })
+    .join("");
+};
+
+/** "Name - Role" with the role abbreviated, or the name alone when the agent has no role. */
+export const openBotAgentLabel = (name: string, role: string | undefined) =>
+  role?.trim() ? `${name} - ${abbreviateOpenBotRole(role)}` : name;
+
 export const OpenBotSessionsListInput = Schema.Struct({
   instanceId: ProviderInstanceId,
 });
