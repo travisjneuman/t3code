@@ -19,7 +19,7 @@ scripts** API, so OpenBot keeps running as it is, with its schedules, side threa
    `~/.config/OpenBot` on Linux). Set it when OpenBot keeps its data somewhere else, for example a
    Docker install whose data folder is mounted at another path.
 
-The provider shows **Ready** once it has read OpenBot's agents. OpenBot writes a new Local scripts
+The provider shows **Authenticated** once it has read OpenBot's agents. OpenBot writes a new Local scripts
 token each time it starts; T3 reads it on OpenBot's machine for every request and never copies it,
 stores it or sends it to a client.
 
