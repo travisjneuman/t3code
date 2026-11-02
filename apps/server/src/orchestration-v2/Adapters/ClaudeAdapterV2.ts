@@ -1505,6 +1505,7 @@ function forkAgentLaunchKey(scope: ForkAgentScope): string {
 export function makeClaudeQueryOptions(input: {
   readonly modelSelection: ModelSelection;
   readonly nativeThreadId: string;
+  readonly title?: string;
   readonly resume: boolean;
   readonly resumeSessionAt?: string;
   readonly cwd: string | null;
@@ -1586,6 +1587,8 @@ export function makeClaudeQueryOptions(input: {
   const deviceInstructions = input.mcpServers !== undefined && input.deviceToolsAvailable === true;
   const options: ClaudeAgentSdkQueryOptions = {
     model: compiledSelection.apiModelId,
+    // T3 names threads; a supplied title skips Claude's redundant naming request.
+    ...(input.title === undefined ? {} : { title: input.title }),
     tools: claudeAgentSdkQueryToolsForSdk(selectedTools),
     permissionMode:
       (launchArgPermissionMode as PermissionMode | null | undefined) ??
@@ -10418,6 +10421,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             /* Fork add-on(agent-instructions) */ ...(forkAgentBlocksNativeSubagents(agentScope)
               ? { disallowedTools: NATIVE_SUBAGENT_TOOLS } // Fork add-on(agent-instructions)
               : {}), // Fork add-on(agent-instructions)
+            title: turnInput.appThread.title,
             resume: shouldResume,
             ...(resumeSessionAt === undefined ? {} : { resumeSessionAt }),
             cwd: turnInput.runtimePolicy.cwd,
