@@ -27,7 +27,7 @@ import {
   buildSidebarProjectSnapshots,
   projectGroupsSpanEnvironments,
 } from "~/sidebarProjectGrouping";
-import { useProjects, useThreadShells } from "~/state/entities";
+import { useProjects, useVisibleThreadShells } from "~/state/entities";
 import {
   useEnvironments,
   usePrimaryEnvironmentId,
@@ -81,7 +81,7 @@ export function DraftHeroHeadline({
   hermesAgent = null, // Fork add-on(hermes)
 }: DraftHeroHeadlineProps) {
   const projects = useProjects();
-  const threads = useThreadShells();
+  const threads = useVisibleThreadShells();
   const { environments } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
