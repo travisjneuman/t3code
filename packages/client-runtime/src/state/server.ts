@@ -305,7 +305,8 @@ export function serverUpdateStateForServerVersion(
   return state.status === "idle" ||
     state.status === "running" ||
     serverVersion === null ||
-    state.fromVersion === serverVersion
+    // Fork add-on: a host already on the target build has nothing left to update.
+    (state.fromVersion === serverVersion && state.targetVersion !== serverVersion)
     ? state
     : IDLE_SERVER_UPDATE_STATE;
 }
