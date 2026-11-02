@@ -31,7 +31,6 @@ export const FORK_CLIENT_GUARDED_RPC_SCOPES = {
   [HERMES_SESSIONS_WS_METHODS.dashboard]: AuthProvidersManageScope, // Fork add-on(hermes)
   [HERMES_SESSIONS_WS_METHODS.t3Tools]: AuthProvidersManageScope, // Fork add-on(hermes)
   [OPENBOT_SESSIONS_WS_METHODS.open]: AuthOrchestrationOperateScope, // Fork add-on(openbot)
-  [OPENBOT_SESSIONS_WS_METHODS.newChat]: AuthOrchestrationOperateScope, // Fork add-on(openbot)
   [SAVE_TO_NOTES_WS_METHODS.saveCopy]: AuthOrchestrationOperateScope, // Fork add-on(save-to-notes)
   [SAVE_TO_NOTES_WS_METHODS.requestSummary]: AuthOrchestrationOperateScope, // Fork add-on(save-to-notes)
   [COMPARE_AGENTS_WS_METHODS.start]: AuthOrchestrationOperateScope, // Fork add-on(compare-agents)

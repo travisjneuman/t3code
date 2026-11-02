@@ -110,7 +110,7 @@ const effortCapabilities = (pair: OpenBotModelPair) => {
 
 /**
  * The models are OpenBot's provider and model pairs; picking one moves the thread's agent to it.
- * Agents are not models: a thread keeps one agent, picked beside the model for a new chat.
+ * Agents are not models: a thread keeps the agent whose conversation it opened.
  */
 export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus")(function* (
   settings: OpenBotSettings,

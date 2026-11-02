@@ -175,13 +175,6 @@ export const setAgentSettings = (
   );
 };
 
-/**
- * Starts a new chat in the agent's main conversation, as OpenBot's own New chat does: earlier
- * messages stay in the thread but leave the agent's context. OpenBot refuses while the agent works.
- */
-export const clearContext = (location: OpenBotLocation, agentId: string) =>
-  request(location, "POST", `${agentPath(agentId)}/context/clear`, {}).pipe(Effect.asVoid);
-
 /** How many questions, approvals and browser takeovers wait for a person in OpenBot. */
 export const pendingCount = (location: OpenBotLocation, agentId: string) =>
   request(location, "GET", `${agentPath(agentId)}/pending`).pipe(

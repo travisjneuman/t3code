@@ -302,7 +302,6 @@ export function ComposerControlsBar(props: {
           instanceId={selectedInstanceId} // Fork add-on(openbot)
           threadId={activeThreadId} // Fork add-on(openbot)
           size={controlSize} // Fork add-on(openbot)
-          hidden={composerControlsHidden} // Fork add-on(openbot)
         /> // Fork add-on(openbot)
       ) : null /* Fork add-on(openbot) */}
       {composerModelPicker}

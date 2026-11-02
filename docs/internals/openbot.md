@@ -51,20 +51,13 @@ each other under OpenBot's own rules, and prepended rules would land in OpenBot'
 the composer hides the Agents preset and permissions controls for OpenBot, and the section lists an
 agent only once OpenBot holds messages or side threads for it. A T3 thread doesn't count, since
 opening an empty conversation creates one: the server leaves it out, and the client's fallback for
-threads OpenBot no longer lists skips T3 threads with no items. New chats still reach every agent.
+threads OpenBot no longer lists skips T3 threads with no items.
 
-A new chat binds a fresh T3 thread (`openbot:<instance>:new-chat:<id>`) to the agent's
-conversation. Until its first run it is pending: the section's binding skips it, and `setAgent`
-can rebind it to another agent by rewriting its provider thread's native id. The model picker
-can't carry the agent, because a model option would show up as its effort. The adapter clears the
-agent's context (`POST /v1/agents/:id/context/clear`, which keeps the old messages in the same
-OpenBot thread) on the first send rather than at creation, so an abandoned new chat costs nothing.
-So one conversation can have several T3 threads: each new chat's provider thread id is derived from
-`<conversation>#<thread>` so it doesn't take over the earlier chat's, the section follows the newest
-started unarchived one, and a sync imports only rows from after the thread was created. Once a new
-chat has a run, the next list archives the conversation's other threads whose last update came
-before that run; an unarchive bumps the update time, so the thread stays. Local scripts can't
-start OpenBot side threads, so a new chat is the only "new session" T3 can offer.
+T3 starts neither new chats nor side threads. Local scripts posts only to the main conversation and
+has no route that starts a side thread, and a new chat would have to clear the agent's context
+(`context/clear`) in the conversation OpenBot keeps running. An earlier New chat left T3 threads
+beside a conversation's own import (`openbot:<instance>:<conversation>`); the next list archives
+any of those that never ran, so the section binds the import again.
 
 ## Known gaps
 
