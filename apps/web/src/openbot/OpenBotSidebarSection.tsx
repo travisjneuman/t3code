@@ -202,10 +202,13 @@ function mergeRows(
       runningInOpenBot: conversation.running,
     };
   });
-  // New chats before their first message, and threads OpenBot no longer lists.
+  // New chats before their first message, and threads OpenBot no longer lists. An empty thread is
+  // an opened conversation OpenBot holds nothing for, so it doesn't list the agent.
   for (const thread of threads) {
     if (claimed.has(thread.id)) continue;
-    const title = pendingChats.has(thread.id) ? `New chat · ${thread.title}` : thread.title;
+    const pending = pendingChats.has(thread.id);
+    if (!pending && thread.itemCount === 0) continue;
+    const title = pending ? `New chat · ${thread.title}` : thread.title;
     rows.push({
       key: `${targetKey(target)}\u0000thread:${thread.id}`,
       environmentId: target.environmentId,

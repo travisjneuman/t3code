@@ -50,7 +50,8 @@ The adapter sends only the typed text, never T3's agent instructions: OpenBot's 
 each other under OpenBot's own rules, and prepended rules would land in OpenBot's conversation. So
 the composer hides the Agents preset and permissions controls for OpenBot, and the section lists an
 agent only once OpenBot holds messages or side threads for it. A T3 thread doesn't count, since
-opening an empty conversation creates one. New chats still reach every agent.
+opening an empty conversation creates one: the server leaves it out, and the client's fallback for
+threads OpenBot no longer lists skips T3 threads with no items. New chats still reach every agent.
 
 A new chat binds a fresh T3 thread (`openbot:<instance>:new-chat:<id>`) to the agent's
 conversation. Until its first run it is pending: the section's binding skips it, and `setAgent`
