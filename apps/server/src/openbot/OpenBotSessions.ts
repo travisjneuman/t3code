@@ -458,7 +458,19 @@ const make = Effect.gen(function* () {
       // A turn in flight writes its own items; the next open syncs the rest.
       if (records.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) return opened;
 
-      const { agent, entries } = yield* conversationOf(instanceId, conversationId);
+      const { thread, agent, entries } = yield* conversationOf(instanceId, conversationId);
+      // Imports from before the Name - Role label kept the bare name; a title set in T3 stays.
+      const label = OpenBotDb.agentLabel(agent);
+      if (!thread.side && records.thread.title === agent.name && label !== agent.name) {
+        yield* orchestrator
+          .dispatch({
+            type: "thread.metadata.update",
+            commandId: yield* commandId("title"),
+            threadId,
+            title: label,
+          })
+          .pipe(Effect.ignore({ log: true }));
+      }
       // OpenBot's own model control moves the agent too; the picker shows where it is now.
       const model = agentModel(agent);
       if (records.thread.modelSelection.model !== model) {
