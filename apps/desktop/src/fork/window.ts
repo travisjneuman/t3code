@@ -81,12 +81,6 @@ export const make = Effect.gen(function* () {
       }, MAIN_WINDOW_REVEAL_FALLBACK_DELAY_MS),
   ];
 
-  /** Runs the upstream reveal, then puts the active remote app surface back on top. */
-  const afterReveal = <E1, R1, E2, R2>(
-    reveal: Effect.Effect<unknown, E1, R1>,
-    dismissSplash: Effect.Effect<unknown, E2, R2>,
-  ) => Effect.andThen(reveal, Effect.andThen(dismissSplash, Effect.sync(reassertSurface)));
-
   /** Reflows the remote app surface after the app zoom changes. */
   const afterZoom = Option.isNone(remoteAppManager)
     ? Effect.void
@@ -115,7 +109,6 @@ export const make = Effect.gen(function* () {
     attach,
     reassertSurface,
     revealSubscribers,
-    afterReveal,
     afterZoom,
     guardWebview,
     isRemoteAppWebview,
