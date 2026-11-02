@@ -1,6 +1,7 @@
 import type { ProviderDriverKind, ServerProvider } from "@t3tools/contracts";
 import { BotIcon, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../providerInstances";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
 export function threadRelationshipStatusLabel(status: string | null): string {
@@ -45,17 +46,23 @@ export function threadRelationshipStatusLabel(status: string | null): string {
 export function ThreadRelationshipIcon({
   driver,
   provider,
+  providerEntries = [],
   status,
   fallbackIcon: FallbackIcon = BotIcon,
   compact = false, // Fork add-on: compact lineage agents
 }: {
   driver?: ProviderDriverKind | undefined;
   provider?: ServerProvider | undefined;
+  providerEntries?: ReadonlyArray<ProviderInstanceEntry>;
   status: string | null;
   fallbackIcon?: LucideIcon;
   compact?: boolean; // Fork add-on: compact lineage agents
 }) {
   const iconClassName = `${compact ? "size-3" : "size-4"} shrink-0 text-muted-foreground`; // Fork add-on: compact lineage agents
+  const entry = driver
+    ? providerEntries.find((candidate) => candidate.instanceId === provider?.instanceId)
+    : undefined;
+  const showInstanceBadge = entry !== undefined && shouldShowInstanceBadge(entry, providerEntries);
   return (
     <span
       className={
@@ -65,8 +72,12 @@ export function ThreadRelationshipIcon({
       {driver ? (
         <ProviderInstanceIcon
           driverKind={driver}
-          displayName={provider?.displayName ?? driver}
-          acpRegistryIconUrl={provider?.iconUrl}
+          displayName={entry?.displayName ?? provider?.displayName ?? driver}
+          accentColor={entry?.accentColor}
+          acpRegistryAgentId={entry?.acpRegistryAgentId}
+          acpRegistryIconUrl={entry?.acpRegistryIconUrl ?? provider?.iconUrl}
+          showBadge={showInstanceBadge}
+          size="compact"
           iconClassName={iconClassName}
           className="z-auto"
         />
@@ -76,8 +87,15 @@ export function ThreadRelationshipIcon({
       <span
         className={cn(
           compact // Fork add-on: compact lineage agents
-            ? "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-card"
-            : "absolute -bottom-1 -right-1 size-2 rounded-full border-2 border-card",
+            ? "absolute size-1.5 rounded-full border border-card" // Fork add-on: compact lineage agents
+            : "absolute size-2 rounded-full border-2 border-card", // Fork add-on: compact lineage agents
+          showInstanceBadge
+            ? compact // Fork add-on: compact lineage agents
+              ? "-left-0.5 -top-0.5" // Fork add-on: compact lineage agents
+              : "-left-1 -top-1"
+            : compact // Fork add-on: compact lineage agents
+              ? "-bottom-0.5 -right-0.5" // Fork add-on: compact lineage agents
+              : "-bottom-1 -right-1",
           status === "running" ||
             status === "in_progress" ||
             status === "pending" ||

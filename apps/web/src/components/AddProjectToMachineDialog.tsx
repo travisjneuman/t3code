@@ -5,6 +5,7 @@ import {
   getCloneDestinationPath,
   getCloneDirectoryName,
 } from "@t3tools/client-runtime/operations/projects";
+import { resolvePastedPath } from "@t3tools/shared/path";
 import {
   createEnvironmentRpcQueryAtomFamily,
   executeAtomQuery,
@@ -397,11 +398,11 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               <Label htmlFor={`${id}-path`}>Folder on {target?.label ?? "the other machine"}</Label>
               <Input
                 id={`${id}-path`}
-                value={folderPath}
+                value={folderPath} // Fork add-on: existing checkouts
                 onChange={(event) =>
-                  addExisting
-                    ? setExistingPathOverride(event.target.value)
-                    : setPathOverride(event.target.value)
+                  addExisting // Fork add-on: existing checkouts
+                    ? setExistingPathOverride(resolvePastedPath(existingPath, event.target.value)) // Fork add-on: existing checkouts
+                    : setPathOverride(resolvePastedPath(destinationPath, event.target.value))
                 }
                 spellCheck={false}
                 autoComplete="off"

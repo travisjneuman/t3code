@@ -16,7 +16,7 @@ import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
-import { forkAppScheme, REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
+import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
 export interface MakeDesktopEnvironmentInput {
@@ -76,7 +76,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly displayName: string;
     readonly appUserModelId: string;
     readonly linuxDesktopEntryName: string;
-    readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
     readonly desktopLauncherPath: Option.Option<string>;
     readonly appImagePath: Option.Option<string>;
@@ -233,7 +232,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
       isDevelopment ? `${REMOTE_APP_DISTRIBUTION.appId}.dev` : REMOTE_APP_DISTRIBUTION.appId, // Fork add-on: identity.
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: forkAppScheme(isDevelopment), // Fork add-on: identity.
     linuxApplicationsDir,
     desktopLauncherPath: config.desktopLauncherPath,
     appImagePath: config.appImagePath,
