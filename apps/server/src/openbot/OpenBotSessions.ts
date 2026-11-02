@@ -247,13 +247,9 @@ const make = Effect.gen(function* () {
       const withSides = new Set(
         threads.filter((thread) => thread.side).map((thread) => thread.agentId),
       );
-      // An agent is listed once it has a conversation: messages, side threads or a T3 thread.
+      // Listed once OpenBot holds messages or side threads for it; opening an empty one isn't enough.
       const held = withMainConversations(agents, threads).filter(
-        (thread) =>
-          thread.side ||
-          thread.messageCount > 0 ||
-          withSides.has(thread.agentId) ||
-          bound.has(thread.id),
+        (thread) => thread.side || thread.messageCount > 0 || withSides.has(thread.agentId),
       );
       const conversations = held.map(
         (thread): OpenBotConversationSummary => {
