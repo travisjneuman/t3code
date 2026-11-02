@@ -244,6 +244,20 @@ reads Anthropic's release channel. That channel can trail the npm package by a f
 offers a Claude update only when the channel has one. Set `autoUpdatesChannel` to `stable` in
 Claude's `settings.json` to follow the stable channel instead of the latest one.
 
+## Wrapper scripts can name the install they run
+
+If a provider's command is your own script that wraps a package-manager install, for example to set
+environment variables before running Codex, T3 Code can't see the install behind it and asks you to
+update it yourself. Add a line naming the install's command anywhere in the script, and T3 Code's
+update button updates that install:
+
+```sh
+# t3-update-target: /home/me/.npm-global/bin/codex
+```
+
+In a Windows `.cmd` script, start the line with `rem`. The path must be absolute, and the script
+must be under 16 KB.
+
 ## Codex can show hidden models
 
 OpenAI keeps some models out of the Codex picker, such as older or long-context versions. To list

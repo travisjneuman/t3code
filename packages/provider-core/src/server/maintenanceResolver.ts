@@ -33,6 +33,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import { collectUint8StreamText } from "./collectStreamText.ts";
 import * as ProviderLatestVersions from "./ProviderLatestVersions.ts";
+import { wrappedUpdateTarget } from "./updateTarget.ts"; // Fork add-on(update-wrappers)
 
 const LATEST_VERSION_TIMEOUT_MS = 4_000;
 const PROBE_TIMEOUT_MS = 10_000;
@@ -872,10 +873,12 @@ export const resolveProviderMaintenanceCapabilitiesEffect = Effect.fn(
   if (!realCommandPath) {
     return yield* resolver.resolve(null);
   }
+  const wrapped = yield* wrappedUpdateTarget(realCommandPath); // Fork add-on(update-wrappers)
   return yield* resolver.resolve({
     binaryPath,
     resolvedCommandPath,
     realCommandPath,
+    ...wrapped, // Fork add-on(update-wrappers)
     env,
     platform: yield* HostProcess.Platform,
   });
