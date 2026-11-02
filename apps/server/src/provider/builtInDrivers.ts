@@ -11,6 +11,7 @@ import { GrokDriver, type GrokDriverEnv } from "@t3tools/provider-grok/server";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
 import { MuseDriver, type MuseDriverEnv } from "@t3tools/provider-muse/server";
 import { HermesDriver, type HermesDriverEnv } from "@t3tools/provider-hermes/server"; // Fork add-on(hermes)
+import { OpenBotDriver, type OpenBotDriverEnv } from "@t3tools/provider-openbot/server"; // Fork add-on(openbot)
 import { PiDriver, type PiDriverEnv } from "@t3tools/provider-pi/server";
 import type {
   AnyProviderDriver,
@@ -28,7 +29,8 @@ export type BuiltInDriversEnv =
   | OpenCodeDriverEnv
   | PiDriverEnv
   | MuseDriverEnv
-  | HermesDriverEnv; // Fork add-on(hermes)
+  | HermesDriverEnv // Fork add-on(hermes)
+  | OpenBotDriverEnv; // Fork add-on(openbot)
 
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   CodexDriver,
@@ -41,6 +43,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   PiDriver,
   MuseDriver,
   HermesDriver, // Fork add-on(hermes)
+  OpenBotDriver, // Fork add-on(openbot)
   AcpRegistryDriver,
 ];
 

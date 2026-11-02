@@ -108,6 +108,7 @@ graph LR
 - [Session insights](session-insights.md): the thread details card's live session report.
 - [Desktop remote apps](remote-apps.md): ChatGPT, Claude and other web app tabs.
 - [Hermes Agent provider](hermes.md): a remote Hermes over HTTP, its sidebar section and settings.
+- [OpenBot provider](openbot.md): OpenBot's database and Local scripts API, conversation binding and import.
 
 ### Maintainer runbooks and design sets
 

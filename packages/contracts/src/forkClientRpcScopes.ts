@@ -8,6 +8,7 @@ import { COMPARE_AGENTS_WS_METHODS } from "./compareAgents.ts";
 import { EXTERNAL_SESSIONS_WS_METHODS } from "./externalSessions.ts";
 import { HERMES_SESSIONS_WS_METHODS } from "./hermesSessions.ts";
 import { MAINTENANCE_QUEUE_WS_METHODS } from "./maintenanceQueue.ts";
+import { OPENBOT_SESSIONS_WS_METHODS } from "./openbotSessions.ts";
 import { SAVE_TO_NOTES_WS_METHODS } from "./saveToNotes.ts";
 
 export const FORK_CLIENT_GUARDED_RPC_SCOPES = {
@@ -25,6 +26,7 @@ export const FORK_CLIENT_GUARDED_RPC_SCOPES = {
   // Dashboard reads share the route with its writes; the server gates both on this.
   [HERMES_SESSIONS_WS_METHODS.dashboard]: AuthProvidersManageScope, // Fork add-on(hermes)
   [HERMES_SESSIONS_WS_METHODS.t3Tools]: AuthProvidersManageScope, // Fork add-on(hermes)
+  [OPENBOT_SESSIONS_WS_METHODS.open]: AuthOrchestrationOperateScope, // Fork add-on(openbot)
   [SAVE_TO_NOTES_WS_METHODS.saveCopy]: AuthOrchestrationOperateScope, // Fork add-on(save-to-notes)
   [SAVE_TO_NOTES_WS_METHODS.requestSummary]: AuthOrchestrationOperateScope, // Fork add-on(save-to-notes)
   [COMPARE_AGENTS_WS_METHODS.start]: AuthOrchestrationOperateScope, // Fork add-on(compare-agents)

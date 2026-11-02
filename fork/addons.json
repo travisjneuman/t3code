@@ -20,6 +20,7 @@
         "web-apps",
         "other-agents",
         "hermes",
+        "openbot",
         "compare-agents",
         "agent-instructions",
         "save-to-notes",
@@ -43,6 +44,7 @@
       "addons": [
         "other-agents",
         "hermes",
+        "openbot",
         "compare-agents",
         "save-to-notes",
         "thread-export",
@@ -86,6 +88,7 @@
       "addons": [
         "other-agents",
         "hermes",
+        "openbot",
         "compare-agents",
         "save-to-notes",
         "maintenance-queue"
@@ -100,6 +103,7 @@
       "addons": [
         "other-agents",
         "hermes",
+        "openbot",
         "compare-agents",
         "save-to-notes",
         "thread-export",
@@ -119,6 +123,7 @@
       "addons": [
         "other-agents",
         "hermes",
+        "openbot",
         "compare-agents",
         "save-to-notes",
         "thread-export",
@@ -149,7 +154,8 @@
       ],
       "addons": [
         "other-agents",
-        "hermes"
+        "hermes",
+        "openbot"
       ]
     },
     {
@@ -289,7 +295,8 @@
         "apps/web/src/components/chat/ThreadSessionInsightsSection.tsx"
       ],
       "addons": [
-        "hermes"
+        "hermes",
+        "openbot"
       ]
     },
     {
@@ -682,8 +689,8 @@
         "pnpm-lock.yaml"
       ],
       "unmarkedUpstreamEdits": {
-        "apps/server/package.json": "dependency @t3tools/provider-hermes",
-        "packages/client-runtime/package.json": "dependency @t3tools/provider-hermes; export ./state/remotePairing",
+        "apps/server/package.json": "dependencies @t3tools/provider-hermes, @t3tools/provider-openbot",
+        "packages/client-runtime/package.json": "dependencies @t3tools/provider-hermes, @t3tools/provider-openbot; export ./state/remotePairing",
         "pnpm-lock.yaml": "generated; rebuilt from upstream's copy plus fork manifests"
       },
       "data": {
@@ -692,6 +699,70 @@
         ],
         "wire": [
           "hermes driver kind and default model"
+        ]
+      }
+    },
+    {
+      "id": "openbot",
+      "tier": "feature",
+      "title": "OpenBot",
+      "summary": "An OpenBot provider whose agents' conversations get their own sidebar section; an agent's main conversation takes messages.",
+      "docs": [
+        "docs/user/openbot.md",
+        "docs/internals/openbot.md"
+      ],
+      "dependsOn": [
+        "core",
+        "other-agents"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/openbot/OpenBotSessions.ts",
+        "apps/server/src/openbot/OpenBotSessionsRpc.ts",
+        "apps/server/src/openbot/openbotEntries.ts",
+        "apps/web/src/openbot/OpenBotSidebarSection.tsx",
+        "apps/web/src/openbot/openbotSessions.ts",
+        "docs/internals/openbot.md",
+        "docs/user/openbot.md",
+        "packages/contracts/src/openbotSessions.ts",
+        "packages/provider-openbot/package.json",
+        "packages/provider-openbot/src/client.ts",
+        "packages/provider-openbot/src/server.ts",
+        "packages/provider-openbot/src/server/adapter.ts",
+        "packages/provider-openbot/src/server/api.ts",
+        "packages/provider-openbot/src/server/db.ts",
+        "packages/provider-openbot/src/server/driver.ts",
+        "packages/provider-openbot/src/server/status.ts",
+        "packages/provider-openbot/src/server/textGeneration.ts",
+        "packages/provider-openbot/src/settings.ts",
+        "packages/provider-openbot/tsconfig.json"
+      ],
+      "hooks": [
+        "apps/server/package.json",
+        "apps/server/src/orchestration-v2/ThreadLaunchService.ts",
+        "apps/server/src/provider/ProviderRegistry.ts",
+        "apps/server/src/provider/builtInDrivers.ts",
+        "apps/web/src/components/Sidebar.tsx",
+        "packages/client-runtime/package.json",
+        "packages/client-runtime/src/providerClients.ts",
+        "packages/contracts/src/model.ts",
+        "pnpm-lock.yaml"
+      ],
+      "unmarkedUpstreamEdits": {
+        "apps/server/package.json": "dependencies @t3tools/provider-hermes, @t3tools/provider-openbot",
+        "packages/client-runtime/package.json": "dependencies @t3tools/provider-hermes, @t3tools/provider-openbot; export ./state/remotePairing",
+        "pnpm-lock.yaml": "generated; rebuilt from upstream's copy plus fork manifests"
+      },
+      "data": {
+        "settings": [
+          "openbot provider instance settings (provider-openbot/settings)"
+        ],
+        "wire": [
+          "openbot driver kind"
         ]
       }
     },
@@ -1265,7 +1336,7 @@
         "packages/client-runtime/package.json"
       ],
       "unmarkedUpstreamEdits": {
-        "packages/client-runtime/package.json": "dependency @t3tools/provider-hermes; export ./state/remotePairing"
+        "packages/client-runtime/package.json": "dependencies @t3tools/provider-hermes, @t3tools/provider-openbot; export ./state/remotePairing"
       }
     },
     {

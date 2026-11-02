@@ -205,6 +205,7 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [FX_DRIVER_KIND]: "fx",
   [MUSE_DRIVER_KIND]: "Muse Code",
   [HERMES_DRIVER_KIND]: "Hermes Agent", // Fork add-on(hermes)
+  [ProviderDriverKind.make("openbot")]: "OpenBot", // Fork add-on(openbot)
   [ACP_REGISTRY_DRIVER_KIND]: "ACP Registry",
   [PI_DRIVER_KIND]: "Pi",
   [OPENCODE_DRIVER_KIND]: "OpenCode",

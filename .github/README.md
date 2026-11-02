@@ -28,6 +28,7 @@ This fork follows the upstream nightly and adds the features below. Each add-on 
 | [**Web apps**](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app |
 | [**Other Agents**](#other-agents)             | Follow and continue sessions you started in other agent apps            |
 | [**Hermes Agent**](#hermes-agent)             | Chat with a Hermes Agent running on this or another computer            |
+| [**OpenBot**](#openbot)                       | Chat with OpenBot agents and follow all their conversations             |
 | [**Compare agents**](#compare-agents)         | One prompt, two models, side by side                                    |
 | [**Agent instructions**](#agent-instructions) | Delegation and agent rules as settings, globally or per project         |
 | [**Save to notes**](#save-to-notes)           | Files a thread into your notes folder or Obsidian vault                 |
@@ -71,6 +72,15 @@ Talk to a [Hermes Agent](https://github.com/NousResearch/hermes-agent) from T3 o
 - Archive, unarchive and delete reach Hermes too. Hermes's config, keys and custom endpoints are editable in Settings.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/hermes.md)
+
+### OpenBot
+
+Chat with your OpenBot agents from T3 on the machine where OpenBot runs, and follow every conversation they hold, side threads and scheduled runs included.
+
+- Conversations have their own **OpenBot** section above Other Agents. Click one to open it with its history; click again later to bring in what OpenBot added.
+- T3 messages an agent's main conversation when the agent has Local scripts on. Side threads and other agents are watch-only, and turns can't be stopped from T3.
+
+[Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/openbot.md)
 
 ### Compare agents
 
@@ -152,6 +162,7 @@ Every add-on has an id, and each fork line in an upstream file carries `Fork add
 | `web-apps`                | feature      | [Web apps](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app.                                                                  |
 | `other-agents`            | feature      | [Other Agents](#other-agents)             | Follow, continue and hand back sessions started in other agent apps.                                                                      |
 | `hermes`                  | feature      | [Hermes Agent](#hermes-agent)             | A Hermes Agent provider, local or remote, with its own sidebar section.                                                                   |
+| `openbot`                 | feature      | [OpenBot](#openbot)                       | An OpenBot provider that reads OpenBot's database and messages agents through Local scripts, with its own sidebar section.                 |
 | `compare-agents`          | feature      | [Compare agents](#compare-agents)         | One prompt to two models, side by side, with review swap.                                                                                 |
 | `agent-instructions`      | feature      | [Agent instructions](#agent-instructions) | Delegation, worker models and agent rules as settings, globally or per project.                                                           |
 | `save-to-notes`           | feature      | [Save to notes](#save-to-notes)           | Files a thread into a notes folder as a summary or a full copy.                                                                           |
@@ -229,6 +240,7 @@ Fork-specific docs, plus the fork's two front doors that list every user guide a
 | Web apps tabs: ChatGPT, Claude, Grok, Gemini      | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/desktop-remote-apps.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/remote-apps.md)                                                                                                       |
 | Other Agents, continue or hand back a session     | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/other-agents.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/external-sessions.md) · [session search](https://github.com/travisjneuman/t3code/blob/main/docs/internals/session-search.md) |
 | Hermes Agent, remote agent sessions               | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/hermes.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/hermes.md)                                                                                                                         |
+| OpenBot agents and conversations                  | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/openbot.md) · [internals](https://github.com/travisjneuman/t3code/blob/main/docs/internals/openbot.md)                                                                                                                       |
 | Compare agents, review swap                       | [User guide](https://github.com/travisjneuman/t3code/blob/main/docs/user/compare-agents.md)                                                                                                                                                                                                           |
 | Delegation, worker models, presets                | [Agent instructions](https://github.com/travisjneuman/t3code/blob/main/docs/user/agent-instructions.md)                                                                                                                                                                                               |
 | Save to notes, export Markdown or JSON            | [Save and export threads](https://github.com/travisjneuman/t3code/blob/main/docs/user/save-and-export-threads.md)                                                                                                                                                                                     |

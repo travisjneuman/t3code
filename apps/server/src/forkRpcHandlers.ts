@@ -11,6 +11,7 @@ import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts
 import * as HermesSessionsRpc from "./hermes/HermesSessionsRpc.ts";
 import * as HostBackupsRpc from "./host-backups/HostBackupsRpc.ts";
 import * as MaintenanceQueueRpc from "./maintenance-queue/MaintenanceQueueRpc.ts";
+import * as OpenBotSessionsRpc from "./openbot/OpenBotSessionsRpc.ts";
 import * as SaveToNotesRpc from "./save-to-notes/SaveToNotesRpc.ts";
 import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts";
 import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts";
@@ -24,6 +25,7 @@ export const makeHandlers = Effect.gen(function* () {
     ...(yield* SaveToNotesRpc.makeHandlers), // Fork add-on(save-to-notes)
     ...(yield* CompareAgentsRpc.makeHandlers), // Fork add-on(compare-agents)
     ...(yield* HermesSessionsRpc.makeHandlers), // Fork add-on(hermes)
+    ...(yield* OpenBotSessionsRpc.makeHandlers), // Fork add-on(openbot)
     ...(yield* MaintenanceQueueRpc.makeHandlers), // Fork add-on(maintenance-queue)
     ...(yield* HostBackupsRpc.makeHandlers), // Fork add-on(host-backups)
     ...(yield* ExistingCheckoutRpc.makeHandlers), // Fork add-on(existing-checkout)

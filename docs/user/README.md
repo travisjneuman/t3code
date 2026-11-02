@@ -22,6 +22,7 @@ This page belongs to the ndev.t3code fork and is not part of upstream T3 Code. P
 | switch provider, handoff, portable context                          | [portable-handoffs.md](portable-handoffs.md)                                                                                                                          |                             |
 | Codex, Claude, Cursor, OpenCode, Antigravity, Pi, Muse, ACP         | [providers-codex.md](providers-codex.md) and the other provider pages in [Contents](#providers)                                                                       | One page per provider       |
 | Hermes Agent, remote agent, Hermes sessions and config              | [hermes.md](hermes.md)                                                                                                                                                | Fork add-on                 |
+| OpenBot agents, OpenBot conversations, Local scripts                | [openbot.md](openbot.md)                                                                                                                                              | Fork add-on                 |
 | MCP, outside agents, other agent sessions, compare, delegation      | [outside-agents.md](outside-agents.md) · [other-agents.md](other-agents.md) · [compare-agents.md](compare-agents.md) · [agent-instructions.md](agent-instructions.md) | Last three are fork add-ons |
 | terminal, git, pull requests, simulators, screenshots               | [terminal.md](terminal.md) · [source-control.md](source-control.md) · [devices.md](devices.md) · [snap-shot.md](snap-shot.md)                                         |                             |
 | browser sessions, default browser, ChatGPT and Claude web tabs      | [browser-import.md](browser-import.md) · [default-browser.md](default-browser.md) · [desktop-remote-apps.md](desktop-remote-apps.md)                                  | Web tabs are a fork add-on  |
@@ -81,6 +82,7 @@ graph LR
 - [Muse Code](providers-muse.md): beta integration, off by default.
 - [ACP providers](providers-acp.md): other ACP commands and agents.
 - [Hermes Agent](hermes.md): fork add-on; chat with a Hermes Agent over its API.
+- [OpenBot](openbot.md): fork add-on; chat with OpenBot agents and follow their conversations.
 
 ### Other agents
 

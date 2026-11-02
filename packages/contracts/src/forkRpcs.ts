@@ -8,6 +8,7 @@ import { ExternalSessionsRpcs } from "./externalSessions.ts";
 import { HermesSessionsRpcs } from "./hermesSessions.ts";
 import { HostBackupsRpcs } from "./hostBackups.ts";
 import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts";
+import { OpenBotSessionsRpcs } from "./openbotSessions.ts";
 import { SaveToNotesRpcs } from "./saveToNotes.ts";
 import { SessionSearchRpc } from "./sessionSearch.ts";
 import { ThreadExportRpc } from "./threadExport.ts";
@@ -20,6 +21,7 @@ export const FORK_WS_RPCS = [
   ...SaveToNotesRpcs, // Fork add-on(save-to-notes)
   ...CompareAgentsRpcs, // Fork add-on(compare-agents)
   ...HermesSessionsRpcs, // Fork add-on(hermes)
+  ...OpenBotSessionsRpcs, // Fork add-on(openbot)
   ...MaintenanceQueueRpcs, // Fork add-on(maintenance-queue)
   ...HostBackupsRpcs, // Fork add-on(host-backups)
   ...ExistingCheckoutRpcs, // Fork add-on(existing-checkout)

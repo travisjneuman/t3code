@@ -1,0 +1,37 @@
+# OpenBot provider
+
+_Fork add-on (`openbot`)._ How T3 talks to OpenBot, and what a maintainer would get wrong without
+reading every file. Usage: [user guide](../user/openbot.md).
+
+## Two channels, one record
+
+`openbot.db` in the OpenBot folder is the conversation of record. OpenBot's Local scripts API
+(`automation/url` and `automation/token`) can post a message and report its delivery, but cannot
+read history. So the driver ([`packages/provider-openbot`](../../packages/provider-openbot)) sends
+through the API and reads everything else from the database, opened read-only. OpenBot rewrites
+the URL and token on each start, so both are read per request; a 401 rereads them once.
+
+## Why Other Agents never saw OpenBot
+
+Other Agents scans the T3 server user's home folder for each CLI's transcripts. OpenBot runs its
+agent CLIs with a home of its own (in the Docker install, `/data`, mounted from OpenBot's data
+folder), and its conversations live in `openbot.db`, not in CLI transcripts. That is why OpenBot is a
+provider with its own section rather than another Other Agents source.
+
+## Binding
+
+The model slug is the OpenBot agent id. A T3 thread on OpenBot binds to the agent's main
+conversation (`openbot-thread-<agentId>`), the only one Local scripts posts to. Side threads, and
+agents without Local scripts, are listed but watch-only. Opening a conversation from the section
+creates or reuses one Scratch thread for it (`openbot:<instance>:<conversation>`) and imports its
+rows with keys taken from OpenBot's message ids, so a re-sync writes only new rows. Rows that fall
+inside the window of a T3 turn (30 s either side) are skipped, because the adapter already wrote them as
+turn items.
+
+## Known gaps
+
+- A thread started from the model picker and a thread opened from the section both bind to the
+  agent's main conversation, so two T3 threads can follow it.
+- Messages sent from OpenBot's own app during a T3 turn can land in that turn.
+- The OpenBot section reuses `importedMessageEvents` from the Other Agents add-on, so `openbot`
+  depends on `other-agents`.

@@ -807,8 +807,8 @@ const make = Effect.gen(function* () {
     );
   });
 
-  // Fork add-on(hermes): Hermes runs on its own machine, so a new
-  // Hermes thread lives in the Scratch project whatever project it began in.
+  // Fork add-on(hermes,openbot): Hermes and OpenBot work in their own folders, so a new
+  // thread on either lives in the Scratch project whatever project it began in.
   const hermesInScratch /* Fork add-on(hermes) */ = Effect.fn("ThreadLaunchService.hermesInScratch")(
     /* Fork add-on(hermes) */ function* (
       input: ThreadLaunchInput, // Fork add-on(hermes)
@@ -818,7 +818,7 @@ const make = Effect.gen(function* () {
       const instance /* Fork add-on(hermes) */ = providers.find(
         (provider) => provider.instanceId === input.modelSelection.instanceId, // Fork add-on(hermes)
       ); // Fork add-on(hermes)
-      if (instance?.driver !== "hermes") return input; // Fork add-on(hermes)
+      if (instance?.driver !== "hermes" && instance?.driver !== "openbot") return input; // Fork add-on(hermes,openbot)
       const { projectId } /* Fork add-on(hermes) */ = yield* managedFolders.ensureScratchProject.pipe(
         Effect.mapError(mapError(input, "resolve-project")), // Fork add-on(hermes)
       ); // Fork add-on(hermes)

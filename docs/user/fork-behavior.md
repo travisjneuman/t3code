@@ -227,6 +227,7 @@ a connected machine that reports its own addresses and when your connection may 
 A connection paired with limited access, for example without operate or provider management
 access, hides the fork's actions the server would refuse instead of letting them fail: continuing,
 archiving, deleting, handing back or opening Other Agents sessions, Hermes session and settings changes,
+opening OpenBot conversations,
 **Save to notes**, comparisons, and releasing provider sessions before an update. Where a whole
 settings section is unavailable, it says which access it needs.
 

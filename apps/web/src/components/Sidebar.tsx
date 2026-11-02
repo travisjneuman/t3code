@@ -257,6 +257,8 @@ import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../
 import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection"; // Fork add-on(other-agents): read-only sessions from agents running outside T3.
 import { HermesSidebarSection } from "../hermes/HermesSidebarSection"; // Fork add-on(hermes)
 import { isHermesThread } from "../hermes/hermesSessions"; // Fork add-on(hermes)
+import { OpenBotSidebarSection } from "../openbot/OpenBotSidebarSection"; // Fork add-on(openbot)
+import { isOpenBotThread } from "../openbot/openbotSessions"; // Fork add-on(openbot)
 import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on(session-search)
 /* Fork add-on(core) */ import {
   forkThreadActionMenuBuilder, // Fork add-on(core)
@@ -658,7 +660,10 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent)
     /* Fork add-on(hermes) */ .filter(
       (thread) => !isHermesThread(thread, input.providerEntriesByEnvironment), // Fork add-on(hermes)
-    ); // Fork add-on(hermes): Hermes threads live in their own section.
+    ) // Fork add-on(hermes): Hermes threads live in their own section.
+    /* Fork add-on(openbot) */ .filter(
+      (thread) => !isOpenBotThread(thread, input.providerEntriesByEnvironment), // Fork add-on(openbot)
+    ); // Fork add-on(openbot): OpenBot threads live in their own section.
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -3702,6 +3707,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             </div>
           ) : null}
           {!isSearchingThreads ? <HermesSidebarSection /> : null /* Fork add-on(hermes) */}
+          {!isSearchingThreads ? <OpenBotSidebarSection /> : null /* Fork add-on(openbot) */}
           {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null /* Fork add-on(other-agents) */}
         </SidebarGroup>
       </SidebarContent>

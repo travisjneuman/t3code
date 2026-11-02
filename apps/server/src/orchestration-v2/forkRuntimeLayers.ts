@@ -10,6 +10,7 @@ import * as Layer from "effect/Layer";
 
 import * as ExternalSessions from "../external-sessions/ExternalSessions.ts";
 import * as HermesSessions from "../hermes/HermesSessions.ts";
+import * as OpenBotSessions from "../openbot/OpenBotSessions.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 
@@ -17,6 +18,7 @@ export const make = <ROut, E, RIn>(upstream: Layer.Layer<ROut, E, RIn>) =>
   Layer.mergeAll(
     ExternalSessions.layer, // Fork add-on(other-agents)
     HermesSessions.layer, // Fork add-on(hermes)
+    OpenBotSessions.layer, // Fork add-on(openbot)
   ).pipe(
     Layer.provide(
       Layer.mergeAll(
