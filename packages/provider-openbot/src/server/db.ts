@@ -2,14 +2,9 @@
  * Read-only reader for openbot.db, OpenBot's conversation of record. The
  * Local scripts API cannot read history, so T3 reads it here and never writes.
  */
-import * as NodePath from "node:path";
-import * as NodeSqlite from "node:sqlite";
-
 import * as Effect from "effect/Effect";
 
-import { OpenBotError } from "./api.ts";
-
-type Row = Record<string, NodeSqlite.SQLOutputValue>;
+import { query, type OpenBotLocation, type OpenBotRow as Row } from "./host.ts";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -20,25 +15,10 @@ const timeMs = (value: unknown) => {
   return Number.isFinite(ms) ? ms : 0;
 };
 
-const withDatabase = <A>(configDir: string, read: (db: NodeSqlite.DatabaseSync) => A) =>
-  Effect.try({
-    try: () => {
-      const db = new NodeSqlite.DatabaseSync(NodePath.join(configDir, "openbot.db"), {
-        readOnly: true,
-      });
-      try {
-        // OpenBot owns the writer; never wait on it.
-        db.exec("PRAGMA busy_timeout = 100");
-        return read(db);
-      } finally {
-        db.close();
-      }
-    },
-    catch: (cause) =>
-      new OpenBotError({
-        detail: `Could not read OpenBot's conversations in ${configDir}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      }),
-  });
+const queryOne = (location: OpenBotLocation, sql: string, params?: ReadonlyArray<string | number>) =>
+  query(location, [{ sql, ...(params === undefined ? {} : { params }) }]).pipe(
+    Effect.map(([rows]) => rows ?? []),
+  );
 
 export const mainThreadId = (agentId: string) => `openbot-thread-${agentId}`;
 /** The agent whose main conversation this is, or undefined for a side thread. */
@@ -65,20 +45,30 @@ export interface OpenBotThreadRecord {
 }
 
 /** Every agent, and every thread not archived in OpenBot, newest first. */
-export const readDirectory = (configDir: string) =>
-  withDatabase(configDir, (db) => {
-    const agents = db
-      .prepare(
-        `SELECT agent_id,
+export const readDirectory = (location: OpenBotLocation) =>
+  query(location, [
+    {
+      sql: `SELECT agent_id,
                 json_extract(agent_json, '$.name') AS name,
                 json_extract(agent_json, '$.title') AS title,
                 json_extract(agent_json, '$.provider') AS provider,
                 json_extract(agent_json, '$.allowAutomation') AS local_scripts
            FROM projection_agents
           ORDER BY sort_order`,
-      )
-      .all()
-      .flatMap((row: Row): Array<OpenBotAgentRecord> => {
+    },
+    {
+      sql: `SELECT t.thread_id, t.agent_id, t.title, t.active_turn_id, t.updated_at,
+                a.outcome,
+                (SELECT COUNT(*) FROM projection_thread_messages m
+                  WHERE m.thread_id = t.thread_id) AS message_count
+           FROM projection_threads t
+           LEFT JOIN projection_agent_threads a ON a.thread_id = t.thread_id
+          WHERE a.archived_at IS NULL
+          ORDER BY t.updated_at DESC`,
+    },
+  ]).pipe(
+    Effect.map(([agentRows = [], threadRows = []]) => {
+      const agents = agentRows.flatMap((row: Row): Array<OpenBotAgentRecord> => {
         const id = str(row.agent_id);
         return id
           ? [
@@ -92,19 +82,7 @@ export const readDirectory = (configDir: string) =>
             ]
           : [];
       });
-    const threads = db
-      .prepare(
-        `SELECT t.thread_id, t.agent_id, t.title, t.active_turn_id, t.updated_at,
-                a.outcome,
-                (SELECT COUNT(*) FROM projection_thread_messages m
-                  WHERE m.thread_id = t.thread_id) AS message_count
-           FROM projection_threads t
-           LEFT JOIN projection_agent_threads a ON a.thread_id = t.thread_id
-          WHERE a.archived_at IS NULL
-          ORDER BY t.updated_at DESC`,
-      )
-      .all()
-      .flatMap((row: Row): Array<OpenBotThreadRecord> => {
+      const threads = threadRows.flatMap((row: Row): Array<OpenBotThreadRecord> => {
         const id = str(row.thread_id);
         const agentId = str(row.agent_id);
         if (!id || !agentId) return [];
@@ -121,34 +99,32 @@ export const readDirectory = (configDir: string) =>
           },
         ];
       });
-    return { agents, threads };
-  });
+      return { agents, threads };
+    }),
+  );
 
-export const agentNames = (configDir: string) =>
-  withDatabase(
-    configDir,
-    (db) =>
-      new Map(
-        db
-          .prepare(
-            `SELECT agent_id, json_extract(agent_json, '$.name') AS name FROM projection_agents`,
-          )
-          .all()
-          .flatMap((row: Row): Array<[string, string]> => {
+export const agentNames = (location: OpenBotLocation) =>
+  queryOne(
+    location,
+    `SELECT agent_id, json_extract(agent_json, '$.name') AS name FROM projection_agents`,
+  ).pipe(
+    Effect.map(
+      (rows) =>
+        new Map(
+          rows.flatMap((row: Row): Array<[string, string]> => {
             const id = str(row.agent_id);
             return id ? [[id, text(row.name) ?? id]] : [];
           }),
-      ),
+        ),
+    ),
   );
 
 /** The newest event sequence in the database: a turn reads only rows changed after it. */
-export const maxSequence = (configDir: string) =>
-  withDatabase(configDir, (db) => {
-    const row = db
-      .prepare(`SELECT MAX(last_event_sequence) AS sequence FROM projection_thread_messages`)
-      .get();
-    return Number(row?.sequence ?? 0);
-  });
+export const maxSequence = (location: OpenBotLocation) =>
+  queryOne(
+    location,
+    `SELECT MAX(last_event_sequence) AS sequence FROM projection_thread_messages`,
+  ).pipe(Effect.map(([row]) => Number(row?.sequence ?? 0)));
 
 export interface OpenBotMessageRow {
   readonly messageId: string;
@@ -163,17 +139,17 @@ export interface OpenBotMessageRow {
 const UNSETTLED = new Set(["pending", "queued", "running", "streaming", "in_progress"]);
 
 /** A thread's messages in OpenBot's order; only those changed after `afterSequence` when given. */
-export const readRows = (configDir: string, threadId: string, afterSequence = -1) =>
-  withDatabase(configDir, (db) =>
-    db
-      .prepare(
-        `SELECT message_id, author, status, item_type, created_at, last_event_sequence, message_json
-           FROM projection_thread_messages
-          WHERE thread_id = ? AND last_event_sequence > ?
-          ORDER BY created_at, ordinal`,
-      )
-      .all(threadId, afterSequence)
-      .flatMap((row: Row): Array<OpenBotMessageRow> => {
+export const readRows = (location: OpenBotLocation, threadId: string, afterSequence = -1) =>
+  queryOne(
+    location,
+    `SELECT message_id, author, status, item_type, created_at, last_event_sequence, message_json
+       FROM projection_thread_messages
+      WHERE thread_id = ? AND last_event_sequence > ?
+      ORDER BY created_at, ordinal`,
+    [threadId, afterSequence],
+  ).pipe(
+    Effect.map((rows) =>
+      rows.flatMap((row: Row): Array<OpenBotMessageRow> => {
         const messageId = str(row.message_id);
         let body: unknown;
         try {
@@ -194,6 +170,7 @@ export const readRows = (configDir: string, threadId: string, afterSequence = -1
           },
         ];
       }),
+    ),
   );
 
 export type OpenBotEntry =

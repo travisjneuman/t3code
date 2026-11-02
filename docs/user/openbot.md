@@ -7,16 +7,21 @@ scripts** API, so OpenBot keeps running as it is, with its schedules, side threa
 ## Set it up
 
 1. In OpenBot, turn on **Local scripts** for each agent you want to message from T3.
-2. In T3, open **Settings › Providers**, add **OpenBot**, and turn it on. It must run on the same
-   machine as OpenBot.
-3. Leave **OpenBot folder** blank to use OpenBot's default folder on that machine
+2. In T3, open **Settings › Providers**, add **OpenBot**, and turn it on. Add it on one server
+   only, usually the desktop app you use every day.
+3. If OpenBot runs on another machine, set **SSH host** to that machine, as you would type it after
+   `ssh`. The T3 server must reach it with a key and no password prompt, and the machine needs
+   node 22.13 or newer. T3 reads OpenBot's conversations and sends messages there, so OpenBot's
+   Local scripts API never has to leave that machine. Leave it blank when OpenBot runs on the same
+   machine as the T3 server.
+4. Leave **OpenBot folder** blank to use OpenBot's default folder on OpenBot's machine
    (`~/Library/Application Support/OpenBot` on macOS, `%APPDATA%\OpenBot` on Windows,
    `~/.config/OpenBot` on Linux). Set it when OpenBot keeps its data somewhere else, for example a
    Docker install whose data folder is mounted at another path.
 
 The provider shows **Ready** once it has read OpenBot's agents. OpenBot writes a new Local scripts
-token each time it starts; T3 reads it from the OpenBot folder for every request and never stores
-it or sends it to a client.
+token each time it starts; T3 reads it on OpenBot's machine for every request and never copies it,
+stores it or sends it to a client.
 
 ## Find and open conversations
 

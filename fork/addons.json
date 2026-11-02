@@ -736,6 +736,7 @@
         "packages/provider-openbot/src/server/api.ts",
         "packages/provider-openbot/src/server/db.ts",
         "packages/provider-openbot/src/server/driver.ts",
+        "packages/provider-openbot/src/server/host.ts",
         "packages/provider-openbot/src/server/status.ts",
         "packages/provider-openbot/src/server/textGeneration.ts",
         "packages/provider-openbot/src/settings.ts",

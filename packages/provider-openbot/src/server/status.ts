@@ -8,7 +8,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { OpenBotSettings } from "../settings.ts";
-import { configDirOf, listAgents } from "./api.ts";
+import { listAgents } from "./api.ts";
 
 const OPENBOT_PRESENTATION = {
   displayName: "OpenBot",
@@ -59,7 +59,7 @@ export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus"
 ) {
   if (!settings.enabled) return yield* makePendingOpenBotProvider(settings);
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
-  return yield* listAgents(configDirOf(settings)).pipe(
+  return yield* listAgents(settings).pipe(
     Effect.map((agents) =>
       snapshotFor(
         settings,

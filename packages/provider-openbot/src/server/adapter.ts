@@ -180,7 +180,7 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
 ) {
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const providerHost = yield* ProviderHost.ProviderHost;
-  const configDir = OpenBotApi.configDirOf(options.settings);
+  const location = options.settings;
   const capabilities: OrchestrationV2ProviderCapabilities = OpenBotProviderCapabilitiesV2;
 
   const protocolError = (detail: string, payload?: unknown, cause?: OpenBotTurnNotSentError) =>
@@ -472,13 +472,13 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
 
       const pollOnce = (turn: ActiveTurn, deliveryId: string, sequence: number) =>
         Effect.gen(function* () {
-          const delivery = yield* OpenBotApi.getDelivery(configDir, turn.agentId, deliveryId);
-          const rows = yield* OpenBotDb.readRows(configDir, turn.nativeThreadId, sequence);
+          const delivery = yield* OpenBotApi.getDelivery(location, turn.agentId, deliveryId);
+          const rows = yield* OpenBotDb.readRows(location, turn.nativeThreadId, sequence);
           const ended = OpenBotApi.ENDED_DELIVERY_STATUSES.has(delivery.status);
           const waiting =
             ended || turn.noticedPending
               ? 0
-              : yield* OpenBotApi.pendingCount(configDir, turn.agentId).pipe(
+              : yield* OpenBotApi.pendingCount(location, turn.agentId).pipe(
                   Effect.orElseSucceed(() => 0),
                 );
           return { delivery, rows, ended, waiting };
@@ -656,7 +656,7 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           startedAt,
           completedAt: null,
         };
-        const names = yield* OpenBotDb.agentNames(configDir).pipe(
+        const names = yield* OpenBotDb.agentNames(location).pipe(
           Effect.orElseSucceed((): ReadonlyMap<string, string> => new Map()),
         );
         const turn: ActiveTurn = {
@@ -692,8 +692,8 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           yield* updateSession("running");
         }).pipe(eventPermit.withPermits(1));
         yield* Effect.gen(function* () {
-          const baseline = yield* openbot(OpenBotDb.maxSequence(configDir));
-          const deliveryId = yield* OpenBotApi.sendMessage(configDir, agentId, text, nativeId).pipe(
+          const baseline = yield* openbot(OpenBotDb.maxSequence(location));
+          const deliveryId = yield* OpenBotApi.sendMessage(location, agentId, text, nativeId).pipe(
             Effect.mapError((error) => notSentError(error.detail, error)),
           );
           yield* follow(turn, deliveryId, baseline).pipe(Effect.forkIn(scope));
@@ -714,8 +714,8 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
       const snapshot = Effect.fnUntraced(function* (current: OrchestrationV2ProviderThread) {
         const threadId = current.nativeThreadRef?.nativeId ?? nativeThreadId;
         if (!threadId) return yield* protocolError("OpenBot thread has no conversation");
-        const rows = yield* openbot(OpenBotDb.readRows(configDir, threadId));
-        const names = yield* openbot(OpenBotDb.agentNames(configDir));
+        const rows = yield* openbot(OpenBotDb.readRows(location, threadId));
+        const names = yield* openbot(OpenBotDb.agentNames(location));
         const now = yield* DateTime.now;
         return {
           providerThread: current,

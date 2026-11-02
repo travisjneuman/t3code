@@ -11,6 +11,16 @@ read history. So the driver ([`packages/provider-openbot`](../../packages/provid
 through the API and reads everything else from the database, opened read-only. OpenBot rewrites
 the URL and token on each start, so both are read per request; a 401 rereads them once.
 
+## Another machine over SSH
+
+The API listens on loopback only, on a port that changes with every start, and the history is a
+local SQLite file, so neither can be reached from another machine directly. With **SSH host** set,
+[`host.ts`](../../packages/provider-openbot/src/server/host.ts) pipes a small script to `node` on
+that machine, which runs the same queries or API call there and prints the result as JSON. The
+token is read and used on OpenBot's machine and never crosses the wire. That script repeats the
+local code path in plain JavaScript, so the two must change together. Calls share one SSH
+connection (`ControlMaster`, except on Windows), since a running turn polls every two seconds.
+
 ## Why Other Agents never saw OpenBot
 
 Other Agents scans the T3 server user's home folder for each CLI's transcripts. OpenBot runs its

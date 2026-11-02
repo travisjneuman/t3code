@@ -14,12 +14,21 @@ export const OpenBotSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed(false)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    sshHost: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "SSH host",
+        description:
+          "The machine OpenBot runs on, as you would type it after ssh. It needs node 22.13 or newer. Blank means this server.",
+        providerSettingsForm: { placeholder: "openbot-host", clearWhenEmpty: "omit" },
+      }),
+    ),
     configDir: TrimmedString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "OpenBot folder",
         description:
-          "OpenBot's config folder on this server, holding openbot.db and automation/. Blank uses OpenBot's default here.",
+          "OpenBot's config folder on the machine it runs on, holding openbot.db and automation/. Blank uses OpenBot's default there.",
         providerSettingsForm: { placeholder: "~/.config/OpenBot", clearWhenEmpty: "omit" },
       }),
     ),
@@ -28,6 +37,6 @@ export const OpenBotSettings = makeProviderSettingsSchema(
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["configDir"] },
+  { order: ["sshHost", "configDir"] },
 );
 export type OpenBotSettings = typeof OpenBotSettings.Type;

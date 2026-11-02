@@ -93,8 +93,8 @@ const make = Effect.gen(function* () {
       Effect.mapError(failed("Could not update the thread.")),
     );
 
-  /** The instance's OpenBot folder; only for an OpenBot instance. */
-  const configDirOf = Effect.fn("OpenBotSessions.configDirOf")(function* (
+  /** Where the instance's OpenBot runs; only for an OpenBot instance. */
+  const locationOf = Effect.fn("OpenBotSessions.locationOf")(function* (
     instanceId: ProviderInstanceId,
   ) {
     const settings = yield* serverSettings.getSettings.pipe(
@@ -107,7 +107,7 @@ const make = Effect.gen(function* () {
     return yield* Option.match(decodeOpenBotSettings(instance.config ?? {}), {
       onNone: () =>
         Effect.fail(new OpenBotSessionsError({ message: "The OpenBot settings are invalid." })),
-      onSome: (decoded) => Effect.succeed(OpenBotApi.configDirOf(decoded)),
+      onSome: (decoded) => Effect.succeed(decoded),
     });
   });
 
@@ -144,8 +144,8 @@ const make = Effect.gen(function* () {
 
   const list: OpenBotSessions["Service"]["list"] = Effect.fn("OpenBotSessions.list")(
     function* (input) {
-      const configDir = yield* configDirOf(input.instanceId);
-      const { agents, threads } = yield* OpenBotDb.readDirectory(configDir).pipe(
+      const location = yield* locationOf(input.instanceId);
+      const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
         Effect.mapError(fromOpenBot),
       );
       const bound = yield* boundThreads(input.instanceId);
@@ -184,8 +184,8 @@ const make = Effect.gen(function* () {
     instanceId: ProviderInstanceId,
     conversationId: string,
   ) {
-    const configDir = yield* configDirOf(instanceId);
-    const { agents, threads } = yield* OpenBotDb.readDirectory(configDir).pipe(
+    const location = yield* locationOf(instanceId);
+    const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
       Effect.mapError(fromOpenBot),
     );
     const thread = threads.find((candidate) => candidate.id === conversationId);
@@ -193,7 +193,7 @@ const make = Effect.gen(function* () {
       return yield* new OpenBotSessionsError({ message: "OpenBot has no such conversation." });
     }
     const names = new Map(agents.map((agent) => [agent.id, agent.name]));
-    const rows = yield* OpenBotDb.readRows(configDir, conversationId).pipe(
+    const rows = yield* OpenBotDb.readRows(location, conversationId).pipe(
       Effect.mapError(fromOpenBot),
     );
     return {
