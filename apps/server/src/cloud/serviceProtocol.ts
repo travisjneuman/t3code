@@ -153,7 +153,7 @@ export function decodeServiceState(value: unknown): ServiceState | undefined {
     typeof value.activeVersion !== "string" ||
     !isExactServiceVersion(value.activeVersion) ||
     (value.update !== undefined && update === undefined) ||
-    (update !== undefined && !isServiceUpdateTarget(update.targetVersion, update.fromVersion)) ||
+    (update !== undefined && !isServiceUpdateTarget(update.targetVersion, update.fromVersion)) || // Fork add-on(host-releases)
     (update?.status === "pending" && update.fromVersion !== value.activeVersion) ||
     (update?.status === "committed" && update.targetVersion !== value.activeVersion) ||
     ((update?.status === "rolled-back" || update?.status === "failed") &&

@@ -141,7 +141,7 @@ export function matchesServerUpdateReadyEvent(
   event: ServerLifecycleStreamReadyEvent,
 ): boolean {
   return result.updateId === undefined
-    ? environmentRuntimeVersion(event.payload.environment) === result.targetVersion
+    ? environmentRuntimeVersion(event.payload.environment) === result.targetVersion // Fork add-on(host-releases)
     : event.payload.updateOutcome?.id === result.updateId;
 }
 
@@ -165,7 +165,7 @@ export function validateServerUpdateReadyEvent(
     outcome?.id === result.updateId &&
     outcome.status === "committed" &&
     outcome.targetVersion === result.targetVersion &&
-    environmentRuntimeVersion(event.payload.environment) === result.targetVersion
+    environmentRuntimeVersion(event.payload.environment) === result.targetVersion // Fork add-on(host-releases)
   ) {
     return Effect.void;
   }
@@ -262,7 +262,7 @@ export const waitForDesktopUpdateTarget = Effect.fn("waitForDesktopUpdateTarget"
   const maxCommitAttempts = 3;
   for (let attempt = 1; attempt <= maxCommitAttempts; attempt += 1) {
     const ready = yield* nextReady;
-    if (environmentRuntimeVersion(ready.payload.environment) === targetVersion) return ready;
+    if (environmentRuntimeVersion(ready.payload.environment) === targetVersion) return ready; // Fork add-on(host-releases)
     if (attempt === maxCommitAttempts) break;
     const retryExit = yield* retryCommit.pipe(Effect.exit);
     if (Exit.isSuccess(retryExit)) break;
@@ -655,7 +655,7 @@ export function resolveServerConfigValue(
   if (
     projection?.source === "live" &&
     (initialConfig === null ||
-      environmentRuntimeVersion(projection.config.environment) ===
+      environmentRuntimeVersion(projection.config.environment) === // Fork add-on(host-releases)
         environmentRuntimeVersion(initialConfig.environment))
   ) {
     return projection.config;
@@ -825,7 +825,7 @@ export function createServerEnvironmentAtoms<R, E>(
     Atom.make((get) =>
       serverUpdateStateForServerVersion(
         get(serverUpdateStateAtom(environmentId)),
-        runtimeVersionOf(get(configValueAtom(environmentId))),
+        runtimeVersionOf(get(configValueAtom(environmentId))), // Fork add-on(host-releases)
       ),
     ).pipe(Atom.withLabel(`environment-data:server:update-state-value:${environmentId}`)),
   );
@@ -845,7 +845,7 @@ export function createServerEnvironmentAtoms<R, E>(
       const stateAtom = serverUpdateStateAtom(target.environmentId);
       let targetVersion = target.input.targetVersion;
       let fromVersion =
-        runtimeVersionOf(atomRegistry.get(configValueAtom(target.environmentId))) ?? targetVersion;
+        runtimeVersionOf(atomRegistry.get(configValueAtom(target.environmentId))) ?? targetVersion; // Fork add-on(host-releases)
       let currentStage: ServerUpdateStage = "downloading";
       let desktopCommitLostTransport = false;
       atomRegistry.set(stateAtom, {
@@ -879,7 +879,7 @@ export function createServerEnvironmentAtoms<R, E>(
           target,
           Effect.gen(function* () {
             const currentConfig = atomRegistry.get(configValueAtom(target.environmentId));
-            fromVersion = runtimeVersionOf(currentConfig) ?? targetVersion;
+            fromVersion = runtimeVersionOf(currentConfig) ?? targetVersion; // Fork add-on(host-releases)
             atomRegistry.set(stateAtom, {
               status: "running",
               stage: currentStage,

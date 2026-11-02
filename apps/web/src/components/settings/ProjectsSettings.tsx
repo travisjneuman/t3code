@@ -52,7 +52,7 @@ export function ProjectsSettings() {
           <SettingsScopeNotice inline target="project">
             Choose a project to manage its name, icon, checkouts and actions.
           </SettingsScopeNotice>
-          <FindCheckoutsButton />
+          <FindCheckoutsButton /* Fork add-on(existing-checkout) */ />
         </SettingsPageContainer>
       )}
     </div>

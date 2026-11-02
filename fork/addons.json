@@ -1,5 +1,5 @@
 {
-  "$comment": "Every fork add-on. files: fork-owned files it owns (absent upstream). hooks: upstream files where its lines carry `Fork add-on(<id>)`. extensionPoints: the core registries an upstream file (or the feature that owns them) hooks once, and the add-ons registered in each. unmarkedUpstreamEdits: upstream files that cannot hold a marker. dependsOn: add-ons whose fork-owned files it imports; a registry importing an add-on registers it, so core depends on none. Update this in the same change as the code. See docs/internals/fork-add-ons.md.",
+  "$comment": "Every fork add-on. files: fork-owned files it owns (absent upstream). hooks: upstream files where its lines carry `Fork add-on(<id>)`. extensionPoints: the core registries an upstream file (or the feature that owns them) hooks once, and the add-ons registered in each. unmarkedUpstreamEdits: upstream files that cannot hold a marker. upstreamDeletions: upstream lines it removes outright, which no marker can sit on. dependsOn: add-ons whose fork-owned files it imports; a registry importing an add-on registers it, so core depends on none. Update this in the same change as the code. See docs/internals/fork-add-ons.md.",
   "upstream": "https://github.com/pingdotgg/t3code",
   "tiers": {
     "core": "Shared plumbing every other add-on hooks into.",
@@ -162,6 +162,18 @@
         "maintenance-queue",
         "existing-checkout",
         "host-releases"
+      ]
+    },
+    {
+      "name": "UI fallback slots",
+      "registry": "apps/web/src/forkSlots.ts",
+      "hookedFrom": [
+        "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
+        "apps/web/src/components/usage/UsagePage.tsx"
+      ],
+      "addons": [
+        "compact-cards",
+        "usage-by-model"
       ]
     },
     {
@@ -369,6 +381,7 @@
         "apps/web/src/forkContextMenuIcons.ts",
         "apps/web/src/forkOwnWorkspaceDrivers.ts",
         "apps/web/src/forkRootHosts.tsx",
+        "apps/web/src/forkSlots.ts",
         "apps/web/src/forkThreadMenu.ts",
         "apps/web/src/forkTimelineLiveFollow.ts",
         "apps/web/src/sidebar-compact/AgentSectionParts.tsx",
@@ -399,6 +412,8 @@
         "apps/server/src/server.ts",
         "apps/server/src/ws.ts",
         "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
+        "apps/web/src/components/usage/UsagePage.tsx",
         "apps/web/src/contextMenuFallback.ts",
         "apps/web/src/hooks/useThreadActionMenu.ts",
         "apps/web/src/routes/__root.tsx",
@@ -788,6 +803,13 @@
       "unmarkedUpstreamEdits": {
         "packages/provider-core/package.json": "exports ./server/forkAgentInstructions, ./server/sessionInsights"
       },
+      "upstreamDeletions": [
+        {
+          "file": "apps/server/src/mcp/OrchestratorMcpService.ts",
+          "line": "const providers = yield* loadProviders;",
+          "why": "moved below the receipt check"
+        }
+      ],
       "data": {
         "settings": [
           "Agents fields in server settings, client settings and project settings (forkAgentSettings.ts)"
@@ -1271,7 +1293,6 @@
       "hooks": [
         "apps/server/src/usage/usagePricing.ts",
         "apps/web/src/components/usage/UsageModelDialog.tsx",
-        "apps/web/src/components/usage/UsagePage.tsx",
         "apps/web/src/components/usage/UsagePriceOverrides.tsx",
         "apps/web/src/state/usage.ts",
         "packages/provider-grok/src/server/usage.ts",
@@ -1549,6 +1570,23 @@
       ]
     },
     {
+      "id": "removable-providers",
+      "tier": "feature",
+      "title": "Removable providers",
+      "summary": "Built-in providers other than Codex and Claude can be deleted from Settings > Providers.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/components/settings/ProviderSettingsPanel.tsx"
+      ]
+    },
+    {
       "id": "vpn-lan",
       "tier": "fix",
       "title": "VPN addresses",
@@ -1792,7 +1830,14 @@
         "apps/web/public/favicon-16x16.png": "replaced artwork",
         "apps/web/public/favicon-32x32.png": "replaced artwork",
         "apps/web/public/favicon.ico": "replaced artwork"
-      }
+      },
+      "upstreamDeletions": [
+        {
+          "file": "scripts/lib/brand-assets.ts",
+          "line": "const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];",
+          "why": "every brand reads the fork's icons"
+        }
+      ]
     },
     {
       "id": "keychain-free-secrets",
@@ -1915,6 +1960,7 @@
         "packages/ssh/src/releaseMirror.ts"
       ],
       "hooks": [
+        "apps/server/src/binCli.ts",
         "apps/server/src/cli/service.ts",
         "apps/server/src/cli/up.ts",
         "apps/server/src/cli/update.ts",
@@ -1941,6 +1987,43 @@
         "packages/contracts/src/environment.ts",
         "packages/shared/src/cliRelease.ts",
         "packages/ssh/src/tunnel.ts"
+      ],
+      "upstreamDeletions": [
+        {
+          "file": "apps/web/src/components/chat/useAutoBalanceUpdateBanner.tsx",
+          "line": "resolveServerConfigVersionMismatch,",
+          "why": "replaced by resolveHostVersionMismatch"
+        },
+        {
+          "file": "apps/web/src/components/chat/useSystemComposerBanners.tsx",
+          "line": "resolveServerConfigVersionMismatch,",
+          "why": "replaced by useHostVersionMismatch"
+        },
+        {
+          "file": "apps/web/src/components/settings/SavedEnvironmentRows.tsx",
+          "line": "resolveServerConfigVersionMismatch,",
+          "why": "replaced by useHostVersionMismatch"
+        },
+        {
+          "file": "apps/web/src/components/sidebar/updateEverything.logic.ts",
+          "line": "resolveVersionMismatch,",
+          "why": "replaced by the host release target"
+        },
+        {
+          "file": "apps/web/src/components/sidebar/useUpdateEverything.ts",
+          "line": "import { APP_VERSION } from \"~/branding\";",
+          "why": "the target comes from the host release check"
+        },
+        {
+          "file": "apps/web/src/components/sidebar/useUpdateEverything.ts",
+          "line": "collectServerUpdateTargets,",
+          "why": "replaced by the host release targets"
+        },
+        {
+          "file": "packages/shared/src/cliRelease.ts",
+          "line": "const CLI_RELEASE_DEFAULT_BASE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases/download`;",
+          "why": "moved into cliReleaseGuards.ts"
+        }
       ],
       "data": {
         "wire": [

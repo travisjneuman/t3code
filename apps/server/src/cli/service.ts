@@ -9,8 +9,8 @@ import * as Path from "effect/Path";
 import { Command, Flag, GlobalFlag, Prompt } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
-import * as BootService from "../cloud/bootService.ts";
 import { SERVICE_RUNTIME_VERSION } from "../cloud/runtimeVersion.ts"; // Fork add-on(host-releases): service version includes the fork build.
+import * as BootService from "../cloud/bootService.ts";
 import * as ServiceProtection from "../cloud/serviceProtection.ts";
 import { compareExactServiceVersions, SERVICE_ENV_FILE } from "../cloud/serviceProtocol.ts";
 import * as ServerConfig from "../config.ts";

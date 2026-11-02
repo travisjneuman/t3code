@@ -1,7 +1,7 @@
 import { SessionPermissions } from "./SessionPermissions";
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"; // Fork add-on(host-releases)
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,

@@ -422,7 +422,7 @@ function ProjectDetail({
       })}
     </>
   );
-  const checkoutChoices = <SettingsSection title="Checkouts">{checkoutRows}</SettingsSection>;
+  const checkoutChoices = <SettingsSection title="Checkouts">{checkoutRows}</SettingsSection>; // Fork add-on(project-links)
 
   return (
     <>

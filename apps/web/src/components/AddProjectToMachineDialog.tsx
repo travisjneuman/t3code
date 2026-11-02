@@ -7,7 +7,7 @@ import {
 } from "@t3tools/client-runtime/operations/projects";
 import { resolvePastedPath } from "@t3tools/shared/path";
 import {
-  createEnvironmentRpcQueryAtomFamily,
+  createEnvironmentRpcQueryAtomFamily, // Fork add-on(existing-checkout)
   executeAtomQuery,
 } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -15,7 +15,7 @@ import {
   type EnvironmentId,
   type ProjectIgnoredFile,
   type ScopedProjectRef,
-  repositoryGroupingKeyOf,
+  repositoryGroupingKeyOf, // Fork add-on(existing-checkout)
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import {
@@ -28,13 +28,13 @@ import { useId, useState } from "react";
 import { create } from "zustand";
 
 import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
-import { connectionAtomRuntime } from "../connection/runtime";
+import { connectionAtomRuntime } from "../connection/runtime"; // Fork add-on(existing-checkout)
 import { useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
 import {
   COPYABLE_FILE_MAX_BYTES,
-  addExistingCheckout,
+  addExistingCheckout, // Fork add-on(existing-checkout)
   addProjectToMachine,
   isDefaultCopiedFile,
 } from "../lib/addProjectToMachine";
@@ -128,10 +128,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     (protocol === "ssh" ? sshUrl : protocol === "https" ? httpsUrl : null) ?? sourceUrl;
 
   const targetEnvironment = environments.find((env) => env.environmentId === target?.environmentId);
-  const baseDirectory = getAddProjectInitialQuery(
+  const baseDirectory = getAddProjectInitialQuery( // Fork add-on(existing-checkout)
     targetEnvironment?.serverConfig?.settings.addProjectBaseDirectory,
   );
-  const defaultPath = getCloneDestinationPath(baseDirectory, getCloneDirectoryName(sourceUrl));
+  const defaultPath = getCloneDestinationPath(baseDirectory, getCloneDirectoryName(sourceUrl)); // Fork add-on(existing-checkout)
   const [pathOverride, setPathOverride] = useState<string | null>(null);
   const destinationPath = pathOverride ?? defaultPath;
 
@@ -191,7 +191,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 
   // The project or every target can vanish while the dialog is open. Submitting
   // before the file list loads would silently skip the default .env copies.
-  // Waiting on the search keeps a clone from starting before a checkout it would duplicate is found.
+  // Fork add-on(existing-checkout): waiting on the search keeps a clone from starting before a checkout it would duplicate is found.
   const unavailable =
     project === null ||
     target === null ||
@@ -230,7 +230,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 
   const submit = async () => {
     if (!project || !target || submitting) return;
-    if (folderPath.trim().length === 0) {
+    if (folderPath.trim().length === 0) { // Fork add-on(existing-checkout)
       setError("Choose a folder on the other machine.");
       return;
     }
@@ -238,7 +238,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     setError(null);
     const projectId = newProjectId();
     try {
-      if (addExisting) {
+      if (addExisting) { // Fork add-on(existing-checkout)
         const workspaceRoot =
           canCheckFolder && repositoryKey !== null
             ? await checkedWorkspaceRoot({
@@ -259,19 +259,19 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
       } else {
         await addProjectToMachine({
           source: { environmentId: project.environmentId, cwd: project.workspaceRoot },
-          subdirectory,
+          subdirectory, // Fork add-on(existing-checkout)
           target: { environmentId: target.environmentId, label: target.label },
           projectId,
           title: project.title,
           remoteUrl,
-          destinationPath: folderPath.trim(),
+          destinationPath: folderPath.trim(), // Fork add-on(existing-checkout)
           files: files.filter((file) => selectedFiles.has(file.path)).map((file) => file.path),
         });
       }
       close();
       openClonedProject(scopeProjectRef(target.environmentId, projectId));
     } catch (cause) {
-      const fallback = addExisting ? "Could not add the project." : "Could not start the clone.";
+      const fallback = addExisting ? "Could not add the project." : "Could not start the clone."; // Fork add-on(existing-checkout)
       setError(cause instanceof Error ? cause.message : fallback);
       setSubmitting(false);
     }
@@ -295,7 +295,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
           <DialogHeader>
             <DialogTitle>Add to another machine</DialogTitle>
             <DialogDescription>
-              {addExisting
+              {addExisting // Fork add-on(existing-checkout)
                 ? `${target?.label ?? "That machine"} already has ${project?.repositoryIdentity?.displayName ?? project?.title}. Add its folder as the project there.`
                 : `Clone ${project?.repositoryIdentity?.displayName ?? project?.title} and bring the local files git does not track.`}
             </DialogDescription>
@@ -315,13 +315,13 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 </span>
               </div>
               <div className="flex w-28 flex-col items-center gap-0.5 text-muted-foreground text-xs">
-                <span>{addExisting ? "already there" : "git clone"}</span>
+                <span>{addExisting /* Fork add-on(existing-checkout) */ ? "already there" : "git clone"}</span>
                 <span className="flex w-full items-center">
                   <span className="h-px flex-1 bg-border" />
                   <ArrowRightIcon className="-ms-1 size-3.5" aria-hidden />
                 </span>
                 <span>
-                  {addExisting
+                  {addExisting // Fork add-on(existing-checkout)
                     ? "no copy"
                     : selectedFiles.size === 0
                       ? "no files"
@@ -333,7 +333,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   <Select
                     value={target?.environmentId ?? null}
                     onValueChange={(value) => {
-                      if (!value) return;
+                      if (!value) return; // Fork add-on(existing-checkout)
                       setTargetId(value);
                       setCloneInstead(false);
                       setUseOwnFolder(false);
@@ -367,12 +367,12 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   </span>
                 )}
                 <span className="flex min-w-0 font-mono text-muted-foreground text-xs">
-                  <MiddleTruncate value={folderPath} />
+                  <MiddleTruncate value={folderPath} /* Fork add-on(existing-checkout) */ />
                 </span>
               </div>
             </div>
 
-            {addExisting ? null : (
+            {addExisting ? null : ( // Fork add-on(existing-checkout)
               <div className="flex flex-col gap-1.5">
                 <Label>Clone over</Label>
                 {sshUrl && httpsUrl ? (
@@ -388,7 +388,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     <Toggle value="https">HTTPS</Toggle>
                   </ToggleGroup>
                 ) : null}
-                <span className="truncate font-mono text-muted-foreground text-xs">
+                <span className="truncate font-mono text-muted-foreground text-xs" /* Fork add-on(existing-checkout) */>
                   {remoteUrl}
                 </span>
               </div>
@@ -407,7 +407,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 spellCheck={false}
                 autoComplete="off"
               />
-              {searching ? (
+              {searching ? ( // Fork add-on(existing-checkout)
                 <p className="text-muted-foreground text-xs">
                   Looking for a checkout already on {target?.label ?? "that machine"}…
                 </p>
@@ -448,7 +448,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               ) : null}
             </div>
 
-            {canListFiles && !addExisting ? (
+            {canListFiles && !addExisting ? ( // Fork add-on(existing-checkout)
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
                   <Label className="flex-1">Copy ignored files</Label>
@@ -514,7 +514,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               Cancel
             </Button>
             <Button type="submit" disabled={unavailable || submitting}>
-              {submitting
+              {submitting // Fork add-on(existing-checkout)
                 ? "Starting…"
                 : `${addExisting ? "Add to" : "Clone to"} ${target?.label ?? "machine"}`}
             </Button>
@@ -567,7 +567,7 @@ function comparablePath(path: string) {
  * A project can be rooted below its repository's top folder. The clone lands
  * at the top, so copied files keep the same path below it.
  */
-export function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: string) {
+export function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: string) { // Fork add-on(existing-checkout)
   if (!repositoryRoot) return "";
   const prefix = repositoryRoot.replace(/[\\/]+$/, "");
   const rest = workspaceRoot.slice(prefix.length);
@@ -576,7 +576,7 @@ export function projectSubdirectory(repositoryRoot: string | undefined, workspac
     : "";
 }
 
-/** Uses the found folder's own separator, since the other machine may be Windows. */
+/** Fork add-on(existing-checkout): uses the found folder's own separator, since the other machine may be Windows. */
 export function joinSubdirectory(root: string, subdirectory: string) {
   if (!subdirectory) return root;
   const separator = root.includes("\\") ? "\\" : "/";

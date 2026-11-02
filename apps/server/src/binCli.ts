@@ -8,7 +8,7 @@ import { Argument, Command } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
 import * as NetService from "@t3tools/shared/Net";
-import { SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts";
+import { SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts"; // Fork add-on(host-releases): service version includes the fork build.
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { mcpCommand } from "./cli/forkMcp.ts"; // Fork add-on(mcp-hub)
@@ -109,7 +109,7 @@ export const cli = makeCli();
 export function runCli() {
   extendConnectionAttemptTimeout();
   keepOutboundFetchOnHttp1();
-  Command.run(cli, { version: SERVICE_RUNTIME_VERSION }).pipe(
+  Command.run(cli, { version: SERVICE_RUNTIME_VERSION }).pipe( // Fork add-on(host-releases)
     Effect.scoped,
     Effect.provide(layerCliRuntime),
     NodeRuntime.runMain,

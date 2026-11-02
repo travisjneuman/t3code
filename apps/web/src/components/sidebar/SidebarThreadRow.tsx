@@ -116,7 +116,7 @@ import { MiddleTruncate } from "../ui/middle-truncate";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
 import { ContinuedFromLine } from "../../external-sessions/handBack"; // Fork add-on(other-agents): external-session hand back.
 import { SubagentToggle } from "../../subagents/SidebarSubagentRows"; // Fork add-on(subagent-tree)
-import { ThreadCardMeta } from "../../fork-sidebar/ThreadCardMeta"; // Fork add-on(compact-cards)
+import { forkSlots } from "../../forkSlots"; // Fork add-on(core)
 import { THREAD_CARD_LAYOUT } from "../../sidebar-compact/threadCardLayout"; // Fork add-on(compact-cards)
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
@@ -1142,7 +1142,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const diff = latestRunDiff(thread);
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const metaLineEmpty =
-    variant !== "card" && // Fork add-on(compact-cards): the card's meta line always names its machine.
+    (variant !== "card" || forkSlots.threadCardMeta === undefined) && // Fork add-on(core): a filled card meta slot always renders.
     !thread.branch &&
     !showsScratchMachine &&
     prBadge === null &&
@@ -1605,23 +1605,27 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               ) : null}
               {titleLineIcons}
             </div>
-            <ThreadCardMeta // Fork add-on(compact-cards)
-              thread={thread} // Fork add-on(compact-cards)
-              threadKey={threadKey} // Fork add-on(compact-cards)
-              subagentCount={props.subagentCount} // Fork add-on(subagent-tree)
-              environmentLabel={props.environmentLabel} // Fork add-on(compact-cards)
-              environmentMachine={props.environmentMachine} // Fork add-on(compact-cards)
-              isRemote={isRemote} // Fork add-on(compact-cards)
-              terminalStatusIcon={terminalStatusIcon} // Fork add-on(compact-cards)
-              prBadge={prBadge} // Fork add-on(compact-cards)
-              diff={diff} // Fork add-on(compact-cards)
-              providerStack /* Fork add-on(compact-cards) */={
-                <SidebarProviderStack
-                  thread={thread}
-                  providerEntryByInstanceId={props.providerEntryByInstanceId}
-                />
-              } // Fork add-on(compact-cards)
-            />
+            {forkSlots.threadCardMeta ? ( // Fork add-on(core)
+              <forkSlots.threadCardMeta
+                thread={thread}
+                threadKey={threadKey}
+                subagentCount={props.subagentCount} // Fork add-on(subagent-tree)
+                environmentLabel={props.environmentLabel}
+                environmentMachine={props.environmentMachine}
+                isRemote={isRemote}
+                terminalStatusIcon={terminalStatusIcon}
+                prBadge={prBadge}
+                diff={diff}
+                providerStack={
+                  <SidebarProviderStack
+                    thread={thread}
+                    providerEntryByInstanceId={props.providerEntryByInstanceId}
+                  />
+                }
+              />
+            ) : (
+              metaLine
+            )}
           </div>
         </TooltipTrigger>
         {detailsTooltip}

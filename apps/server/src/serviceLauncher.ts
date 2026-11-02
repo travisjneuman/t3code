@@ -17,9 +17,9 @@ import type {
   ServiceUpdateRecord,
 } from "./cloud/serviceProtocol.ts";
 import {
+  isServiceUpdateTarget, // Fork add-on(host-releases)
   decodeServiceLauncherChildMessage,
   isExactServiceVersion,
-  isServiceUpdateTarget,
   parseServiceState,
   SERVICE_ENV_FILE,
   SERVICE_LAUNCHER_CONTEXT_ENV,
@@ -544,7 +544,7 @@ export class Launcher {
     const update = this.#state.update;
     if (update?.status !== "pending") {
       if (update !== undefined) {
-        await discardDatabaseBackup(this.#baseDir, update.id).catch(reportRecoveryCleanupFailure);
+        await discardDatabaseBackup(this.#baseDir, update.id).catch(reportRecoveryCleanupFailure); // Fork add-on(host-releases)
       }
       await this.#startChild(this.#state.activeVersion, "active", update);
       return;
@@ -663,7 +663,7 @@ export class Launcher {
       await reject("The requested target is not an exact version.");
       return;
     }
-    if (!isServiceUpdateTarget(message.targetVersion, child.version)) {
+    if (!isServiceUpdateTarget(message.targetVersion, child.version)) { // Fork add-on(host-releases)
       await reject("Remote updates must select a newer server version or fork build.");
       return;
     }
@@ -739,7 +739,7 @@ export class Launcher {
     await writeServiceState(this.#statePath, next);
     this.#state = next;
     child.role = "active";
-    await discardDatabaseBackup(this.#baseDir, committed.id).catch(reportRecoveryCleanupFailure);
+    await discardDatabaseBackup(this.#baseDir, committed.id).catch(reportRecoveryCleanupFailure); // Fork add-on(host-releases)
     await sendMessage(child.process, { type: "committed", updateId: committed.id });
   }
 
@@ -798,7 +798,7 @@ export class Launcher {
       };
       await writeServiceState(this.#statePath, next);
       this.#state = next;
-      await discardDatabaseBackup(this.#baseDir, pending.id).catch(reportRecoveryCleanupFailure);
+      await discardDatabaseBackup(this.#baseDir, pending.id).catch(reportRecoveryCleanupFailure); // Fork add-on(host-releases)
     }
     // Signal listeners alone do not keep Node alive.
     this.#timer = setInterval(() => {}, 2_147_483_647);
@@ -826,7 +826,7 @@ export class Launcher {
     };
     await writeServiceState(this.#statePath, next);
     this.#state = next;
-    await discardDatabaseBackup(this.#baseDir, pending.id).catch(reportRecoveryCleanupFailure);
+    await discardDatabaseBackup(this.#baseDir, pending.id).catch(reportRecoveryCleanupFailure); // Fork add-on(host-releases)
     await this.#startChild(next.activeVersion, "active", outcome);
   }
 }

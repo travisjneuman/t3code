@@ -144,7 +144,7 @@ function providerConfigString(config: unknown, key: string): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-// These default slots run before they are configured, so they always stay listed.
+// Fork add-on(removable-providers): these default slots run before they are configured, so they always stay listed.
 // Every other built-in leaves the list once its explicit instance is removed and
 // comes back through Add provider, which reuses the free default slot id.
 const ALWAYS_LISTED_DEFAULT_DRIVERS: ReadonlySet<string> = new Set(["codex", "claudeAgent"]);
@@ -739,7 +739,7 @@ export function EnvironmentProviderSettings({
     const hasDefaultSlot = providerSettings.hasDefaultInstance || explicitInstance !== undefined;
     if (
       hasDefaultSlot &&
-      (ALWAYS_LISTED_DEFAULT_DRIVERS.has(driver) ||
+      (ALWAYS_LISTED_DEFAULT_DRIVERS.has(driver) || // Fork add-on(removable-providers)
         isDirty ||
         resolveProviderInstanceEnabled(explicitInstance ?? { driver }) ||
         defaultInstanceId === targetInstanceId)
@@ -770,7 +770,7 @@ export function EnvironmentProviderSettings({
         explicitInstance: instance,
         driver: instance.driver,
         isDefault: defaultSlotIdsBySource.has(String(id)),
-        isDirty: true,
+        isDirty: true, // Fork add-on(removable-providers)
       });
     }
   }
@@ -1073,6 +1073,7 @@ export function EnvironmentProviderSettings({
           </div>
         </SettingsGroup>
       </SettingsSection>
+
       <UsageProviderSettings
         key={environmentId}
         environmentId={environmentId}
@@ -1149,6 +1150,7 @@ export function EnvironmentProviderSettings({
         />
         <CompactIdleThreadsRow />
       </SettingsSection>
+
       {isAddInstanceDialogOpen && !readOnly ? (
         <AddProviderInstanceDialog
           open
@@ -1260,7 +1262,7 @@ function ProviderInstanceRow({
     favorite.provider === instanceId ? Result.succeed(favorite.model) : Result.failVoid,
   );
   const resetLabel = driverOption?.label ?? String(driver);
-  const isRemovableDefault = isDefault && isDirty && !ALWAYS_LISTED_DEFAULT_DRIVERS.has(driver);
+  const isRemovableDefault = isDefault && isDirty && !ALWAYS_LISTED_DEFAULT_DRIVERS.has(driver); // Fork add-on(removable-providers)
   const projectOverride = showProjectOverride
     ? {
         value: projectOverrideValue,
@@ -1365,12 +1367,12 @@ function ProviderInstanceRow({
       }
       onUpdate={(next) => actions.updateInstance(instanceId, instance, next)}
       onDelete={
-        mode === "editor" && (!isDefault || isRemovableDefault)
+        mode === "editor" && (!isDefault || isRemovableDefault) // Fork add-on(removable-providers)
           ? () => actions.deleteInstance(instanceId, instance)
           : undefined
       }
       headerAction={
-        mode === "editor" && isDefault && isDirty && !isRemovableDefault ? (
+        mode === "editor" && isDefault && isDirty && !isRemovableDefault ? ( // Fork add-on(removable-providers)
           <SettingResetButton
             label={`${resetLabel} provider settings`}
             onClick={() => actions.resetDefaultInstance(driver)}

@@ -1300,6 +1300,7 @@ export function ProviderInstanceCard({
           }
         />
       </SettingsSection>
+
       {setup || environmentFields.length > 0 ? (
         <SettingsSection title="Setup">
           {setup}
@@ -1331,6 +1332,7 @@ export function ProviderInstanceCard({
           ) : null}
         </SettingsSection>
       ) : null}
+
       {instance.driver === "codex" && readCodexSetupMode(instance.config) === "managed" ? (
         <div
           inert={readOnly}
@@ -1356,6 +1358,7 @@ export function ProviderInstanceCard({
           {runtimeFields}
         </SettingsSection>
       ) : null}
+
       <SettingsSection
         title="Environment"
         inert={readOnly || instanceLocks?.wholeEnvironment}

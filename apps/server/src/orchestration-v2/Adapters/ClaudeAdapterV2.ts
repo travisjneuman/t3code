@@ -1638,13 +1638,13 @@ export function makeClaudeQueryOptions(input: {
         ...launchAppendSystemPrompt,
       ].join("\n\n"),
     },
-    ...(deviceInstructions || input.agentScope !== undefined
+    ...(deviceInstructions || input.agentScope !== undefined // Fork add-on(agent-instructions)
       ? {
           hooks: {
             ...(deviceInstructions
               ? { SubagentStart: [{ hooks: [subagentDeviceInstructions] }] }
               : {}),
-            ...(input.agentScope === undefined
+            ...(input.agentScope === undefined // Fork add-on(agent-instructions)
               ? {}
               : {
                   PreToolUse: [

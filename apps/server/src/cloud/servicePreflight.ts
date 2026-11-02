@@ -1,5 +1,5 @@
-import { BUILD_MIGRATION_HEAD, recordedMigrations } from "../persistence/databaseMigrationHead.ts";
 import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts"; // Fork add-on(host-releases): service version includes the fork build.
+import { BUILD_MIGRATION_HEAD, recordedMigrations } from "../persistence/databaseMigrationHead.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
 export type ServicePreflightResult =

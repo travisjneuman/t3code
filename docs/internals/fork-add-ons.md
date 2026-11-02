@@ -29,7 +29,7 @@ touches upstream files, so the fork is shaped like a plug-in rather than a patch
 
 [`fork/addons.json`](../../fork/addons.json) lists every add-on: its id, tier, fork-owned `files`
 and `tests`, the upstream files it `hooks` (the files where its markers are), the upstream edits
-that cannot carry a marker, the data it adds (migrations, wire fields, settings), and `dependsOn`,
+that cannot carry a marker, the upstream lines it deletes outright, the data it adds (migrations, wire fields, settings), and `dependsOn`,
 the add-ons whose fork-owned files it imports. Every fork-owned file belongs to exactly one
 add-on. Tiers:
 
@@ -53,7 +53,7 @@ registry and the upstream file hooks it once, marked `Fork add-on(core)`. Adding
 add-on there edits the registry, not the upstream file. The contracts barrel, the WebSocket RPC
 group, server capabilities and settings, RPC handlers, scopes and span labels, the server's
 background workers, the orchestration services, the web root's hosts, the composer banners, the
-thread menu, the archived page, the fork migrations, the desktop artifact build, and the desktop
+thread menu, the archived page, the web UI's fallback slots, the fork migrations, the desktop artifact build, and the desktop
 IPC, preload, layers, menu and window each have one. `extensionPoints` in
 [`fork/addons.json`](../../fork/addons.json) lists them with the file that hooks each and the
 add-ons registered there.
@@ -101,17 +101,42 @@ it sends; removals drop ids client side, and expanding a row mounts its thread f
 Usage model rows are grouped the same way, after the merge:
 [`usageModelGroups.ts`](../../packages/shared/src/usageModelGroups.ts) wraps `mergeUsage` in
 the web's `mergeAnsweredUsage`, so the wire, the usage cache and mobile keep upstream's per-harness
-rows. The model `<tbody>` in `UsagePage.tsx` is replaced, not wrapped, by
-[`UsageModelBreakdown.tsx`](../../apps/web/src/components/usage/UsageModelBreakdown.tsx). Its
-deletion carries no marker, so an upstream sync that touches that table must port the change into
-the fork component rather than restore the deleted block. The Grok reader tags `grok-N-build-fast`
-as Fast speed without bumping upstream's scan-cache version, so Grok records cached before that
-change stay Standard until their file is re-read.
+rows; the table body is a fallback slot (below). The Grok reader tags `grok-N-build-fast` as Fast
+speed without bumping upstream's scan-cache version, so Grok records cached before that change stay
+Standard until their file is re-read.
 
-The sidebar card's meta line is replaced the same way: `SidebarThreadRow.tsx` renders
-`ThreadCardMeta` instead of upstream's meta line, and upstream's `showsScratchMachine` is
-deleted without a marker. The card always names its machine, so the fork pins upstream's
-`metaLineEmpty` to `false`; port upstream meta-line changes into `ThreadCardMeta`.
+## Fallback slots
+
+Where an add-on replaces a block of upstream UI instead of adding beside it, the upstream file
+keeps its block and renders it only while the add-on's slot in
+[`forkSlots.ts`](../../apps/web/src/forkSlots.ts) is empty. The upstream file reads `forkSlots`
+through `Fork add-on(core)` hooks, and each slot entry carries its add-on's id, so leaving the
+add-on out brings back upstream's block unchanged.
+
+- `usageModelRows`: the Usage → Breakdown → Model table body and the key a row opens the model
+  dialog by, from usage-by-model's
+  [`UsageModelBreakdown.tsx`](../../apps/web/src/components/usage/UsageModelBreakdown.tsx).
+- `threadCardMeta`: the sidebar card's meta line, from compact-cards'
+  [`ThreadCardMeta.tsx`](../../apps/web/src/fork-sidebar/ThreadCardMeta.tsx). The card always
+  names its machine, so `metaLineEmpty` is false for cards while the slot is filled.
+
+The kept block is upstream's code, so upstream changes to it merge without conflict. Port each one
+into the add-on's component in the same sync, or the fork's version drifts from upstream's.
+
+## Every upstream change is attributed
+
+Each hunk of `git diff -w -U0 <merge base>` in an upstream code file is accounted for in one of
+three ways:
+
+- an added line in it carries a marker, which names the add-on that replaced the old lines;
+- it only adds or removes closing brackets or tags;
+- it only deletes upstream lines, and each one is listed in its add-on's `upstreamDeletions` in
+  [`fork/addons.json`](../../fork/addons.json) with the reason.
+
+Prefer a marked replacement to a listed deletion: put a fork import on the line of the upstream
+import it replaces, and keep upstream blank lines. List a deletion only when nothing takes the
+line's place, such as an import that a marked change left unused. Regenerating the manifest fails
+on a hunk that fits none of these.
 
 ## RPC scopes
 
@@ -175,7 +200,8 @@ changes the OAuth grant. `stdio` wraps `runAcpMcpStdioBridge` and takes the toke
 
 Blank separator lines need no marker. Except for the `.gitignore` rule above, never add
 marker-only lines. Keep markers on real fork code in positions the formatter preserves, such as
-list elements; do not mark upstream lines merely rewrapped around a fork addition. Use comments
+list elements. An upstream line the formatter rewraps around a fork addition gets one marker only
+when `git diff -w` still shows it changed, so its hunk stays attributed. Use comments
 inside JSX expressions or tags and XML comments in SVG, never marker text in strings, template
 payloads, JSX text, or JSON.
 
