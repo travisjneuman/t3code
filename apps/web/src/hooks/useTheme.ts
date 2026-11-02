@@ -25,7 +25,7 @@ import {
   type ThemeHalves,
   type ThemePreferenceMode,
 } from "../themePalette";
-import { dispatchThemeChange } from "../remote-apps/themeChangeEvent"; // Fork add-on: remote apps.
+import { dispatchThemeChange } from "../remote-apps/themeChangeEvent"; // Fork add-on(web-apps)
 
 type Theme = ThemePreference;
 type ThemeSnapshot = {
@@ -134,7 +134,7 @@ let themeStorageReadFailure: ThemeStorageError | null = null;
 function emitChange() {
   snapshotStale = true;
   for (const listener of listeners) listener();
-  dispatchThemeChange(); // Fork add-on: remote apps.
+  dispatchThemeChange(); // Fork add-on(web-apps)
 }
 
 function getSystemDark() {

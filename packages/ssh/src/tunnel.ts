@@ -23,7 +23,7 @@ import { HttpClient } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import * as SshAuth from "./auth.ts";
-import { assertSshReleaseMirror } from "./releaseMirror.ts"; // Fork add-on: HTTPS-only release mirrors.
+import { assertSshReleaseMirror } from "./releaseMirror.ts"; // Fork add-on(host-releases): HTTPS-only release mirrors.
 import {
   baseSshArgs,
   buildSshHostSpecEffect,
@@ -800,7 +800,7 @@ export function buildRemoteT3RunnerScript(input?: RemoteT3RunnerOptions): string
   if (archiveVersion !== "" && !EXACT_ARCHIVE_VERSION.test(archiveVersion)) {
     throw new SshInvalidArchiveVersionError({ archiveVersion });
   }
-  assertSshReleaseMirror(input?.releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
+  assertSshReleaseMirror(input?.releaseBaseUrl); // Fork add-on(host-releases): HTTPS-only release mirrors.
   const releaseBaseUrl = cliReleaseDownloadBaseUrl("", input?.releaseBaseUrl ?? undefined).replace(
     /\/v$/u,
     "",

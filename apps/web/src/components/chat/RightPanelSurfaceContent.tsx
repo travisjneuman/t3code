@@ -24,7 +24,7 @@ import { PullRequestDetailPanel } from "../pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "../pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
 import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel";
-import { renderRemoteAppPanel } from "../../remote-apps/panel/RemoteAppPanelView"; // Fork add-on: remote app panel.
+import { renderRemoteAppPanel } from "../../remote-apps/panel/RemoteAppPanelView"; // Fork add-on(web-apps)
 
 const PreviewPanel = lazy(() =>
   import("../preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
@@ -233,7 +233,7 @@ export function RightPanelSurfaceContent(props: {
         </Suspense>
       );
     }
-    case "remote-app": // Fork add-on: remote app panel.
-      return renderRemoteAppPanel(surface, visible, threadRef); // Fork add-on: remote app panel.
+    case "remote-app": // Fork add-on(web-apps)
+      return renderRemoteAppPanel(surface, visible, threadRef); // Fork add-on(web-apps)
   }
 }

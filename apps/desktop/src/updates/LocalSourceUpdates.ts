@@ -54,7 +54,7 @@ export const FORK_MARKER = "Fork add-on";
 const MERGE_AGENT_RULES = [
   `${UPSTREAM_SYNC_PROMPT_PREFIX} (${UPSTREAM_REPOSITORY}) into this fork.`,
   "Keep upstream's text and code everywhere; never revert or reword an upstream change.",
-  `Every fork line in an upstream file carries "${FORK_MARKER}" on that line, not on a separate comment above a block. Preserve each fork behavior, not obsolete upstream scaffolding.`,
+  `Every fork line in an upstream file carries "${FORK_MARKER}(<id>)" on that line, naming its add-on from fork/addons.json, not on a separate comment above a block. Keep each marker's id when moving it. Preserve each fork behavior, not obsolete upstream scaffolding.`,
   `Leave no unexplained marked-line loss: move markers with moved code, and report obsolete marked lines instead of recreating removed scaffolding. Never add markers to lines that do not carry fork behavior.`,
   "Fork features live in fork-owned files. The fork's identity lives in apps/desktop/src/remote-apps/RemoteAppDistribution.ts and packages/shared/src/branding.ts.",
   "Where upstream renamed or moved code a fork add-on uses, update the add-on and every reference to the moved module or renamed identifier, not just the first.",

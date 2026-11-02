@@ -10,7 +10,7 @@ import { Command, Flag, GlobalFlag, Prompt } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
 import * as BootService from "../cloud/bootService.ts";
-import { SERVICE_RUNTIME_VERSION } from "../cloud/runtimeVersion.ts"; // Fork add-on: service version includes the fork build.
+import { SERVICE_RUNTIME_VERSION } from "../cloud/runtimeVersion.ts"; // Fork add-on(host-releases): service version includes the fork build.
 import * as ServiceProtection from "../cloud/serviceProtection.ts";
 import { compareExactServiceVersions, SERVICE_ENV_FILE } from "../cloud/serviceProtocol.ts";
 import * as ServerConfig from "../config.ts";
@@ -22,7 +22,7 @@ export const layer = (config: ServerConfig.ServerConfig["Service"]) =>
   BootService.layer({
     baseDir: config.baseDir,
     logsDir: config.logsDir,
-    cliVersion: SERVICE_RUNTIME_VERSION, // Fork add-on
+    cliVersion: SERVICE_RUNTIME_VERSION, // Fork add-on(host-releases)
   }).pipe(Layer.provide(ProcessRunner.layer), Layer.provide(FetchHttpClient.layer));
 
 export type ServiceReconcileResult =
@@ -105,11 +105,11 @@ export const reconcileService = Effect.fn("cli.service.reconcile")(function* (op
   if (
     status.installedVersion !== undefined &&
     options?.allowDowngrade !== true &&
-    compareExactServiceVersions(SERVICE_RUNTIME_VERSION, status.installedVersion) < 0 // Fork add-on
+    compareExactServiceVersions(SERVICE_RUNTIME_VERSION, status.installedVersion) < 0 // Fork add-on(host-releases)
   ) {
     return yield* new BootService.BootServiceDowngradeRefusedError({
       installedVersion: status.installedVersion,
-      targetVersion: SERVICE_RUNTIME_VERSION, // Fork add-on
+      targetVersion: SERVICE_RUNTIME_VERSION, // Fork add-on(host-releases)
     });
   }
   const plan = yield* service.install(options);
@@ -124,9 +124,9 @@ export function formatServiceChange(
   result: Extract<ServiceReconcileResult, { readonly changed: true }>,
 ): string {
   if (result.plan.handedOff === true) {
-    return `Service update to t3@${SERVICE_RUNTIME_VERSION} queued. This session will disconnect.\nLog: ${result.plan.logPath}`; // Fork add-on
+    return `Service update to t3@${SERVICE_RUNTIME_VERSION} queued. This session will disconnect.\nLog: ${result.plan.logPath}`; // Fork add-on(host-releases)
   }
-  return `Service ${result.previouslyInstalled ? "updated" : "installed"} · t3@${SERVICE_RUNTIME_VERSION}\nLog: ${result.plan.logPath}`; // Fork add-on
+  return `Service ${result.previouslyInstalled ? "updated" : "installed"} · t3@${SERVICE_RUNTIME_VERSION}\nLog: ${result.plan.logPath}`; // Fork add-on(host-releases)
 }
 
 function formatProtection(
@@ -210,7 +210,7 @@ const serviceInstallCommand = Command.make("install", serviceReconcileFlags).pip
         const result = yield* reconcileService({ allowDowngrade: flags.allowDowngrade });
         if (!result.changed) {
           yield* Console.log(
-            `T3 Code service is already installed with t3@${SERVICE_RUNTIME_VERSION} (${yield* resolveEntryPath}).`, // Fork add-on
+            `T3 Code service is already installed with t3@${SERVICE_RUNTIME_VERSION} (${yield* resolveEntryPath}).`, // Fork add-on(host-releases)
           );
           return;
         }
@@ -236,7 +236,7 @@ const serviceUpdateCommand = Command.make("update", serviceReconcileFlags).pipe(
         const result = yield* reconcileService({ allowDowngrade: flags.allowDowngrade });
         if (!result.changed) {
           yield* Console.log(
-            `T3 Code service is already using t3@${SERVICE_RUNTIME_VERSION} (${yield* resolveEntryPath}).`, // Fork add-on
+            `T3 Code service is already using t3@${SERVICE_RUNTIME_VERSION} (${yield* resolveEntryPath}).`, // Fork add-on(host-releases)
           );
           return;
         }
@@ -302,7 +302,7 @@ const serviceStatusCommand = Command.make("status", projectLocationFlags).pipe(
                 Effect.provide(ProcessRunner.layer),
               )
             : undefined;
-        yield* Console.log(formatServiceStatus(status, SERVICE_RUNTIME_VERSION, protection)); // Fork add-on
+        yield* Console.log(formatServiceStatus(status, SERVICE_RUNTIME_VERSION, protection)); // Fork add-on(host-releases)
       }),
     ),
   ),

@@ -28,9 +28,9 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
-import { queueDesktopInstallWhileBusy } from "../../maintenance-queue/desktopGate"; // Fork add-on: maintenance queue.
-import { useRefreshHostUpdateTarget } from "../../host-release/hostRelease"; // Fork add-on: host releases.
-import { hostReleaseCheckFailureNotice, useHostReleaseCheck } from "../../host-release/hostRelease"; // Fork add-on: release check states.
+import { queueDesktopInstallWhileBusy } from "../../maintenance-queue/desktopGate"; // Fork add-on(maintenance-queue)
+import { useRefreshHostUpdateTarget } from "../../host-release/hostRelease"; // Fork add-on(host-releases)
+import { hostReleaseCheckFailureNotice, useHostReleaseCheck } from "../../host-release/hostRelease"; // Fork add-on(host-releases): release check states.
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -173,7 +173,7 @@ export async function installLocalUpdate(
   reportError: ReportLocalUpdateError = toastUpdateError,
   expectedVersion?: string,
 ): Promise<boolean> {
-  if (await queueDesktopInstallWhileBusy(bridge)) return false; // Fork add-on: maintenance queue.
+  if (await queueDesktopInstallWhileBusy(bridge)) return false; // Fork add-on(maintenance-queue)
   try {
     const result = await bridge.installUpdate(expectedVersion);
     if (!result.accepted) {
@@ -234,8 +234,8 @@ function SidebarUpdateControl() {
   const localUpdateVersion =
     state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
-  const refreshHost = useRefreshHostUpdateTarget(); // Fork add-on: host releases.
-  const hostCheckNotice = hostReleaseCheckFailureNotice(useHostReleaseCheck()); // Fork add-on: release check states.
+  const refreshHost = useRefreshHostUpdateTarget(); // Fork add-on(host-releases)
+  const hostCheckNotice = hostReleaseCheckFailureNotice(useHostReleaseCheck()); // Fork add-on(host-releases): release check states.
   const runsEverything = everything.hasUpdates && !isDownloading;
   const run = useUpdateEverythingRun();
   const isRunningEverything = run !== null;
@@ -261,7 +261,7 @@ function SidebarUpdateControl() {
         : "Update available"
       : showCheckIcon
         ? "Checking for updates…"
-        : (hostCheckNotice ?? idleTooltip?.title ?? "Check for updates"); // Fork add-on: release check states.
+        : (hostCheckNotice ?? idleTooltip?.title ?? "Check for updates"); // Fork add-on(host-releases): release check states.
   const disabled = showCheckIcon
     ? true
     : runsEverything
@@ -286,7 +286,7 @@ function SidebarUpdateControl() {
   const handleAction = async () => {
     const bridge = window.desktopBridge;
     if (isInteractionDisabled) return;
-    refreshHost(); // Fork add-on: host releases.
+    refreshHost(); // Fork add-on(host-releases)
 
     if (runsEverything) {
       setIsConfirmingEverything(true);
@@ -431,7 +431,7 @@ function SidebarUpdateControl() {
     return (
       <SidebarMenuItem
         className="ml-auto flex flex-1"
-        data-update-capsule="" /* Fork add-on */
+        data-update-capsule="" /* Fork add-on(maintenance-queue) */
       >
         <SidebarUpdateCapsule
           run={run}

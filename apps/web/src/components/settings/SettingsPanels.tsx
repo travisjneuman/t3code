@@ -99,12 +99,12 @@ import {
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
-import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on
-import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on: agent instructions.
-/* Fork add-on */ import {
-  SOURCE_UPDATE_ACTION_LABELS, // Fork add-on
-  withSourceUpdateDescription, // Fork add-on
-} from "../../source-updates/sourceUpdateWording"; // Fork add-on
+import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on(save-to-notes)
+import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on(save-to-notes)
+/* Fork add-on(upstream-sync) */ import {
+  SOURCE_UPDATE_ACTION_LABELS, // Fork add-on(upstream-sync)
+  withSourceUpdateDescription, // Fork add-on(upstream-sync)
+} from "../../source-updates/sourceUpdateWording"; // Fork add-on(upstream-sync)
 import { AdvancedSettings } from "./AdvancedSettings";
 import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
 import { StorageCleanupSections } from "./StorageSettings";
@@ -288,7 +288,7 @@ function AboutVersionSection() {
       : isDesktopUpdateButtonDisabled(updateState);
 
   const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
-  if (updateState?.sourceUpdate) Object.assign(actionLabel, SOURCE_UPDATE_ACTION_LABELS); // Fork add-on: local source updates.
+  if (updateState?.sourceUpdate) Object.assign(actionLabel, SOURCE_UPDATE_ACTION_LABELS); // Fork add-on(upstream-sync)
   const statusLabel: Record<string, string> = {
     checking: "Checking…",
     downloading: "Downloading…",
@@ -299,7 +299,7 @@ function AboutVersionSection() {
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
   const description =
     action === "download" || action === "install"
-      ? withSourceUpdateDescription(updateState, "Update available.") // Fork add-on: local source updates.
+      ? withSourceUpdateDescription(updateState, "Update available.") // Fork add-on(upstream-sync)
       : (getDesktopUpdateDisabledReason(updateState, updatesDenial) ??
         "Current version of the application.");
 
@@ -1592,7 +1592,7 @@ export function ThreadsSettingsPanel() {
             />
           }
         />
-        <SaveToNotesSettingsRows /* Fork add-on */ />
+        <SaveToNotesSettingsRows /* Fork add-on(save-to-notes) */ />
       </SettingsSection>
 
       <ProjectDefaultsSettings category="general" />
@@ -1737,7 +1737,7 @@ export function ThreadsSettingsPanel() {
         </SettingsSection>
       ) : null}
 
-      <AgentInstructionsSettingsSection /* Fork add-on */ />
+      <AgentInstructionsSettingsSection /* Fork add-on(agent-instructions) */ />
 
       <SettingsSection id="text-generation" title="Text generation">
         <SettingsRow

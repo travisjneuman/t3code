@@ -67,18 +67,18 @@ interface DraftHeroHeadlineProps {
   readonly draftId: DraftId | null;
   readonly activeProjectRef: ScopedProjectRef | null;
   readonly activeProjectTitle: string | null;
-  /** Fork add-on: Hermes provider.
+  /** Fork add-on(hermes)
    * Set while a Hermes model is picked. Hermes works on its own machine, so
    * the headline names the agent and that machine instead of a project.
    */
-  readonly hermesAgent?: { readonly name: string; readonly machine: string } | null; // Fork add-on
+  readonly hermesAgent?: { readonly name: string; readonly machine: string } | null; // Fork add-on(hermes)
 }
 
 export function DraftHeroHeadline({
   draftId,
   activeProjectRef,
   activeProjectTitle,
-  hermesAgent = null, // Fork add-on: Hermes provider.
+  hermesAgent = null, // Fork add-on(hermes)
 }: DraftHeroHeadlineProps) {
   const projects = useProjects();
   const threads = useThreadShells();
@@ -406,22 +406,22 @@ export function DraftHeroHeadline({
       </Tooltip>
     ) : null;
 
-  if (hermesAgent /* Fork add-on */) {
-    /* Fork add-on */ return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center" /* Fork add-on */>
-        <h1 // Fork add-on
-          className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl" // Fork add-on
+  if (hermesAgent /* Fork add-on(hermes) */) {
+    /* Fork add-on(hermes) */ return (
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center" /* Fork add-on(hermes) */>
+        <h1 // Fork add-on(hermes)
+          className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl" // Fork add-on(hermes)
         >
-          What should {hermesAgent.name /* Fork add-on */} work on?
-        </h1 /* Fork add-on */>
-        <p // Fork add-on
-          className="mt-2 flex h-6 items-center text-muted-foreground/70 text-sm" // Fork add-on
+          What should {hermesAgent.name /* Fork add-on(hermes) */} work on?
+        </h1 /* Fork add-on(hermes) */>
+        <p // Fork add-on(hermes)
+          className="mt-2 flex h-6 items-center text-muted-foreground/70 text-sm" // Fork add-on(hermes)
         >
-          Runs on {hermesAgent.machine /* Fork add-on */}
-        </p /* Fork add-on */>
-      </div> // Fork add-on
-    ); // Fork add-on
-  } // Fork add-on
+          Runs on {hermesAgent.machine /* Fork add-on(hermes) */}
+        </p /* Fork add-on(hermes) */>
+      </div> // Fork add-on(hermes)
+    ); // Fork add-on(hermes)
+  } // Fork add-on(hermes)
   if (isScratchDraft && isTriageDraftPrompt) {
     const environment = environments.find(
       (entry) => entry.environmentId === activeProject.environmentId,

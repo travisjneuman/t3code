@@ -125,8 +125,8 @@ import {
   useThreadActions,
 } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { useScratchThreadClick } from "../fork-sidebar/useScratchThreadClick"; // Fork add-on: scratch-thread action.
-import { isBulkThreadMenuId, useBulkThreadMenu } from "../fork-sidebar/useBulkThreadMenu"; // Fork add-on: every thread action in the multi-select menu.
+import { useScratchThreadClick } from "../fork-sidebar/useScratchThreadClick"; // Fork add-on(no-project-start): scratch-thread action.
+import { isBulkThreadMenuId, useBulkThreadMenu } from "../fork-sidebar/useBulkThreadMenu"; // Fork add-on(multi-select-menu)
 import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
 import { useProjectPin } from "../hooks/useProjectGroupUpdate";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
@@ -138,7 +138,7 @@ import { useBoringSidebarEnabled, useClientSettings } from "../hooks/useSettings
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
-import { useSidebarSubagents } from "../subagents/SidebarSubagentRows"; // Fork add-on: nested subagents.
+import { useSidebarSubagents } from "../subagents/SidebarSubagentRows"; // Fork add-on(subagent-tree)
 import {
   useEnvironmentIdentities,
   useConnectedEnvironmentIds,
@@ -174,7 +174,7 @@ import type { SidebarThreadSummary } from "../types";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { cn } from "~/lib/utils";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
-import { buildDraftActionMenuItems, threadActionRequiresOperate } from "./threadActionMenu.logic"; // Fork add-on: the thread builder comes from forkThreadMenu.
+import { buildDraftActionMenuItems, threadActionRequiresOperate } from "./threadActionMenu.logic"; // Fork add-on(core): the thread builder comes from forkThreadMenu.
 import {
   applySidebarThreadDrop,
   filterSidebarV2VisibleThreads,
@@ -254,17 +254,17 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
-import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection"; // Fork add-on: read-only sessions from agents running outside T3.
-import { HermesSidebarSection } from "../hermes/HermesSidebarSection"; // Fork add-on: Hermes provider.
-import { isHermesThread } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
-import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on: session search.
-/* Fork add-on */ import {
-  forkThreadActionMenuBuilder, // Fork add-on
-  isForkThreadMenuId, // Fork add-on
-  runForkThreadMenuItem, // Fork add-on
-} from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back, open comparison.
-import "../sidebar-compact/threadCardLayout.css"; // Fork add-on: compact sidebar cards.
-import { AGENT_LINE_ICON_CLASS, AGENT_MORE_BUTTON_CLASS } from "../sidebar-compact/agentLines"; // Fork add-on: compact sidebar cards.
+import { ExternalSessionsSidebarSection } from "../external-sessions/ExternalSessionsSidebarSection"; // Fork add-on(other-agents): read-only sessions from agents running outside T3.
+import { HermesSidebarSection } from "../hermes/HermesSidebarSection"; // Fork add-on(hermes)
+import { isHermesThread } from "../hermes/hermesSessions"; // Fork add-on(hermes)
+import { SessionSearchResults } from "../session-search/SessionSearchResults"; // Fork add-on(session-search)
+/* Fork add-on(core) */ import {
+  forkThreadActionMenuBuilder, // Fork add-on(core)
+  isForkThreadMenuId, // Fork add-on(core)
+  runForkThreadMenuItem, // Fork add-on(core)
+} from "../forkThreadMenu"; // Fork add-on(core)
+import "../sidebar-compact/threadCardLayout.css"; // Fork add-on(compact-cards)
+import { AGENT_LINE_ICON_CLASS, AGENT_MORE_BUTTON_CLASS } from "../sidebar-compact/agentLines"; // Fork add-on(compact-cards)
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import {
   SidebarSearchResultRow,
@@ -356,10 +356,10 @@ type SidebarOptimisticDrop = {
 
 interface SidebarThreadPartitionInput {
   readonly threads: readonly EnvironmentThreadShell[];
-  readonly providerEntriesByEnvironment: /* Fork add-on */ ReadonlyMap<
-    string, // Fork add-on
-    ReadonlyMap<string, SidebarProviderEntry> // Fork add-on
-  >; // Fork add-on: Hermes provider classification.
+  readonly providerEntriesByEnvironment: /* Fork add-on(hermes) */ ReadonlyMap<
+    string, // Fork add-on(hermes)
+    ReadonlyMap<string, SidebarProviderEntry> // Fork add-on(hermes)
+  >; // Fork add-on(hermes): Hermes provider classification.
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   /** Tasks linked environments run for a listed thread; they show under it. */
   readonly delegatedUnderParent: ReadonlySet<string>;
@@ -427,10 +427,10 @@ function routeThreadOnly(
 
 // Separate hooks cache maps independently of later Sidebar hooks and preserve dnd-kit inputs.
 function useSidebarThreads(input: {
-  readonly providerEntriesByEnvironment: /* Fork add-on */ ReadonlyMap<
-    string, // Fork add-on
-    ReadonlyMap<string, SidebarProviderEntry> // Fork add-on
-  >; // Fork add-on: Hermes provider classification.
+  readonly providerEntriesByEnvironment: /* Fork add-on(hermes) */ ReadonlyMap<
+    string, // Fork add-on(hermes)
+    ReadonlyMap<string, SidebarProviderEntry> // Fork add-on(hermes)
+  >; // Fork add-on(hermes): Hermes provider classification.
   readonly projectScopeKey: string | null;
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
@@ -508,7 +508,7 @@ function useSidebarThreads(input: {
 
   const partition = partitionSidebarThreads({
     threads,
-    providerEntriesByEnvironment: input.providerEntriesByEnvironment, // Fork add-on: Hermes provider classification.
+    providerEntriesByEnvironment: input.providerEntriesByEnvironment, // Fork add-on(hermes): Hermes provider classification.
     scopedProjectKeys,
     delegatedUnderParent,
     serverConfigs,
@@ -656,9 +656,9 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent)
-    /* Fork add-on */ .filter(
-      (thread) => !isHermesThread(thread, input.providerEntriesByEnvironment), // Fork add-on
-    ); // Fork add-on: Hermes threads live in their own section.
+    /* Fork add-on(hermes) */ .filter(
+      (thread) => !isHermesThread(thread, input.providerEntriesByEnvironment), // Fork add-on(hermes)
+    ); // Fork add-on(hermes): Hermes threads live in their own section.
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -1033,14 +1033,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // Row callbacks capture only the handler; the rest of the context changes with the route.
   const { handleNewThread } = newThreadContext;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const startScratchThreadOnClick /* Fork add-on */ = useScratchThreadClick(
-    newThreadContext.activeThread?.environmentId ?? // Fork add-on
-      newThreadContext.activeDraftThread?.environmentId ?? // Fork add-on
-      primaryEnvironmentId, // Fork add-on
-    (/* Fork add-on */) => {
-      if (isMobile) setOpenMobile(false); // Fork add-on
-    }, // Fork add-on
-  ); // Fork add-on: scratch-thread action.
+  const startScratchThreadOnClick /* Fork add-on(no-project-start) */ = useScratchThreadClick(
+    newThreadContext.activeThread?.environmentId ?? // Fork add-on(no-project-start)
+      newThreadContext.activeDraftThread?.environmentId ?? // Fork add-on(no-project-start)
+      primaryEnvironmentId, // Fork add-on(no-project-start)
+    (/* Fork add-on(no-project-start) */) => {
+      if (isMobile) setOpenMobile(false); // Fork add-on(no-project-start)
+    }, // Fork add-on(no-project-start)
+  ); // Fork add-on(no-project-start): scratch-thread action.
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
@@ -1071,7 +1071,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [searchHighlightKey, setSearchHighlightKey] = useState<string | null>(null);
   const connectedEnvironmentIds = useConnectedEnvironmentIds();
-  const bulkThreadMenu = useBulkThreadMenu(); // Fork add-on: every thread action in the multi-select menu.
+  const bulkThreadMenu = useBulkThreadMenu(); // Fork add-on(multi-select-menu)
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
   const clearPendingFileDrop = useSidebarPendingFileDropStore((s) => s.clearPendingFileDrop);
   const [renamingThreadRef, setRenamingThreadRef] = useState<ScopedThreadRef | null>(null);
@@ -1374,7 +1374,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     pinnedKeysById,
     activeKeysById,
   } = useSidebarThreads({
-    providerEntriesByEnvironment, // Fork add-on: Hermes provider classification.
+    providerEntriesByEnvironment, // Fork add-on(hermes): Hermes provider classification.
     projectScopeKey,
     scopedProjectKeys,
     serverConfigs,
@@ -1496,12 +1496,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       params: buildThreadRouteParams(threadRef),
     });
   };
-  const forkSubagents /* Fork add-on */ = useSidebarSubagents({
-    threads, // Fork add-on
-    activeThreadKey: routeThreadKey, // Fork add-on
-    providerEntriesByEnvironment, // Fork add-on
-    onOpen: navigateToThread, // Fork add-on
-  }); // Fork add-on: nested subagents.
+  const forkSubagents /* Fork add-on(subagent-tree) */ = useSidebarSubagents({
+    threads, // Fork add-on(subagent-tree)
+    activeThreadKey: routeThreadKey, // Fork add-on(subagent-tree)
+    providerEntriesByEnvironment, // Fork add-on(subagent-tree)
+    onOpen: navigateToThread, // Fork add-on(subagent-tree)
+  }); // Fork add-on(subagent-tree)
 
   const handleThreadFileDrop = async (threadRef: ScopedThreadRef, files: File[]) => {
     const dropId = queuePendingFileDrop({ threadRef, files });
@@ -2356,7 +2356,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         timestampFormat,
         selectedThreads[0]!.environmentId,
       );
-      // Fork add-on: every thread action in the multi-select menu.
+      // Fork add-on(multi-select-menu)
       const forkBulk = bulkThreadMenu({
         threads: selectedThreads,
         settledKeys: settledThreadKeysRef.current,
@@ -2382,7 +2382,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const clicked = await settlePromise(() =>
         api.contextMenu.show(
           forkBulk.withItems([
-            // Fork add-on: every thread action in the multi-select menu.
+            // Fork add-on(multi-select-menu)
             ...(unpinMenuItem
               ? [{ ...unpinMenuItem, disabled: !canOperateThreads(pinnedSelectedThreads) }]
               : []),
@@ -2430,12 +2430,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               destructive: true,
               disabled: !canOperateThreads(selectedThreads),
             },
-          ]), // Fork add-on: every thread action in the multi-select menu.
+          ]), // Fork add-on(multi-select-menu)
           position,
         ),
       );
       if (clicked._tag === "Failure" || clicked.value === null) return;
-      if (isBulkThreadMenuId(clicked.value)) return forkBulk.run(clicked.value); // Fork add-on: every thread action in the multi-select menu.
+      if (isBulkThreadMenuId(clicked.value)) return forkBulk.run(clicked.value); // Fork add-on(multi-select-menu)
       const actionTargets =
         clicked.value === "unpin"
           ? pinnedSelectedThreads
@@ -2681,7 +2681,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 projectRef.projectId === thread.projectId,
             ),
           ) ?? null;
-        const buildThreadActionMenuItems = forkThreadActionMenuBuilder(thread); // Fork add-on: thread export, save to notes, external-session hand back.
+        const buildThreadActionMenuItems = forkThreadActionMenuBuilder(thread); // Fork add-on(core)
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
@@ -2722,8 +2722,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
-        if (isForkThreadMenuId(clicked.value) /* Fork add-on */)
-          return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on: thread export, save to notes, hand back, open comparison.
+        if (isForkThreadMenuId(clicked.value) /* Fork add-on(core) */)
+          return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on(core)
         if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
@@ -3015,7 +3015,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const showJumpHints = useThreadJumpHintsVisible(shouldShowJumpHintsNow);
 
   const handleNewThreadClick = (event?: ReactMouseEvent) => {
-    if (startScratchThreadOnClick(event)) return; // Fork add-on: plain click starts in No project; Shift keeps the current project.
+    if (startScratchThreadOnClick(event)) return; // Fork add-on(no-project-start): plain click starts in No project; Shift keeps the current project.
     if (
       boringSidebarEnabled ||
       shouldCreateNewThreadInCurrentProject(
@@ -3248,7 +3248,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               newThreadDisabled={projects.length === 0}
               newThreadShortcutLabel={newThreadShortcutLabel}
               newThreadInProjectShortcutLabel={newThreadInProjectShortcutLabel}
-              showNewThreadInProjectHint={projectGroups.length > 0} // Fork add-on: click starts in No project
+              showNewThreadInProjectHint={projectGroups.length > 0} // Fork add-on(no-project-start): click starts in No project
               searchInputRef={threadSearchInputRef}
               searchQuery={threadSearchQuery}
               onSearchQueryChange={(value) => {
@@ -3334,7 +3334,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               </p>
             )
           ) : null}
-          <SessionSearchResults query={threadSearchQuery} /* Fork add-on */ />
+          <SessionSearchResults query={threadSearchQuery} /* Fork add-on(session-search) */ />
           {!isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"
@@ -3412,7 +3412,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             snoozeSupported={serverConfigs.has(thread.environmentId)}
                             pinningSupported={serverConfigs.has(thread.environmentId)}
                             isPinned={thread.pinnedAt != null}
-                            subagentCount={forkSubagents.count(threadKey)} // Fork add-on: nested subagents.
+                            subagentCount={forkSubagents.count(threadKey)} // Fork add-on(subagent-tree)
                             dropVerb={
                               dragState?.activeKey === threadKey
                                 ? resolveSidebarDropVerb(dragState.activeSection, dragTargetSection)
@@ -3500,7 +3500,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           // Folders draw active rows in their own place below.
                           if (projectFolders !== null && item.section === "active") continue;
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
-                          items.push(...forkSubagents.render(item.key)); // Fork add-on: nested subagents.
+                          items.push(...forkSubagents.render(item.key)); // Fork add-on(subagent-tree)
                           continue;
                         }
                         if (projectFolders !== null && item.marker === "active-placeholder") {
@@ -3653,10 +3653,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             olderSettledShelf.retry();
                             showMoreSettled();
                           }}
-                          className={cn(AGENT_MORE_BUTTON_CLASS, "disabled:cursor-default")} // Fork add-on: compact sidebar cards.
+                          className={cn(AGENT_MORE_BUTTON_CLASS, "disabled:cursor-default")} // Fork add-on(compact-cards)
                         >
                           {/* Plus means "add", so revealing more uses a chevron. */}
-                          <ChevronDownIcon aria-hidden className={AGENT_LINE_ICON_CLASS} /* Fork add-on */ />
+                          <ChevronDownIcon aria-hidden className={AGENT_LINE_ICON_CLASS} /* Fork add-on(compact-cards) */ />
                           {olderSettledShelf.loading
                             ? "Loading"
                             : olderSettledShelf.failed
@@ -3701,8 +3701,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               )}
             </div>
           ) : null}
-          {!isSearchingThreads ? <HermesSidebarSection /> : null /* Fork add-on */}
-          {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null /* Fork add-on */}
+          {!isSearchingThreads ? <HermesSidebarSection /> : null /* Fork add-on(hermes) */}
+          {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null /* Fork add-on(other-agents) */}
         </SidebarGroup>
       </SidebarContent>
       <SidebarChromeFooter />

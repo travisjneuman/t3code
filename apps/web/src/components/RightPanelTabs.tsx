@@ -62,7 +62,7 @@ import {
 import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
-import { RemoteAppPanelTab } from "~/remote-apps/panel/RemoteAppPanelTab"; // Fork add-on: remote app panel.
+import { RemoteAppPanelTab } from "~/remote-apps/panel/RemoteAppPanelTab"; // Fork add-on(web-apps)
 import { cn } from "~/lib/utils";
 import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
 import { readLocalApi } from "~/localApi";
@@ -562,7 +562,7 @@ function RightPanelEmptyState(props: {
               />
             ),
           )}
-          <RemoteAppPanelTab.LauncherItems /* Fork add-on */ />
+          <RemoteAppPanelTab.LauncherItems /* Fork add-on(web-apps) */ />
         </div>
       </div>
     </div>
@@ -596,8 +596,8 @@ function surfaceTitle(
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
       return "Side chat";
-    case "remote-app": // Fork add-on: remote app panel.
-      return RemoteAppPanelTab.title(surface); // Fork add-on: remote app panel.
+    case "remote-app": // Fork add-on(web-apps)
+      return RemoteAppPanelTab.title(surface); // Fork add-on(web-apps)
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -696,8 +696,8 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
-    case "remote-app": // Fork add-on: remote app panel.
-      return <RemoteAppPanelTab.Icon surface={surface} />; // Fork add-on: remote app panel.
+    case "remote-app": // Fork add-on(web-apps)
+      return <RemoteAppPanelTab.Icon surface={surface} />; // Fork add-on(web-apps)
   }
 }
 
@@ -1467,7 +1467,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                       </SurfaceMenuItem>
                     );
                   })}
-                  <RemoteAppPanelTab.MenuItems /* Fork add-on */ />
+                  <RemoteAppPanelTab.MenuItems /* Fork add-on(web-apps) */ />
                 </MenuPopup>
               </Menu>
             ) : null}

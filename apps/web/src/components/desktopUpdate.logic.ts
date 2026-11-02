@@ -1,5 +1,5 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
-import * as SourceUpdate from "../source-updates/sourceUpdateWording"; // Fork add-on: local source updates.
+import * as SourceUpdate from "../source-updates/sourceUpdateWording"; // Fork add-on(upstream-sync)
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
@@ -88,8 +88,8 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
-  const sourceTooltip = SourceUpdate.getSourceUpdateButtonTooltip(state); // Fork add-on: local source updates.
-  if (sourceTooltip !== null) return sourceTooltip; // Fork add-on: local source updates.
+  const sourceTooltip = SourceUpdate.getSourceUpdateButtonTooltip(state); // Fork add-on(upstream-sync)
+  if (sourceTooltip !== null) return sourceTooltip; // Fork add-on(upstream-sync)
   if (
     state.notAppliedVersion !== undefined &&
     (state.status === "available" || state.status === "downloaded") &&
@@ -126,8 +126,8 @@ export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string
 export function getDesktopUpdateInstallConfirmationMessage(
   state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion">,
 ): string {
-  const sourceMessage = SourceUpdate.getSourceUpdateInstallConfirmationMessage(state); // Fork add-on: local source updates.
-  if (sourceMessage !== null) return sourceMessage; // Fork add-on: local source updates.
+  const sourceMessage = SourceUpdate.getSourceUpdateInstallConfirmationMessage(state); // Fork add-on(upstream-sync)
+  if (sourceMessage !== null) return sourceMessage; // Fork add-on(upstream-sync)
   const version = state.downloadedVersion ?? state.availableVersion;
   return `Install update${version ? ` ${version}` : ""} and restart T3 Code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.`;
 }

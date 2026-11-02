@@ -1,12 +1,12 @@
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import * as ReleaseGuards from "./cliReleaseGuards.ts"; // Fork add-on
+import * as ReleaseGuards from "./cliReleaseGuards.ts"; // Fork add-on(host-releases)
 import { compareSemverVersions } from "./semver.ts";
 
-export * from "./cliReleaseGuards.ts"; // Fork add-on: release source, HTTPS and download-size guards.
+export * from "./cliReleaseGuards.ts"; // Fork add-on(host-releases): release source, HTTPS and download-size guards.
 
-const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code"; // Fork add-on: host releases come from the fork.
+const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code"; // Fork add-on(host-releases): host releases come from the fork.
 export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
@@ -46,10 +46,10 @@ export function cliArchiveFileName(version: string, platformKey: CliArchivePlatf
 
 export function cliReleaseDownloadBaseUrl(
   version: string,
-  baseUrl: string | undefined = undefined, // Fork add-on
-  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on
+  baseUrl: string | undefined = undefined, // Fork add-on(host-releases)
+  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on(host-releases)
 ): string {
-  return ReleaseGuards.cliReleaseDownloadBaseUrl(version, baseUrl, repository); // Fork add-on
+  return ReleaseGuards.cliReleaseDownloadBaseUrl(version, baseUrl, repository); // Fork add-on(host-releases)
 }
 
 export function parseChecksums(text: string): ReadonlyMap<string, string> {
@@ -71,7 +71,7 @@ export const CLI_RELEASE_CHANNELS: ReadonlyArray<CliReleaseChannel> = [
 ];
 
 export function cliReleaseChannelOf(version: string): CliReleaseChannel {
-  // Fork add-on: fork host builds append `+<fork build>`, which keeps the channel.
+  // Fork add-on(host-releases): fork host builds append `+<fork build>`, which keeps the channel.
   const channel = /^[^-+]+-(nightly|preview)\.\d{8}\.\d+(?:\+[0-9A-Za-z.-]+)?$/.exec(version)?.[1];
   return channel === "nightly" || channel === "preview" ? channel : "stable";
 }
@@ -105,9 +105,9 @@ export function acceptsTrackSwitchRelease(
 /** Page until the channel matches; nightlies can push preview/stable releases past the first page. */
 export function cliReleaseIndexPageUrl(
   page: number,
-  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on
+  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on(host-releases)
 ): string {
-  return ReleaseGuards.cliReleaseIndexPageUrl(page, repository); // Fork add-on
+  return ReleaseGuards.cliReleaseIndexPageUrl(page, repository); // Fork add-on(host-releases)
 }
 
 /** Draft assets are not downloadable. */

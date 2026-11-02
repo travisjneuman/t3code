@@ -39,11 +39,11 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
-import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem"; // Fork add-on
-import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate"; // Fork add-on
-import { SidebarSourceSyncButton } from "~/source-updates/SidebarSourceSyncButton"; // Fork add-on
-import { MaintenanceQueueCapsule } from "~/maintenance-queue/MaintenanceQueueCapsule"; // Fork add-on: maintenance queue.
-import "../../sidebar-compact/footerButtons.css"; // Fork add-on
+import { CompareAgentsSidebarItem } from "~/compare-agents/CompareAgentsSidebarItem"; // Fork add-on(compare-agents)
+import { useT3SurfaceNavigate } from "~/remote-apps/useT3SurfaceNavigate"; // Fork add-on(web-apps)
+import { SidebarSourceSyncButton } from "~/source-updates/SidebarSourceSyncButton"; // Fork add-on(upstream-sync)
+import { MaintenanceQueueCapsule } from "~/maintenance-queue/MaintenanceQueueCapsule"; // Fork add-on(maintenance-queue)
+import "../../sidebar-compact/footerButtons.css"; // Fork add-on(compact-cards)
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -224,7 +224,7 @@ function SidebarUtilityItem({
 }
 
 const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
-  const navigate = useT3SurfaceNavigate(useNavigate()); // Fork add-on: remote apps.
+  const navigate = useT3SurfaceNavigate(useNavigate()); // Fork add-on(web-apps)
   const navigateToMainApp = useNavigateToMainApp();
   const { isMobile, setOpenMobile } = useSidebar();
   const isOnUtilityPage = useLocation({
@@ -288,10 +288,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
-          <CompareAgentsSidebarItem /* Fork add-on */ />
+          <CompareAgentsSidebarItem /* Fork add-on(compare-agents) */ />
         </>
       )}
-      <SidebarSourceSyncButton /* Fork add-on */ />
+      <SidebarSourceSyncButton /* Fork add-on(upstream-sync) */ />
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
     </SidebarMenu>
@@ -301,7 +301,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <MaintenanceQueueCapsule /> {/* Fork add-on: maintenance queue. */}
+      <MaintenanceQueueCapsule /> {/* Fork add-on(maintenance-queue) */}
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />

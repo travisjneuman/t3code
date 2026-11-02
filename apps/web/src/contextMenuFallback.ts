@@ -1,10 +1,10 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
-import { FORK_CONTEXT_MENU_ICON_PATHS } from "./forkContextMenuIcons"; // Fork add-on: menu icons.
+import { FORK_CONTEXT_MENU_ICON_PATHS } from "./forkContextMenuIcons"; // Fork add-on(core): menu icons.
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<string, string> }>> = {
-  ...FORK_CONTEXT_MENU_ICON_PATHS, // Fork add-on: menu icons.
+  ...FORK_CONTEXT_MENU_ICON_PATHS, // Fork add-on(core): menu icons.
   archive: [
     { tag: "rect", attrs: { width: "20", height: "5", x: "2", y: "3", rx: "1" } },
     { tag: "path", attrs: { d: "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" } },

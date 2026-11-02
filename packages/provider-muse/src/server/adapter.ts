@@ -78,7 +78,7 @@ import {
 } from "@t3tools/provider-core/server/attachmentPrompt";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { sessionUsageBreakdown } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
+import { sessionUsageBreakdown } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on(session-details)
 import {
   backgroundWorkNotification,
   type BackgroundWorkReport,
@@ -2072,7 +2072,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
                       harness: "Muse Code",
                       model: session.model ?? undefined,
                       reasoningEffort: effort,
-                      agentScope: { thread: turnInput.appThread, provider: MUSE_PROVIDER }, // Fork add-on: agent instructions.
+                      agentScope: { thread: turnInput.appThread, provider: MUSE_PROVIDER }, // Fork add-on(agent-instructions)
                     }),
                   },
                   ...parts,
@@ -2161,17 +2161,17 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
         hasPendingBackgroundWork: Effect.sync(
           () => observedChildren.size > 0 || wake !== undefined,
         ),
-        sessionInsights: /* Fork add-on */ {
-          contextBreakdown: ({ providerThread } /* Fork add-on */) =>
-            /* Fork add-on */ Effect.sync(
-              (/* Fork add-on */) =>
-                /* Fork add-on */ sessionUsageBreakdown(
-                  thread?.id === providerThread.id // Fork add-on
-                    ? thread.contextUsage // Fork add-on
-                    : providerThread.contextUsage, // Fork add-on
-                ), // Fork add-on
-            ), // Fork add-on
-        }, // Fork add-on: session details.
+        sessionInsights: /* Fork add-on(session-details) */ {
+          contextBreakdown: ({ providerThread } /* Fork add-on(session-details) */) =>
+            /* Fork add-on(session-details) */ Effect.sync(
+              (/* Fork add-on(session-details) */) =>
+                /* Fork add-on(session-details) */ sessionUsageBreakdown(
+                  thread?.id === providerThread.id // Fork add-on(session-details)
+                    ? thread.contextUsage // Fork add-on(session-details)
+                    : providerThread.contextUsage, // Fork add-on(session-details)
+                ), // Fork add-on(session-details)
+            ), // Fork add-on(session-details)
+        }, // Fork add-on(session-details)
         ensureThread: (args) =>
           register(args).pipe(
             commands.withPermits(1),

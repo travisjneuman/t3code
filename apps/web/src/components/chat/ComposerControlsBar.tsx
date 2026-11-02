@@ -4,10 +4,10 @@ import type { ProviderInstanceEntry } from "../../providerInstances";
 import { type AppModelOption } from "../../modelSelection";
 import { CircleAlertIcon } from "lucide-react";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
-/* Fork add-on */ import {
-  AgentThreadPresetControl, // Fork add-on
-  AgentThreadPresetMenuItems, // Fork add-on
-} from "../../agent-instructions/AgentThreadPresetControl"; // Fork add-on: agent instructions.
+/* Fork add-on(agent-instructions) */ import {
+  AgentThreadPresetControl, // Fork add-on(agent-instructions)
+  AgentThreadPresetMenuItems, // Fork add-on(agent-instructions)
+} from "../../agent-instructions/AgentThreadPresetControl"; // Fork add-on(agent-instructions)
 import { ComposerControl } from "./ComposerControl";
 import {
   ComposerFooterModeControls,
@@ -22,7 +22,7 @@ import {
   type ProviderInteractionMode,
   type RuntimeMode,
   type ServerProvider,
-  type ThreadId, // Fork add-on: agent instructions.
+  type ThreadId, // Fork add-on(agent-instructions)
 } from "@t3tools/contracts";
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { cn } from "~/lib/utils";
@@ -93,8 +93,8 @@ export function ComposerControlsBar(props: {
   onModelPickerOpenChange: (open: boolean) => void;
   modelPickerIconClassName: string | undefined;
   getModelDisabledReason: ChatComposerProps["getModelDisabledReason"];
-  modelPickerTriggerLabel?: string; // Fork add-on: Hermes provider.
-  activeThreadId: ThreadId | null; // Fork add-on: agent instructions.
+  modelPickerTriggerLabel?: string; // Fork add-on(hermes)
+  activeThreadId: ThreadId | null; // Fork add-on(agent-instructions)
 }) {
   const {
     environmentId,
@@ -143,8 +143,8 @@ export function ComposerControlsBar(props: {
     onModelPickerOpenChange,
     modelPickerIconClassName,
     getModelDisabledReason,
-    modelPickerTriggerLabel, // Fork add-on: Hermes provider.
-    activeThreadId, // Fork add-on: agent instructions.
+    modelPickerTriggerLabel, // Fork add-on(hermes)
+    activeThreadId, // Fork add-on(agent-instructions)
   } = props;
   const accessMatchesDefault = compatibleRuntimeMode === defaultRuntimeMode;
   const {
@@ -175,20 +175,20 @@ export function ComposerControlsBar(props: {
     planModeEnabled,
   });
   const effort = describeComposerEffort(traitsInput, props.effortDisplay, controlSize);
-  const agentPresetControl = activeThreadId ? ( // Fork add-on
-    <AgentThreadPresetControl // Fork add-on
-      environmentId={environmentId} // Fork add-on
-      threadId={activeThreadId} // Fork add-on
-      size={controlSize} // Fork add-on
-      hidden={composerControlsHidden || hiddenRestingBlockIds.length > 0} // Fork add-on: only the mode block overflows.
-    /> // Fork add-on
-  ) : null; // Fork add-on: agent instructions.
+  const agentPresetControl = activeThreadId ? ( // Fork add-on(agent-instructions)
+    <AgentThreadPresetControl // Fork add-on(agent-instructions)
+      environmentId={environmentId} // Fork add-on(agent-instructions)
+      threadId={activeThreadId} // Fork add-on(agent-instructions)
+      size={controlSize} // Fork add-on(agent-instructions)
+      hidden={composerControlsHidden || hiddenRestingBlockIds.length > 0} // Fork add-on(agent-instructions): only the mode block overflows.
+    /> // Fork add-on(agent-instructions)
+  ) : null; // Fork add-on(agent-instructions)
   const restingBlockDefs = showModeBlock
     ? [
         {
           id: "mode",
           content: (
-            /* Fork add-on */ <>
+            /* Fork add-on(agent-instructions) */ <>
               <ComposerFooterModeControls
                 showInteractionModeToggle={planModeUiEnabled}
                 interactionMode={interactionMode}
@@ -201,13 +201,13 @@ export function ComposerControlsBar(props: {
                 onToggleInteractionMode={toggleInteractionMode}
                 onRuntimeModeChange={handleRuntimeModeChange}
               />
-              {agentPresetControl /* Fork add-on */}{" "}
-            </> // Fork add-on: agent instructions.
+              {agentPresetControl /* Fork add-on(agent-instructions) */}{" "}
+            </> // Fork add-on(agent-instructions)
           ),
         },
       ]
-    : agentPresetControl // Fork add-on
-      ? [{ id: "agent-preset", content: agentPresetControl }] // Fork add-on: agent instructions.
+    : agentPresetControl // Fork add-on(agent-instructions)
+      ? [{ id: "agent-preset", content: agentPresetControl }] // Fork add-on(agent-instructions)
       : [];
   // Its own element, so typing (which rebuilds the controls around it) leaves it cached.
   const composerModelPicker = (
@@ -238,9 +238,9 @@ export function ComposerControlsBar(props: {
       instanceEntries={providerInstanceEntries}
       keybindings={keybindings}
       modelOptionsByInstance={modelOptionsByInstance}
-      {...(modelPickerTriggerLabel !== undefined // Fork add-on
-        ? { triggerLabel: modelPickerTriggerLabel } // Fork add-on
-        : {})} // Fork add-on: Hermes provider.
+      {...(modelPickerTriggerLabel !== undefined // Fork add-on(hermes)
+        ? { triggerLabel: modelPickerTriggerLabel } // Fork add-on(hermes)
+        : {})} // Fork add-on(hermes)
       size={controlSize}
       triggerClassName={cn(
         "group/model-trigger",
@@ -336,14 +336,14 @@ export function ComposerControlsBar(props: {
             showInteractionModeToggle={planModeUiEnabled && hiddenRestingBlockIds.length > 0}
             // Permissions join the overflow only when their normal home is in it.
             showPermissions={overflowShowsPermissions}
-            forkMenuContent /* Fork add-on */={
-              activeThreadId && hiddenRestingBlockIds.length > 0 ? ( // Fork add-on
-                <AgentThreadPresetMenuItems // Fork add-on
-                  environmentId={environmentId} // Fork add-on
-                  threadId={activeThreadId} // Fork add-on
-                /> // Fork add-on
-              ) : undefined // Fork add-on
-            } // Fork add-on: agent instructions.
+            forkMenuContent /* Fork add-on(agent-instructions) */={
+              activeThreadId && hiddenRestingBlockIds.length > 0 ? ( // Fork add-on(agent-instructions)
+                <AgentThreadPresetMenuItems // Fork add-on(agent-instructions)
+                  environmentId={environmentId} // Fork add-on(agent-instructions)
+                  threadId={activeThreadId} // Fork add-on(agent-instructions)
+                /> // Fork add-on(agent-instructions)
+              ) : undefined // Fork add-on(agent-instructions)
+            } // Fork add-on(agent-instructions)
             onToggleInteractionMode={toggleInteractionMode}
             onRuntimeModeChange={handleRuntimeModeChange}
           />

@@ -8,14 +8,14 @@ import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as McpAppRequests from "../mcpApps/McpAppRequests.ts";
-import * as SessionInsights from "../sessionInsights/SessionInsights.ts"; // Fork add-on: session details.
+import * as SessionInsights from "../sessionInsights/SessionInsights.ts"; // Fork add-on(session-details)
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as AgentSessionImporter from "../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../project/AgentSessionScanner.ts";
-import * as ExternalSessions from "../external-sessions/ExternalSessions.ts"; // Fork add-on: external sessions.
-import * as HermesSessions from "../hermes/HermesSessions.ts"; // Fork add-on: Hermes provider.
+import * as ExternalSessions from "../external-sessions/ExternalSessions.ts"; // Fork add-on(other-agents)
+import * as HermesSessions from "../hermes/HermesSessions.ts"; // Fork add-on(hermes)
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -357,17 +357,17 @@ const layerMcpAppRequestsProvided = McpAppRequests.layer.pipe(
   ),
 );
 
-const layerSessionInsightsProvided /* Fork add-on */ = SessionInsights.layer.pipe(
-  /* Fork add-on */ Layer.provide(
-    Layer.mergeAll(layerThreadManagementProvided, layerProviderSessionManagerProvided), // Fork add-on
-  ), // Fork add-on
-); // Fork add-on
+const layerSessionInsightsProvided /* Fork add-on(session-details) */ = SessionInsights.layer.pipe(
+  /* Fork add-on(session-details) */ Layer.provide(
+    Layer.mergeAll(layerThreadManagementProvided, layerProviderSessionManagerProvided), // Fork add-on(session-details)
+  ), // Fork add-on(session-details)
+); // Fork add-on(session-details)
 
 export const layer = Layer.mergeAll(
   layerCommandOutputHubProvided,
   layerOrchestratorProvided,
   layerMcpAppRequestsProvided,
-  layerSessionInsightsProvided, // Fork add-on: session details.
+  layerSessionInsightsProvided, // Fork add-on(session-details)
   layerThreadManagementProvided,
   layerEffectWorkerProvided,
   layerProviderSessionManagerProvided,
@@ -400,29 +400,29 @@ export const layerProduction = Layer.mergeAll(
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
-  /* Fork add-on: read-only sessions from agents running outside T3. */ ExternalSessions.layer.pipe(
-    /* Fork add-on */ Layer.provide(
-      /* Fork add-on */ Layer.mergeAll(
-        layerProjectService, // Fork add-on
-        layerOrchestratorProvided, // Fork add-on
-        layerEventSink, // Fork add-on
-        layerEventStoreProvided, // Fork add-on
-        IdAllocator.layer, // Fork add-on
-        ProviderSessionRuntime.layer, // Fork add-on
-      ), // Fork add-on
-    ), // Fork add-on
-  ), // Fork add-on
-  /* Fork add-on: Hermes provider. */ HermesSessions.layer.pipe(
-    /* Fork add-on */ Layer.provide(
-      /* Fork add-on */ Layer.mergeAll(
-        layerOrchestratorProvided, // Fork add-on
-        layerEventSink, // Fork add-on
-        layerManagedProjectFoldersProvided, // Fork add-on
-        IdAllocator.layer, // Fork add-on
-        TurnItemPositionStore.layer, // Fork add-on
-      ), // Fork add-on
-    ), // Fork add-on
-  ), // Fork add-on
+  /* Fork add-on(other-agents): read-only sessions from agents running outside T3. */ ExternalSessions.layer.pipe(
+    /* Fork add-on(other-agents) */ Layer.provide(
+      /* Fork add-on(other-agents) */ Layer.mergeAll(
+        layerProjectService, // Fork add-on(other-agents)
+        layerOrchestratorProvided, // Fork add-on(other-agents)
+        layerEventSink, // Fork add-on(other-agents)
+        layerEventStoreProvided, // Fork add-on(other-agents)
+        IdAllocator.layer, // Fork add-on(other-agents)
+        ProviderSessionRuntime.layer, // Fork add-on(other-agents)
+      ), // Fork add-on(other-agents)
+    ), // Fork add-on(other-agents)
+  ), // Fork add-on(other-agents)
+  /* Fork add-on(hermes) */ HermesSessions.layer.pipe(
+    /* Fork add-on(hermes) */ Layer.provide(
+      /* Fork add-on(hermes) */ Layer.mergeAll(
+        layerOrchestratorProvided, // Fork add-on(hermes)
+        layerEventSink, // Fork add-on(hermes)
+        layerManagedProjectFoldersProvided, // Fork add-on(hermes)
+        IdAllocator.layer, // Fork add-on(hermes)
+        TurnItemPositionStore.layer, // Fork add-on(hermes)
+      ), // Fork add-on(hermes)
+    ), // Fork add-on(hermes)
+  ), // Fork add-on(hermes)
 ).pipe(
   Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),
   Layer.provide(Scheduler.layer),

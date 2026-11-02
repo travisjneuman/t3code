@@ -61,7 +61,7 @@ import {
   resolveClaudeHomePath,
 } from "./ClaudeHome.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import { withClaudeNativeChannel } from "./claudeNativeLatestVersion.ts"; // Fork add-on: native release channel
+import { withClaudeNativeChannel } from "./claudeNativeLatestVersion.ts"; // Fork add-on(claude-release-channel): native release channel
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
@@ -150,7 +150,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
       }).pipe(
-        Effect.flatMap(withClaudeNativeChannel(httpClient, effectiveConfig, processEnv)), // Fork add-on: native release channel
+        Effect.flatMap(withClaudeNativeChannel(httpClient, effectiveConfig, processEnv)), // Fork add-on(claude-release-channel): native release channel
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),

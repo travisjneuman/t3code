@@ -23,7 +23,7 @@ import {
   ArchivedThreadsHeading,
   hideArchivedSubagents,
   ThreadStorageBytes,
-} from "../../thread-retention/ThreadRetentionSections"; // Fork add-on: thread retention.
+} from "../../thread-retention/ThreadRetentionSections"; // Fork add-on(thread-retention)
 
 export function ArchivedThreadsPanel() {
   const { scope, groups: projectGroups, environments } = useSettingsScope();
@@ -60,7 +60,7 @@ export function ArchivedThreadsPanel() {
       }),
     );
     const threads = archivedSnapshots.flatMap(({ environmentId, snapshot }) =>
-      // Fork add-on: thread retention.
+      // Fork add-on(thread-retention)
       hideArchivedSubagents(snapshot.threads).map((thread) => ({
         ...presentThreadShell(environmentId, thread),
         environmentLabel: environmentLabels.get(environmentId) ?? environmentId,
@@ -179,7 +179,7 @@ export function ArchivedThreadsPanel() {
   return (
     <SettingsPageContainer>
       {archivedGroups.length > 0 ? <ArchivedThreadsHeading /> : null}
-      {/* Fork add-on: thread retention. */}
+      {/* Fork add-on(thread-retention) */}
       {archivedGroups.length === 0 ? (
         <SettingsSection
           id={isLoadingArchive ? undefined : searchableSetting("archive").id}
@@ -251,7 +251,7 @@ export function ArchivedThreadsPanel() {
                     {" \u00b7 Created "}
                     <RelativeTime timestamp={thread.createdAt} />
                     <ThreadStorageBytes environmentId={thread.environmentId} threadId={thread.id} />
-                    {/* Fork add-on: thread retention. */}
+                    {/* Fork add-on(thread-retention) */}
                   </span>
                 }
                 control={

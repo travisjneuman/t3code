@@ -807,28 +807,28 @@ const make = Effect.gen(function* () {
     );
   });
 
-  // Fork add-on: Hermes provider. Hermes runs on its own machine, so a new
+  // Fork add-on(hermes): Hermes runs on its own machine, so a new
   // Hermes thread lives in the Scratch project whatever project it began in.
-  const hermesInScratch /* Fork add-on */ = Effect.fn("ThreadLaunchService.hermesInScratch")(
-    /* Fork add-on */ function* (
-      input: ThreadLaunchInput, // Fork add-on
-    ) /* Fork add-on */ {
-      if (input.reuseExistingThread === true) return input; // Fork add-on
-      const providers = yield* providerRegistry.getProviders; // Fork add-on
-      const instance /* Fork add-on */ = providers.find(
-        (provider) => provider.instanceId === input.modelSelection.instanceId, // Fork add-on
-      ); // Fork add-on
-      if (instance?.driver !== "hermes") return input; // Fork add-on
-      const { projectId } /* Fork add-on */ = yield* managedFolders.ensureScratchProject.pipe(
-        Effect.mapError(mapError(input, "resolve-project")), // Fork add-on
-      ); // Fork add-on
-      return { ...input, projectId, workspaceStrategy: { type: "root" as const } }; // Fork add-on
-    }, // Fork add-on
-  ); // Fork add-on
+  const hermesInScratch /* Fork add-on(hermes) */ = Effect.fn("ThreadLaunchService.hermesInScratch")(
+    /* Fork add-on(hermes) */ function* (
+      input: ThreadLaunchInput, // Fork add-on(hermes)
+    ) /* Fork add-on(hermes) */ {
+      if (input.reuseExistingThread === true) return input; // Fork add-on(hermes)
+      const providers = yield* providerRegistry.getProviders; // Fork add-on(hermes)
+      const instance /* Fork add-on(hermes) */ = providers.find(
+        (provider) => provider.instanceId === input.modelSelection.instanceId, // Fork add-on(hermes)
+      ); // Fork add-on(hermes)
+      if (instance?.driver !== "hermes") return input; // Fork add-on(hermes)
+      const { projectId } /* Fork add-on(hermes) */ = yield* managedFolders.ensureScratchProject.pipe(
+        Effect.mapError(mapError(input, "resolve-project")), // Fork add-on(hermes)
+      ); // Fork add-on(hermes)
+      return { ...input, projectId, workspaceStrategy: { type: "root" as const } }; // Fork add-on(hermes)
+    }, // Fork add-on(hermes)
+  ); // Fork add-on(hermes)
 
   const launch: ThreadLaunchService["Service"]["launch"] = Effect.fn("ThreadLaunchService.launch")(
-    function* (requested /* Fork add-on */) {
-      const request = yield* hermesInScratch(requested); // Fork add-on: Hermes provider.
+    function* (requested /* Fork add-on(hermes) */) {
+      const request = yield* hermesInScratch(requested); // Fork add-on(hermes)
       // Scratch has no Git repository. Normalize before folder allocation so
       // durable preparation and retries use the thread's own Scratch folder.
       const input: ThreadLaunchInput =

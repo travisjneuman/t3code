@@ -25,7 +25,7 @@ import {
   isWildcardHost,
   VIRTUAL_INTERFACE,
 } from "../startupAccess.ts";
-import { isVpnTunnelEntry } from "./vpnTunnelInterfaces.ts"; // Fork add-on: VPN tunnels never advertised as LAN.
+import { isVpnTunnelEntry } from "./vpnTunnelInterfaces.ts"; // Fork add-on(vpn-lan)
 
 type NetworkInterfacesMap = ReturnType<typeof NodeOS.networkInterfaces>;
 
@@ -78,7 +78,7 @@ export function resolveBoundEndpoints(input: {
             isAdvertisableAddress(entry.address) &&
             !(input.platform === "win32" && WINDOWS_HOST_ADAPTER_MAC.test(entry.mac)),
         )
-        .filter((entry) => !isVpnTunnelEntry(entry)) // Fork add-on: VPN tunnels never advertised as LAN.
+        .filter((entry) => !isVpnTunnelEntry(entry)) // Fork add-on(vpn-lan)
         .map((entry) => entry.address)
     : [input.host!].filter(isAdvertisableAddress);
   return [...new Set(addresses)]

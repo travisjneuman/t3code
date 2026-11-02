@@ -32,7 +32,7 @@ import {
   resolveServerSelfUpdateCapability,
   supportsDesktopAppUpdate,
 } from "../../versionSkew";
-import { useHostVersionMismatch } from "../../host-release/hostRelease"; // Fork add-on: host releases.
+import { useHostVersionMismatch } from "../../host-release/hostRelease"; // Fork add-on(host-releases)
 
 export type EnvironmentUnavailableState = {
   readonly environmentId: EnvironmentId;
@@ -135,7 +135,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
     handleDisconnectActiveEnvironment,
   );
   const autoBalanceUpdateBanner = useAutoBalanceUpdateBanner(autoUpdateEnvironments);
-  const versionMismatch = useHostVersionMismatch(serverConfig); // Fork add-on: host releases.
+  const versionMismatch = useHostVersionMismatch(serverConfig); // Fork add-on(host-releases)
   const versionMismatchServerLabel =
     hasMultipleRegisteredEnvironments && activeThreadEnvironmentId !== null
       ? `${activeEnvironment?.label ?? serverConfig?.environment.label ?? activeThreadEnvironmentId} server`

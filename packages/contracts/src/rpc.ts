@@ -16,7 +16,7 @@ import {
   McpAppToolInfoInput,
   McpAppUpdateModelContextInput,
 } from "./mcpApps.ts";
-import { SessionInsights, SessionInsightsError, SessionInsightsInput } from "./sessionInsights.ts"; // Fork add-on: session details.
+import { SessionInsights, SessionInsightsError, SessionInsightsInput } from "./sessionInsights.ts"; // Fork add-on(session-details)
 import {
   PeerLink,
   PeerLinkCreateInput,
@@ -404,16 +404,16 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
-import { ExternalSessionsRpcs } from "./externalSessions.ts"; // Fork add-on: external sessions.
-import { SessionSearchRpc } from "./sessionSearch.ts"; // Fork add-on: session search.
-import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on: thread export.
-import { SaveToNotesRpcs } from "./saveToNotes.ts"; // Fork add-on: save to notes.
-import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on: compare agents.
-import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
-import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
-import { HostBackupsRpcs } from "./hostBackups.ts"; // Fork add-on: host backups.
-import { ExistingCheckoutRpcs } from "./existingCheckout.ts"; // Fork add-on: existing checkout.
-import { ThreadRetentionRpcs } from "./threadRetention.ts"; // Fork add-on: thread retention.
+import { ExternalSessionsRpcs } from "./externalSessions.ts"; // Fork add-on(other-agents)
+import { SessionSearchRpc } from "./sessionSearch.ts"; // Fork add-on(session-search)
+import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on(thread-export)
+import { SaveToNotesRpcs } from "./saveToNotes.ts"; // Fork add-on(save-to-notes)
+import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on(compare-agents)
+import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on(hermes)
+import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts"; // Fork add-on(maintenance-queue)
+import { HostBackupsRpcs } from "./hostBackups.ts"; // Fork add-on(host-backups)
+import { ExistingCheckoutRpcs } from "./existingCheckout.ts"; // Fork add-on(existing-checkout)
+import { ThreadRetentionRpcs } from "./threadRetention.ts"; // Fork add-on(thread-retention)
 
 export const WS_METHODS = {
   projectsListEntries: "projects.listEntries",
@@ -443,7 +443,7 @@ export const WS_METHODS = {
   mcpAppsReadResource: "mcpApps.readResource",
   mcpAppsUpdateModelContext: "mcpApps.updateModelContext",
 
-  sessionInsightsGet: "sessionInsights.get", // Fork add-on: session details.
+  sessionInsightsGet: "sessionInsights.get", // Fork add-on(session-details)
 
   providerUploadFeedback: "provider.uploadFeedback",
   providerAuthStart: "provider.auth.start",
@@ -1434,11 +1434,11 @@ const WsMcpAppsUpdateModelContextRpc = Rpc.make(WS_METHODS.mcpAppsUpdateModelCon
   error: Schema.Union([McpAppRequestError, EnvironmentAuthorizationError]),
 });
 
-const WsSessionInsightsGetRpc /* Fork add-on */ = Rpc.make(WS_METHODS.sessionInsightsGet, {
-  payload: SessionInsightsInput, // Fork add-on
-  success: SessionInsights, // Fork add-on
-  error: Schema.Union([SessionInsightsError, EnvironmentAuthorizationError]), // Fork add-on
-}); // Fork add-on
+const WsSessionInsightsGetRpc /* Fork add-on(session-details) */ = Rpc.make(WS_METHODS.sessionInsightsGet, {
+  payload: SessionInsightsInput, // Fork add-on(session-details)
+  success: SessionInsights, // Fork add-on(session-details)
+  error: Schema.Union([SessionInsightsError, EnvironmentAuthorizationError]), // Fork add-on(session-details)
+}); // Fork add-on(session-details)
 
 const WsMcpAppsReadResourceRpc = Rpc.make(WS_METHODS.mcpAppsReadResource, {
   payload: McpAppReadResourceInput,
@@ -2126,7 +2126,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsMcpAppsToolInfoRpc,
   WsMcpAppsReadResourceRpc,
   WsMcpAppsUpdateModelContextRpc,
-  WsSessionInsightsGetRpc, // Fork add-on: session details.
+  WsSessionInsightsGetRpc, // Fork add-on(session-details)
   WsProviderUploadFeedbackRpc,
   WsSubscribeVcsStatusRpc,
   WsSubscribeWorktreeSetupRpc,
@@ -2198,14 +2198,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
-  ...ExternalSessionsRpcs, // Fork add-on: external sessions.
-  SessionSearchRpc, // Fork add-on: session search.
-  ThreadExportRpc, // Fork add-on: thread export.
-  ...SaveToNotesRpcs, // Fork add-on: save to notes.
-  ...CompareAgentsRpcs, // Fork add-on: compare agents.
-  ...HermesSessionsRpcs, // Fork add-on: Hermes provider.
-  ...MaintenanceQueueRpcs, // Fork add-on: maintenance queue.
-  ...HostBackupsRpcs, // Fork add-on: host backups.
-  ...ExistingCheckoutRpcs, // Fork add-on: existing checkout.
-  ...ThreadRetentionRpcs, // Fork add-on: thread retention.
+  ...ExternalSessionsRpcs, // Fork add-on(other-agents)
+  SessionSearchRpc, // Fork add-on(session-search)
+  ThreadExportRpc, // Fork add-on(thread-export)
+  ...SaveToNotesRpcs, // Fork add-on(save-to-notes)
+  ...CompareAgentsRpcs, // Fork add-on(compare-agents)
+  ...HermesSessionsRpcs, // Fork add-on(hermes)
+  ...MaintenanceQueueRpcs, // Fork add-on(maintenance-queue)
+  ...HostBackupsRpcs, // Fork add-on(host-backups)
+  ...ExistingCheckoutRpcs, // Fork add-on(existing-checkout)
+  ...ThreadRetentionRpcs, // Fork add-on(thread-retention)
 ).middleware(RpcScopeAuthorization);

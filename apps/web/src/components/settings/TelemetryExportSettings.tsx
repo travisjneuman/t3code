@@ -1,9 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime"; // Fork add-on: check failure status.
+import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime"; // Fork add-on(telemetry-check-failure): check failure status.
 import type { OtlpEndpointCheckResult, OtlpSignal, ServerObservability } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { formatEnvironmentQueryError } from "../../state/query"; // Fork add-on: check failure status.
+import { formatEnvironmentQueryError } from "../../state/query"; // Fork add-on(telemetry-check-failure): check failure status.
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -54,12 +54,12 @@ function runningOverride(
   return { url, label: OVERRIDE_LABELS[source], variable: running?.[variableKey] };
 }
 
-// Fork add-on: a failed check request is kept so it doesn't fall back to "Not checked".
-type CheckRequestFailed = { readonly _tag: "CheckFailed"; readonly message: string }; // Fork add-on
+// Fork add-on(telemetry-check-failure): a failed check request is kept so it doesn't fall back to "Not checked".
+type CheckRequestFailed = { readonly _tag: "CheckFailed"; readonly message: string }; // Fork add-on(telemetry-check-failure)
 
 type EndpointCheck = {
   readonly url: string;
-  readonly result: OtlpEndpointCheckResult | CheckRequestFailed | null; // Fork add-on
+  readonly result: OtlpEndpointCheckResult | CheckRequestFailed | null; // Fork add-on(telemetry-check-failure)
 };
 
 const isHttpUrl = (url: string) => /^https?:\/\/./i.test(url);
@@ -68,11 +68,11 @@ function endpointStatus(url: string, check: EndpointCheck | undefined) {
   if (url === "") return { label: "Off", dot: "bg-muted-foreground/40" };
   if (check?.url !== url) return { label: "Not checked", dot: "bg-muted-foreground/40" };
   const { result } = check;
-  // Fork add-on: in progress is informational; amber is reserved for needs-attention.
-  if (result === null) return { label: "Checking…", dot: "bg-info" }; // Fork add-on
+  // Fork add-on(telemetry-check-failure): in progress is informational; amber is reserved for needs-attention.
+  if (result === null) return { label: "Checking…", dot: "bg-info" }; // Fork add-on(telemetry-check-failure)
   switch (result._tag) {
-    case "CheckFailed": // Fork add-on: see CheckRequestFailed.
-      return { label: "Check failed", dot: "bg-destructive", tooltip: result.message }; // Fork add-on
+    case "CheckFailed": // Fork add-on(telemetry-check-failure): see CheckRequestFailed.
+      return { label: "Check failed", dot: "bg-destructive", tooltip: result.message }; // Fork add-on(telemetry-check-failure)
     case "Accepted":
       return { label: `Connected · ${Math.round(result.latencyMs)} ms`, dot: "bg-success" };
     case "Rejected":
@@ -130,11 +130,11 @@ function TelemetryExportForm() {
       if (previous[key]?.url !== url || previous[key].result !== null) return previous;
       const next = { ...previous };
       if (response._tag === "Success") next[key] = { url, result: response.value };
-      // Fork add-on: see CheckRequestFailed.
-      else if (!isAtomCommandInterrupted(response) /* Fork add-on */) {
-        const message = formatEnvironmentQueryError(response.cause); // Fork add-on
-        next[key] = { url, result: { _tag: "CheckFailed", message } }; // Fork add-on
-      } else delete next[key]; // Fork add-on
+      // Fork add-on(telemetry-check-failure): see CheckRequestFailed.
+      else if (!isAtomCommandInterrupted(response) /* Fork add-on(telemetry-check-failure) */) {
+        const message = formatEnvironmentQueryError(response.cause); // Fork add-on(telemetry-check-failure)
+        next[key] = { url, result: { _tag: "CheckFailed", message } }; // Fork add-on(telemetry-check-failure)
+      } else delete next[key]; // Fork add-on(telemetry-check-failure)
       return next;
     });
   };
@@ -211,7 +211,7 @@ function TelemetryExportForm() {
                   {status && (
                     <ConnectionStatusDot
                       dotClassName={status.dot}
-                      tooltipText={status.tooltip ?? null} // Fork add-on: check failure detail.
+                      tooltipText={status.tooltip ?? null} // Fork add-on(telemetry-check-failure): check failure detail.
                     />
                   )}
                   <Label htmlFor={key}>{label} endpoint</Label>

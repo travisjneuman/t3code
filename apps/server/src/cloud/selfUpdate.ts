@@ -22,10 +22,10 @@ import { HttpClient } from "effect/http";
 
 import {
   CLI_RELEASE_BASE_URL_ENV,
-  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on
-  cliReleaseRepositoryOf, // Fork add-on
-  cliReleaseRepositoryProblem, // Fork add-on
-  cliReleaseBaseUrlProblem, // Fork add-on: HTTPS-only release mirrors.
+  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on(host-releases)
+  cliReleaseRepositoryOf, // Fork add-on(host-releases)
+  cliReleaseRepositoryProblem, // Fork add-on(host-releases)
+  cliReleaseBaseUrlProblem, // Fork add-on(host-releases): HTTPS-only release mirrors.
   cliReleaseChannelOf,
   crossesReleaseTrack,
 } from "@t3tools/shared/cliRelease";
@@ -138,9 +138,9 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
   const releaseBaseUrl = Option.getOrUndefined(
     yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option),
   );
-  const releaseRepositoryOverride = /* Fork add-on */ Option.getOrUndefined(
-    yield* Config.String(CLI_RELEASE_REPOSITORY_ENV).pipe(Config.option), // Fork add-on
-  ); // Fork add-on
+  const releaseRepositoryOverride = /* Fork add-on(host-releases) */ Option.getOrUndefined(
+    yield* Config.String(CLI_RELEASE_REPOSITORY_ENV).pipe(Config.option), // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
   const inFlight = yield* Ref.make(false);
 
   yield* pruneRuntimesOnStart({ baseDir: serverConfig.baseDir, managed: launcher.managed }).pipe(
@@ -199,17 +199,17 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     if (!isExactServiceVersion(targetVersion)) {
       return yield* failWith(`'${targetVersion}' is not an exact t3 version.`);
     }
-    const mirrorProblem = cliReleaseBaseUrlProblem(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
-    if (mirrorProblem) return yield* failWith(mirrorProblem); // Fork add-on
-    const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
-      releaseRepositoryOverride, // Fork add-on
-      releaseBaseUrl, // Fork add-on
-    ); // Fork add-on
-    if (repositoryProblem) return yield* failWith(repositoryProblem); // Fork add-on
-    const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
-      releaseRepositoryOverride, // Fork add-on
-      releaseBaseUrl, // Fork add-on
-    ); // Fork add-on
+    const mirrorProblem = cliReleaseBaseUrlProblem(releaseBaseUrl); // Fork add-on(host-releases): HTTPS-only release mirrors.
+    if (mirrorProblem) return yield* failWith(mirrorProblem); // Fork add-on(host-releases)
+    const repositoryProblem = /* Fork add-on(host-releases) */ cliReleaseRepositoryProblem(
+      releaseRepositoryOverride, // Fork add-on(host-releases)
+      releaseBaseUrl, // Fork add-on(host-releases)
+    ); // Fork add-on(host-releases)
+    if (repositoryProblem) return yield* failWith(repositoryProblem); // Fork add-on(host-releases)
+    const releaseRepository = /* Fork add-on(host-releases) */ cliReleaseRepositoryOf(
+      releaseRepositoryOverride, // Fork add-on(host-releases)
+      releaseBaseUrl, // Fork add-on(host-releases)
+    ); // Fork add-on(host-releases)
     if (yield* Ref.getAndSet(inFlight, true)) {
       return yield* failWith("A server update is already in progress.");
     }
@@ -226,7 +226,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
         platform,
         arch,
         releaseBaseUrl,
-        releaseRepository, // Fork add-on
+        releaseRepository, // Fork add-on(host-releases)
         validate: (runtime) =>
           runner
             .run({

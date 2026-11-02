@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { FORK_BRAND_ASSET_PATHS } from "../../../../scripts/lib/fork-brand-assets.mjs"; // Fork add-on: ndev app icon.
+import { FORK_BRAND_ASSET_PATHS } from "../../../../scripts/lib/fork-brand-assets.mjs"; // Fork add-on(ndev-icons)
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 export interface DesktopIconPaths {
@@ -62,11 +62,11 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
   return Option.none<string>();
 });
 
-// Fork add-on: ndev app icon for every brand, as repository-relative paths.
-const sourceTreeIconPaths /* Fork add-on */ = {
-  ico: FORK_BRAND_ASSET_PATHS.windowsIconIco, // Fork add-on
-  macPng: FORK_BRAND_ASSET_PATHS.macIconPng, // Fork add-on
-  universalPng: FORK_BRAND_ASSET_PATHS.universalIconPng, // Fork add-on
+// Fork add-on(ndev-icons): ndev app icon for every brand, as repository-relative paths.
+const sourceTreeIconPaths /* Fork add-on(ndev-icons) */ = {
+  ico: FORK_BRAND_ASSET_PATHS.windowsIconIco, // Fork add-on(ndev-icons)
+  macPng: FORK_BRAND_ASSET_PATHS.macIconPng, // Fork add-on(ndev-icons)
+  universalPng: FORK_BRAND_ASSET_PATHS.universalIconPng, // Fork add-on(ndev-icons)
 } as const;
 
 function resolveSourceTreeIconPath(
@@ -74,14 +74,14 @@ function resolveSourceTreeIconPath(
   ext: keyof DesktopIconPaths,
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
-  // Fork add-on: ndev app icon; no per-brand directory.
+  // Fork add-on(ndev-icons): no per-brand directory.
   const fileName =
     ext === "ico"
-      ? sourceTreeIconPaths.ico // Fork add-on
+      ? sourceTreeIconPaths.ico // Fork add-on(ndev-icons)
       : environment.platform === "darwin"
-        ? sourceTreeIconPaths.macPng // Fork add-on
-        : sourceTreeIconPaths.universalPng; // Fork add-on
-  return environment.path.join(environment.rootDir, fileName); // Fork add-on
+        ? sourceTreeIconPaths.macPng // Fork add-on(ndev-icons)
+        : sourceTreeIconPaths.universalPng; // Fork add-on(ndev-icons)
+  return environment.path.join(environment.rootDir, fileName); // Fork add-on(ndev-icons)
 }
 
 const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (

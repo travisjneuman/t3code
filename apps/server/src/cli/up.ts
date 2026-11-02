@@ -12,7 +12,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as BootService from "../cloud/bootService.ts";
 import * as CliState from "../cloud/CliState.ts";
-import { SERVICE_RUNTIME_VERSION } from "../cloud/runtimeVersion.ts"; // Fork add-on: service version includes the fork build.
+import { SERVICE_RUNTIME_VERSION } from "../cloud/runtimeVersion.ts"; // Fork add-on(host-releases): service version includes the fork build.
 import { CLOUD_ENDPOINT_RUNTIME_CONFIG, CLOUD_LINK_REVOKED } from "../cloud/config.ts";
 import { hasCloudPublicConfig } from "../cloud/publicConfig.ts";
 import { compareExactServiceVersions } from "../cloud/serviceProtocol.ts";
@@ -258,7 +258,7 @@ const setUp = Effect.fn("cli.up")(function* (flags: {
   const { installedVersion } = before.service;
   const newer =
     installedVersion !== undefined &&
-    compareExactServiceVersions(installedVersion, SERVICE_RUNTIME_VERSION) > 0; // Fork add-on
+    compareExactServiceVersions(installedVersion, SERVICE_RUNTIME_VERSION) > 0; // Fork add-on(host-releases)
   // Asked before anything changes, so a declined restart leaves service.env
   // matching what the running service read when it started.
   // A stopped service of this version is not current, so reconcile starts it;

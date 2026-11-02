@@ -266,7 +266,7 @@ export interface DesktopRuntimeInfo {
 
 export interface DesktopUpdateState {
   enabled: boolean;
-  sourceUpdate?: boolean; // Fork add-on: true when updates sync and build a local source checkout.
+  sourceUpdate?: boolean; // Fork add-on(upstream-sync): true when updates sync and build a local source checkout.
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
   currentVersion: string;
@@ -312,7 +312,7 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 
 export const DesktopUpdateStateSchema = Schema.Struct({
   enabled: Schema.Boolean,
-  sourceUpdate: Schema.optionalKey(Schema.Boolean), // Fork add-on: local source updates.
+  sourceUpdate: Schema.optionalKey(Schema.Boolean), // Fork add-on(upstream-sync)
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
   currentVersion: Schema.String,

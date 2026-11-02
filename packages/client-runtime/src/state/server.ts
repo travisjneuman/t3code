@@ -1,5 +1,5 @@
 import {
-  environmentRuntimeVersion, // Fork add-on: same-nightly fork builds.
+  environmentRuntimeVersion, // Fork add-on(host-releases): same-nightly fork builds.
   type EnvironmentId,
   type ProviderInstanceId,
   type ServerConfig,
@@ -296,7 +296,7 @@ export function serverUpdateStateForProgressEvent(
 }
 
 const runtimeVersionOf = (config: ServerConfig | null | undefined): string | null =>
-  config ? environmentRuntimeVersion(config.environment) : null; // Fork add-on
+  config ? environmentRuntimeVersion(config.environment) : null; // Fork add-on(host-releases)
 
 export function serverUpdateStateForServerVersion(
   state: ServerUpdateState,
@@ -305,7 +305,7 @@ export function serverUpdateStateForServerVersion(
   return state.status === "idle" ||
     state.status === "running" ||
     serverVersion === null ||
-    // Fork add-on: a host already on the target build has nothing left to update.
+    // Fork add-on(host-releases): a host already on the target build has nothing left to update.
     (state.fromVersion === serverVersion && state.targetVersion !== serverVersion)
     ? state
     : IDLE_SERVER_UPDATE_STATE;

@@ -3,11 +3,11 @@ import { useLayoutEffect, useRef } from "react";
 import { acquireBrowserSurface } from "./browserSurfaceStore";
 import { observeResize } from "../lib/observeResize";
 
-// Fork add-on: web pages in the narrow-window panel sheet.
+// Fork add-on(web-apps): web pages in the narrow-window panel sheet.
 // A docked sheet (the right panel in a narrow window) covers the app at
 // --z-sheet (46), so a page placed in one rises just above it. Dialogs (50 and
 // up) and the floating player's webview (48) still cover it.
-const SHEET_SURFACE_Z_INDEX = 47; // Fork add-on
+const SHEET_SURFACE_Z_INDEX = 47; // Fork add-on(web-apps)
 
 export function BrowserSurfaceSlot(props: {
   readonly tabId: string;
@@ -33,12 +33,12 @@ export function BrowserSurfaceSlot(props: {
   // The lease lives as long as this element for one tab, so the ref callback owns it.
   const attachSurface = (element: HTMLDivElement) => {
     let lease = acquireBrowserSurface(tabId, fitSourceContent);
-    const sheet = element.closest('[data-slot="sheet-popup"]'); // Fork add-on: web pages in the narrow-window panel sheet.
+    const sheet = element.closest('[data-slot="sheet-popup"]'); // Fork add-on(web-apps): web pages in the narrow-window panel sheet.
     const update = () => {
       const rect = element.getBoundingClientRect();
       const presentation = presentationRef.current;
-      const zIndex = // Fork add-on
-        sheet === null ? presentation.zIndex : Math.max(presentation.zIndex, SHEET_SURFACE_Z_INDEX); // Fork add-on
+      const zIndex = // Fork add-on(web-apps)
+        sheet === null ? presentation.zIndex : Math.max(presentation.zIndex, SHEET_SURFACE_Z_INDEX); // Fork add-on(web-apps)
       const presented = lease.present(
         {
           x: Math.round(rect.x),
@@ -48,7 +48,7 @@ export function BrowserSurfaceSlot(props: {
         },
         presentation.visible && rect.width > 0 && rect.height > 0,
         presentation.cornerRadius,
-        zIndex, // Fork add-on: web pages in the narrow-window panel sheet.
+        zIndex, // Fork add-on(web-apps): web pages in the narrow-window panel sheet.
       );
       if (presentation.visible && !presented) {
         lease.release();
@@ -62,7 +62,7 @@ export function BrowserSurfaceSlot(props: {
           },
           rect.width > 0 && rect.height > 0,
           presentation.cornerRadius,
-          zIndex, // Fork add-on: web pages in the narrow-window panel sheet.
+          zIndex, // Fork add-on(web-apps): web pages in the narrow-window panel sheet.
         );
       }
     };
@@ -75,17 +75,17 @@ export function BrowserSurfaceSlot(props: {
     // Sidebar width changes move the slot without changing its size or column offset.
     observed.push(...document.querySelectorAll('[data-slot="sidebar-gap"]'));
     const stopObserving = observeResize(observed, update);
-    // Fork add-on: web pages in the narrow-window panel sheet.
+    // Fork add-on(web-apps): web pages in the narrow-window panel sheet.
     // A sheet slides in by translation, which no resize reports; measure where it settles.
-    const onSheetTransitionEnd = (event: Event /* Fork add-on */) => {
-      if (event.target === sheet) update(); // Fork add-on
-    }; // Fork add-on
-    sheet?.addEventListener("transitionend", onSheetTransitionEnd); // Fork add-on
+    const onSheetTransitionEnd = (event: Event /* Fork add-on(web-apps) */) => {
+      if (event.target === sheet) update(); // Fork add-on(web-apps)
+    }; // Fork add-on(web-apps)
+    sheet?.addEventListener("transitionend", onSheetTransitionEnd); // Fork add-on(web-apps)
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
       stopObserving();
-      sheet?.removeEventListener("transitionend", onSheetTransitionEnd); // Fork add-on: web pages in the narrow-window panel sheet.
+      sheet?.removeEventListener("transitionend", onSheetTransitionEnd); // Fork add-on(web-apps): web pages in the narrow-window panel sheet.
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
       if (updateRef.current === update) updateRef.current = null;

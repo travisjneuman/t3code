@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import { useState } from "react";
 
-import { resolveHostVersionMismatch, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on: host releases.
+import { resolveHostVersionMismatch, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on(host-releases)
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import type { EnvironmentPresentation } from "~/state/environments";
 import { environmentUpdateStatesAtom } from "~/state/server";
@@ -37,12 +37,12 @@ export function useAutoBalanceUpdateBanner(
     const state = updateStates[index];
     return state ? [{ environment, state }] : [];
   });
-  const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on: host releases.
+  const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on(host-releases)
   const [dismissedNotices, setDismissedNotices] = useState<ReadonlySet<string | ServerUpdateState>>(
     () => new Set(),
   );
   const machines = states.flatMap(({ environment, state }) => {
-    const mismatch = resolveHostVersionMismatch(environment.serverConfig, hostUpdateTarget); // Fork add-on: host releases.
+    const mismatch = resolveHostVersionMismatch(environment.serverConfig, hostUpdateTarget); // Fork add-on(host-releases)
     const dismissKey = mismatch
       ? buildVersionMismatchDismissalKey(environment.environmentId, mismatch)
       : null;

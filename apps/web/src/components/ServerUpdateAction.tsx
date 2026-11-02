@@ -27,8 +27,8 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { serverEnvironment, updateOutdatedServer } from "~/state/server";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { useQueuedServerUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
-import { confirmHostReleaseSource, forkHostsOnly } from "~/host-release/hostReleaseGuard"; // Fork add-on: release source.
+import { useQueuedServerUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
+import { confirmHostReleaseSource, forkHostsOnly } from "~/host-release/hostReleaseGuard"; // Fork add-on(host-releases): release source.
 import { useServerConfigs } from "~/state/entities";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { environmentPresentations } from "~/state/presentation";
@@ -111,7 +111,7 @@ export type ServerUpdateOutcome =
 
 /** Toasts its success or failure unless `quiet`; never rejects. */
 export function useServerUpdate() {
-  const updateServer = useQueuedServerUpdate(serverEnvironment.updateServer); // Fork add-on: maintenance queue.
+  const updateServer = useQueuedServerUpdate(serverEnvironment.updateServer); // Fork add-on(maintenance-queue)
   return async (
     target: ServerUpdateTarget,
     { quiet = false }: { readonly quiet?: boolean } = {},
@@ -196,7 +196,7 @@ export function ServerUpdatesAction({
     pending.current = true;
     setIsPending(true);
     await settlePromise(async () => {
-      const available = forkHostsOnly(eligible /* Fork add-on: release source. */).filter(
+      const available = forkHostsOnly(eligible /* Fork add-on(host-releases): release source. */).filter(
         (target) => !pendingUpdateEnvironmentIds.has(target.environmentId),
       );
       const desktopTargets = available.filter((target) => target.selfUpdate === "desktop-managed");
@@ -306,7 +306,7 @@ export function ServerUpdateAction({
     ) {
       return;
     }
-    if (!(await confirmHostReleaseSource({ environmentId, serverLabel, targetVersion }))) return; // Fork add-on: release source.
+    if (!(await confirmHostReleaseSource({ environmentId, serverLabel, targetVersion }))) return; // Fork add-on(host-releases): release source.
     if (isDesktopAppUpdate) {
       const confirmed =
         (await requestConfirmDialog(

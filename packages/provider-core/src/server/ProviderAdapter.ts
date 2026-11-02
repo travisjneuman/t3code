@@ -1,7 +1,7 @@
 import type {
   OrchestrationV2HistoricalMessage,
-  SessionContextBreakdown, // Fork add-on: session details.
-  SessionMcpServer, // Fork add-on: session details.
+  SessionContextBreakdown, // Fork add-on(session-details)
+  SessionMcpServer, // Fork add-on(session-details)
 } from "@t3tools/contracts";
 import {
   ChatAttachment,
@@ -436,8 +436,8 @@ export interface ProviderAdapterV2OpenSessionInput {
   readonly resumeFromSession?: OrchestrationV2ProviderSession;
   readonly initialNativeThreadId?: string;
   readonly initialProviderItemIdentityVersion?: 2;
-  /** The app thread's project, for instructions fixed at process start. */ // Fork add-on: agent instructions.
-  readonly projectId?: string; // Fork add-on: agent instructions.
+  /** The app thread's project, for instructions fixed at process start. */ // Fork add-on(agent-instructions)
+  readonly projectId?: string; // Fork add-on(agent-instructions)
 }
 
 export interface ProviderAdapterV2EnsureThreadInput {
@@ -571,20 +571,20 @@ export interface ProviderAdapterV2McpApps {
   }) => Effect.Effect<{ readonly contents: ReadonlyArray<unknown> }, ProviderAdapterV2Error>;
 }
 
-/** Fork add-on: session details.
+/** Fork add-on(session-details)
  * What a live session reports about itself, read on demand. Each method is
  * optional: a provider implements only what its protocol exposes.
  */
-export interface ProviderAdapterV2SessionInsights /* Fork add-on */ {
-  /** Fork add-on: Null when the session cannot report a breakdown right now. */
-  readonly contextBreakdown?: (input: /* Fork add-on */ {
-    readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on
-  }) => Effect.Effect<SessionContextBreakdown | null, ProviderAdapterV2Error>; // Fork add-on
-  /** Fork add-on: Null when the session has no live query to ask. */
-  readonly mcpServers?: (input: /* Fork add-on */ {
-    readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on
-  }) => Effect.Effect<ReadonlyArray<SessionMcpServer> | null, ProviderAdapterV2Error>; // Fork add-on
-} // Fork add-on
+export interface ProviderAdapterV2SessionInsights /* Fork add-on(session-details) */ {
+  /** Fork add-on(session-details): Null when the session cannot report a breakdown right now. */
+  readonly contextBreakdown?: (input: /* Fork add-on(session-details) */ {
+    readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on(session-details)
+  }) => Effect.Effect<SessionContextBreakdown | null, ProviderAdapterV2Error>; // Fork add-on(session-details)
+  /** Fork add-on(session-details): Null when the session has no live query to ask. */
+  readonly mcpServers?: (input: /* Fork add-on(session-details) */ {
+    readonly providerThread: OrchestrationV2ProviderThread; // Fork add-on(session-details)
+  }) => Effect.Effect<ReadonlyArray<SessionMcpServer> | null, ProviderAdapterV2Error>; // Fork add-on(session-details)
+} // Fork add-on(session-details)
 
 export type ProviderAdapterV2SubagentOutcome = {
   readonly status: "completed" | "failed" | "cancelled";
@@ -674,11 +674,11 @@ export interface ProviderAdapterV2SessionRuntime {
   }) => Effect.Effect<{ readonly feedbackId: string }, ProviderAdapterV2Error>;
   /** Absent means non-interactive apps with plain tool rows. */
   readonly mcpApps?: ProviderAdapterV2McpApps;
-  /** Fork add-on: session details.
+  /** Fork add-on(session-details)
    * The context breakdown and MCP server list a session sidebar shows, read
    * from the live native session. Absent means the provider reports neither.
    */
-  readonly sessionInsights?: ProviderAdapterV2SessionInsights; // Fork add-on
+  readonly sessionInsights?: ProviderAdapterV2SessionInsights; // Fork add-on(session-details)
   readonly rollbackThread: (
     input: ProviderAdapterV2RollbackThreadInput,
   ) => Effect.Effect<ProviderAdapterV2ThreadSnapshot, ProviderAdapterV2Error>;

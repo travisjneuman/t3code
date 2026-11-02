@@ -77,7 +77,7 @@ export function grokUsageResponseToLimits(
     // Grok omits a zero percentage while retaining the complete subscription period.
     usedPercent = 0;
   }
-  if (usedPercent === undefined) usedPercent = 0; // Fork add-on: an omitted percentage without a full period still shows as 0% used.
+  if (usedPercent === undefined) usedPercent = 0; // Fork add-on(grok-zero-usage): an omitted percentage without a full period still shows as 0% used.
   if (usedPercent === undefined || !Number.isFinite(usedPercent)) {
     return makeUsageLimits({ checkedAt, windows: [] });
   }

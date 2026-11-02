@@ -11,18 +11,18 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
-import { forkAppScheme } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
+import { forkAppScheme } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on(identity)
 
 export const DESKTOP_HOST = "app";
-const DESKTOP_PRODUCTION_SCHEME = forkAppScheme(false); // Fork add-on: identity.
-const DESKTOP_DEVELOPMENT_SCHEME = forkAppScheme(true); // Fork add-on: identity.
+const DESKTOP_PRODUCTION_SCHEME = forkAppScheme(false); // Fork add-on(identity)
+const DESKTOP_DEVELOPMENT_SCHEME = forkAppScheme(true); // Fork add-on(identity)
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
 
-// Fork add-on: exported for the remote app tabs.
-export function getDesktopOrigin(isDevelopment: boolean /* Fork add-on */): string {
+// Fork add-on(web-apps): exported for the remote app tabs.
+export function getDesktopOrigin(isDevelopment: boolean /* Fork add-on(web-apps) */): string {
   return `${getDesktopScheme(isDevelopment)}://${DESKTOP_HOST}`;
 }
 

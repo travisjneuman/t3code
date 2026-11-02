@@ -1167,12 +1167,12 @@ export function resolveThreadStatusPill(input: {
     (thread.runtime?.status === "running" && thread.blockedOnThreadWait === true) ||
     backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])
   ) {
-    // Fork add-on: background work is still in progress, so it takes the
+    // Fork add-on(status-colors): background work is still in progress, so it takes the
     // in-progress blue rather than the grey of a finished thread.
     return {
       label: "Waiting",
-      colorClass: "text-sky-600 dark:text-sky-300/80", // Fork add-on
-      dotClass: "bg-sky-500 dark:bg-sky-300/80", // Fork add-on
+      colorClass: "text-sky-600 dark:text-sky-300/80", // Fork add-on(status-colors)
+      dotClass: "bg-sky-500 dark:bg-sky-300/80", // Fork add-on(status-colors)
       pulse: false,
     };
   }

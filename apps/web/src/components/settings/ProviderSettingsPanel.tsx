@@ -63,7 +63,7 @@ import {
 import { useEnvironmentSessionState } from "../../state/session";
 import { useProjects } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { useQueuedProviderUpdate } from "../../maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
+import { useQueuedProviderUpdate } from "../../maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
 import { useRelativeTimeState } from "../../hooks/useRelativeTimeState";
 import {
   ConnectionStatusDot,
@@ -96,8 +96,8 @@ import { IntervalSecondsField } from "./IntervalSecondsField";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { useSecretSources } from "./SecretSourceInput";
 import { UsageProviderSettings } from "./UsageProviderSettings";
-// Fork add-on: desktop web-app (remote app) visibility settings.
-import { RemoteAppSitesSettings } from "../../remote-apps/RemoteAppSitesSettings"; // Fork add-on: remote apps.
+// Fork add-on(web-apps): desktop web-app (remote app) visibility settings.
+import { RemoteAppSitesSettings } from "../../remote-apps/RemoteAppSitesSettings"; // Fork add-on(web-apps)
 import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 import { CodexSetupSection, CodexManagedRuntimeFields } from "./CodexSetupSection";
@@ -569,7 +569,7 @@ export function EnvironmentProviderSettings({
   const refreshServerProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
-  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on: maintenance queue.
+  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on(maintenance-queue)
   const uninstallAcpRegistryManagedBinary = useAtomCommand(
     serverEnvironment.uninstallAcpRegistryManagedBinary,
     { reportFailure: false },
@@ -1081,8 +1081,8 @@ export function EnvironmentProviderSettings({
         cursorKeychainUsageEnabled={settings.cursorKeychainUsageEnabled}
         readOnly={readOnly}
       />
-      {/* Fork add-on: choose which provider web apps the desktop app switcher lists. */}
-      <RemoteAppSitesSettings environmentId={environmentId} /> {/* Fork add-on: remote apps. */}
+      {/* Fork add-on(web-apps): choose which provider web apps the desktop app switcher lists. */}
+      <RemoteAppSitesSettings environmentId={environmentId} /> {/* Fork add-on(web-apps) */}
       <SettingsSection title="Advanced">
         <SettingsRow
           id={searchableSetting("provider-health-check-interval").id}

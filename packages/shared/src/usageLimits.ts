@@ -16,7 +16,7 @@ import {
 } from "@t3tools/contracts";
 
 import * as DateTime from "effect/DateTime";
-import { withForkPeriodLength } from "./forkUsagePeriods.ts"; // Fork add-on: weekly and monthly pace.
+import { withForkPeriodLength } from "./forkUsagePeriods.ts"; // Fork add-on(usage-pace)
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -624,7 +624,7 @@ function resetMillis(window: ServerProviderUsageWindow): number | null {
 }
 
 export function elapsedShare(window: ServerProviderUsageWindow, now: number): number | null {
-  window = withForkPeriodLength(window); // Fork add-on: pace for weekly and monthly windows.
+  window = withForkPeriodLength(window); // Fork add-on(usage-pace): pace for weekly and monthly windows.
   const resetsAt = resetMillis(window);
   if (resetsAt === null || window.windowDurationMins === undefined) return null;
   const length = window.windowDurationMins * MINUTE;

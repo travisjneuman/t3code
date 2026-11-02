@@ -80,12 +80,12 @@ import {
   type ServerClientSessionRecord,
 } from "~/environments/primary";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
-/* Fork add-on */ import {
-  resolveHostVersionMismatch, // Fork add-on: host releases.
-  useHostUpdateTarget, // Fork add-on: host releases.
-  useRefreshHostUpdateTarget, // Fork add-on: host releases.
-} from "~/host-release/hostRelease"; // Fork add-on: host releases.
-import { HostReleaseCheckNotice } from "~/host-release/HostReleaseCheckNotice"; // Fork add-on: release check.
+/* Fork add-on(host-releases) */ import {
+  resolveHostVersionMismatch, // Fork add-on(host-releases)
+  useHostUpdateTarget, // Fork add-on(host-releases)
+  useRefreshHostUpdateTarget, // Fork add-on(host-releases)
+} from "~/host-release/hostRelease"; // Fork add-on(host-releases)
+import { HostReleaseCheckNotice } from "~/host-release/HostReleaseCheckNotice"; // Fork add-on(host-releases): release check.
 import { useUiStateStore } from "~/uiStateStore";
 import {
   resolveServerConfigVersionMismatch,
@@ -191,13 +191,13 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
     environment,
     updateStatus: savedUpdateStates[index]!.status,
   }));
-  const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on: host releases.
-  const refreshHostUpdateTarget = useRefreshHostUpdateTarget(); // Fork add-on: host releases.
-  useEffect(() => refreshHostUpdateTarget(), [refreshHostUpdateTarget]); // Fork add-on
+  const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on(host-releases)
+  const refreshHostUpdateTarget = useRefreshHostUpdateTarget(); // Fork add-on(host-releases)
+  useEffect(() => refreshHostUpdateTarget(), [refreshHostUpdateTarget]); // Fork add-on(host-releases)
   const savedServerUpdateTargets = savedServerUpdateStates.flatMap(
     ({ environment, updateStatus }): ServerUpdateTarget[] => {
-      // Fork add-on: host releases; the compiler re-derives targets when hostUpdateTarget changes.
-      const mismatch = resolveHostVersionMismatch(environment.serverConfig, hostUpdateTarget); // Fork add-on: host releases.
+      // Fork add-on(host-releases): the compiler re-derives targets when hostUpdateTarget changes.
+      const mismatch = resolveHostVersionMismatch(environment.serverConfig, hostUpdateTarget); // Fork add-on(host-releases)
       const selfUpdate = resolveServerSelfUpdateCapability(environment.serverConfig);
       const desktopAppUpdate = supportsDesktopAppUpdate(environment.serverConfig);
       if (
@@ -1510,7 +1510,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
           </div>
         }
       >
-        {listedEnvironments.length > 0 ? <HostReleaseCheckNotice /> : null /* Fork add-on */}
+        {listedEnvironments.length > 0 ? <HostReleaseCheckNotice /> : null /* Fork add-on(host-releases) */}
         {listedEnvironments.map((environment) => (
           <SavedBackendListRow
             key={environment.environmentId}

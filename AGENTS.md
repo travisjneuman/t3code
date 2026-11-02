@@ -101,15 +101,15 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 - Bring `secrets` and `settings.json` only if the flow under test needs them.
 - Copy in, never symlink. Data flows one way: into your sandbox, never back out.
 
-Do not create test databases, data copies, backups, or duplicate owner state unless the maintainer specifically requests them. If testing is requested, use synthetic data in the isolated local `.t3` state. Never read or copy `~/.t3/userdata`, secrets, settings, sessions, or scheduled work as test fixtures without specific authorization. <!-- Fork add-on: overrides the seeding guidance above. -->
+Do not create test databases, data copies, backups, or duplicate owner state unless the maintainer specifically requests them. If testing is requested, use synthetic data in the isolated local `.t3` state. Never read or copy `~/.t3/userdata`, secrets, settings, sessions, or scheduled work as test fixtures without specific authorization. <!-- Fork add-on(owner-policy): overrides the seeding guidance above. -->
 
-## Verification <!-- Fork add-on -->
+## Verification <!-- Fork add-on(owner-policy) -->
 
-- Do not add or run tests, lint, typechecks, check scripts, validation builds, deployment rehearsals, or extra browser verification unless the maintainer specifically requests them. <!-- Fork add-on: no tests by default; overrides the Verifying guidance below. -->
-- T3 updates may create the installer's temporary database recovery copy during a version switch; remove it after success or rollback. This scoped permission does not authorize retained backups or previous builds. <!-- Fork add-on -->
-- For an authorized check, use the narrowest requested scope. Do not run repo-wide checks or add tests to a change unless they were specifically requested. <!-- Fork add-on -->
-- For requested browser review, use managed CamoFox Headless, the browser built into the agent's app, or computer use. Do not install or independently invoke Playwright or another browser-automation stack. <!-- Fork add-on -->
-- The server is event-sourced, and side effects run after the command commits. If a test is specifically requested, await the relevant persisted event or `Deferred` instead of relying on sleeps or polling. <!-- Fork add-on -->
+- Do not add or run tests, lint, typechecks, check scripts, validation builds, deployment rehearsals, or extra browser verification unless the maintainer specifically requests them. <!-- Fork add-on(owner-policy): no tests by default; overrides the Verifying guidance below. -->
+- T3 updates may create the installer's temporary database recovery copy during a version switch; remove it after success or rollback. This scoped permission does not authorize retained backups or previous builds. <!-- Fork add-on(owner-policy) -->
+- For an authorized check, use the narrowest requested scope. Do not run repo-wide checks or add tests to a change unless they were specifically requested. <!-- Fork add-on(owner-policy) -->
+- For requested browser review, use managed CamoFox Headless, the browser built into the agent's app, or computer use. Do not install or independently invoke Playwright or another browser-automation stack. <!-- Fork add-on(owner-policy) -->
+- The server is event-sourced, and side effects run after the command commits. If a test is specifically requested, await the relevant persisted event or `Deferred` instead of relying on sleeps or polling. <!-- Fork add-on(owner-policy) -->
 
 ## Verifying
 
@@ -230,5 +230,5 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 
 ## Additional tips
 
-- Perform live browser or computer-use verification only when the maintainer explicitly requests it; use one of the approved browser methods above. <!-- Fork add-on -->
+- Perform live browser or computer-use verification only when the maintainer explicitly requests it; use one of the approved browser methods above. <!-- Fork add-on(owner-policy) -->
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.

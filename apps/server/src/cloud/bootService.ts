@@ -14,14 +14,14 @@ import * as Schema from "effect/Schema";
 
 import {
   CLI_RELEASE_BASE_URL_ENV,
-  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on
-  cliReleaseRepositoryOf, // Fork add-on
-  cliReleaseRepositoryProblem, // Fork add-on
+  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on(host-releases)
+  cliReleaseRepositoryOf, // Fork add-on(host-releases)
+  cliReleaseRepositoryProblem, // Fork add-on(host-releases)
 } from "@t3tools/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
-import { releaseMirrorCheckStep, rotateBootServiceLog } from "./bootServiceGuards.ts"; // Fork add-on: mirror check, bounded log.
-import { currentRuntimePaths, syncCurrentRuntime } from "./currentRuntime.ts"; // Fork add-on: fixed runtime/current path.
+import { releaseMirrorCheckStep, rotateBootServiceLog } from "./bootServiceGuards.ts"; // Fork add-on(host-releases): mirror check, bounded log.
+import { currentRuntimePaths, syncCurrentRuntime } from "./currentRuntime.ts"; // Fork add-on(host-releases): fixed runtime/current path.
 import {
   ensurePinnedRuntimeInstalled,
   launcherOwnsVersionsDir,
@@ -542,9 +542,9 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   const releaseBaseUrl = Option.getOrUndefined(
     yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option),
   );
-  const releaseRepositoryOverride = /* Fork add-on */ Option.getOrUndefined(
-    yield* Config.String(CLI_RELEASE_REPOSITORY_ENV).pipe(Config.option), // Fork add-on
-  ); // Fork add-on
+  const releaseRepositoryOverride = /* Fork add-on(host-releases) */ Option.getOrUndefined(
+    yield* Config.String(CLI_RELEASE_REPOSITORY_ENV).pipe(Config.option), // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
   const homeDir = yield* Config.String("HOME").pipe(Config.withDefault(""));
   const installerPath = yield* Config.String("PATH").pipe(Config.withDefault(""));
   const runningInsideService =
@@ -594,7 +594,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   const logPath = path.join(input.logsDir, BOOT_SERVICE_LOG_FILE);
   const statePath = path.join(input.baseDir, "runtime", SERVICE_STATE_FILE);
   const restartPendingPath = path.join(input.baseDir, "runtime", SERVICE_RESTART_PENDING_FILE);
-  const currentRuntime = currentRuntimePaths(input.baseDir, platform); // Fork add-on: fixed runtime/current path.
+  const currentRuntime = currentRuntimePaths(input.baseDir, platform); // Fork add-on(host-releases): fixed runtime/current path.
   const writeDurably = (filePath: string, contents: string) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -615,7 +615,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       }),
     ).pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
   const plan: BootServicePlan = {
-    program: [currentRuntime.entryPath, "__service-launcher"], // Fork add-on: fixed runtime/current path.
+    program: [currentRuntime.entryPath, "__service-launcher"], // Fork add-on(host-releases): fixed runtime/current path.
     baseDir: input.baseDir,
     logPath,
     unitPath,
@@ -629,7 +629,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
 
   const logFailure = (error: { readonly message: string }) =>
     DateTime.now.pipe(
-      Effect.tap(() => rotateBootServiceLog(fs, logPath)), // Fork add-on: bounded service log.
+      Effect.tap(() => rotateBootServiceLog(fs, logPath)), // Fork add-on(host-releases): bounded service log.
       Effect.flatMap((now) =>
         fs.writeFileString(logPath, `${DateTime.formatIso(now)} ${error.message}\n`, { flag: "a" }),
       ),
@@ -741,22 +741,22 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     yield* fs
       .makeDirectory(input.logsDir, { recursive: true })
       .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
-    yield* rotateBootServiceLog(fs, logPath); // Fork add-on: bounded service log.
-    const mirrorStep = releaseMirrorCheckStep(releaseBaseUrl); // Fork add-on: HTTPS-only release mirrors.
-    if (mirrorStep) return yield* new BootServiceCommandError({ step: mirrorStep }); // Fork add-on
-    const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
-      releaseRepositoryOverride, // Fork add-on
-      releaseBaseUrl, // Fork add-on
-    ); // Fork add-on
-    if (repositoryProblem /* Fork add-on */) {
-      return yield* /* Fork add-on */ new BootServiceCommandError({
-        step: `checking the release repository: ${repositoryProblem}`, // Fork add-on
-      }); // Fork add-on
-    } // Fork add-on
-    const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
-      releaseRepositoryOverride, // Fork add-on
-      releaseBaseUrl, // Fork add-on
-    ); // Fork add-on
+    yield* rotateBootServiceLog(fs, logPath); // Fork add-on(host-releases): bounded service log.
+    const mirrorStep = releaseMirrorCheckStep(releaseBaseUrl); // Fork add-on(host-releases): HTTPS-only release mirrors.
+    if (mirrorStep) return yield* new BootServiceCommandError({ step: mirrorStep }); // Fork add-on(host-releases)
+    const repositoryProblem = /* Fork add-on(host-releases) */ cliReleaseRepositoryProblem(
+      releaseRepositoryOverride, // Fork add-on(host-releases)
+      releaseBaseUrl, // Fork add-on(host-releases)
+    ); // Fork add-on(host-releases)
+    if (repositoryProblem /* Fork add-on(host-releases) */) {
+      return yield* /* Fork add-on(host-releases) */ new BootServiceCommandError({
+        step: `checking the release repository: ${repositoryProblem}`, // Fork add-on(host-releases)
+      }); // Fork add-on(host-releases)
+    } // Fork add-on(host-releases)
+    const releaseRepository = /* Fork add-on(host-releases) */ cliReleaseRepositoryOf(
+      releaseRepositoryOverride, // Fork add-on(host-releases)
+      releaseBaseUrl, // Fork add-on(host-releases)
+    ); // Fork add-on(host-releases)
 
     if (manager.kind === "systemd") {
       yield* requireSystemdPrerequisites.pipe(Effect.tapError(logFailure));
@@ -772,7 +772,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       platform,
       arch,
       releaseBaseUrl,
-      releaseRepository, // Fork add-on
+      releaseRepository, // Fork add-on(host-releases)
       validate: (runtime) =>
         runner
           .run({
@@ -892,16 +892,16 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           return yield* new BootServiceUpdatePendingError();
         }
       }
-      // Fork add-on: the unit runs `runtime/current`, so it must exist before the unit names it.
+      // Fork add-on(host-releases): the unit runs `runtime/current`, so it must exist before the unit names it.
       // A service left running keeps its copy; its launcher moves it to the new version on its
       // next start.
-      const replaceCurrent = start || !installed; // Fork add-on
-      if (replaceCurrent || !(yield* fs.exists(currentRuntime.sentinelPath)) /* Fork add-on */) {
-        /* Fork add-on */ yield* Effect.tryPromise({
-          try: () => syncCurrentRuntime(input.baseDir, input.cliVersion, platform), // Fork add-on
-          catch: (cause) => new BootServiceInstallError({ cause }), // Fork add-on
-        }); // Fork add-on
-      } // Fork add-on
+      const replaceCurrent = start || !installed; // Fork add-on(host-releases)
+      if (replaceCurrent || !(yield* fs.exists(currentRuntime.sentinelPath)) /* Fork add-on(host-releases) */) {
+        /* Fork add-on(host-releases) */ yield* Effect.tryPromise({
+          try: () => syncCurrentRuntime(input.baseDir, input.cliVersion, platform), // Fork add-on(host-releases)
+          catch: (cause) => new BootServiceInstallError({ cause }), // Fork add-on(host-releases)
+        }); // Fork add-on(host-releases)
+      } // Fork add-on(host-releases)
       yield* writeDurably(unitPath, manager.render(plan));
 
       if (start) {
@@ -1027,7 +1027,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       fs.readFileString(runtimePaths.sentinelPath).pipe(Effect.option),
       fs.readFileString(statePath).pipe(Effect.option),
     ]);
-    const currentEntryExists = yield* fs.exists(currentRuntime.entryPath); // Fork add-on
+    const currentEntryExists = yield* fs.exists(currentRuntime.entryPath); // Fork add-on(host-releases)
     const state = Option.isSome(stateText) ? parseServiceState(stateText.value) : undefined;
     const installedVersion = Option.isSome(stateText)
       ? serviceStateActiveVersion(stateText.value)
@@ -1050,7 +1050,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         problems.length === 0 &&
         normalizeUnit(unit) === normalizeUnit(detectedManager.render(plan)) &&
         runtimeEntryExists &&
-        currentEntryExists && // Fork add-on
+        currentEntryExists && // Fork add-on(host-releases)
         Option.isSome(runtimeSentinel) &&
         runtimeSentinel.value.trim() === input.cliVersion &&
         state?.activeVersion === input.cliVersion &&

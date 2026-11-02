@@ -22,7 +22,7 @@ import {
 
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { normalizeClaudeTurnTokenUsage } from "../../provider/ClaudeTurnTokenUsage.ts";
-import * as ClaudeInsightsHooks from "./claudeInsightsHooks.ts"; // Fork add-on: session details.
+import * as ClaudeInsightsHooks from "./claudeInsightsHooks.ts"; // Fork add-on(session-details)
 import { toMcpElicitationResponse } from "../../provider/CodexMcpElicitation.ts";
 import {
   type CanUseTool,
@@ -182,11 +182,11 @@ import {
   T3_CODE_ORCHESTRATION_INSTRUCTIONS,
 } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
-/* Fork add-on */ import {
-  type ForkAgentScope, // Fork add-on
-  forkAgentBlocksNativeSubagents, // Fork add-on
-  forkAgentInstructions, // Fork add-on
-} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+/* Fork add-on(agent-instructions) */ import {
+  type ForkAgentScope, // Fork add-on(agent-instructions)
+  forkAgentBlocksNativeSubagents, // Fork add-on(agent-instructions)
+  forkAgentInstructions, // Fork add-on(agent-instructions)
+} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on(agent-instructions)
 import {
   mcpToolPresentation,
   normalizeMcpText,
@@ -539,8 +539,8 @@ export interface ClaudeAgentSdkQuerySession {
   readonly backgroundTasks: (
     toolUseId: string,
   ) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
-  readonly getContextUsage?: ClaudeInsightsHooks.ContextUsageRequest; // Fork add-on: session details.
-  readonly mcpServerStatus?: ClaudeInsightsHooks.McpServerStatusRequest; // Fork add-on: session details.
+  readonly getContextUsage?: ClaudeInsightsHooks.ContextUsageRequest; // Fork add-on(session-details)
+  readonly mcpServerStatus?: ClaudeInsightsHooks.McpServerStatusRequest; // Fork add-on(session-details)
   readonly interrupt: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly close: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
 }
@@ -745,7 +745,7 @@ export type ClaudeAgentSdkProtocolLogEvent =
         readonly taskId: string;
       };
     }
-  | ClaudeInsightsHooks.ProtocolLogEvent // Fork add-on: session details.
+  | ClaudeInsightsHooks.ProtocolLogEvent // Fork add-on(session-details)
   | {
       readonly direction: "outgoing";
       readonly stage: "decoded";
@@ -1239,7 +1239,7 @@ export const layerQueryRunner: Layer.Layer<
                   }),
                 ),
               ),
-            ...ClaudeInsightsHooks.queryRequests(queryRuntime, queryRunnerError, logProtocolEvent), // Fork add-on: session details.
+            ...ClaudeInsightsHooks.queryRequests(queryRuntime, queryRunnerError, logProtocolEvent), // Fork add-on(session-details)
             interrupt: Effect.tryPromise({
               try: () => queryRuntime.interrupt(),
               catch: (cause) => queryRunnerError(cause, "interrupt"),
@@ -1468,7 +1468,7 @@ const subagentDeviceInstructions: HookCallback = () =>
     },
   });
 
-// Fork add-on: agent instructions. Claude's own subagent tools, turned off at launch when the
+// Fork add-on(agent-instructions): Claude's own subagent tools, turned off at launch when the
 // thread's Agents settings block them, and refused live in case they change while it runs.
 const NATIVE_SUBAGENT_TOOLS: ReadonlyArray<string> = ["Agent", "Task", "Workflow"];
 
@@ -1517,7 +1517,7 @@ export function makeClaudeQueryOptions(input: {
   readonly onElicitation?: ClaudeQueryOptions["onElicitation"];
   readonly supportedDialogKinds?: ClaudeQueryOptions["supportedDialogKinds"];
   readonly allowDangerouslySkipPermissions?: boolean;
-  readonly agentScope?: ForkAgentScope; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope; // Fork add-on(agent-instructions)
   readonly appendSystemPromptFileText?: string;
   // Flag settings, because a user's settings.json env beats the process env in Claude Code.
   readonly toolSearchOverride?: "true";
@@ -1627,7 +1627,7 @@ export function makeClaudeQueryOptions(input: {
       type: "preset" as const,
       preset: "claude_code" as const,
       append: [
-        buildRuntimeInstructions({ harness: "Claude Code", agentScope: input.agentScope }) + // Fork add-on: agent instructions.
+        buildRuntimeInstructions({ harness: "Claude Code", agentScope: input.agentScope }) + // Fork add-on(agent-instructions)
           (input.mcpServers === undefined
             ? ""
             : T3_CODE_ORCHESTRATION_INSTRUCTIONS +
@@ -4165,7 +4165,7 @@ interface ClaudeLiveQueryContext {
   readonly nativeThreadId: string;
   readonly query: ClaudeAgentSdkQuerySession;
   readonly queryPolicyKey: string;
-  readonly forkAgentKey: string; // Fork add-on: agent instructions.
+  readonly forkAgentKey: string; // Fork add-on(agent-instructions)
   selection: CompiledClaudeModelSelection;
   readonly closed: Deferred.Deferred<void, never>;
   lastTurn: ActiveClaudeTurnContext | null;
@@ -10255,9 +10255,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               : { allowedTools: queryPolicy.allowedTools }),
           });
           const queryPolicyKey = claudeEffectiveQueryPolicyKey(queryPolicy, mcpOverrides);
-          const agentScope = { thread: turnInput.appThread, provider: CLAUDE_PROVIDER }; // Fork add-on
-          const forkAgentKey = forkAgentLaunchKey(agentScope); // Fork add-on: agent instructions.
-          // Fork add-on: a changed Agents setting relaunches Claude with the new prompt, except
+          const agentScope = { thread: turnInput.appThread, provider: CLAUDE_PROVIDER }; // Fork add-on(agent-instructions)
+          const forkAgentKey = forkAgentLaunchKey(agentScope); // Fork add-on(agent-instructions)
+          // Fork add-on(agent-instructions): a changed Agents setting relaunches Claude with the new prompt, except
           // while background work runs; the PreToolUse guard and delegate_task refusal still apply.
           const keepsForkAgentLaunch = (live: ClaudeLiveQueryContext) =>
             live.forkAgentKey === forkAgentKey
@@ -10284,7 +10284,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             canApplyClaudeSelectionLive(existing.selection, compiledSelection) &&
             (existing.selection.apiModelId === compiledSelection.apiModelId ||
               existing.openedPermissionMode === queryPolicy.permissionMode) &&
-            (yield* keepsForkAgentLaunch(existing)) // Fork add-on
+            (yield* keepsForkAgentLaunch(existing)) // Fork add-on(agent-instructions)
           ) {
             const live = existing;
             // Preserve launcher-selected models unless the model changed or a failed update left it unknown.
@@ -10311,7 +10311,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             existing.queryPolicyKey === queryPolicyKey &&
             !existing.stopping &&
             existing.selection.queryIdentity === compiledSelection.queryIdentity &&
-            (yield* keepsForkAgentLaunch(existing)) // Fork add-on
+            (yield* keepsForkAgentLaunch(existing)) // Fork add-on(agent-instructions)
           ) {
             // A denied ExitPlanMode leaves Claude in plan mode. Restore only from plan:
             // Auto/default may reflect a policy restriction that forbids restoring bypass.
@@ -10381,10 +10381,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const queryOptions = makeClaudeQueryOptions({
             modelSelection: turnInput.modelSelection,
             nativeThreadId,
-            agentScope, // Fork add-on: agent instructions.
-            /* Fork add-on */ ...(forkAgentBlocksNativeSubagents(agentScope)
-              ? { disallowedTools: NATIVE_SUBAGENT_TOOLS } // Fork add-on
-              : {}), // Fork add-on: agent instructions.
+            agentScope, // Fork add-on(agent-instructions)
+            /* Fork add-on(agent-instructions) */ ...(forkAgentBlocksNativeSubagents(agentScope)
+              ? { disallowedTools: NATIVE_SUBAGENT_TOOLS } // Fork add-on(agent-instructions)
+              : {}), // Fork add-on(agent-instructions)
             resume: shouldResume,
             ...(resumeSessionAt === undefined ? {} : { resumeSessionAt }),
             cwd: turnInput.runtimePolicy.cwd,
@@ -10460,7 +10460,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId,
             query: querySession,
             queryPolicyKey,
-            forkAgentKey, // Fork add-on: agent instructions.
+            forkAgentKey, // Fork add-on(agent-instructions)
             selection: compiledSelection,
             closed,
             lastTurn: null,
@@ -11342,7 +11342,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ),
             );
           }),
-          sessionInsights: ClaudeInsightsHooks.makeSessionInsights(CLAUDE_PROVIDER, queryContext), // Fork add-on: session details.
+          sessionInsights: ClaudeInsightsHooks.makeSessionInsights(CLAUDE_PROVIDER, queryContext), // Fork add-on(session-details)
           awaitBackgroundTasks: Effect.fn("ClaudeAdapterV2.awaitBackgroundTasks")(
             function* ({ providerThread, taskIds, awaited }) {
               const nativeThreadId = providerThread.nativeThreadRef?.nativeId;

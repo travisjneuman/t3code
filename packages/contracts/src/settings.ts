@@ -31,18 +31,18 @@ import {
   ProviderOptionSelections,
 } from "./model.ts";
 import { ModelSelection } from "./modelSelection.ts";
-/* Fork add-on */ import {
-  AGENT_NULLABLE_PROJECT_SETTING_KEYS, // Fork add-on
-  AGENT_PROJECT_SCOPED_SETTING_KEYS, // Fork add-on
-  AgentServerSettingsFields, // Fork add-on
-  AgentSettingsOptionalFields, // Fork add-on
-  AgentSettingsPatchFields, // Fork add-on
-} from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
-import { CodexHiddenModelsSettingFields } from "./forkCodexSettings.ts"; // Fork add-on: Codex hidden models.
+/* Fork add-on(agent-instructions) */ import {
+  AGENT_NULLABLE_PROJECT_SETTING_KEYS, // Fork add-on(agent-instructions)
+  AGENT_PROJECT_SCOPED_SETTING_KEYS, // Fork add-on(agent-instructions)
+  AgentServerSettingsFields, // Fork add-on(agent-instructions)
+  AgentSettingsOptionalFields, // Fork add-on(agent-instructions)
+  AgentSettingsPatchFields, // Fork add-on(agent-instructions)
+} from "./forkAgentSettings.ts"; // Fork add-on(agent-instructions)
+import { CodexHiddenModelsSettingFields } from "./forkCodexSettings.ts"; // Fork add-on(codex-hidden-models)
 import {
   ThreadRetentionSettingsFields,
   ThreadRetentionSettingsPatchFields,
-} from "./threadRetention.ts"; // Fork add-on: thread retention.
+} from "./threadRetention.ts"; // Fork add-on(thread-retention)
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -689,7 +689,7 @@ export const CodexSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    ...CodexHiddenModelsSettingFields, // Fork add-on: Codex hidden models.
+    ...CodexHiddenModelsSettingFields, // Fork add-on(codex-hidden-models)
   },
   {
     order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs"],
@@ -1061,7 +1061,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "sidebarAutoSettleKeepPullRequests",
   "continueThreadsAfterServerUpdate",
   "responseStreamingMode",
-  ...AGENT_PROJECT_SCOPED_SETTING_KEYS, // Fork add-on: agent instructions.
+  ...AGENT_PROJECT_SCOPED_SETTING_KEYS, // Fork add-on(agent-instructions)
 ] as const;
 export type ProjectScopedServerSettingKey = (typeof PROJECT_SCOPED_SERVER_SETTING_KEYS)[number];
 
@@ -1099,7 +1099,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
-  ...AgentSettingsOptionalFields, // Fork add-on: agent instructions.
+  ...AgentSettingsOptionalFields, // Fork add-on(agent-instructions)
   providerInstances: Schema.optionalKey(
     Schema.Record(ProviderInstanceId, ProjectProviderInstanceOverride),
   ),
@@ -1130,7 +1130,7 @@ const NULLABLE_PROJECT_SETTINGS_OVERRIDES: ReadonlySet<ProjectScopedServerSettin
   "reviewGuideModelSelection",
   "pullRequestMergeMethod",
   "sidebarAutoSettleAfterDays",
-  ...AGENT_NULLABLE_PROJECT_SETTING_KEYS, // Fork add-on: agent instructions.
+  ...AGENT_NULLABLE_PROJECT_SETTING_KEYS, // Fork add-on(agent-instructions)
 ]);
 
 /** Reclaimable bytes from which the offline `t3 doctor` repair is worth suggesting. */
@@ -1315,10 +1315,10 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
-  savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on: save to notes.
-  ...AgentServerSettingsFields, // Fork add-on: agent instructions.
-  ...ThreadRetentionSettingsFields, // Fork add-on: thread retention.
+  notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on(save-to-notes)
+  savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on(save-to-notes)
+  ...AgentServerSettingsFields, // Fork add-on(agent-instructions)
+  ...ThreadRetentionSettingsFields, // Fork add-on(thread-retention)
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1400,7 +1400,7 @@ export const providerInstanceConfigEnabledFlag = (config: unknown): boolean | un
 
 // Must match each driver's enabled decoding default.
 const DEFAULT_DISABLED_PROVIDER_DRIVERS: ReadonlySet<ProviderDriverKind> = new Set(
-  ["cursor", "grok", "fx", "muse", "pi", "opencode", "antigravity", "hermes" /* Fork add-on */].map(
+  ["cursor", "grok", "fx", "muse", "pi", "opencode", "antigravity", "hermes" /* Fork add-on(hermes) */].map(
     (driver) => ProviderDriverKind.make(driver),
   ),
 );
@@ -1677,10 +1677,10 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
-  notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
-  savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on: save to notes.
-  ...AgentSettingsPatchFields, // Fork add-on: agent instructions.
-  ...ThreadRetentionSettingsPatchFields, // Fork add-on: thread retention.
+  notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on(save-to-notes)
+  savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on(save-to-notes)
+  ...AgentSettingsPatchFields, // Fork add-on(agent-instructions)
+  ...ThreadRetentionSettingsPatchFields, // Fork add-on(thread-retention)
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),

@@ -33,7 +33,7 @@ const Catalog = Schema.Struct({
 export const chatGptModels = Effect.fn("chatGptModels")(function* (
   accessToken: string,
   nativeModels: ReadonlyArray<ServerProviderModel>,
-  includeHidden = false, // Fork add-on: Codex hidden models.
+  includeHidden = false, // Fork add-on(codex-hidden-models)
 ) {
   const http = yield* HttpClient.HttpClient;
   const response = yield* http.execute(
@@ -44,7 +44,7 @@ export const chatGptModels = Effect.fn("chatGptModels")(function* (
   if (response.status !== 200) return yield* new ChatGptCatalogError({ status: response.status });
   const catalog = yield* response.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(Catalog)));
   return catalog.models
-    .filter((model) => includeHidden || model.visibility === "list") // Fork add-on: Codex hidden models.
+    .filter((model) => includeHidden || model.visibility === "list") // Fork add-on(codex-hidden-models)
     .map((model): ServerProviderModel => {
       const native = nativeModels.find((candidate) => candidate.slug === model.slug);
       // A pinned Codex CLI can predate a model the account already has; the catalog still lists its efforts.

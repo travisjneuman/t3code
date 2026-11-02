@@ -37,7 +37,7 @@ import {
   type BranchToolbarBranchSelectorHandle,
 } from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
-import type { FixedRunLocation } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
+import type { FixedRunLocation } from "../hermes/hermesSessions"; // Fork add-on(hermes)
 import { openAddProjectToMachine } from "./AddProjectToMachineDialog";
 import { type AddProjectTarget, useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
@@ -102,7 +102,7 @@ interface BranchToolbarProps {
   trailing?: ReactNode;
   availableEnvironments?: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
-  fixedRunLocation?: FixedRunLocation | undefined; // Fork add-on: Hermes provider.
+  fixedRunLocation?: FixedRunLocation | undefined; // Fork add-on(hermes)
 }
 
 function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string) {
@@ -620,7 +620,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   availableEnvironments,
   onEnvironmentChange,
   trailing,
-  fixedRunLocation, // Fork add-on: Hermes provider.
+  fixedRunLocation, // Fork add-on(hermes)
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = scopeThreadRef(environmentId, threadId);
@@ -679,14 +679,14 @@ export const BranchToolbar = memo(function BranchToolbar({
   // A project on one machine still gets the picker when it can be added to another.
   const hasMultipleEnvironments = (availableEnvironments?.length ?? 0) > 1 || addTargets.length > 0;
   const showEnvironmentPicker =
-    hasMultipleEnvironments && onEnvironmentChange !== undefined && fixedRunLocation === undefined; // Fork add-on: Hermes keeps Run on fixed.
+    hasMultipleEnvironments && onEnvironmentChange !== undefined && fixedRunLocation === undefined; // Fork add-on(hermes): Hermes keeps Run on fixed.
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
   // Started threads get no handler but still show which machine they run on,
   // matching the strip visibility ChatView computes from the same inputs.
   const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments || fixedRunLocation !== undefined, // Fork add-on: Hermes provider.
+    canPickEnvironment: hasMultipleEnvironments || fixedRunLocation !== undefined, // Fork add-on(hermes)
   });
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 
@@ -788,7 +788,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 availableEnvironments={availableEnvironments}
                 {...(showEnvironmentPicker ? { onEnvironmentChange } : {})}
                 {...(addTargets.length > 0 ? { onAddToMachine: () => onAddToMachine(null) } : {})}
-                fixedLocation={fixedRunLocation} // Fork add-on: Hermes provider.
+                fixedLocation={fixedRunLocation} // Fork add-on(hermes)
               />
               {showGitControls ? (
                 <Separator

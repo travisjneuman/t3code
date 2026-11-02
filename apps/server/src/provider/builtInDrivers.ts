@@ -10,7 +10,7 @@ import { FxDriver, type FxDriverEnv } from "@t3tools/provider-fx/server";
 import { GrokDriver, type GrokDriverEnv } from "@t3tools/provider-grok/server";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-opencode/server";
 import { MuseDriver, type MuseDriverEnv } from "@t3tools/provider-muse/server";
-import { HermesDriver, type HermesDriverEnv } from "@t3tools/provider-hermes/server"; // Fork add-on: Hermes provider.
+import { HermesDriver, type HermesDriverEnv } from "@t3tools/provider-hermes/server"; // Fork add-on(hermes)
 import { PiDriver, type PiDriverEnv } from "@t3tools/provider-pi/server";
 import type {
   AnyProviderDriver,
@@ -28,7 +28,7 @@ export type BuiltInDriversEnv =
   | OpenCodeDriverEnv
   | PiDriverEnv
   | MuseDriverEnv
-  | HermesDriverEnv; // Fork add-on: Hermes provider.
+  | HermesDriverEnv; // Fork add-on(hermes)
 
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   CodexDriver,
@@ -40,7 +40,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   AntigravityDriver,
   PiDriver,
   MuseDriver,
-  HermesDriver, // Fork add-on: Hermes provider.
+  HermesDriver, // Fork add-on(hermes)
   AcpRegistryDriver,
 ];
 

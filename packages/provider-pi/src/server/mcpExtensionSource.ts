@@ -7,7 +7,7 @@ export const T3_MCP_URL_ENV = "T3_MCP_URL";
 export const T3_MCP_BEARER_ENV = "T3_MCP_BEARER_TOKEN";
 export const T3_PI_RUNTIME_MODE_ENV = "T3_PI_RUNTIME_MODE";
 export const T3_PI_MCP_EXTENSION_PATH_ENV = "T3_PI_MCP_EXTENSION_PATH";
-export const T3_AGENT_INSTRUCTIONS_ENV = "T3_AGENT_INSTRUCTIONS"; // Fork add-on: agent instructions.
+export const T3_AGENT_INSTRUCTIONS_ENV = "T3_AGENT_INSTRUCTIONS"; // Fork add-on(agent-instructions)
 
 // These tools trigger file-change approvals, bypassed by Auto-accept edits.
 export const PI_FILE_CHANGE_TOOLS = ["edit", "write"] as const;
@@ -469,10 +469,10 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
     const sections = event.systemPromptOptions?.sections;
     if (sections && typeof sections === "object" && event.systemPromptOptions?.forceSystemPrompt === undefined) {
       // A full prompt override bypasses Pi's later section rendering.
-      sections.t3_code_orchestration = ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV /* Fork add-on: agent instructions. */)}] ?? "");
+      sections.t3_code_orchestration = ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV /* Fork add-on(agent-instructions) */)}] ?? "");
       return undefined;
     }
-    return { systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV /* Fork add-on: agent instructions. */)}] ?? "") };
+    return { systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS + (process.env[${JSON.stringify(T3_AGENT_INSTRUCTIONS_ENV /* Fork add-on(agent-instructions) */)}] ?? "") };
   });
 }
 `;

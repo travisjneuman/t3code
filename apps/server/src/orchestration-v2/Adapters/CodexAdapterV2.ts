@@ -3,8 +3,8 @@ import * as DocumentText from "../../provider/DocumentText.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
-import * as CodexInsightsHooks from "./codexInsightsHooks.ts"; // Fork add-on: session details.
-import type { CodexTokenUsage } from "./codexSessionInsights.ts"; // Fork add-on: session details.
+import * as CodexInsightsHooks from "./codexInsightsHooks.ts"; // Fork add-on(session-details)
+import type { CodexTokenUsage } from "./codexSessionInsights.ts"; // Fork add-on(session-details)
 import {
   mcpToolPresentation,
   type McpToolPresentation,
@@ -138,10 +138,10 @@ import {
 } from "@t3tools/provider-core/server/adapterDriver";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { backgroundWorkNotification } from "@t3tools/provider-core/server/notification";
-/* Fork add-on */ import {
-  type ForkAgentScope, // Fork add-on
-  forkAgentBlocksNativeSubagents, // Fork add-on
-} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+/* Fork add-on(agent-instructions) */ import {
+  type ForkAgentScope, // Fork add-on(agent-instructions)
+  forkAgentBlocksNativeSubagents, // Fork add-on(agent-instructions)
+} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on(agent-instructions)
 import {
   makeProviderFailure,
   makeProviderFailureTurnItem,
@@ -755,7 +755,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
     /** ChatGPT token sharing does not accept service tiers. */
     readonly omitServiceTier?: boolean;
     readonly appContext?: ProviderAdapter.ProviderAdapterV2TurnInput["appContext"];
-    readonly agentScope?: ForkAgentScope; // Fork add-on: agent instructions.
+    readonly agentScope?: ForkAgentScope; // Fork add-on(agent-instructions)
   }) {
     const runtimeModeDefaults = codexRuntimeModeTurnDefaults(input.runtimePolicy.runtimeMode);
     const approvalPolicy =
@@ -788,7 +788,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
             {
               model: input.modelSelection.model,
               reasoningEffort: effort ?? undefined,
-              agentScope: input.agentScope, // Fork add-on: agent instructions.
+              agentScope: input.agentScope, // Fork add-on(agent-instructions)
             },
             {
               browser: input.browserToolsAvailable ?? true,
@@ -1362,12 +1362,12 @@ function codexThreadRuntimeParams(input: {
     ...(input.modelSelection === undefined ? {} : { model: input.modelSelection.model }),
     config: {
       ...CODEX_THREAD_CONFIG,
-      /* Fork add-on */ ...(forkAgentBlocksNativeSubagents({
-        threadId: mcpSession?.threadId, // Fork add-on
-        provider: CODEX_PROVIDER, // Fork add-on
-      }) // Fork add-on
-        ? { "features.multi_agent": false, "features.multi_agent_v2": false } // Fork add-on
-        : {}), // Fork add-on: agent instructions.
+      /* Fork add-on(agent-instructions) */ ...(forkAgentBlocksNativeSubagents({
+        threadId: mcpSession?.threadId, // Fork add-on(agent-instructions)
+        provider: CODEX_PROVIDER, // Fork add-on(agent-instructions)
+      }) // Fork add-on(agent-instructions)
+        ? { "features.multi_agent": false, "features.multi_agent_v2": false } // Fork add-on(agent-instructions)
+        : {}), // Fork add-on(agent-instructions)
       // One app-server serves many threads, so the id goes in per-thread shell config, not its env.
       ...(input.threadId === null
         ? {}
@@ -1815,7 +1815,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         );
         const activeTurns = yield* Ref.make(new Map<string, ActiveCodexTurnContext>());
         const turnTokenUsageByThread = new Map<string, CodexTurnTokenUsageState>();
-        const insightsTokenUsage = new Map<string, CodexTokenUsage>(); // Fork add-on: session details.
+        const insightsTokenUsage = new Map<string, CodexTokenUsage>(); // Fork add-on(session-details)
         const usageStateForThread = (nativeThreadId: string) => {
           let state = turnTokenUsageByThread.get(nativeThreadId);
           if (!state) {
@@ -4455,7 +4455,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
 
         yield* client.handleServerNotification("thread/tokenUsage/updated", (payload) =>
           Effect.gen(function* () {
-            insightsTokenUsage.set(payload.threadId, payload.tokenUsage); // Fork add-on: session details.
+            insightsTokenUsage.set(payload.threadId, payload.tokenUsage); // Fork add-on(session-details)
             accumulateCodexTurnTokenUsage(
               usageStateForThread(payload.threadId),
               payload.turnId,
@@ -6697,7 +6697,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
               omitServiceTier: adapterOptions.resolveRuntime !== undefined,
               ...(turnInput.appContext === undefined ? {} : { appContext: turnInput.appContext }),
-              agentScope: { thread: turnInput.appThread, provider: CODEX_PROVIDER }, // Fork add-on: agent instructions.
+              agentScope: { thread: turnInput.appThread, provider: CODEX_PROVIDER }, // Fork add-on(agent-instructions)
             });
             yield* Ref.update(pendingRootTurns, (current) => {
               const updated = new Map(current);
@@ -6941,14 +6941,14 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             Effect.mapError(mcpAppsError("Codex MCP resource read failed.")),
           ),
         };
-        /* Fork add-on */ const sessionInsights = CodexInsightsHooks.makeSessionInsights({
-          client, // Fork add-on
-          ensureInitialized, // Fork add-on
-          getNativeThreadId, // Fork add-on
-          cwd: input.runtimePolicy.cwd, // Fork add-on
-          tokenUsage: insightsTokenUsage, // Fork add-on
-          mcpServersError: mcpAppsError("Failed to list Codex MCP servers."), // Fork add-on
-        }); // Fork add-on: session details.
+        /* Fork add-on(session-details) */ const sessionInsights = CodexInsightsHooks.makeSessionInsights({
+          client, // Fork add-on(session-details)
+          ensureInitialized, // Fork add-on(session-details)
+          getNativeThreadId, // Fork add-on(session-details)
+          cwd: input.runtimePolicy.cwd, // Fork add-on(session-details)
+          tokenUsage: insightsTokenUsage, // Fork add-on(session-details)
+          mcpServersError: mcpAppsError("Failed to list Codex MCP servers."), // Fork add-on(session-details)
+        }); // Fork add-on(session-details)
 
         const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,
@@ -7760,7 +7760,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             ),
           ),
           mcpApps,
-          sessionInsights, // Fork add-on: session details.
+          sessionInsights, // Fork add-on(session-details)
           readThreadSnapshot: Effect.fn("CodexAdapterV2.readThreadSnapshot")(
             function* (threadInput) {
               const threadId = yield* getNativeThreadId(threadInput.providerThread);

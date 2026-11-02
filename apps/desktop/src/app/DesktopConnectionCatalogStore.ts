@@ -430,7 +430,7 @@ export const make = Effect.gen(function* () {
   });
 
   const migrateLegacyCatalog = Effect.gen(function* () {
-    // Fork add-on: the keychain check moved below the empty-registry check (no needless prompt).
+    // Fork add-on(keychain-free-secrets): the keychain check moved below the empty-registry check (no needless prompt).
     const records = yield* savedEnvironments.getRegistry.pipe(
       Effect.mapError(
         (cause) =>
@@ -444,7 +444,7 @@ export const make = Effect.gen(function* () {
     if (records.length === 0) {
       return Option.none<string>();
     }
-    if (!(yield* encryptionAvailable)) return Option.none<string>(); // Fork add-on: see above.
+    if (!(yield* encryptionAvailable)) return Option.none<string>(); // Fork add-on(keychain-free-secrets): see above.
     const catalog = yield* migrateSavedEnvironmentRecords(records, savedEnvironments, catalogPath);
     const encoded = yield* encodeRuntimeConnectionCatalogDocumentJson(catalog).pipe(
       Effect.mapError(
@@ -478,12 +478,12 @@ export const make = Effect.gen(function* () {
       if (!(yield* encryptionAvailable)) {
         return Option.none<string>();
       }
-      // Fork add-on: the encrypted bytes stay in scope so a legacy catalog can be rewritten.
-      const encryptedCatalog /* Fork add-on */ = yield* decodeSecretBytes(
-        catalogPath, // Fork add-on
-        document.value.encryptedCatalog, // Fork add-on
-      ); // Fork add-on
-      const decrypted /* Fork add-on */ = yield* safeStorage.decryptString(encryptedCatalog).pipe(
+      // Fork add-on(keychain-free-secrets): the encrypted bytes stay in scope so a legacy catalog can be rewritten.
+      const encryptedCatalog /* Fork add-on(keychain-free-secrets) */ = yield* decodeSecretBytes(
+        catalogPath, // Fork add-on(keychain-free-secrets)
+        document.value.encryptedCatalog, // Fork add-on(keychain-free-secrets)
+      ); // Fork add-on(keychain-free-secrets)
+      const decrypted /* Fork add-on(keychain-free-secrets) */ = yield* safeStorage.decryptString(encryptedCatalog).pipe(
         Effect.mapError(
           (cause) =>
             new DesktopConnectionCatalogStoreProtectionError({
@@ -493,21 +493,21 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
-      // Fork add-on: move a keychain-encrypted catalog to the fork's file key.
-      if (safeStorage.needsReencryption?.(encryptedCatalog) /* Fork add-on */) {
-        /* Fork add-on */ yield* writeCatalog(decrypted).pipe(
-          /* Fork add-on */ Effect.catch(
-            (error /* Fork add-on */) =>
-              /* Fork add-on */ Effect.logWarning(
-                "Could not re-encrypt the desktop connection catalog.", // Fork add-on
-                /* Fork add-on */ {
-                  catalogPath, // Fork add-on
-                  error, // Fork add-on
-                }, // Fork add-on
-              ), // Fork add-on
-          ), // Fork add-on
-        ); // Fork add-on
-      } // Fork add-on
+      // Fork add-on(keychain-free-secrets): move a keychain-encrypted catalog to the fork's file key.
+      if (safeStorage.needsReencryption?.(encryptedCatalog) /* Fork add-on(keychain-free-secrets) */) {
+        /* Fork add-on(keychain-free-secrets) */ yield* writeCatalog(decrypted).pipe(
+          /* Fork add-on(keychain-free-secrets) */ Effect.catch(
+            (error /* Fork add-on(keychain-free-secrets) */) =>
+              /* Fork add-on(keychain-free-secrets) */ Effect.logWarning(
+                "Could not re-encrypt the desktop connection catalog.", // Fork add-on(keychain-free-secrets)
+                /* Fork add-on(keychain-free-secrets) */ {
+                  catalogPath, // Fork add-on(keychain-free-secrets)
+                  error, // Fork add-on(keychain-free-secrets)
+                }, // Fork add-on(keychain-free-secrets)
+              ), // Fork add-on(keychain-free-secrets)
+          ), // Fork add-on(keychain-free-secrets)
+        ); // Fork add-on(keychain-free-secrets)
+      } // Fork add-on(keychain-free-secrets)
       return Option.some(decrypted);
     }).pipe(Effect.withSpan("desktop.connectionCatalogStore.get")),
     set: Effect.fn("desktop.connectionCatalogStore.set")(function* (catalog) {

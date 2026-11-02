@@ -134,6 +134,11 @@ project, **Add…** opens [Add to another machine](thread-sidebar.md). For a fol
 folder on that machine (it must already exist) and press **Add**; the new copy is linked
 automatically.
 
+When **Add to another machine** finds the repository already checked out on that machine, in its
+add-project folder, beside its other projects, or one level below either, it offers to add that
+folder instead of cloning a second copy. If the checkout is somewhere else, choose **Use a folder
+already there** and enter its folder; it is added only if it is a checkout of the same repository.
+
 To pick up git projects you already have checked out on other machines, use **Find projects on
 other machines** in **Settings → Projects**, or the same command in the command palette. It
 searches each connected machine that lacks a project, in its add-project folder and beside its

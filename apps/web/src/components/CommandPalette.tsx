@@ -235,8 +235,8 @@ import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
-import { useSessionSearchPaletteGroup } from "../session-search/commandPaletteGroup"; // Fork add-on: session search.
-import { useCompareAgentsPaletteItems } from "../compare-agents/compareAgentsPalette"; // Fork add-on: compare agents.
+import { useSessionSearchPaletteGroup } from "../session-search/commandPaletteGroup"; // Fork add-on(session-search)
+import { useCompareAgentsPaletteItems } from "../compare-agents/compareAgentsPalette"; // Fork add-on(compare-agents)
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
@@ -487,7 +487,7 @@ function OpenCommandPaletteDialog(props: {
   const { changeThemeItem, changeAppearanceItem, themeEditorItem } = useCommandPaletteThemeItems();
   const currentView = viewStack.at(-1)?.view ?? null;
   const threadSearchQuery = currentView === null && !isActionsOnly ? deferredQuery : "";
-  const otherAgentsGroup = useSessionSearchPaletteGroup(threadSearchQuery); // Fork add-on: session search.
+  const otherAgentsGroup = useSessionSearchPaletteGroup(threadSearchQuery); // Fork add-on(session-search)
   const [browseGeneration, setBrowseGeneration] = useState(0);
   const [browseNavigation] = useState(createBrowseNavigationCoordinator);
   const [addProjectEnvironmentId, setAddProjectEnvironmentId] = useState<EnvironmentId | null>(
@@ -1651,13 +1651,13 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  /* Fork add-on */ actionItems.push(
-    /* Fork add-on */ ...useCompareAgentsPaletteItems({
-      navigate, // Fork add-on
-      environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId, // Fork add-on
-      activeThread: activeThread ?? null, // Fork add-on
-    }), // Fork add-on
-  ); // Fork add-on
+  /* Fork add-on(compare-agents) */ actionItems.push(
+    /* Fork add-on(compare-agents) */ ...useCompareAgentsPaletteItems({
+      navigate, // Fork add-on(compare-agents)
+      environmentId: currentProjectEnvironmentId ?? primaryEnvironmentId, // Fork add-on(compare-agents)
+      activeThread: activeThread ?? null, // Fork add-on(compare-agents)
+    }), // Fork add-on(compare-agents)
+  ); // Fork add-on(compare-agents)
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
   // Every setting goes to the palette's own matcher, so settings get the same
   // word starts and typo tolerance as threads.
@@ -2302,8 +2302,8 @@ function OpenCommandPaletteDialog(props: {
           },
         ];
 
-  let displayedGroups: CommandPaletteView["groups"] = // Fork add-on
-    otherAgentsGroup === null ? filteredGroups : [...filteredGroups, otherAgentsGroup]; // Fork add-on
+  let displayedGroups: CommandPaletteView["groups"] = // Fork add-on(other-agents)
+    otherAgentsGroup === null ? filteredGroups : [...filteredGroups, otherAgentsGroup]; // Fork add-on(other-agents)
   if (newProjectFlow !== null) {
     displayedGroups = [
       ...(newProjectMachineGroup ? [newProjectMachineGroup] : []),

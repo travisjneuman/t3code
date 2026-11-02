@@ -19,7 +19,7 @@ import {
 } from "@t3tools/client-runtime/state/provider-instance-display";
 
 export { normalizeProviderAccentColor, shouldShowInstanceBadge };
-export { getProviderInstanceEntry }; // Fork add-on: hand-back and session insights resolve an instance's display name
+export { getProviderInstanceEntry }; // Fork add-on(other-agents,session-details): hand-back and session insights resolve an instance's display name
 
 /** Placeholder for untargetable drafts. Never persist or dispatch it; disable send until replaced. */
 export const NO_PROVIDER_MODEL_SELECTION: ModelSelection = {

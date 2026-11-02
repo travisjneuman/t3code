@@ -127,7 +127,7 @@ export function SidebarSectionHeader(props: {
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className={cn("relative mx-0.5 h-5", props.className) /* Fork add-on: compact sidebar */}
+      className={cn("relative mx-0.5 h-5", props.className) /* Fork add-on(compact-cards) */}
     >
       <CollapsibleSectionHeader
         role="treeitem"
@@ -135,7 +135,7 @@ export function SidebarSectionHeader(props: {
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
         expanded={props.toggle.expanded}
-        size="sidebar" // Fork add-on: compact sidebar
+        size="sidebar" // Fork add-on(compact-cards)
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
         accessory={<span className="font-normal tabular-nums">{props.count}</span>}

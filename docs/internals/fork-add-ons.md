@@ -10,10 +10,13 @@ touches upstream files, so the fork is shaped like a plug-in rather than a patch
 - An upstream file gets only one-line hooks at stable points that call into fork-owned code: an
   import, a spread into a list or layer, a mount. A hook is one line so a conflict on it is
   obvious and quick to re-apply.
-- Every fork code line in an upstream file carries `Fork add-on` inline, usually as a trailing
-  comment naming the feature. A multi-line fork comment is marked once on its first line.
-  `git grep -n "Fork add-on"` lists the whole fork footprint in upstream files, and a fork change
-  to an upstream file without the marker is a bug.
+- Every fork code line in an upstream file carries `Fork add-on(<id>)` inline, usually as a
+  trailing comment, where `<id>` names its add-on in [`fork/addons.json`](../../fork/addons.json).
+  A line shared by several add-ons lists them comma-separated: `Fork add-on(thread-export,save-to-notes)`.
+  An explanation follows a colon: `Fork add-on(hermes): Hermes reports its full catalog`. A
+  multi-line fork comment is marked once on its first line. `git grep -n "Fork add-on("` lists the
+  whole fork footprint in upstream files, `git grep -n "Fork add-on(hermes"` one add-on's, and a
+  fork change to an upstream file without the marker is a bug.
 - JSON and binary assets cannot hold comments, and generated files cannot retain hand-added
   markers reliably. The exceptions below are not protected by the marker check; review their
   fork diff explicitly during upstream sync. Keep those edits to what a feature cannot do without.
@@ -21,6 +24,26 @@ touches upstream files, so the fork is shaped like a plug-in rather than a patch
   `docs/`, and the repository landing page is `.github/README.md`. When the fork changes how an
   upstream feature behaves, say so in [`fork-behavior.md`](../user/fork-behavior.md), not in the
   upstream guide.
+
+## Add-on manifest
+
+[`fork/addons.json`](../../fork/addons.json) lists every add-on: its id, tier, fork-owned `files`
+and `tests`, the upstream files it `hooks` (the files where its markers are), the upstream edits
+that cannot carry a marker, the data it adds (migrations, wire fields, settings), and `dependsOn`,
+the add-ons whose fork-owned files it imports. Every fork-owned file belongs to exactly one
+add-on. Tiers:
+
+- `core`: plumbing the other add-ons hook into, such as the RPC scope merge, the desktop bridge and
+  the fork migration ledger.
+- `feature`: a user-visible feature.
+- `fix`: a small behavior fix to upstream code.
+- `distribution`: how the fork is named, built, signed, installed and updated.
+- `personal`: the owner's own host tooling and instructions; skip these when adopting add-ons.
+
+A new add-on gets an entry and an id before its first marker. Keep the entry in the same change as
+the code: a new fork-owned file goes into one add-on's `files`, and a new hooked upstream file
+into its `hooks`. `core` currently imports from the features it registers, so `dependsOn` is not
+yet a clean graph; read it as what an add-on needs today, not what it should need.
 
 ## Hook modules for large fork blocks
 
@@ -102,8 +125,7 @@ changes the OAuth grant. `stdio` wraps `runAcpMcpStdioBridge` and takes the toke
 
 ## Marker exceptions
 
-- JSON: `package.json`, `apps/server/package.json`, `apps/web/package.json`,
-  `packages/client-runtime/package.json`, `packages/provider-core/package.json`,
+- JSON: `package.json`, `apps/server/package.json`, `packages/client-runtime/package.json`, `packages/provider-core/package.json`,
   `packages/shared/package.json`, and `apps/web/public/manifest.webmanifest`. `tsconfig.json` files accept comments, so their fork
   lines carry markers.
 - Generated output: `pnpm-lock.yaml` and `apps/web/src/routeTree.gen.ts`. Do not hand-mark
@@ -114,7 +136,10 @@ changes the OAuth grant. `stdio` wraps `runAcpMcpStdioBridge` and takes the toke
 - Binary icons: `apps/web/public/apple-touch-icon.png`, `apps/web/public/favicon-16x16.png`,
   `apps/web/public/favicon-32x32.png`, and `apps/web/public/favicon.ico`.
 - `.gitignore` patterns cannot have trailing comments: the comment would become part of the
-  pattern. Each fork pattern instead has an immediately preceding `# Fork add-on` line.
+  pattern. Each fork pattern instead has an immediately preceding `# Fork add-on(<id>)` line.
+
+`fork/addons.json` lists each of these files under the add-on that edits it, in
+`unmarkedUpstreamEdits`.
 
 Blank separator lines need no marker. Except for the `.gitignore` rule above, never add
 marker-only lines. Keep markers on real fork code in positions the formatter preserves, such as
@@ -145,8 +170,8 @@ surface.
 
 Upstream sync ([local source updates](./local-source-updates.md)) requires no unexplained
 marked-line loss. Files with marker deficits get one repair pass with their original
-`HEAD:path:line:text` lines. Restore fork behavior in upstream's current form, keep markers inline,
-and move them with moved code; never recreate obsolete scaffolding or add markers to lines without
+`HEAD:path:line:text` lines. Restore fork behavior in upstream's current form, keep markers inline
+with their ids, and move them with moved code; never recreate obsolete scaffolding or add markers to lines without
 fork behavior. Unrestored lines need an explicit moved or obsolete disposition: a move consumes
 the named destination's surplus over its HEAD file (following renames) once per marker, and an
 obsolete line needs a reason. A file the merge deleted always needs dispositions for its markers,

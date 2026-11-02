@@ -23,7 +23,7 @@ import {
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as ProcessRunner from "../processRunner.ts";
-import * as PinnedRuntimeGuards from "./pinnedRuntimeGuards.ts"; // Fork add-on: download size cap.
+import * as PinnedRuntimeGuards from "./pinnedRuntimeGuards.ts"; // Fork add-on(host-releases): download size cap.
 import { isExactServiceVersion, parseServiceState, SERVICE_STATE_FILE } from "./serviceProtocol.ts";
 
 const PINNED_RUNTIME_DIR = "runtime";
@@ -112,7 +112,7 @@ interface PinnedRuntimeInstallInput {
   readonly arch: string;
   readonly httpClient: HttpClient.HttpClient;
   readonly releaseBaseUrl?: string | undefined;
-  readonly releaseRepository?: string | undefined; // Fork add-on
+  readonly releaseRepository?: string | undefined; // Fork add-on(host-releases)
   readonly onProgress?: (progress: PinnedRuntimeProgress) => void;
 }
 
@@ -122,7 +122,7 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
   step: string,
   onProgress?: (progress: PinnedRuntimeProgress) => void,
 ) {
-  const errorStep = (cause: unknown) => PinnedRuntimeGuards.releaseAssetErrorStep(step, cause); // Fork add-on: download size cap.
+  const errorStep = (cause: unknown) => PinnedRuntimeGuards.releaseAssetErrorStep(step, cause); // Fork add-on(host-releases): download size cap.
   // Bound stalls while holding the install lock, but allow transfers that keep
   // receiving bytes to finish regardless of their total duration.
   return yield* httpClient.execute(HttpClientRequest.get(url)).pipe(
@@ -130,7 +130,7 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
     Effect.timeout(PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT),
     Effect.flatMap(
       Effect.fn(function* (response) {
-        yield* PinnedRuntimeGuards.checkReleaseAssetLength(response); // Fork add-on: download size cap.
+        yield* PinnedRuntimeGuards.checkReleaseAssetLength(response); // Fork add-on(host-releases): download size cap.
         const length = Number(response.headers["content-length"]);
         const total = Number.isFinite(length) && length > 0 ? length : undefined;
         let received = 0;
@@ -140,7 +140,7 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
             duration: PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT,
             orElse: () => Stream.fail(new Cause.TimeoutError()),
           }),
-          Stream.tap(PinnedRuntimeGuards.releaseAssetByteCap()), // Fork add-on: download size cap.
+          Stream.tap(PinnedRuntimeGuards.releaseAssetByteCap()), // Fork add-on(host-releases): download size cap.
           Stream.tap((chunk) =>
             Effect.sync(() => {
               received += chunk.byteLength;
@@ -164,7 +164,7 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
     Effect.mapError(
       (cause) =>
         new PinnedRuntimeInstallError({
-          step: cause._tag === "TimeoutError" ? `${step} (timed out)` : errorStep(cause), // Fork add-on: download size cap.
+          step: cause._tag === "TimeoutError" ? `${step} (timed out)` : errorStep(cause), // Fork add-on(host-releases): download size cap.
           cause,
         }),
     ),
@@ -183,14 +183,14 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
     });
   }
   const httpClient = input.httpClient;
-  // Fork add-on: a fork build (`<version>+<build>`) ships in that nightly's release; validate
+  // Fork add-on(host-releases): a fork build (`<version>+<build>`) ships in that nightly's release; validate
   // rejects an archive whose runtime id differs.
   const releaseVersion = input.version.split("+", 1)[0] ?? input.version;
-  const baseUrl = /* Fork add-on */ cliReleaseDownloadBaseUrl(
-    releaseVersion, // Fork add-on
-    input.releaseBaseUrl, // Fork add-on
-    input.releaseRepository, // Fork add-on
-  ); // Fork add-on
+  const baseUrl = /* Fork add-on(host-releases) */ cliReleaseDownloadBaseUrl(
+    releaseVersion, // Fork add-on(host-releases)
+    input.releaseBaseUrl, // Fork add-on(host-releases)
+    input.releaseRepository, // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
   const fileName = cliArchiveFileName(releaseVersion, platformKey);
 
   input.onProgress?.({ stage: "download", received: 0, total: undefined });

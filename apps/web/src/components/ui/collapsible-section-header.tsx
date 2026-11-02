@@ -13,14 +13,14 @@ export function CollapsibleSectionHeader({
   expanded,
   tone = "muted",
   variant = "default",
-  size = "default", // Fork add-on: compact lineage agents
+  size = "default", // Fork add-on(subagent-tree)
   accessory,
   ...buttonProps
 }: Omit<ComponentProps<"button">, "className" | "style" | "aria-expanded"> & {
   expanded: boolean;
   tone?: keyof typeof tones;
   variant?: "default" | "panel";
-  size?: "default" | "compact" | "sidebar"; // Fork add-on: compact lineage agents, compact sidebar
+  size?: "default" | "compact" | "sidebar"; // Fork add-on(subagent-tree,compact-cards)
   accessory?: ReactNode;
 }) {
   return (
@@ -29,10 +29,10 @@ export function CollapsibleSectionHeader({
       type="button"
       aria-expanded={expanded}
       className={cn(
-        "flex w-full cursor-pointer items-center rounded-md text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70", // Fork add-on: compact lineage agents
-        size === "compact" // Fork add-on: compact lineage agents
+        "flex w-full cursor-pointer items-center rounded-md text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70", // Fork add-on(subagent-tree)
+        size === "compact" // Fork add-on(subagent-tree)
           ? "h-5 gap-1.5 text-3xs"
-          : size === "sidebar" // Fork add-on: compact sidebar
+          : size === "sidebar" // Fork add-on(compact-cards)
             ? "h-5 gap-1.5 text-[10px]" // Same literal size as the sidebar agent lines.
             : "h-8 gap-2 text-xs",
         variant === "panel" ? "ps-2 pe-2.5" : "px-2",

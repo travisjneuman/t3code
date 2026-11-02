@@ -22,11 +22,11 @@ import {
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
-/* Fork add-on */ import {
-  isForkThreadMenuId, // Fork add-on
-  runForkThreadMenuItem, // Fork add-on
-  withForkThreadMenuItems, // Fork add-on
-} from "../forkThreadMenu"; // Fork add-on: thread export, save to notes, hand back.
+/* Fork add-on(core) */ import {
+  isForkThreadMenuId, // Fork add-on(core)
+  runForkThreadMenuItem, // Fork add-on(core)
+  withForkThreadMenuItems, // Fork add-on(core)
+} from "../forkThreadMenu"; // Fork add-on(core)
 import { copyThreadReference } from "../lib/copyThreadReference";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import { threadEnvironment } from "../state/threads";
@@ -154,11 +154,11 @@ export function useThreadActionMenu(input: {
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
       });
-      const menuItems = withForkThreadMenuItems(items, thread); // Fork add-on: thread export, save to notes, hand back.
-      const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on: thread export.
+      const menuItems = withForkThreadMenuItems(items, thread); // Fork add-on(core)
+      const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on(core)
       if (clicked._tag === "Failure" || clicked.value === null) return;
-      if (isForkThreadMenuId(clicked.value) /* Fork add-on */)
-        return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on
+      if (isForkThreadMenuId(clicked.value) /* Fork add-on(core) */)
+        return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on(core)
       const action: ThreadActionMenuId = clicked.value;
       if (
         threadActionRequiresOperate(action) &&

@@ -19,7 +19,7 @@ import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
 import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachineDialog";
-import { FindCheckoutsDialogHost } from "../components/settings/FindCheckoutsDialog"; // Fork add-on: find checkouts
+import { FindCheckoutsDialogHost } from "../components/settings/FindCheckoutsDialog"; // Fork add-on(existing-checkout)
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { DevReplayHost } from "../components/DevReplayHost";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
@@ -30,12 +30,12 @@ import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
 import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkCoordinator";
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
-import { MaintenanceQueueCoordinator } from "../maintenance-queue/MaintenanceQueueCoordinator"; // Fork add-on: maintenance queue.
-import { HostReleaseAutoUpdate } from "../host-release/HostReleaseAutoUpdate"; // Fork add-on: host releases.
+import { MaintenanceQueueCoordinator } from "../maintenance-queue/MaintenanceQueueCoordinator"; // Fork add-on(maintenance-queue)
+import { HostReleaseAutoUpdate } from "../host-release/HostReleaseAutoUpdate"; // Fork add-on(host-releases)
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
-import { HostLabelSync } from "../connection/forkHostLabels"; // Fork add-on
+import { HostLabelSync } from "../connection/forkHostLabels"; // Fork add-on(renamed-hosts)
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { Button } from "../components/ui/button";
@@ -197,7 +197,7 @@ function RootRouteBranch() {
   return (
     <>
       <ChatGptWelcomeCoordinator />
-      <HostLabelSync /> {/* Fork add-on: renamed hosts */}
+      <HostLabelSync /> {/* Fork add-on(renamed-hosts) */}
       <FirstRunGate
         enabled={primaryEnvironmentAuthenticated}
         hostedStatic={authGateState.status === "hosted-static"}
@@ -211,15 +211,15 @@ function RootRouteBranch() {
         <ConnectOnboardingDialog />
         <SshPasswordPromptDialog />
         <SnapShotCoordinator />
-        <MaintenanceQueueCoordinator /> {/* Fork add-on: maintenance queue. */}
-        <HostReleaseAutoUpdate /> {/* Fork add-on: host releases. */}
+        <MaintenanceQueueCoordinator /> {/* Fork add-on(maintenance-queue) */}
+        <HostReleaseAutoUpdate /> {/* Fork add-on(host-releases) */}
         <ReopenClosedViewShortcut />
         <ConfirmDialogHost />
         <CustomSnoozeDialogHost />
         <GuestShareDialogHost />
         <ProjectCloneToastCoordinator />
         <AddProjectToMachineDialogHost />
-        <FindCheckoutsDialogHost /> {/* Fork add-on: find checkouts. */}
+        <FindCheckoutsDialogHost /> {/* Fork add-on(existing-checkout) */}
         {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
         {primaryEnvironmentAuthenticated ? (
           <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
@@ -247,7 +247,7 @@ function RootRouteErrorView({ error }: ErrorComponentProps) {
         <Button size="sm" onClick={() => void router.invalidate()}>
           Try again
         </Button>
-        {/* Fork add-on: leave a crashing route instead of being stuck on it. */}
+        {/* Fork add-on(route-crash-escape): leave a crashing route instead of being stuck on it. */}
         <Button
           size="sm"
           variant="outline"

@@ -3,7 +3,7 @@ import type { ConfirmDialogOptions, ContextMenuItem, LocalApi } from "@t3tools/c
 import { requestConfirmDialog } from "./confirmDialog";
 import { dismissContextMenu, showContextMenuFallback } from "./contextMenuFallback";
 import { readBrowserClientSettings, writeBrowserClientSettings } from "./clientPersistenceStorage";
-import { confirmAboveRemoteApp } from "./remote-apps/confirmAboveRemoteApp"; // Fork add-on: remote apps.
+import { confirmAboveRemoteApp } from "./remote-apps/confirmAboveRemoteApp"; // Fork add-on(web-apps)
 
 let cachedApi: LocalApi | undefined;
 
@@ -15,8 +15,8 @@ export function createLocalApi(): LocalApi {
         return window.desktopBridge.pickFolder(options);
       },
       confirm: async (message, options?: ConfirmDialogOptions) => {
-        const nativeAnswer = await confirmAboveRemoteApp(message); // Fork add-on: remote apps.
-        if (nativeAnswer !== null) return nativeAnswer; // Fork add-on: remote apps.
+        const nativeAnswer = await confirmAboveRemoteApp(message); // Fork add-on(web-apps)
+        if (nativeAnswer !== null) return nativeAnswer; // Fork add-on(web-apps)
         return requestConfirmDialog(message, options) ?? false;
       },
     },

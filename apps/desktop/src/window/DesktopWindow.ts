@@ -30,7 +30,7 @@ import {
 import { PASSKEY_BRIDGE_ARGUMENT } from "../preview/GuestProtocol.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 import * as PreviewPasskeys from "../preview/Passkeys.ts";
-import * as ForkWindow from "../fork/window.ts"; // Fork add-on: remote apps.
+import * as ForkWindow from "../fork/window.ts"; // Fork add-on(web-apps)
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -311,7 +311,7 @@ export const make = Effect.gen(function* () {
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
   const runFork = Effect.runForkWith(context);
   const runPromise = Effect.runPromiseWith(context);
-  const fork = yield* ForkWindow.make; // Fork add-on: remote apps.
+  const fork = yield* ForkWindow.make; // Fork add-on(web-apps)
   let flushMainWindowBounds: Effect.Effect<void> = Effect.void;
 
   const dismissConnectingSplash = Effect.gen(function* () {
@@ -345,7 +345,7 @@ export const make = Effect.gen(function* () {
     if (environment.platform === "darwin") syncMacosWindowButtons(window);
     // App zoom propagates to guests; restore each preview's own zoom.
     yield* previewManager.reapplyZoom();
-    yield* fork.afterZoom; // Fork add-on: remote apps.
+    yield* fork.afterZoom; // Fork add-on(web-apps)
   });
 
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
@@ -411,7 +411,7 @@ export const make = Effect.gen(function* () {
     }
 
     yield* rendererHistory.register(window.webContents, { surface: "main" });
-    yield* fork.attach(window); // Fork add-on: remote apps.
+    yield* fork.attach(window); // Fork add-on(web-apps)
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }
@@ -508,7 +508,7 @@ export const make = Effect.gen(function* () {
       return Option.none();
     }
     window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
-      if (fork.guardWebview(event, webPreferences, params)) return; // Fork add-on: remote app side panel.
+      if (fork.guardWebview(event, webPreferences, params)) return; // Fork add-on(web-apps)
       if (
         typeof params.partition !== "string" ||
         !previewManager.isBrowserPartition(params.partition)
@@ -606,7 +606,7 @@ export const make = Effect.gen(function* () {
     };
     installContextMenu(window, window.webContents);
     window.webContents.on("did-attach-webview", (_event, contents) => {
-      if (fork.isRemoteAppWebview(contents)) return; // Fork add-on: RemoteAppManager.attachPanel adopts it.
+      if (fork.isRemoteAppWebview(contents)) return; // Fork add-on(web-apps): RemoteAppManager.attachPanel adopts it.
       installContextMenu(window, contents);
       void runPromise(previewManager.prepareWebview(contents));
     });
@@ -762,7 +762,7 @@ export const make = Effect.gen(function* () {
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
-      fork.reassertSurface(); // Fork add-on: remote apps.
+      fork.reassertSurface(); // Fork add-on(web-apps)
       if (environment.platform === "darwin") syncMacosWindowButtons(window);
     });
     window.webContents.on(
@@ -829,7 +829,7 @@ export const make = Effect.gen(function* () {
     if (environment.platform === "linux") {
       revealSubscribers.push((fire) => window.webContents.once("did-finish-load", fire));
     }
-    revealSubscribers.push(...fork.revealSubscribers(window)); // Fork add-on: reveal fallbacks.
+    revealSubscribers.push(...fork.revealSubscribers(window)); // Fork add-on(web-apps): reveal fallbacks.
     bindFirstRevealTrigger(revealSubscribers, () => {
       if (!window.isDestroyed()) {
         window.webContents.setBackgroundThrottling(true);
@@ -837,7 +837,7 @@ export const make = Effect.gen(function* () {
       if (persistedSettings.mainWindowMaximized) {
         window.maximize();
       }
-      void runPromise(fork.afterReveal(electronWindow.reveal(window), dismissConnectingSplash)); // Fork add-on: remote apps.
+      void runPromise(fork.afterReveal(electronWindow.reveal(window), dismissConnectingSplash)); // Fork add-on(web-apps)
     });
 
     loadApplication();

@@ -13,9 +13,9 @@ import * as Schema from "effect/Schema";
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
-import { SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS } from "../../save-to-notes/saveToNotesSettingsSearch"; // Fork add-on: save to notes.
-import { AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS } from "../../agent-instructions/agentInstructionsSettingsSearch"; // Fork add-on: agent instructions.
-import { THREAD_RETENTION_SETTINGS_SEARCH_ITEMS } from "../../thread-retention/threadRetentionSettingsSearch"; // Fork add-on: thread retention.
+import { SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS } from "../../save-to-notes/saveToNotesSettingsSearch"; // Fork add-on(save-to-notes)
+import { AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS } from "../../agent-instructions/agentInstructionsSettingsSearch"; // Fork add-on(agent-instructions)
+import { THREAD_RETENTION_SETTINGS_SEARCH_ITEMS } from "../../thread-retention/threadRetentionSettingsSearch"; // Fork add-on(thread-retention)
 import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
@@ -656,7 +656,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "environment-defaults",
     searchTerms: ["base directory folder browser path home"],
   },
-  ...SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS, // Fork add-on: save to notes.
+  ...SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS, // Fork add-on(save-to-notes)
   {
     id: "unpin-confirmation",
     title: "Unpin confirmation",
@@ -682,7 +682,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["confirmation desktop app exit direct hold double click press twice"],
     desktopOnly: true,
   },
-  ...AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS, // Fork add-on: agent instructions.
+  ...AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS, // Fork add-on(agent-instructions)
   {
     id: "text-generation-model",
     title: "Text generation model",
@@ -1188,7 +1188,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
-  ...THREAD_RETENTION_SETTINGS_SEARCH_ITEMS, // Fork add-on: thread retention.
+  ...THREAD_RETENTION_SETTINGS_SEARCH_ITEMS, // Fork add-on(thread-retention)
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];

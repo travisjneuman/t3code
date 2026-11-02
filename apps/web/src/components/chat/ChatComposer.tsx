@@ -263,8 +263,8 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { usePanelAnimationSettings } from "../../panelAnimations";
 import { readEnvironmentScope } from "../../state/session";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
-import { hermesComposerTriggerLabel } from "../../hermes/hermesModelGroups"; // Fork add-on: Hermes provider.
-import { HERMES_DRIVER, hermesAgentName } from "../../hermes/hermesSessions"; // Fork add-on: Hermes provider.
+import { hermesComposerTriggerLabel } from "../../hermes/hermesModelGroups"; // Fork add-on(hermes)
+import { HERMES_DRIVER, hermesAgentName } from "../../hermes/hermesSessions"; // Fork add-on(hermes)
 import { useComposerRestingTransition } from "./useComposerRestingTransition";
 import { ComposerCommandMenuLayer } from "./ComposerCommandMenuLayer";
 import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
@@ -988,8 +988,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   }
 
-  const selectedIsHermes = // Fork add-on
-    selectedProviderEntry?.driverKind === HERMES_DRIVER && multipleModelSelections === null; // Fork add-on: Hermes provider.
+  const selectedIsHermes = // Fork add-on(hermes)
+    selectedProviderEntry?.driverKind === HERMES_DRIVER && multipleModelSelections === null; // Fork add-on(hermes)
   const selectedModelForPickerWithCustomFallback = (() => {
     const currentOptions = modelOptionsByInstance.get(selectedInstanceId) ?? [];
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
@@ -2364,16 +2364,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       providerInstanceEntries={providerInstanceEntries}
       keybindings={keybindings}
       modelOptionsByInstance={modelOptionsByInstance}
-      {...(selectedIsHermes // Fork add-on
-        ? /* Fork add-on */ {
-            modelPickerTriggerLabel: /* Fork add-on */ hermesComposerTriggerLabel(
-              hermesAgentName(settings, selectedInstanceId), // Fork add-on
-              selectedModelForPicker, // Fork add-on
-              modelOptionsByInstance.get(selectedInstanceId) ?? [], // Fork add-on
-            ), // Fork add-on
-          } // Fork add-on
-        : {})} // Fork add-on: Hermes provider.
-      activeThreadId={activeThreadId} // Fork add-on: agent instructions.
+      {...(selectedIsHermes // Fork add-on(hermes)
+        ? /* Fork add-on(hermes) */ {
+            modelPickerTriggerLabel: /* Fork add-on(hermes) */ hermesComposerTriggerLabel(
+              hermesAgentName(settings, selectedInstanceId), // Fork add-on(hermes)
+              selectedModelForPicker, // Fork add-on(hermes)
+              modelOptionsByInstance.get(selectedInstanceId) ?? [], // Fork add-on(hermes)
+            ), // Fork add-on(hermes)
+          } // Fork add-on(hermes)
+        : {})} // Fork add-on(hermes)
+      activeThreadId={activeThreadId} // Fork add-on(agent-instructions)
       terminalOpen={terminalOpen}
       modelPickerOpen={isComposerModelPickerOpen}
       onModelPickerOpenChange={setIsComposerModelPickerOpen}

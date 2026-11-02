@@ -4,7 +4,7 @@ import {
   type EnvironmentId,
   globalIdleCompaction,
   idleCompactionPatch,
-  isAgentModelSelectionKey, // Fork add-on: agent instructions.
+  isAgentModelSelectionKey, // Fork add-on(agent-instructions)
   isNullableProjectSettingsOverride,
   readsIdleCompactionModes,
   PROJECT_SCOPED_SERVER_SETTING_KEYS,
@@ -273,7 +273,7 @@ export function planScopedSettingsPatch(
                   (key === "defaultModelSelection" ||
                     key === "sourceControlWriterModelSelection" ||
                     key === "reviewGuideModelSelection" ||
-                    isAgentModelSelectionKey(key) || // Fork add-on: agent instructions.
+                    isAgentModelSelectionKey(key) || // Fork add-on(agent-instructions)
                     key === "textGenerationModelSelection") &&
                   (value.instanceId !== undefined || value.model !== undefined)
                 ) {

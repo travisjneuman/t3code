@@ -30,20 +30,20 @@ import {
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
 } from "./threadDetailsPanelStyles";
 
-// Fork add-on: theme tokens and a spoken label, matching the settings page.
+// Fork add-on(status-colors): theme tokens and a spoken label, matching the settings page.
 const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
   never: "bg-muted-foreground/40",
-  running: "bg-info", // Fork add-on
-  succeeded: "bg-success", // Fork add-on
+  running: "bg-info", // Fork add-on(status-colors)
+  succeeded: "bg-success", // Fork add-on(status-colors)
   failed: "bg-destructive",
 };
 
-const LAST_RUN_LABEL: Record<ScheduledTask["lastRunStatus"], string> /* Fork add-on */ = {
-  never: "Not run yet", // Fork add-on
-  running: "Running", // Fork add-on
-  succeeded: "Last run succeeded", // Fork add-on
-  failed: "Last run failed", // Fork add-on
-}; // Fork add-on
+const LAST_RUN_LABEL: Record<ScheduledTask["lastRunStatus"], string> /* Fork add-on(status-colors) */ = {
+  never: "Not run yet", // Fork add-on(status-colors)
+  running: "Running", // Fork add-on(status-colors)
+  succeeded: "Last run succeeded", // Fork add-on(status-colors)
+  failed: "Last run failed", // Fork add-on(status-colors)
+}; // Fork add-on(status-colors)
 
 function taskScheduleLine(task: ScheduledTask) {
   return (
@@ -174,7 +174,7 @@ export function ThreadAutomationsPanel(props: {
           >
             <span
               className="relative inline-flex size-4 shrink-0 items-center justify-center"
-              title={LAST_RUN_LABEL[task.lastRunStatus]} // Fork add-on
+              title={LAST_RUN_LABEL[task.lastRunStatus]} // Fork add-on(status-colors)
             >
               <CalendarClockIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
               <span
@@ -184,9 +184,9 @@ export function ThreadAutomationsPanel(props: {
                 )}
                 aria-hidden
               />
-              <span className="sr-only" /* Fork add-on */>
-                {LAST_RUN_LABEL[task.lastRunStatus] /* Fork add-on */}
-              </span /* Fork add-on */>
+              <span className="sr-only" /* Fork add-on(status-colors) */>
+                {LAST_RUN_LABEL[task.lastRunStatus] /* Fork add-on(status-colors) */}
+              </span /* Fork add-on(status-colors) */>
             </span>
             <Tooltip>
               <TooltipTrigger render={<div className="min-w-0 flex-1" />}>

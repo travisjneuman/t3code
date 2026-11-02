@@ -40,7 +40,7 @@ interface DraftEnvironmentRoutingInput {
   readonly activeProjectIsScratch: boolean;
   readonly projectGroupingSettings: ReturnType<typeof selectProjectGroupingSettings>;
   readonly sendInFlightRef: { readonly current: boolean };
-  readonly hermesAgent: boolean; // Fork add-on: Hermes provider.
+  readonly hermesAgent: boolean; // Fork add-on(hermes)
 }
 
 /**
@@ -66,7 +66,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     activeProjectIsScratch,
     projectGroupingSettings,
     sendInFlightRef,
-    hermesAgent, // Fork add-on: Hermes provider.
+    hermesAgent, // Fork add-on(hermes)
   } = input;
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const getDraftSession = useComposerDraftStore((store) => store.getDraftSession);
@@ -135,7 +135,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     setDraftThreadContext,
   ]);
   const onAutoEnvironment = () => {
-    if (envLocked || hermesAgent || !draftId) return; // Fork add-on: Hermes provider.
+    if (envLocked || hermesAgent || !draftId) return; // Fork add-on(hermes)
     if (composerHasAttachments) {
       toastManager.add({
         type: "warning",
@@ -201,7 +201,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   const isEnvironmentChanging = busyEnvironmentChange?.scope === environmentChangeScope;
 
   const onEnvironmentChange = (nextEnvironmentId: EnvironmentId) => {
-    if (envLocked || hermesAgent || !draftId || sendInFlightRef.current) return; // Fork add-on: Hermes provider.
+    if (envLocked || hermesAgent || !draftId || sendInFlightRef.current) return; // Fork add-on(hermes)
     const originalDraft = getDraftSession(draftId);
     if (!originalDraft || originalDraft.promotedTo) return;
     const target = logicalProjectEnvironments.find(

@@ -50,7 +50,7 @@ import * as CommandOutputHub from "./CommandOutputHub.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { rememberForkAgentThread } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+import { rememberForkAgentThread } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on(agent-instructions)
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -2180,17 +2180,17 @@ export const layerWithOptions = (
               });
               const sessionScope = yield* Scope.fork(sessionScopes);
               yield* agentScope.clear(input.threadId);
-              const forkProjectId /* Fork add-on */ = yield* projectionStore
-                .getThread(input.threadId) // Fork add-on
-                /* Fork add-on */ .pipe(
-                  Effect.tap((thread) => Effect.sync(() => rememberForkAgentThread(thread))), // Fork add-on
-                  Effect.map((thread) => thread.projectId), // Fork add-on
-                  Effect.orElseSucceed(() => undefined), // Fork add-on
-                ); // Fork add-on: agent instructions.
+              const forkProjectId /* Fork add-on(agent-instructions) */ = yield* projectionStore
+                .getThread(input.threadId) // Fork add-on(agent-instructions)
+                /* Fork add-on(agent-instructions) */ .pipe(
+                  Effect.tap((thread) => Effect.sync(() => rememberForkAgentThread(thread))), // Fork add-on(agent-instructions)
+                  Effect.map((thread) => thread.projectId), // Fork add-on(agent-instructions)
+                  Effect.orElseSucceed(() => undefined), // Fork add-on(agent-instructions)
+                ); // Fork add-on(agent-instructions)
               const runtime = yield* adapter
                 .openSession({
                   threadId: input.threadId,
-                  ...(forkProjectId === undefined ? {} : { projectId: forkProjectId }), // Fork add-on: agent instructions.
+                  ...(forkProjectId === undefined ? {} : { projectId: forkProjectId }), // Fork add-on(agent-instructions)
                   providerSessionId: input.providerSessionId,
                   modelSelection: input.modelSelection,
                   runtimePolicy: input.runtimePolicy,

@@ -66,7 +66,7 @@ export interface AppModelOption {
   shortName?: string;
   subProvider?: string;
   aliases?: ReadonlyArray<string>;
-  supersedes?: ReadonlyArray<string>; // Fork add-on: retired models.
+  supersedes?: ReadonlyArray<string>; // Fork add-on(retired-models)
   badge?: "new";
   isCustom: boolean;
   isDefault?: boolean;
@@ -80,9 +80,9 @@ function appendUnavailableDynamicModelSelection(
   provider: ProviderDriverKind,
   selectedModel: string | null | undefined,
   hiddenModels: ReadonlyArray<string>,
-  anyDriver: boolean, // Fork add-on: retired models.
+  anyDriver: boolean, // Fork add-on(retired-models)
 ): AppModelOption[] {
-  if (!anyDriver && provider !== "opencode" && provider !== "antigravity") return options; // Fork add-on: retired models.
+  if (!anyDriver && provider !== "opencode" && provider !== "antigravity") return options; // Fork add-on(retired-models)
   const slug = normalizeCustomModelSlug(selectedModel);
   if (!slug) return options;
   if (provider === "antigravity" && slug === ANTIGRAVITY_DEFAULT_MODEL) return options;
@@ -107,7 +107,7 @@ function toAppModelOption(
   if (shortName) option.shortName = shortName;
   if (model.subProvider) option.subProvider = model.subProvider;
   if (model.aliases) option.aliases = model.aliases;
-  if (model.supersedes) option.supersedes = model.supersedes; // Fork add-on: retired models.
+  if (model.supersedes) option.supersedes = model.supersedes; // Fork add-on(retired-models)
   if (model.badge) option.badge = model.badge;
   if (model.isDefault) option.isDefault = true;
   if (model.isLegacy) option.isLegacy = true;
@@ -205,7 +205,7 @@ function getAppModelOptions(
     provider,
     selectedModel,
     preferences.hiddenModels,
-    false, // Fork add-on: retired models.
+    false, // Fork add-on(retired-models)
   );
 }
 
@@ -213,7 +213,7 @@ export function getAppModelOptionsForInstance(
   settings: UnifiedSettings,
   entry: ProviderInstanceEntry,
   selectedModel?: string | null,
-  anyDriver = false, // Fork add-on: retired models; settings pickers show a missing saved model as unavailable.
+  anyDriver = false, // Fork add-on(retired-models): settings pickers show a missing saved model as unavailable.
 ): AppModelOption[] {
   const options: AppModelOption[] = entry.models
     .filter((model) => !model.isCustom)
@@ -248,7 +248,7 @@ export function getAppModelOptionsForInstance(
     entry.driverKind,
     selectedModel,
     preferences.hiddenModels,
-    anyDriver, // Fork add-on: retired models.
+    anyDriver, // Fork add-on(retired-models)
   );
 }
 
@@ -366,7 +366,7 @@ export function getCustomModelOptionsByInstance(
         settings,
         entry,
         entry.instanceId === selectedInstanceId ? selectedModel : null,
-        true, // Fork add-on: retired models; pickers show a saved model the catalog dropped.
+        true, // Fork add-on(retired-models): pickers show a saved model the catalog dropped.
       ),
     );
   }
@@ -397,7 +397,7 @@ export function resolveAppModelSelectionState(
   if (entry) {
     const selectedModel = selectedEntry ? selection.model : null;
     // Use the cheap generation default; the catalog default is the expensive chat flagship.
-    const options = getAppModelOptionsForInstance(settings, entry, selectedModel, true); // Fork add-on: retired models; the server keeps using a missing saved model, so it stays shown as unavailable.
+    const options = getAppModelOptionsForInstance(settings, entry, selectedModel, true); // Fork add-on(retired-models): the server keeps using a missing saved model, so it stays shown as unavailable.
     const model =
       resolveSelectableModel(entry.driverKind, selectedModel, options) ??
       resolveSelectableModel(

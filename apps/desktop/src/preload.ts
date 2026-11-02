@@ -11,7 +11,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
 import { mergeLegacyLocalStorage } from "./legacyLocalStorageMerge.ts";
-import { makeForkDesktopBridge } from "./fork/preloadBridge.ts"; // Fork add-on: bridge members.
+import { makeForkDesktopBridge } from "./fork/preloadBridge.ts"; // Fork add-on(core): bridge members.
 
 const SNAP_SHOT_EVENT_TYPES = new Set([
   "requested",
@@ -74,7 +74,7 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
-  ...makeForkDesktopBridge(ipcRenderer), // Fork add-on: confirm, source sync, remote apps, update gate.
+  ...makeForkDesktopBridge(ipcRenderer), // Fork add-on(core): confirm, source sync, remote apps, update gate.
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

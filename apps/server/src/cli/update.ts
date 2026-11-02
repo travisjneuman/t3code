@@ -1,11 +1,11 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   CLI_RELEASE_BASE_URL_ENV,
-  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on
-  cliReleaseRepositoryOf, // Fork add-on
-  cliReleaseRepositoryProblem, // Fork add-on
+  CLI_RELEASE_REPOSITORY_ENV, // Fork add-on(host-releases)
+  cliReleaseRepositoryOf, // Fork add-on(host-releases)
+  cliReleaseRepositoryProblem, // Fork add-on(host-releases)
   CLI_RELEASE_CHANNELS,
-  cliReleaseBaseUrlProblem, // Fork add-on: HTTPS-only release mirrors.
+  cliReleaseBaseUrlProblem, // Fork add-on(host-releases): HTTPS-only release mirrors.
   cliReleaseIndexPageUrl,
   cliReleaseChannelOf,
   newestCliReleaseVersion,
@@ -65,26 +65,26 @@ const RELEASE_INDEX_MAX_PAGES = 10;
 
 export const resolveNewestVersion = Effect.fn("cli.update.resolve_newest")(function* (
   channel: CliReleaseChannel,
-  repository?: string, // Fork add-on
+  repository?: string, // Fork add-on(host-releases)
 ) {
   const httpClient = yield* HttpClient.HttpClient;
   const environment = yield* HostProcess.Environment;
-  const repositoryOverride = repository ?? environment[CLI_RELEASE_REPOSITORY_ENV]; // Fork add-on
-  const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
-    repositoryOverride, // Fork add-on
-    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
-  ); // Fork add-on
-  if (repositoryProblem /* Fork add-on */) {
-    return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on
-  } // Fork add-on
-  const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
-    repositoryOverride, // Fork add-on
-    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
-  ); // Fork add-on
+  const repositoryOverride = repository ?? environment[CLI_RELEASE_REPOSITORY_ENV]; // Fork add-on(host-releases)
+  const repositoryProblem = /* Fork add-on(host-releases) */ cliReleaseRepositoryProblem(
+    repositoryOverride, // Fork add-on(host-releases)
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
+  if (repositoryProblem /* Fork add-on(host-releases) */) {
+    return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on(host-releases)
+  } // Fork add-on(host-releases)
+  const releaseRepository = /* Fork add-on(host-releases) */ cliReleaseRepositoryOf(
+    repositoryOverride, // Fork add-on(host-releases)
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
   const githubToken = environment.GH_TOKEN?.trim() || environment.GITHUB_TOKEN?.trim() || undefined;
   for (let page = 1; page <= RELEASE_INDEX_MAX_PAGES; page += 1) {
     const request = HttpClientRequest.get(
-      cliReleaseIndexPageUrl(page, releaseRepository), // Fork add-on
+      cliReleaseIndexPageUrl(page, releaseRepository), // Fork add-on(host-releases)
     ).pipe(
       HttpClientRequest.setHeader("Accept", "application/vnd.github+json"),
     );
@@ -340,19 +340,19 @@ export const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   const service = yield* BootService.BootService;
   const policy = yield* ManagedPolicy.ManagedPolicy;
 
-  const mirrorProblem = cliReleaseBaseUrlProblem(environment[CLI_RELEASE_BASE_URL_ENV]); // Fork add-on: HTTPS-only release mirrors.
-  if (mirrorProblem) return yield* new CliUpdateError({ reason: mirrorProblem }); // Fork add-on
-  const repositoryProblem = /* Fork add-on */ cliReleaseRepositoryProblem(
-    environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on
-    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
-  ); // Fork add-on
-  if (repositoryProblem /* Fork add-on */) {
-    return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on
-  } // Fork add-on
-  const releaseRepository = /* Fork add-on */ cliReleaseRepositoryOf(
-    environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on
-    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on
-  ); // Fork add-on
+  const mirrorProblem = cliReleaseBaseUrlProblem(environment[CLI_RELEASE_BASE_URL_ENV]); // Fork add-on(host-releases): HTTPS-only release mirrors.
+  if (mirrorProblem) return yield* new CliUpdateError({ reason: mirrorProblem }); // Fork add-on(host-releases)
+  const repositoryProblem = /* Fork add-on(host-releases) */ cliReleaseRepositoryProblem(
+    environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on(host-releases)
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
+  if (repositoryProblem /* Fork add-on(host-releases) */) {
+    return yield* new CliUpdateError({ reason: repositoryProblem }); // Fork add-on(host-releases)
+  } // Fork add-on(host-releases)
+  const releaseRepository = /* Fork add-on(host-releases) */ cliReleaseRepositoryOf(
+    environment[CLI_RELEASE_REPOSITORY_ENV], // Fork add-on(host-releases)
+    environment[CLI_RELEASE_BASE_URL_ENV], // Fork add-on(host-releases)
+  ); // Fork add-on(host-releases)
 
   const currentVersion = packageJson.version;
   const channel = input.channel ?? cliReleaseChannelOf(currentVersion);
@@ -372,7 +372,7 @@ export const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   progress.status("Checking for updates...");
   const targetVersion = yield* (
     input.requestedVersion === undefined
-      ? resolveNewestVersion(channel, releaseRepository) // Fork add-on
+      ? resolveNewestVersion(channel, releaseRepository) // Fork add-on(host-releases)
       : Effect.succeed(input.requestedVersion)
   ).pipe(Effect.ensuring(Effect.sync(progress.finish)));
   const targetChannel = cliReleaseChannelOf(targetVersion);
@@ -489,7 +489,7 @@ export const runUpdate = Effect.fn("cli.update.run")(function* (input: {
     platform,
     arch,
     releaseBaseUrl: environment[CLI_RELEASE_BASE_URL_ENV]?.trim() || undefined,
-    releaseRepository, // Fork add-on
+    releaseRepository, // Fork add-on(host-releases)
     validate: (paths) =>
       runner
         .run({

@@ -8,7 +8,7 @@ import {
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
-  AuthAccessWriteScope, // Fork add-on: pair remote devices.
+  AuthAccessWriteScope, // Fork add-on(remote-pairing)
   AuthRelayWriteScope,
   type EnvironmentId,
   connectReachabilityHelpUrl,
@@ -43,16 +43,16 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button, InlineButton } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
-/* Fork add-on */ import {
-  useHostVersionMismatch, // Fork add-on: host releases.
-  useHostReleaseCheck, // Fork add-on: row facts.
-} from "~/host-release/hostRelease"; // Fork add-on: host releases.
-import { hostRowSubtitle, hostRowTooltipFacts } from "~/host-release/hostRowFacts"; // Fork add-on: row facts.
-import { HostBackupsDialog } from "~/host-release/HostBackupsDialog"; // Fork add-on: host backups.
-/* Fork add-on */ import {
-  RemotePairingDialog, // Fork add-on: pair remote devices.
-  pairingEndpointUrl, // Fork add-on: pair remote devices.
-} from "~/remote-pairing/RemotePairingDialog"; // Fork add-on: pair remote devices.
+/* Fork add-on(host-releases) */ import {
+  useHostVersionMismatch, // Fork add-on(host-releases)
+  useHostReleaseCheck, // Fork add-on(host-releases): row facts.
+} from "~/host-release/hostRelease"; // Fork add-on(host-releases)
+import { hostRowSubtitle, hostRowTooltipFacts } from "~/host-release/hostRowFacts"; // Fork add-on(host-releases): row facts.
+import { HostBackupsDialog } from "~/host-release/HostBackupsDialog"; // Fork add-on(host-backups)
+/* Fork add-on(host-backups) */ import {
+  RemotePairingDialog, // Fork add-on(remote-pairing)
+  pairingEndpointUrl, // Fork add-on(remote-pairing)
+} from "~/remote-pairing/RemotePairingDialog"; // Fork add-on(remote-pairing)
 import {
   resolveServerSelfUpdateCapability,
   supportsDesktopAppUpdate,
@@ -90,40 +90,40 @@ type SavedBackendListRowProps = {
   onAddRoute: (environment: EnvironmentPresentation) => void;
 };
 
-// Fork add-on: a status dot, so a live connection reads as on at a glance.
-const IDLE_STATUS_DOT = "bg-muted-foreground/40"; // Fork add-on: connection status dots.
+// Fork add-on(status-colors): a status dot, so a live connection reads as on at a glance.
+const IDLE_STATUS_DOT = "bg-muted-foreground/40"; // Fork add-on(status-colors): connection status dots.
 
 function savedBackendStatus(environment: EnvironmentPresentation): {
   readonly text: string;
   readonly tone: "muted" | "error";
-  readonly dotClassName: string; // Fork add-on: connection status dots.
+  readonly dotClassName: string; // Fork add-on(status-colors): connection status dots.
 } {
   if (!environment.entry.enabled && environment.connection.phase !== "unsupported")
-    return { text: "Off", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
+    return { text: "Off", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on(status-colors): connection status dots.
   const { connection } = environment;
   switch (connection.phase) {
     case "connected":
-      return { text: "Connected", tone: "muted", dotClassName: "bg-success" }; // Fork add-on: connection status dots.
+      return { text: "Connected", tone: "muted", dotClassName: "bg-success" }; // Fork add-on(status-colors): connection status dots.
     case "connecting":
-      return { text: "Connecting", tone: "muted", dotClassName: "bg-info" }; // Fork add-on: connection status dots.
+      return { text: "Connecting", tone: "muted", dotClassName: "bg-info" }; // Fork add-on(status-colors): connection status dots.
     case "reconnecting":
       return {
         text: connection.error ? `Reconnecting: ${connection.error}` : "Reconnecting",
         tone: "error",
-        dotClassName: "bg-warning", // Fork add-on: connection status dots.
+        dotClassName: "bg-warning", // Fork add-on(status-colors): connection status dots.
       };
     case "unsupported":
-      return { text: "Client not supported", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
+      return { text: "Client not supported", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on(status-colors): connection status dots.
     case "error":
       return {
         text: connection.error ? `Connection failed: ${connection.error}` : "Connection failed",
         tone: "error",
-        dotClassName: "bg-destructive", // Fork add-on: connection status dots.
+        dotClassName: "bg-destructive", // Fork add-on(status-colors): connection status dots.
       };
     case "offline":
-      return { text: "Offline", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
+      return { text: "Offline", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on(status-colors): connection status dots.
     case "available":
-      return { text: "Not connected", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on: connection status dots.
+      return { text: "Not connected", tone: "muted", dotClassName: IDLE_STATUS_DOT }; // Fork add-on(status-colors): connection status dots.
   }
 }
 
@@ -185,12 +185,12 @@ export function SavedBackendListRow({
       );
     },
   });
-  const versionMismatch = useHostVersionMismatch(environment.serverConfig); // Fork add-on: host releases.
-  const releaseCheck = useHostReleaseCheck(); // Fork add-on: row facts.
-  const hostEnvironment = environment.serverConfig?.environment; // Fork add-on: row facts.
-  const [backupsOpen, setBackupsOpen] = useState(false); // Fork add-on: host backups.
-  const [pairingOpen, setPairingOpen] = useState(false); // Fork add-on: pair remote devices.
-  const pairingEndpoint = pairingEndpointUrl(environment.serverConfig?.directEndpoints); // Fork add-on: pair remote devices.
+  const versionMismatch = useHostVersionMismatch(environment.serverConfig); // Fork add-on(host-releases)
+  const releaseCheck = useHostReleaseCheck(); // Fork add-on(host-releases): row facts.
+  const hostEnvironment = environment.serverConfig?.environment; // Fork add-on(host-releases): row facts.
+  const [backupsOpen, setBackupsOpen] = useState(false); // Fork add-on(host-backups)
+  const [pairingOpen, setPairingOpen] = useState(false); // Fork add-on(remote-pairing)
+  const pairingEndpoint = pairingEndpointUrl(environment.serverConfig?.directEndpoints); // Fork add-on(remote-pairing)
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -238,7 +238,7 @@ export function SavedBackendListRow({
     environmentTransportLabel(environment, connectedTarget),
     // The headline below names the failure in full.
     diagnosis ? null : resumingServerUpdate ? "Restarting" : status.text,
-    enabled && serverVersion ? hostRowSubtitle(serverVersion, hostEnvironment) : null, // Fork add-on: row facts.
+    enabled && serverVersion ? hostRowSubtitle(serverVersion, hostEnvironment) : null, // Fork add-on(host-releases): row facts.
   ]
     .filter((value): value is string => value !== null)
     .join(" · ");
@@ -259,7 +259,7 @@ export function SavedBackendListRow({
     versionMismatch
       ? `\nUpdate available: ${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
       : ""
-  }${hostRowTooltipFacts(hostEnvironment, releaseCheck)}`; // Fork add-on: row facts.
+  }${hostRowTooltipFacts(hostEnvironment, releaseCheck)}`; // Fork add-on(host-releases): row facts.
 
   return (
     <EnvironmentRow
@@ -268,14 +268,14 @@ export function SavedBackendListRow({
       dimmed={!enabled}
       subtitle={
         <span className="flex min-w-0 items-center gap-1">
-          <span // Fork add-on
-            aria-hidden // Fork add-on
-            className /* Fork add-on */={cn(
-              "me-0.5 size-1.5 shrink-0 rounded-full", // Fork add-on
-              resumingServerUpdate ? "bg-info" : status.dotClassName, // Fork add-on
-            )} // Fork add-on
+          <span // Fork add-on(status-colors)
+            aria-hidden // Fork add-on(status-colors)
+            className /* Fork add-on(status-colors) */={cn(
+              "me-0.5 size-1.5 shrink-0 rounded-full", // Fork add-on(status-colors)
+              resumingServerUpdate ? "bg-info" : status.dotClassName, // Fork add-on(status-colors)
+            )} // Fork add-on(status-colors)
           />
-          {" " /* Fork add-on */}
+          {" " /* Fork add-on(status-colors) */}
           <Tooltip>
             {/* The status can change while the tooltip is open, and base-ui only
                 re-measures the popup when the trigger's payload changes. */}
@@ -456,35 +456,35 @@ export function SavedBackendListRow({
           {errorTraceId ? (
             <MenuItem onClick={() => copyTraceId(errorTraceId)}>Copy trace ID</MenuItem>
           ) : null}
-          {isConnected && hostEnvironment?.capabilities.hostBackups === true ? ( // Fork add-on: host backups.
-            <MenuItem onClick={() => setBackupsOpen(true)}>Backups…</MenuItem> // Fork add-on
-          ) : /* Fork add-on */ null}
-          {isConnected && // Fork add-on: pair remote devices.
-          pairingEndpoint !== null && // Fork add-on
-          readEnvironmentScope(environmentId, AuthAccessWriteScope) ? ( // Fork add-on
-            <MenuItem onClick={() => setPairingOpen(true)}>Pair a device…</MenuItem> // Fork add-on
-          ) : /* Fork add-on */ null}
+          {isConnected && hostEnvironment?.capabilities.hostBackups === true ? ( // Fork add-on(host-backups)
+            <MenuItem onClick={() => setBackupsOpen(true)}>Backups…</MenuItem> // Fork add-on(host-backups)
+          ) : /* Fork add-on(host-backups) */ null}
+          {isConnected && // Fork add-on(remote-pairing)
+          pairingEndpoint !== null && // Fork add-on(remote-pairing)
+          readEnvironmentScope(environmentId, AuthAccessWriteScope) ? ( // Fork add-on(remote-pairing)
+            <MenuItem onClick={() => setPairingOpen(true)}>Pair a device…</MenuItem> // Fork add-on(remote-pairing)
+          ) : /* Fork add-on(remote-pairing) */ null}
           <MenuSeparator />
           <MenuItem variant="destructive" onClick={() => onRemove(environment)}>
             {isRemoving ? "Removing…" : "Remove from this device…"}
           </MenuItem>
         </MenuPopup>
       </Menu>
-      {backupsOpen ? ( // Fork add-on: host backups.
-        <HostBackupsDialog // Fork add-on
-          environmentId={environmentId} // Fork add-on
-          serverLabel={environment.label} // Fork add-on
-          onClose={() => setBackupsOpen(false)} // Fork add-on
-        /> // Fork add-on
-      ) : /* Fork add-on */ null}
-      {pairingOpen && pairingEndpoint !== null ? ( // Fork add-on: pair remote devices.
-        <RemotePairingDialog // Fork add-on
-          environmentId={environmentId} // Fork add-on
-          serverLabel={environment.label} // Fork add-on
-          endpointUrl={pairingEndpoint} // Fork add-on
-          onClose={() => setPairingOpen(false)} // Fork add-on
-        /> // Fork add-on
-      ) : /* Fork add-on */ null}
+      {backupsOpen ? ( // Fork add-on(host-backups)
+        <HostBackupsDialog // Fork add-on(host-backups)
+          environmentId={environmentId} // Fork add-on(host-backups)
+          serverLabel={environment.label} // Fork add-on(host-backups)
+          onClose={() => setBackupsOpen(false)} // Fork add-on(host-backups)
+        /> // Fork add-on(host-backups)
+      ) : /* Fork add-on(host-backups) */ null}
+      {pairingOpen && pairingEndpoint !== null ? ( // Fork add-on(remote-pairing)
+        <RemotePairingDialog // Fork add-on(remote-pairing)
+          environmentId={environmentId} // Fork add-on(remote-pairing)
+          serverLabel={environment.label} // Fork add-on(remote-pairing)
+          endpointUrl={pairingEndpoint} // Fork add-on(remote-pairing)
+          onClose={() => setPairingOpen(false)} // Fork add-on(remote-pairing)
+        /> // Fork add-on(remote-pairing)
+      ) : /* Fork add-on(remote-pairing) */ null}
     </EnvironmentRow>
   );
 }

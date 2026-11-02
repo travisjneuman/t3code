@@ -34,7 +34,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Layer from "effect/Layer";
 import type * as RpcGroup from "effect/rpc/RpcGroup";
-import { FORK_RPC_REQUIRED_SCOPES } from "./forkRpcScopes.ts"; // Fork add-on: add-on RPC scopes.
+import { FORK_RPC_REQUIRED_SCOPES } from "./forkRpcScopes.ts"; // Fork add-on(core)
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 
@@ -166,7 +166,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.mcpAppsToolInfo]: AuthOrchestrationReadScope,
   [WS_METHODS.mcpAppsReadResource]: AuthOrchestrationReadScope,
   [WS_METHODS.mcpAppsUpdateModelContext]: AuthOrchestrationOperateScope,
-  [WS_METHODS.sessionInsightsGet]: AuthOrchestrationReadScope, // Fork add-on: session details.
+  [WS_METHODS.sessionInsightsGet]: AuthOrchestrationReadScope, // Fork add-on(session-details)
   [WS_METHODS.subscribeVcsStatus]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeWorktreeSetup]: AuthOrchestrationReadScope,
   [WS_METHODS.worktreeSetupCancel]: AuthOrchestrationOperateScope,
@@ -210,7 +210,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscribeServerConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeServerLifecycle]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeAuthAccess]: AuthAccessReadScope,
-  ...FORK_RPC_REQUIRED_SCOPES, // Fork add-on: add-on RPC scopes.
+  ...FORK_RPC_REQUIRED_SCOPES, // Fork add-on(core)
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {

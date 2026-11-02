@@ -148,7 +148,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
           const models = yield* chatGptModels(
             credentials.accessToken,
             draft.models,
-            effective.config.showHiddenModels, // Fork add-on: Codex hidden models.
+            effective.config.showHiddenModels, // Fork add-on(codex-hidden-models)
           ).pipe(Effect.provideService(HttpClient.HttpClient, http));
           return { ...draft, models };
         }),

@@ -123,20 +123,20 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
         void scratch.startScratchThread(environmentId);
       },
       "chat.new": (event) => {
-        // Fork add-on: like the sidebar's New thread button, start in No project.
-        if (!getClientSettings().legacySidebarEnabled) { // Fork add-on
-          const { activeThread, activeDraftThread } = readThreadContext(); // Fork add-on
-          const scratchTarget = scratch.scratchEnvironmentId( // Fork add-on
-            activeThread?.environmentId ?? // Fork add-on
-              activeDraftThread?.environmentId ?? // Fork add-on
-              appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on
-          ); // Fork add-on
-          if (scratchTarget !== null) { // Fork add-on
-            claim(event); // Fork add-on
-            void scratch.startScratchThread(scratchTarget); // Fork add-on
-            return; // Fork add-on
-          } // Fork add-on
-        } // Fork add-on
+        // Fork add-on(no-project-start): like the sidebar's New thread button, start in No project.
+        if (!getClientSettings().legacySidebarEnabled) { // Fork add-on(no-project-start)
+          const { activeThread, activeDraftThread } = readThreadContext(); // Fork add-on(no-project-start)
+          const scratchTarget = scratch.scratchEnvironmentId( // Fork add-on(no-project-start)
+            activeThread?.environmentId ?? // Fork add-on(no-project-start)
+              activeDraftThread?.environmentId ?? // Fork add-on(no-project-start)
+              appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on(no-project-start)
+          ); // Fork add-on(no-project-start)
+          if (scratchTarget !== null) { // Fork add-on(no-project-start)
+            claim(event); // Fork add-on(no-project-start)
+            void scratch.startScratchThread(scratchTarget); // Fork add-on(no-project-start)
+            return; // Fork add-on(no-project-start)
+          } // Fork add-on(no-project-start)
+        } // Fork add-on(no-project-start)
         // The boring sidebar's folders already show the context, so it starts in
         // the current project like the legacy sidebar did.
         const { boringSidebarEnabled, legacySidebarEnabled } = getClientSettings();

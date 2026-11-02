@@ -1,6 +1,6 @@
 import {
   EnvironmentAuthorizationError,
-  type ExternalSessionsSubscriptionMethod, // Fork add-on: external sessions.
+  type ExternalSessionsSubscriptionMethod, // Fork add-on(other-agents)
   clientRpcRequiredScopes,
   authScopeRequiredResponse,
   type EnvironmentId,
@@ -50,7 +50,7 @@ export type EnvironmentRpcTag = keyof WsRpcProtocolClient & string;
 type RpcMethod<TTag extends EnvironmentRpcTag> = WsRpcProtocolClient[TTag];
 
 export type EnvironmentSubscriptionRpcTag =
-  | ExternalSessionsSubscriptionMethod // Fork add-on: external sessions.
+  | ExternalSessionsSubscriptionMethod // Fork add-on(other-agents)
   | typeof WS_METHODS.providerAuthSubscribe
   | typeof WS_METHODS.providerInstallSubscribe
   | typeof ORCHESTRATION_V2_WS_METHODS.subscribeShell

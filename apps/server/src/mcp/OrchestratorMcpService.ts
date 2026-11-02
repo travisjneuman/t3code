@@ -102,7 +102,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import * as DelegationPolicy from "../agent-instructions/DelegationPolicy.ts"; // Fork add-on: agent instructions.
+import * as DelegationPolicy from "../agent-instructions/DelegationPolicy.ts"; // Fork add-on(agent-instructions)
 import {
   clientModeCeiling,
   type McpInvocationScope,
@@ -1010,7 +1010,7 @@ const make = Effect.gen(function* () {
   const gitDriver = yield* GitVcsDriver.GitVcsDriver;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
-  const forkPolicy = yield* DelegationPolicy.make; // Fork add-on: agent instructions.
+  const forkPolicy = yield* DelegationPolicy.make; // Fork add-on(agent-instructions)
 
   const requireProject = (projectId: ProjectId) =>
     projects.getById(projectId).pipe(
@@ -2322,7 +2322,7 @@ const make = Effect.gen(function* () {
       if (input.target !== undefined && environmentId !== undefined) {
         yield* requireCapability(callerScope);
         const scope = yield* requireThreadScope(callerScope, "delegate_task");
-        yield* forkPolicy.checkRemote(scope.thread.threadId); // Fork add-on: agent instructions.
+        yield* forkPolicy.checkRemote(scope.thread.threadId); // Fork add-on(agent-instructions)
         // The task's child runs as an ordinary thread there; this thread keeps the task.
         const { taskId } = yield* remoteDelegation.delegate(scope, {
           ...input,
@@ -2362,35 +2362,35 @@ const make = Effect.gen(function* () {
         operation: "delegate-task",
       });
       const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
-      // Fork add-on: agent instructions. A receipt replay does not need a fresh provider
+      // Fork add-on(agent-instructions): A receipt replay does not need a fresh provider
       // snapshot; its original dispatch target is already recorded under this exact command id.
-      const providers = isRetryOfAcceptedDelegation ? [] : yield* loadProviders; // Fork add-on
-      const policy /* Fork add-on */ = yield* forkPolicy.prepare({
-        parent, // Fork add-on
-        request: input, // Fork add-on
-        providers, // Fork add-on
-        isRetry: isRetryOfAcceptedDelegation, // Fork add-on
-      }); // Fork add-on: agent instructions.
-      // Fork add-on: agent instructions. The command id is derived from this caller, operation,
+      const providers = isRetryOfAcceptedDelegation ? [] : yield* loadProviders; // Fork add-on(agent-instructions)
+      const policy /* Fork add-on(agent-instructions) */ = yield* forkPolicy.prepare({
+        parent, // Fork add-on(agent-instructions)
+        request: input, // Fork add-on(agent-instructions)
+        providers, // Fork add-on(agent-instructions)
+        isRetry: isRetryOfAcceptedDelegation, // Fork add-on(agent-instructions)
+      }); // Fork add-on(agent-instructions)
+      // Fork add-on(agent-instructions): The command id is derived from this caller, operation,
       // and request key. Once its receipt exists, dispatch can only replay that receipt; resolving
       // current provider and mode settings here could reject (or appear to redirect) an already
       // accepted worker.
-      const target: ResolvedTarget = isRetryOfAcceptedDelegation // Fork add-on
-        ? { modelSelection: parent.thread.modelSelection, supportedRuntimeModes: undefined } // Fork add-on
+      const target: ResolvedTarget = isRetryOfAcceptedDelegation // Fork add-on(agent-instructions)
+        ? { modelSelection: parent.thread.modelSelection, supportedRuntimeModes: undefined } // Fork add-on(agent-instructions)
         : yield* resolveTargetRechecking({
             parent,
-            target: policy.target, // Fork add-on: agent instructions.
+            target: policy.target, // Fork add-on(agent-instructions)
             providers,
-            skipProjectEnablementFilter: false, // Fork add-on: agent instructions.
+            skipProjectEnablementFilter: false, // Fork add-on(agent-instructions)
           });
-      const runtimeMode = isRetryOfAcceptedDelegation // Fork add-on
-        ? parent.thread.runtimeMode // Fork add-on
+      const runtimeMode = isRetryOfAcceptedDelegation // Fork add-on(agent-instructions)
+        ? parent.thread.runtimeMode // Fork add-on(agent-instructions)
         : yield* resolveRuntimeMode(parent.thread.runtimeMode, input.runtimeMode, target);
-      const interactionMode = isRetryOfAcceptedDelegation // Fork add-on
-        ? parent.thread.interactionMode // Fork add-on
+      const interactionMode = isRetryOfAcceptedDelegation // Fork add-on(agent-instructions)
+        ? parent.thread.interactionMode // Fork add-on(agent-instructions)
         : yield* resolveInteractionMode(parent.thread.interactionMode, input.interactionMode);
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
-      if (policy.isolation /* Fork add-on */ === "worktree" && !isRetryOfAcceptedDelegation) {
+      if (policy.isolation /* Fork add-on(agent-instructions) */ === "worktree" && !isRetryOfAcceptedDelegation) {
         const project = yield* requireProject(parent.thread.projectId);
         const base = yield* gitDriver
           .resolveCommit({
@@ -2431,7 +2431,7 @@ const make = Effect.gen(function* () {
           parentThreadId: scope.thread.threadId,
           parentRunId: parentRun.id,
           parentNodeId: parentRun.rootNodeId,
-          task: taskPrompt({ ...input, task: policy.task }), // Fork add-on: agent instructions.
+          task: taskPrompt({ ...input, task: policy.task }), // Fork add-on(agent-instructions)
           ...(input.title === undefined ? {} : { title: input.title }),
           modelSelection: target.modelSelection,
           runtimeMode,
@@ -2478,11 +2478,11 @@ const make = Effect.gen(function* () {
           runId: childRunEvent.event.payload.id,
         });
       }
-      /* Fork add-on */ yield* forkPolicy.startTimeLimit(policy, {
-        parentThreadId: scope.thread.threadId, // Fork add-on
-        taskId, // Fork add-on
-        commandId, // Fork add-on
-      }); // Fork add-on: agent instructions.
+      /* Fork add-on(agent-instructions) */ yield* forkPolicy.startTimeLimit(policy, {
+        parentThreadId: scope.thread.threadId, // Fork add-on(agent-instructions)
+        taskId, // Fork add-on(agent-instructions)
+        commandId, // Fork add-on(agent-instructions)
+      }); // Fork add-on(agent-instructions)
 
       if (input.mode !== "wait") {
         return yield* readTask(scope, taskId, false, true);

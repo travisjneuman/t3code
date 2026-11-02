@@ -20,7 +20,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   showInteractionModeToggle: boolean;
   showPermissions?: boolean;
-  forkMenuContent?: ReactNode; // Fork add-on: agent instructions.
+  forkMenuContent?: ReactNode; // Fork add-on(agent-instructions)
   size?: "sm" | "xs";
   /** Close the portaled popup when its trigger hides. */
   hidden?: boolean;
@@ -75,7 +75,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             onRuntimeModeChange={props.onRuntimeModeChange}
           />
         )}
-        {props.forkMenuContent /* Fork add-on: agent instructions. */}
+        {props.forkMenuContent /* Fork add-on(agent-instructions) */}
       </MenuPopup>
     </Menu>
   );

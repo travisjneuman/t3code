@@ -27,7 +27,7 @@ export interface SelectableModelOption {
   slug: string;
   name: string;
   aliases?: ReadonlyArray<string> | undefined;
-  supersedes?: ReadonlyArray<string> | undefined; // Fork add-on: retired models.
+  supersedes?: ReadonlyArray<string> | undefined; // Fork add-on(retired-models)
 }
 
 export function createModelCapabilities(input: {
@@ -457,8 +457,8 @@ export function resolveSelectableModel(
     return byAlias.slug;
   }
 
-  const bySuccessor = options.find((option) => option.supersedes?.includes(trimmed)); // Fork add-on: retired models.
-  if (bySuccessor) return bySuccessor.slug; // Fork add-on: retired models.
+  const bySuccessor = options.find((option) => option.supersedes?.includes(trimmed)); // Fork add-on(retired-models)
+  if (bySuccessor) return bySuccessor.slug; // Fork add-on(retired-models)
 
   const normalized = normalizeModelSlug(trimmed, provider);
   if (!normalized) {

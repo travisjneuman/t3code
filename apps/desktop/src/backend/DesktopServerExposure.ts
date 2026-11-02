@@ -624,10 +624,10 @@ export const make = Effect.gen(function* () {
         tailscaleStatusCache,
         tailscaleIpv4AddressKey(currentNetworkInterfaces),
       ),
-      readHttpsCertificatesEnabled: Cache.get( // Fork add-on: the cached status says whether tailnet HTTPS is on.
-        tailscaleStatusCache, // Fork add-on
-        tailscaleIpv4AddressKey(currentNetworkInterfaces), // Fork add-on
-      ).pipe(Effect.map((status) => status?.httpsServeEnabled ?? null)), // Fork add-on
+      readHttpsCertificatesEnabled: Cache.get( // Fork add-on(tailscale-https): the cached status says whether tailnet HTTPS is on.
+        tailscaleStatusCache, // Fork add-on(tailscale-https)
+        tailscaleIpv4AddressKey(currentNetworkInterfaces), // Fork add-on(tailscale-https)
+      ).pipe(Effect.map((status) => status?.httpsServeEnabled ?? null)), // Fork add-on(tailscale-https)
     }).pipe(
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
       Effect.provideService(HttpClient.HttpClient, httpClient),

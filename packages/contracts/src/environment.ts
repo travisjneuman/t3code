@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import {
   EnvironmentId,
   ForwardCompatibleOptional,
-  IsoDateTime, // Fork add-on: server start time.
+  IsoDateTime, // Fork add-on(host-releases): server start time.
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
@@ -164,15 +164,15 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   triage: Schema.optionalKey(Schema.Boolean),
   /** Server accepts `{ type: "once" }` scheduled tasks; older servers reject them on save. */
   oneTimeSchedules: Schema.optionalKey(Schema.Boolean),
-  hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers hostBackups.list.
-  existingCheckout: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers existingCheckout.find.
-  existingCheckoutFolder: Schema.optionalKey(Schema.Boolean), // Fork add-on: existingCheckout.find takes a folder to check.
-  threadRetention: Schema.optionalKey(Schema.Boolean), // Fork add-on: server answers threadRetention.storage and runs thread retention.
+  hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on(host-backups): server answers hostBackups.list.
+  existingCheckout: Schema.optionalKey(Schema.Boolean), // Fork add-on(existing-checkout): server answers existingCheckout.find.
+  existingCheckoutFolder: Schema.optionalKey(Schema.Boolean), // Fork add-on(existing-checkout): existingCheckout.find takes a folder to check.
+  threadRetention: Schema.optionalKey(Schema.Boolean), // Fork add-on(thread-retention): server answers threadRetention.storage and runs thread retention.
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 
-export const ServerReleaseSource = Schema.Literals(["fork", "upstream", "custom"]); // Fork add-on: update source.
-export type ServerReleaseSource = typeof ServerReleaseSource.Type; // Fork add-on: update source.
+export const ServerReleaseSource = Schema.Literals(["fork", "upstream", "custom"]); // Fork add-on(host-releases): update source.
+export type ServerReleaseSource = typeof ServerReleaseSource.Type; // Fork add-on(host-releases): update source.
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,
@@ -180,16 +180,16 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   platform: ExecutionEnvironmentPlatform,
   serverVersion: TrimmedNonEmptyString,
   orchestrationProtocolVersion: Schema.optionalKey(Schema.Int),
-  releaseSource: ForwardCompatibleOptional(ServerReleaseSource), // Fork add-on: absent means unknown.
-  startedAt: Schema.optionalKey(IsoDateTime), // Fork add-on: server start time.
-  forkBuild: Schema.optionalKey(TrimmedNonEmptyString), // Fork add-on: fork commit of a host build.
+  releaseSource: ForwardCompatibleOptional(ServerReleaseSource), // Fork add-on(host-releases): absent means unknown.
+  startedAt: Schema.optionalKey(IsoDateTime), // Fork add-on(host-releases): server start time.
+  forkBuild: Schema.optionalKey(TrimmedNonEmptyString), // Fork add-on(host-releases): fork commit of a host build.
   /** Highest migration this server's database holds; absent on older servers. */
   databaseMigration: Schema.optionalKey(Schema.Int),
   capabilities: ExecutionEnvironmentCapabilities,
 });
 export type ExecutionEnvironmentDescriptor = typeof ExecutionEnvironmentDescriptor.Type;
 
-// Fork add-on: the version a server's launcher selects and update targets name. Two fork builds
+// Fork add-on(host-releases): the version a server's launcher selects and update targets name. Two fork builds
 // of one upstream nightly differ only here.
 export const environmentRuntimeVersion = (
   environment: Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "forkBuild">,

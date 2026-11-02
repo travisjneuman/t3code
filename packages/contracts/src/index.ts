@@ -55,26 +55,26 @@ export * from "./agentSessions.ts";
 export * from "./assets.ts";
 export * from "./review.ts";
 export * from "./mcpApps.ts";
-export * from "./sessionInsights.ts"; // Fork add-on: session details.
+export * from "./sessionInsights.ts"; // Fork add-on(session-details)
 export * from "./browserImport.ts";
 export * from "./browserProfile.ts";
 export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
-export * from "./remote-apps.ts"; // Fork add-on: remote apps.
-export * from "./forkDesktopBridge.ts"; // Fork add-on: desktop bridge additions.
-export * from "./forkAgentSettings.ts"; // Fork add-on: agent instructions.
-export * from "./externalSessions.ts"; // Fork add-on: external sessions.
-export * from "./sessionSearch.ts"; // Fork add-on: cross-agent session search.
-export * from "./threadExport.ts"; // Fork add-on: thread export.
-export * from "./saveToNotes.ts"; // Fork add-on: save to notes.
-export * from "./compareAgents.ts"; // Fork add-on: compare agents.
-export * from "./hermesSessions.ts"; // Fork add-on: Hermes provider.
-export * from "./maintenanceQueue.ts"; // Fork add-on: maintenance queue.
-export * from "./threadExchanges.ts"; // Fork add-on: save to notes, compare agents.
-export * from "./hostBackups.ts"; // Fork add-on: host backups.
-export * from "./existingCheckout.ts"; // Fork add-on: existing checkout.
-export * from "./threadRetention.ts"; // Fork add-on: thread retention.
+export * from "./remote-apps.ts"; // Fork add-on(web-apps)
+export * from "./forkDesktopBridge.ts"; // Fork add-on(core): desktop bridge additions.
+export * from "./forkAgentSettings.ts"; // Fork add-on(agent-instructions)
+export * from "./externalSessions.ts"; // Fork add-on(other-agents)
+export * from "./sessionSearch.ts"; // Fork add-on(session-search)
+export * from "./threadExport.ts"; // Fork add-on(thread-export)
+export * from "./saveToNotes.ts"; // Fork add-on(save-to-notes)
+export * from "./compareAgents.ts"; // Fork add-on(compare-agents)
+export * from "./hermesSessions.ts"; // Fork add-on(hermes)
+export * from "./maintenanceQueue.ts"; // Fork add-on(maintenance-queue)
+export * from "./threadExchanges.ts"; // Fork add-on(save-to-notes,compare-agents)
+export * from "./hostBackups.ts"; // Fork add-on(host-backups)
+export * from "./existingCheckout.ts"; // Fork add-on(existing-checkout)
+export * from "./threadRetention.ts"; // Fork add-on(thread-retention)
 export * from "./previewCapture.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";

@@ -531,7 +531,7 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
   });
 
   const executablePath = path.join(contentDir, executableName);
-  // Fork add-on: fleet hosts run the archive they build against their own libatomic; Arch lacks dpkg and patchelf.
+  // Fork add-on(tjn-fleet): fleet hosts run the archive they build against their own libatomic; Arch lacks dpkg and patchelf.
   if (input.platform === "linux" && process.env.T3CODE_FORK_BUILD === undefined) {
     yield* bundleLinuxLibatomic({ repoRoot, contentDir, executablePath });
   }

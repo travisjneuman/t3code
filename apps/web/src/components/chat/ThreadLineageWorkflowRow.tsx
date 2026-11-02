@@ -17,8 +17,8 @@ import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Spinner } from "../ui/spinner";
 import {
-  THREAD_DETAILS_PANEL_AGENT_SPLIT_GROUP_CLASS, // Fork add-on: compact lineage agents
-  THREAD_DETAILS_PANEL_AGENT_SPLIT_SEPARATOR_CLASS, // Fork add-on: compact lineage agents
+  THREAD_DETAILS_PANEL_AGENT_SPLIT_GROUP_CLASS, // Fork add-on(subagent-tree)
+  THREAD_DETAILS_PANEL_AGENT_SPLIT_SEPARATOR_CLASS, // Fork add-on(subagent-tree)
 } from "./threadDetailsPanelStyles";
 
 function phaseElapsed(phase: SubagentWorkflowGroup["phases"][number]) {
@@ -74,7 +74,7 @@ function WorkflowMemberRow({
           delay={200}
           render={
             <ThreadDetailsControl
-              part="agentLine" // Fork add-on: compact lineage agents
+              part="agentLine" // Fork add-on(subagent-tree)
               aria-label={`Open ${member.title} chat`}
               disabled={!canOpen}
               onClick={() => canOpen && onOpen(threadId)}
@@ -86,13 +86,13 @@ function WorkflowMemberRow({
             provider={provider}
             providerEntries={providerEntries}
             status={member.status}
-            compact // Fork add-on: compact lineage agents
+            compact // Fork add-on(subagent-tree)
           />
           <span className="min-w-0 flex-1 truncate">{member.title}</span>
           <span className="sr-only">{member.status}</span>
           {member.startedAt ? (
             <span
-              className="shrink-0 font-normal tabular-nums text-muted-foreground" /* Fork add-on: compact lineage agents */
+              className="shrink-0 font-normal tabular-nums text-muted-foreground" /* Fork add-on(subagent-tree) */
             >
               <AgentElapsed agent={member} />
             </span>
@@ -152,13 +152,13 @@ export function ThreadLineageWorkflowRow({
       <div
         className={cn(
           "relative",
-          THREAD_DETAILS_PANEL_AGENT_SPLIT_GROUP_CLASS, // Fork add-on: compact lineage agents
+          THREAD_DETAILS_PANEL_AGENT_SPLIT_GROUP_CLASS, // Fork add-on(subagent-tree)
         )}
       >
         {header}
         {onStop ? (
           <div
-            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100" /* Fork add-on: compact lineage agents */
+            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100" /* Fork add-on(subagent-tree) */
           >
             <Tooltip>
               <TooltipTrigger
@@ -166,7 +166,7 @@ export function ThreadLineageWorkflowRow({
                   <ThreadDetailsControl
                     size="icon-xs"
                     variant="ghost"
-                    part="agentIcon" // Fork add-on: compact lineage agents
+                    part="agentIcon" // Fork add-on(subagent-tree)
                     tone="destructive"
                     aria-label={`Stop workflow ${label}`}
                     disabled={stopDisabled}
@@ -175,11 +175,11 @@ export function ThreadLineageWorkflowRow({
                 }
               >
                 {stopping ? (
-                  <Spinner aria-hidden size="2xs" /* Fork add-on: compact lineage agents */ />
+                  <Spinner aria-hidden size="2xs" /* Fork add-on(subagent-tree) */ />
                 ) : (
                   <SquareIcon
                     aria-hidden
-                    className={"size-2.5 fill-current" /* Fork add-on: compact lineage agents */}
+                    className={"size-2.5 fill-current" /* Fork add-on(subagent-tree) */}
                   />
                 )}
               </TooltipTrigger>
@@ -190,13 +190,13 @@ export function ThreadLineageWorkflowRow({
         <span
           aria-hidden="true"
           className={
-            THREAD_DETAILS_PANEL_AGENT_SPLIT_SEPARATOR_CLASS /* Fork add-on: compact lineage agents */
+            THREAD_DETAILS_PANEL_AGENT_SPLIT_SEPARATOR_CLASS /* Fork add-on(subagent-tree) */
           }
         />
         <ThreadDetailsControl
           size="sm"
           variant="ghost"
-          part="agentSecondary" // Fork add-on: compact lineage agents
+          part="agentSecondary" // Fork add-on(subagent-tree)
           aria-expanded={expanded}
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           onClick={() => setExpanded((value) => !value)}
@@ -204,7 +204,7 @@ export function ThreadLineageWorkflowRow({
           <ChevronDownIcon
             aria-hidden
             className={cn(
-              "size-3 text-muted-foreground transition-transform", // Fork add-on: compact lineage agents
+              "size-3 text-muted-foreground transition-transform", // Fork add-on(subagent-tree)
               expanded && "rotate-180",
             )}
           />
@@ -212,7 +212,7 @@ export function ThreadLineageWorkflowRow({
       </div>
       {expanded ? (
         <ul
-          className="m-0 list-none p-0 ps-4.5" /* Fork add-on: compact lineage agents: aligns members under the 12px icon's title */
+          className="m-0 list-none p-0 ps-4.5" /* Fork add-on(subagent-tree): aligns members under the 12px icon's title */
         >
           {phases.map((phase) => {
             const open = phaseOpen.get(phase.index) ?? phase.state === "running";
@@ -221,7 +221,7 @@ export function ThreadLineageWorkflowRow({
               <li key={phase.index}>
                 <CollapsibleSectionHeader
                   variant="panel"
-                  size="compact" // Fork add-on: compact lineage agents
+                  size="compact" // Fork add-on(subagent-tree)
                   tone={phase.state === "running" ? "emphasized" : "muted"}
                   expanded={open}
                   aria-label={`${open ? "Collapse" : "Expand"} ${phase.title} phase, ${status}`}
@@ -232,13 +232,13 @@ export function ThreadLineageWorkflowRow({
                         <SectionHeaderStatus>Failed</SectionHeaderStatus>
                       ) : null}
                       <span
-                        className="shrink-0 font-normal tabular-nums" /* Fork add-on: compact lineage agents */
+                        className="shrink-0 font-normal tabular-nums" /* Fork add-on(subagent-tree) */
                       >
                         {phase.settledCount}/{phase.members.length}{" "}
                         {phase.members.length === 1 ? "agent" : "agents"}
                       </span>
                       <span
-                        className="shrink-0 font-normal tabular-nums empty:hidden" /* Fork add-on: compact lineage agents */
+                        className="shrink-0 font-normal tabular-nums empty:hidden" /* Fork add-on(subagent-tree) */
                       >
                         <AgentElapsed agent={phaseElapsed(phase)} />
                       </span>
@@ -280,7 +280,7 @@ export function ThreadLineageWorkflowRow({
           ))}
           {phases.length === 0 && group.unphasedMembers.length === 0 ? (
             <li
-              className="flex h-5 items-center px-2.5 text-3xs text-muted-foreground/70" /* Fork add-on: compact lineage agents */
+              className="flex h-5 items-center px-2.5 text-3xs text-muted-foreground/70" /* Fork add-on(subagent-tree) */
             >
               No agents yet
             </li>

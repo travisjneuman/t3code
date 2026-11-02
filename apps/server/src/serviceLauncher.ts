@@ -28,8 +28,8 @@ import {
   SERVICE_RESTART_PENDING_FILE,
   SERVICE_STOP_MARKER_FILE,
 } from "./cloud/serviceProtocol.ts";
-import { syncCurrentRuntime } from "./cloud/currentRuntime.ts"; // Fork add-on: fixed runtime/current path.
-import { LAUNCHER_VERSION_ENV, SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts"; // Fork add-on: launcher refresh.
+import { syncCurrentRuntime } from "./cloud/currentRuntime.ts"; // Fork add-on(host-releases): fixed runtime/current path.
+import { LAUNCHER_VERSION_ENV, SERVICE_RUNTIME_VERSION } from "./cloud/runtimeVersion.ts"; // Fork add-on(host-releases): launcher refresh.
 
 const HANDOFF_DELAY_MS = 2_000;
 /**
@@ -344,7 +344,7 @@ async function discardDatabaseBackup(baseDir: string, updateId: string): Promise
 }
 
 function reportRecoveryCleanupFailure(error: unknown): void {
-  // Fork add-on: retained recovery data must be visible if the filesystem blocks cleanup.
+  // Fork add-on(host-releases): retained recovery data must be visible if the filesystem blocks cleanup.
   process.stderr.write(
     `[service-launcher] Temporary database recovery cleanup failed: ${String(error)}\n`,
   );
@@ -581,18 +581,18 @@ export class Launcher {
     }
     if (this.#stopping) return;
     const paths = runtimePaths(this.#baseDir, version);
-    const entryPath = await syncCurrentRuntime(this.#baseDir, version); // Fork add-on: fixed runtime/current path.
+    const entryPath = await syncCurrentRuntime(this.#baseDir, version); // Fork add-on(host-releases): fixed runtime/current path.
     const context: ServiceLauncherContext = {
       protocol: SERVICE_LAUNCHER_PROTOCOL,
       childVersion: version,
       ...(update === undefined ? {} : { update }),
     };
-    const spawnArguments = runtimeSpawnArguments({ ...paths, entryPath }); // Fork add-on: fixed runtime/current path.
+    const spawnArguments = runtimeSpawnArguments({ ...paths, entryPath }); // Fork add-on(host-releases): fixed runtime/current path.
     const child = NodeChildProcess.spawn(spawnArguments.command, spawnArguments.args, {
       env: {
         ...this.#environment,
         [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context),
-        [LAUNCHER_VERSION_ENV]: SERVICE_RUNTIME_VERSION, // Fork add-on: launcher refresh.
+        [LAUNCHER_VERSION_ENV]: SERVICE_RUNTIME_VERSION, // Fork add-on(host-releases): launcher refresh.
       },
       stdio: ["inherit", "inherit", "inherit", "ipc"],
     });

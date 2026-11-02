@@ -105,7 +105,7 @@ const LOGIN_SHELL_ENV_NAMES = [
   "NODE_EXTRA_CA_CERTS",
   "T3CODE_TELEMETRY_ENABLED",
   "T3CODE_GITHUB_APP_CLIENT_ID",
-  "TJN_REPO_SYNC_RUNNER", // Fork add-on: local source updates push through it.
+  "TJN_REPO_SYNC_RUNNER", // Fork add-on(tjn-fleet): local source updates push through it.
   "__MISE_DIFF",
   "JAVA_HOME",
 ] as const;
@@ -473,7 +473,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       "JAVA_HOME",
       "T3CODE_TELEMETRY_ENABLED",
       "T3CODE_GITHUB_APP_CLIENT_ID",
-      "TJN_REPO_SYNC_RUNNER", // Fork add-on: local source updates push through it.
+      "TJN_REPO_SYNC_RUNNER", // Fork add-on(tjn-fleet): local source updates push through it.
     ] as const) {
       if (!config.env[name] && shellEnvironment[name]) {
         config.env[name] = shellEnvironment[name];

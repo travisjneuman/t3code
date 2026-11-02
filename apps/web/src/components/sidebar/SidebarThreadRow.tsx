@@ -114,10 +114,10 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } f
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
-import { ContinuedFromLine } from "../../external-sessions/handBack"; // Fork add-on: external-session hand back.
-import { SubagentToggle } from "../../subagents/SidebarSubagentRows"; // Fork add-on: nested subagents.
-import { ThreadCardMeta } from "../../fork-sidebar/ThreadCardMeta"; // Fork add-on: compact sidebar cards.
-import { THREAD_CARD_LAYOUT } from "../../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
+import { ContinuedFromLine } from "../../external-sessions/handBack"; // Fork add-on(other-agents): external-session hand back.
+import { SubagentToggle } from "../../subagents/SidebarSubagentRows"; // Fork add-on(subagent-tree)
+import { ThreadCardMeta } from "../../fork-sidebar/ThreadCardMeta"; // Fork add-on(compact-cards)
+import { THREAD_CARD_LAYOUT } from "../../sidebar-compact/threadCardLayout"; // Fork add-on(compact-cards)
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
 // status and auth on every provider; leaving those out keeps each
@@ -331,9 +331,9 @@ function SidebarThreadTooltip({
             </div>
           </div>
         ) : null}
-        <ContinuedFromLine // Fork add-on
-          threadId={thread.id} // Fork add-on
-          environmentId={thread.environmentId} // Fork add-on
+        <ContinuedFromLine // Fork add-on(other-agents)
+          threadId={thread.id} // Fork add-on(other-agents)
+          environmentId={thread.environmentId} // Fork add-on(other-agents)
         />
         {previousProviderNames.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
@@ -551,7 +551,7 @@ type SidebarThreadRowProps = {
   snoozeSupported: boolean;
   pinningSupported: boolean;
   isPinned: boolean;
-  subagentCount: number; // Fork add-on: nested subagents.
+  subagentCount: number; // Fork add-on(subagent-tree)
   sortable?: SortableThreadRowBag | undefined;
   dropVerb: SidebarDropVerb | null;
   dragOverPinned: boolean;
@@ -1142,7 +1142,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const diff = latestRunDiff(thread);
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const metaLineEmpty =
-    variant !== "card" && // Fork add-on: the card's meta line always names its machine.
+    variant !== "card" && // Fork add-on(compact-cards): the card's meta line always names its machine.
     !thread.branch &&
     !showsScratchMachine &&
     prBadge === null &&
@@ -1204,7 +1204,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     const inFolder = variant === "folder" || multiline;
     return (
       <li
-        data-fork-slim-row={THREAD_CARD_LAYOUT} // Fork add-on: compact sidebar cards.
+        data-fork-slim-row={THREAD_CARD_LAYOUT} // Fork add-on(compact-cards)
         data-thread-item={threadKey}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
@@ -1226,7 +1226,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 aria-label={accessibility.label}
                 aria-current={accessibility.current}
                 data-testid={inFolder ? "sidebar-row-folder" : "sidebar-row-slim"}
-                data-fork-card-part="slim" // Fork add-on: compact sidebar cards.
+                data-fork-card-part="slim" // Fork add-on(compact-cards)
                 aria-busy={isRegeneratingTitle || undefined}
                 className={cn(
                   rowSurfaceClassName,
@@ -1255,11 +1255,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   )}
                 >
                   {props.project ? (
-                    <ProjectFavicon project={props.project} className="size-3" /* Fork add-on */ />
+                    <ProjectFavicon project={props.project} className="size-3" /* Fork add-on(compact-cards) */ />
                   ) : null}
                 </span>
               )}
-              <SubagentToggle threadKey={threadKey} count={props.subagentCount} /* Fork add-on */ />
+              <SubagentToggle threadKey={threadKey} count={props.subagentCount} /* Fork add-on(subagent-tree) */ />
               {draftIndicator}
               {title}
               {multiline ? titleLineIcons : null}
@@ -1404,7 +1404,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   return (
     <li
       data-thread-item={threadKey}
-      data-fork-thread-card={THREAD_CARD_LAYOUT} // Fork add-on: compact sidebar cards.
+      data-fork-thread-card={THREAD_CARD_LAYOUT} // Fork add-on(compact-cards)
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
@@ -1425,7 +1425,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               aria-label={accessibility.label}
               aria-current={accessibility.current}
               data-testid="sidebar-row-card"
-              data-fork-card-part="surface" // Fork add-on: compact sidebar cards.
+              data-fork-card-part="surface" // Fork add-on(compact-cards)
               aria-busy={isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
               onClick={handleClick}
@@ -1437,14 +1437,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         >
           {accessibleTitle}
           <div
-            data-fork-card-part="box" // Fork add-on
+            data-fork-card-part="box" // Fork add-on(compact-cards)
             className={cn(
               "relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
               metaLineEmpty && "h-auto",
             )}
           >
             <div
-              data-fork-card-part="head" // Fork add-on
+              data-fork-card-part="head" // Fork add-on(compact-cards)
               className="flex h-5 min-w-0 items-center gap-1.5"
             >
               {draftIndicator}
@@ -1456,7 +1456,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {pinIndicator}
               {props.projectDisplayName ? (
                 <span
-                  data-fork-card-part="project" // Fork add-on: compact sidebar cards.
+                  data-fork-card-part="project" // Fork add-on(compact-cards)
                   className={cn("min-w-0 flex-1 truncate font-normal text-secondary-label text-xs")}
                 >
                   {props.projectDisplayName}
@@ -1468,7 +1468,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 dragDestination
               ) : (
                 <span
-                  data-fork-card-part="status" // Fork add-on: compact sidebar cards.
+                  data-fork-card-part="status" // Fork add-on(compact-cards)
                   className={cn(
                     "group/sidebar-status-slot relative ml-auto flex h-5 min-w-8 shrink-0 items-stretch justify-end text-xs",
                     props.sweepAction !== null && "hidden",
@@ -1595,7 +1595,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </div>
             <div
               data-fork-card-part="title"
-              className="mt-1 flex min-w-0 items-center gap-1.5" /* Fork add-on */
+              className="mt-1 flex min-w-0 items-center gap-1.5" /* Fork add-on(compact-cards) */
             >
               {title}
               {isRegeneratingTitle ? (
@@ -1605,22 +1605,22 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               ) : null}
               {titleLineIcons}
             </div>
-            <ThreadCardMeta // Fork add-on
-              thread={thread} // Fork add-on
-              threadKey={threadKey} // Fork add-on
-              subagentCount={props.subagentCount} // Fork add-on
-              environmentLabel={props.environmentLabel} // Fork add-on
-              environmentMachine={props.environmentMachine} // Fork add-on
-              isRemote={isRemote} // Fork add-on
-              terminalStatusIcon={terminalStatusIcon} // Fork add-on
-              prBadge={prBadge} // Fork add-on
-              diff={diff} // Fork add-on
-              providerStack /* Fork add-on */={
+            <ThreadCardMeta // Fork add-on(compact-cards)
+              thread={thread} // Fork add-on(compact-cards)
+              threadKey={threadKey} // Fork add-on(compact-cards)
+              subagentCount={props.subagentCount} // Fork add-on(subagent-tree)
+              environmentLabel={props.environmentLabel} // Fork add-on(compact-cards)
+              environmentMachine={props.environmentMachine} // Fork add-on(compact-cards)
+              isRemote={isRemote} // Fork add-on(compact-cards)
+              terminalStatusIcon={terminalStatusIcon} // Fork add-on(compact-cards)
+              prBadge={prBadge} // Fork add-on(compact-cards)
+              diff={diff} // Fork add-on(compact-cards)
+              providerStack /* Fork add-on(compact-cards) */={
                 <SidebarProviderStack
                   thread={thread}
                   providerEntryByInstanceId={props.providerEntryByInstanceId}
                 />
-              } // Fork add-on
+              } // Fork add-on(compact-cards)
             />
           </div>
         </TooltipTrigger>

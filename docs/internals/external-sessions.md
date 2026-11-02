@@ -183,7 +183,7 @@ in T3, which binds an ordinary thread to that same session.
   `external-sessions/`, web `apps/web/src/external-sessions/` plus one route, and contracts
   `externalSessions.ts`. The contract exports the RPC tuple (`ExternalSessionsRpcs`), the scope
   map, and the subscription method type, so a new RPC never touches an upstream file. Upstream
-  files only gain one-line hooks marked "Fork add-on":
+  files only gain one-line hooks marked `Fork add-on(other-agents)`:
   - the contracts index and RPC group (one spread)
   - RPC authorization (one spread)
   - the client subscription tag union

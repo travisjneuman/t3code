@@ -6,7 +6,7 @@ import type {
 } from "@t3tools/contracts";
 
 import type { UsageRecord, UsageSpeed } from "@t3tools/provider-core/server/usage";
-import { usageModelPriceId } from "@t3tools/shared/usageModelIdentity"; // Fork add-on: one price per model across routes.
+import { usageModelPriceId } from "@t3tools/shared/usageModelIdentity"; // Fork add-on(usage-by-model)
 
 export interface TokenRates {
   readonly inputCostPerToken: number;
@@ -241,7 +241,7 @@ export function priceUsage(
   overrides?: RateTable,
 ): PricedUsage {
   const { model, totals, reportedCostUsd } = record;
-  const override = overrides?.get(model.trim()) ?? overrides?.get(usageModelPriceId(model)); // Fork add-on: one price per model across routes.
+  const override = overrides?.get(model.trim()) ?? overrides?.get(usageModelPriceId(model)); // Fork add-on(usage-by-model)
   const reported =
     override === undefined && reportedCostUsd !== null && Number.isFinite(reportedCostUsd)
       ? reportedCostUsd
@@ -283,7 +283,7 @@ export function cacheSavingsUsd(
 ): number {
   const rate =
     overrides?.get(record.model.trim()) ??
-    overrides?.get(usageModelPriceId(record.model)) ?? // Fork add-on: one price per model across routes.
+    overrides?.get(usageModelPriceId(record.model)) ?? // Fork add-on(usage-by-model)
     lookupRate(table, record.rateModel ?? record.model);
   if (rate === null) return 0;
   const rates = ratesAt(rate, record.speed);

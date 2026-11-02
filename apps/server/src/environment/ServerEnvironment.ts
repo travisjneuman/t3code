@@ -24,7 +24,7 @@ import { databaseMigrationHead } from "../persistence/databaseMigrationHead.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import { resolveServerEnvironmentLabel } from "./ServerEnvironmentLabel.ts";
 import { detectServerEnvironmentMachineKind } from "./ServerEnvironmentMachine.ts";
-import { readServerReleaseFacts } from "./ServerReleaseFacts.ts"; // Fork add-on: update source and start time.
+import { readServerReleaseFacts } from "./ServerReleaseFacts.ts"; // Fork add-on(host-releases): update source and start time.
 
 export class ServerEnvironmentIdPersistenceError extends Schema.TaggedError<ServerEnvironmentIdPersistenceError>()(
   "ServerEnvironmentIdPersistenceError",
@@ -205,7 +205,7 @@ export const make = Effect.gen(function* () {
   const desktopAppUpdate =
     serverSelfUpdate === "desktop-managed" && serverConfig.desktopTelemetryControlFd !== undefined;
 
-  const releaseFacts = yield* readServerReleaseFacts; // Fork add-on: update source and start time.
+  const releaseFacts = yield* readServerReleaseFacts; // Fork add-on(host-releases): update source and start time.
   const databaseMigration = databaseMigrationHead(serverConfig.dbPath);
   const descriptor: ExecutionEnvironmentDescriptor = {
     environmentId,
@@ -217,7 +217,7 @@ export const make = Effect.gen(function* () {
     },
     serverVersion: packageJson.version,
     orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
-    ...releaseFacts, // Fork add-on: update source and start time.
+    ...releaseFacts, // Fork add-on(host-releases): update source and start time.
     ...(databaseMigration === undefined ? {} : { databaseMigration }),
     capabilities: {
       repositoryIdentity: true,
@@ -282,10 +282,10 @@ export const make = Effect.gen(function* () {
       peerLinks: true,
       mcpModeLimitHeader: true,
       linkFence: true,
-      hostBackups: true, // Fork add-on: host backups.
-      existingCheckout: true, // Fork add-on: existing checkout.
-      existingCheckoutFolder: true, // Fork add-on: existing checkout.
-      threadRetention: true, // Fork add-on: thread retention.
+      hostBackups: true, // Fork add-on(host-backups)
+      existingCheckout: true, // Fork add-on(existing-checkout)
+      existingCheckoutFolder: true, // Fork add-on(existing-checkout)
+      threadRetention: true, // Fork add-on(thread-retention)
     },
   };
 

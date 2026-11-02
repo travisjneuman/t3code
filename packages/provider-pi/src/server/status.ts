@@ -7,7 +7,7 @@ import type { PiSettings } from "../settings.ts";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { compareSemverVersions } from "@t3tools/shared/semver";
-import { brandPiModelName, brandProviderName } from "@t3tools/shared/modelBrandNames"; // Fork add-on: provider and model brand names.
+import { brandPiModelName, brandProviderName } from "@t3tools/shared/modelBrandNames"; // Fork add-on(model-brand-names)
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
@@ -125,9 +125,9 @@ function parseDiscoveredModels(
     seen.add(slug);
     parsed.push({
       slug,
-      name: brandPiModelName(provider, id, recordString(model, "name")), // Fork add-on: provider and model brand names.
-      subProvider: brandProviderName(provider), // Fork add-on: provider and model brand names.
-      ...(provider === "openai" ? { supersedes: [`openai-codex/${id}`] } : {}), // Fork add-on: retired models; Pi's ChatGPT login replaced openai-codex.
+      name: brandPiModelName(provider, id, recordString(model, "name")), // Fork add-on(model-brand-names)
+      subProvider: brandProviderName(provider), // Fork add-on(model-brand-names)
+      ...(provider === "openai" ? { supersedes: [`openai-codex/${id}`] } : {}), // Fork add-on(retired-models): Pi's ChatGPT login replaced openai-codex.
       isCustom: false,
       capabilities: thinkingCapabilitiesForPiModel(
         model,

@@ -320,10 +320,7 @@ export const prepareAntigravityProfile = Effect.fn("prepareAntigravityProfile")(
     ));
   const helperExecutable =
     platform === "win32" ? runtimeExecutablePath.replaceAll("\\", "/") : runtimeExecutablePath;
-  // Fork add-on: Node 22 writes an experimental warning to stderr when NODE_USE_ENV_PROXY is
-  // set, which fails the preflight's exact stderr match below.
-  const helperArguments = ["--no-warnings", "-e", browserHelperSource, "--"];
-  const browserArguments = [helperExecutable, ...helperArguments, "%s"];
+  const browserArguments = [helperExecutable, "-e", browserHelperSource, "--", "%s"];
   const browserCommand = browserArguments.map(quoteBrowserArgument).join(" ");
   if (
     browserCommand.includes(platform === "win32" ? ";" : ":") ||
@@ -373,7 +370,7 @@ export const prepareAntigravityProfile = Effect.fn("prepareAntigravityProfile")(
   const environment = antigravityEnvironment(profile, input.baseEnv ?? process.env, auth);
   yield* Effect.gen(function* () {
     const child = yield* spawner.spawn(
-      ChildProcess.make(helperExecutable, [...helperArguments, browserPreflightUrl], {
+      ChildProcess.make(helperExecutable, ["-e", browserHelperSource, "--", browserPreflightUrl], {
         env: environment,
         extendEnv: false,
         shell: false,

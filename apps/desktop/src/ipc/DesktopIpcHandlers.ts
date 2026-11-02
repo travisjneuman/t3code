@@ -78,7 +78,7 @@ import {
   installCliCommand,
   uninstallCliCommand,
 } from "./methods/cliCommand.ts";
-import { installForkIpcHandlers } from "../fork/ipcHandlers.ts"; // Fork add-on: fork IPC methods.
+import { installForkIpcHandlers } from "../fork/ipcHandlers.ts"; // Fork add-on(core): fork IPC methods.
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
@@ -166,5 +166,5 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   }
   yield* ipc.handle(PreviewIpc.listBrowserImportSources);
   yield* ipc.handle(PreviewIpc.importBrowserCookies);
-  yield* installForkIpcHandlers(ipc); // Fork add-on: confirm, source sync, remote apps, update gate.
+  yield* installForkIpcHandlers(ipc); // Fork add-on(core): confirm, source sync, remote apps, update gate.
 });

@@ -5,7 +5,7 @@ import * as References from "effect/References";
 import type * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 
-import { FORK_RPC_AGGREGATES } from "./forkRpcAggregates.ts"; // Fork add-on: add-on RPCs.
+import { FORK_RPC_AGGREGATES } from "./forkRpcAggregates.ts"; // Fork add-on(core)
 import { rpcRequestDuration, rpcRequestsTotal, withMetrics } from "./Metrics.ts";
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
@@ -169,7 +169,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.mcpAppsToolInfo]: "provider",
   [WS_METHODS.mcpAppsUpdateModelContext]: "provider",
   [WS_METHODS.mcpAppsReadResource]: "provider",
-  [WS_METHODS.sessionInsightsGet]: "provider", // Fork add-on: session details.
+  [WS_METHODS.sessionInsightsGet]: "provider", // Fork add-on(session-details)
   [WS_METHODS.subscribeVcsStatus]: "vcs",
   [WS_METHODS.subscribeWorktreeSetup]: "vcs",
   [WS_METHODS.worktreeSetupCancel]: "vcs",
@@ -221,7 +221,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
-  ...FORK_RPC_AGGREGATES, // Fork add-on: add-on RPCs.
+  ...FORK_RPC_AGGREGATES, // Fork add-on(core)
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";

@@ -14,7 +14,7 @@ import {
   resolveDesktopStateDir,
   type JoinPath,
 } from "./DesktopStatePaths.ts";
-import { forkAppScheme } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
+import { forkAppScheme } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on(identity)
 
 interface EarlyDesktopSettingsInput {
   readonly env: NodeJS.ProcessEnv;
@@ -32,7 +32,7 @@ export interface EarlyLinuxElectronOptions {
 }
 
 export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
-  `${forkAppScheme(isDevelopment)}.desktop`; // Fork add-on: identity.
+  `${forkAppScheme(isDevelopment)}.desktop`; // Fork add-on(identity)
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();

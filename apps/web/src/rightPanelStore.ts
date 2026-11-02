@@ -10,7 +10,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { useClosedViewStore } from "./closedViewStore";
 import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
-import type { RemoteAppPanelSurface } from "./remote-apps/panel/remoteAppPanelSurface"; // Fork add-on: remote app panel.
+import type { RemoteAppPanelSurface } from "./remote-apps/panel/remoteAppPanelSurface"; // Fork add-on(web-apps)
 import type { ChatFileAttachment } from "./types";
 
 const RIGHT_PANEL_KINDS = [
@@ -23,7 +23,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-request",
   "pull-requests",
   "side-chat",
-  "remote-app", // Fork add-on: remote app panel.
+  "remote-app", // Fork add-on(web-apps)
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -37,7 +37,7 @@ export interface DeviceTabTarget {
 }
 
 export type RightPanelSurface =
-  | RemoteAppPanelSurface // Fork add-on: remote app panel.
+  | RemoteAppPanelSurface // Fork add-on(web-apps)
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
   | { id: "device" | `device:${string}`; kind: "device"; target?: DeviceTabTarget; title?: string }
@@ -126,7 +126,7 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat" | "remote-app">, // Fork add-on: remote app panel.
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat" | "remote-app">, // Fork add-on(web-apps)
   ) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
@@ -186,7 +186,7 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat" | "remote-app">, // Fork add-on: remote app panel.
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat" | "remote-app">, // Fork add-on(web-apps)
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -209,7 +209,7 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "side-chat" | "remote-app">, // Fork add-on: remote app panel.
+  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "side-chat" | "remote-app">, // Fork add-on(web-apps)
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":

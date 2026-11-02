@@ -62,7 +62,7 @@ import {
   providerMessageTextWithAttachmentPaths,
 } from "@t3tools/provider-core/server/attachmentPrompt";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { sessionConfiguredMcpServers } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
+import { sessionConfiguredMcpServers } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on(session-details)
 import {
   makeSubagentChildThread,
   makeSubagentConversationArtifacts,
@@ -2343,7 +2343,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               detail: "Cursor turn requires non-empty text or attachments.",
             });
           }
-          const text = `${userText}\n\n${buildRuntimeInstructions({ harness: "Cursor", model: turnInput.modelSelection.model, agentScope: { thread: turnInput.appThread, provider: CursorAgentSdk.CURSOR_PROVIDER } })}`; // Fork add-on: agent instructions.
+          const text = `${userText}\n\n${buildRuntimeInstructions({ harness: "Cursor", model: turnInput.modelSelection.model, agentScope: { thread: turnInput.appThread, provider: CursorAgentSdk.CURSOR_PROVIDER } })}`; // Fork add-on(agent-instructions)
           return images.length === 0
             ? text
             : ({
@@ -2658,16 +2658,16 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               ),
           ),
           startTurn,
-          sessionInsights: /* Fork add-on */ {
-            mcpServers: ({ providerThread } /* Fork add-on */) =>
-              mcpSessions // Fork add-on
-                .read(providerThread.appThreadId ?? input.threadId) // Fork add-on
-                /* Fork add-on */ .pipe(
-                  /* Fork add-on */ Effect.map(
-                    (mcp) => sessionConfiguredMcpServers(Object.keys(cursorMcpServers(mcp) ?? {})), // Fork add-on
-                  ), // Fork add-on
-                ), // Fork add-on
-          }, // Fork add-on: session details.
+          sessionInsights: /* Fork add-on(session-details) */ {
+            mcpServers: ({ providerThread } /* Fork add-on(session-details) */) =>
+              mcpSessions // Fork add-on(session-details)
+                .read(providerThread.appThreadId ?? input.threadId) // Fork add-on(session-details)
+                /* Fork add-on(session-details) */ .pipe(
+                  /* Fork add-on(session-details) */ Effect.map(
+                    (mcp) => sessionConfiguredMcpServers(Object.keys(cursorMcpServers(mcp) ?? {})), // Fork add-on(session-details)
+                  ), // Fork add-on(session-details)
+                ), // Fork add-on(session-details)
+          }, // Fork add-on(session-details)
           compactThread: (turnInput) =>
             startTurn({
               ...turnInput,

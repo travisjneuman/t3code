@@ -25,7 +25,7 @@ import {
 } from "@t3tools/provider-core/server/handoffBudget";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { createOrchestrationV2TurnItemVisibility } from "@t3tools/shared/orchestrationV2Timeline";
-import { handoffHistoryOrigin } from "../external-sessions/importedHistory.ts"; // Fork add-on: continued external sessions.
+import { handoffHistoryOrigin } from "../external-sessions/importedHistory.ts"; // Fork add-on(other-agents)
 import type { ProjectionStoreV2Shape } from "./ProjectionStore.ts";
 
 export class ContextHandoffPrepareError extends Schema.TaggedError<ContextHandoffPrepareError>()(
@@ -154,7 +154,7 @@ const readOwnHistoryItems = Effect.fn("orchestrationV2.contextHandoff.readOwnHis
     const { turnItems } = yield* projectionStore.getThreadRecords(source.thread.id, ["turnItems"], {
       turnItemRunIds: [
         ...source.runs.filter((run) => run.ordinal <= throughRun.ordinal).map((run) => run.id),
-        ...(handoffHistoryOrigin(source.thread) === "v1_import" ? [null] : []), // Fork add-on: continued external sessions.
+        ...(handoffHistoryOrigin(source.thread) === "v1_import" ? [null] : []), // Fork add-on(other-agents)
       ],
     });
     return visibleConversationItems(source, turnItems);

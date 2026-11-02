@@ -77,7 +77,7 @@ const resolveTailscaleMagicDnsAdvertisedEndpoint = Effect.fn(
   readonly dnsName: string | null;
   readonly serveEnabled: boolean;
   readonly servePort?: number;
-  readonly httpsCertificatesEnabled?: boolean | null; // Fork add-on
+  readonly httpsCertificatesEnabled?: boolean | null; // Fork add-on(tailscale-https)
   readonly probe?: (baseUrl: string) => Effect.Effect<boolean, never, HttpClient.HttpClient>;
 }): Effect.fn.Return<Option.Option<AdvertisedEndpoint>, never, HttpClient.HttpClient> {
   if (!input.dnsName) {
@@ -105,11 +105,11 @@ const resolveTailscaleMagicDnsAdvertisedEndpoint = Effect.fn(
       reachability: "private-network",
       hostedHttpsCompatibility: isReachable ? "compatible" : "requires-configuration",
       status: isReachable ? "available" : "unavailable",
-      // Fork add-on: without tailnet HTTPS, Setup's `tailscale serve` waits for approval and times out.
+      // Fork add-on(tailscale-https): without tailnet HTTPS, Setup's `tailscale serve` waits for approval and times out.
       description: isReachable
         ? "HTTPS endpoint served by Tailscale Serve."
-        : input.httpsCertificatesEnabled === false // Fork add-on
-          ? "Turn on HTTPS Certificates on the DNS page of the Tailscale admin console, then choose Setup." // Fork add-on
+        : input.httpsCertificatesEnabled === false // Fork add-on(tailscale-https)
+          ? "Turn on HTTPS Certificates on the DNS page of the Tailscale admin console, then choose Setup." // Fork add-on(tailscale-https)
           : "MagicDNS hostname. Configure Tailscale Serve for HTTPS access.",
     }),
   );
@@ -127,7 +127,7 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
       never,
       ChildProcessSpawner.ChildProcessSpawner
     >;
-    readonly readHttpsCertificatesEnabled?: Effect.Effect<boolean | null>; // Fork add-on
+    readonly readHttpsCertificatesEnabled?: Effect.Effect<boolean | null>; // Fork add-on(tailscale-https)
     readonly probe?: (baseUrl: string) => Effect.Effect<boolean, never, HttpClient.HttpClient>;
   }): Effect.fn.Return<
     readonly AdvertisedEndpoint[],
@@ -147,9 +147,9 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
       dnsName: status?.magicDnsName ?? null,
       serveEnabled: input.serveEnabled === true,
       ...(input.servePort === undefined ? {} : { servePort: input.servePort }),
-      ...(input.readHttpsCertificatesEnabled === undefined // Fork add-on
-        ? {} // Fork add-on
-        : { httpsCertificatesEnabled: yield* input.readHttpsCertificatesEnabled }), // Fork add-on
+      ...(input.readHttpsCertificatesEnabled === undefined // Fork add-on(tailscale-https)
+        ? {} // Fork add-on(tailscale-https)
+        : { httpsCertificatesEnabled: yield* input.readHttpsCertificatesEnabled }), // Fork add-on(tailscale-https)
       ...(input.probe === undefined ? {} : { probe: input.probe }),
     });
 

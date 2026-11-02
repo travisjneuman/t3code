@@ -362,7 +362,7 @@ function parseCodexSkillsListResponse(
 
 const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   client: CodexClient.CodexAppServerClient["Service"],
-  includeHidden = false, // Fork add-on: Codex hidden models.
+  includeHidden = false, // Fork add-on(codex-hidden-models)
 ) {
   const models: ServerProviderModel[] = [];
   let cursor: string | null | undefined = undefined;
@@ -370,7 +370,7 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   do {
     const response: CodexSchema.V2ModelListResponse = yield* client.request(
       "model/list",
-      { ...(cursor ? { cursor } : {}), ...(includeHidden ? { includeHidden } : {}) }, // Fork add-on: Codex hidden models.
+      { ...(cursor ? { cursor } : {}), ...(includeHidden ? { includeHidden } : {}) }, // Fork add-on(codex-hidden-models)
     );
     models.push(...parseCodexModelListResponse(response));
     cursor = response.nextCursor;
@@ -420,11 +420,11 @@ const requestCodexChatGptModels = Effect.fn("requestCodexChatGptModels")(functio
   readonly client: CodexClient.CodexAppServerClient["Service"];
   readonly codexHome: string;
   readonly spawnedAtMs: number;
-  readonly includeHidden?: boolean; // Fork add-on: Codex hidden models.
+  readonly includeHidden?: boolean; // Fork add-on(codex-hidden-models)
   readonly deadlineMs: number;
 }) {
   const models = yield* withCodexDiscoveryDeadline(
-    requestAllCodexModels(input.client, input.includeHidden), // Fork add-on: Codex hidden models.
+    requestAllCodexModels(input.client, input.includeHidden), // Fork add-on(codex-hidden-models)
     input.deadlineMs,
   );
   if (models === undefined) return undefined;
@@ -448,7 +448,7 @@ const requestCodexChatGptModels = Effect.fn("requestCodexChatGptModels")(functio
     (yield* withCodexDiscoveryDeadline(
       requestAllCodexModels(input.client, input.includeHidden),
       input.deadlineMs,
-    )) ?? // Fork add-on: Codex hidden models.
+    )) ?? // Fork add-on(codex-hidden-models)
     models
   );
 });
@@ -537,7 +537,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly skipNativeUsage?: boolean;
-  readonly includeHiddenModels?: boolean; // Fork add-on: Codex hidden models.
+  readonly includeHiddenModels?: boolean; // Fork add-on(codex-hidden-models)
 }) {
   const spawnedAtMs = DateTime.toEpochMillis(yield* DateTime.now);
   const { client, initialize } = yield* withCodexAppServerClient(input);
@@ -565,13 +565,13 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
             client,
             codexHome: initialize.codexHome,
             spawnedAtMs,
-            includeHidden: input.includeHiddenModels === true, // Fork add-on: Codex hidden models.
+            includeHidden: input.includeHiddenModels === true, // Fork add-on(codex-hidden-models)
             deadlineMs,
           })
         : withCodexDiscoveryDeadline(
             requestAllCodexModels(client, input.includeHiddenModels),
             deadlineMs,
-          ), // Fork add-on: Codex hidden models.
+          ), // Fork add-on(codex-hidden-models)
       // The shared catalog must exclude config from the server's launch project.
       withCodexDiscoveryDeadline(
         client.request("config/read", { includeLayers: false }),
@@ -752,7 +752,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     readonly cwd: string;
     readonly environment?: NodeJS.ProcessEnv;
     readonly skipNativeUsage?: boolean;
-    readonly includeHiddenModels?: boolean; // Fork add-on: Codex hidden models.
+    readonly includeHiddenModels?: boolean; // Fork add-on(codex-hidden-models)
   }) => Effect.Effect<
     CodexAppServerProviderSnapshot,
     CodexErrors.CodexAppServerError,
@@ -793,7 +793,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     cwd: process.cwd(),
     environment: resolvedEnvironment,
     ...(managedAuth ? { skipNativeUsage: true } : {}),
-    ...(codexSettings.showHiddenModels ? { includeHiddenModels: true } : {}), // Fork add-on: Codex hidden models.
+    ...(codexSettings.showHiddenModels ? { includeHiddenModels: true } : {}), // Fork add-on(codex-hidden-models)
   }).pipe(
     // Process teardown can outlast the work budget without discarding a completed snapshot.
     Effect.timeoutOption(Duration.millis(CODEX_AUTH_PROBE_TIMEOUT_MS)),

@@ -7,7 +7,7 @@ export type ModelEsque = {
   shortName?: string | undefined;
   subProvider?: string | undefined;
   aliases?: ReadonlyArray<string> | undefined;
-  supersedes?: ReadonlyArray<string> | undefined; // Fork add-on: retired models.
+  supersedes?: ReadonlyArray<string> | undefined; // Fork add-on(retired-models)
   isDefault?: boolean | undefined;
   badge?: "new" | undefined;
   isLegacy?: boolean | undefined;
@@ -24,7 +24,7 @@ function stripLeadingQualifier(value: string, qualifier: string | null | undefin
     return value;
   }
 
-  const pattern = new RegExp(`^${escapeRegExp(trimmedQualifier)}\\s*[.:/-]\\s*`, "iu"); // Fork add-on: provider and model brand names. A bare space keeps "Grok 4.6" under "Grok".
+  const pattern = new RegExp(`^${escapeRegExp(trimmedQualifier)}\\s*[.:/-]\\s*`, "iu"); // Fork add-on(model-brand-names): A bare space keeps "Grok 4.6" under "Grok".
   return value.replace(pattern, "").trim() || value;
 }
 

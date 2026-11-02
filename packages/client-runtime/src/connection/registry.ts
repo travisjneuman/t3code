@@ -55,7 +55,7 @@ import {
   upsertRoute,
   type ReportedEndpoint,
 } from "./routes.ts";
-import { makeRelabel, type RelabelEnvironment } from "./forkRelabel.ts"; // Fork add-on
+import { makeRelabel, type RelabelEnvironment } from "./forkRelabel.ts"; // Fork add-on(renamed-hosts)
 
 const isSshConnectionProfile = Schema.is(SshConnectionProfile);
 
@@ -98,7 +98,7 @@ export class EnvironmentRegistry extends Context.Service<
     readonly entries: SubscriptionRef.SubscriptionRef<
       ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
     >;
-    readonly relabel?: RelabelEnvironment; // Fork add-on: hosts renamed after pairing
+    readonly relabel?: RelabelEnvironment; // Fork add-on(renamed-hosts): hosts renamed after pairing
     readonly networkStatus: SubscriptionRef.SubscriptionRef<NetworkStatus>;
     readonly start: Effect.Effect<void>;
     /**
@@ -1185,13 +1185,13 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const relabelRefs = { entries, serviceScopes, platformEnvironmentIds }; // Fork add-on
-  const relabelStores = { profiles, registrations, withLeaseLock, persistedRoutes }; // Fork add-on
-  const relabel = makeRelabel({ ...relabelRefs, ...relabelStores }); // Fork add-on: renamed hosts
+  const relabelRefs = { entries, serviceScopes, platformEnvironmentIds }; // Fork add-on(renamed-hosts)
+  const relabelStores = { profiles, registrations, withLeaseLock, persistedRoutes }; // Fork add-on(renamed-hosts)
+  const relabel = makeRelabel({ ...relabelRefs, ...relabelStores }); // Fork add-on(renamed-hosts)
 
   return EnvironmentRegistry.of({
     entries,
-    relabel, // Fork add-on
+    relabel, // Fork add-on(renamed-hosts)
     networkStatus,
     start,
     register,

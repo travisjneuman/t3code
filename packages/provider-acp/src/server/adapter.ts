@@ -105,7 +105,7 @@ import {
   flattenSelectChoices,
 } from "./sessionConfig.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
-import { makeAcpSessionInsights } from "./acpSessionInsights.ts"; // Fork add-on: session details.
+import { makeAcpSessionInsights } from "./acpSessionInsights.ts"; // Fork add-on(session-details)
 import {
   t3AcpPromptWithInstructions,
   type T3AcpInstructionState,
@@ -1661,7 +1661,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
         const contextUsageBySessionId = yield* Ref.make(
           new Map<string, ThreadTokenUsageSnapshot>(),
         );
-        const acpInsights = makeAcpSessionInsights(readMcpContext, contextUsageBySessionId); // Fork add-on: session details.
+        const acpInsights = makeAcpSessionInsights(readMcpContext, contextUsageBySessionId); // Fork add-on(session-details)
         const nativeMetadataBySessionId = yield* Ref.make(
           new Map<string, OrchestrationV2ProviderThreadNativeMetadata>(),
         );
@@ -5928,7 +5928,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                       rawNotification,
                       clientTerminals.readOutputSnapshot,
                     );
-              acpInsights.remember(notification); // Fork add-on: session details.
+              acpInsights.remember(notification); // Fork add-on(session-details)
               if (notification.update.sessionUpdate === "available_commands_update") {
                 yield* (
                   flavor.onAvailableCommandsUpdate?.(notification.update.availableCommands) ??
@@ -7467,7 +7467,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               text: buildRuntimeInstructions({
                 harness: flavor.runtimeHarness ?? driver,
                 model: turnInput.modelSelection.model,
-                agentScope: { thread: turnInput.appThread, provider: driver }, // Fork add-on: agent instructions.
+                agentScope: { thread: turnInput.appThread, provider: driver }, // Fork add-on(agent-instructions)
               }),
             });
           }
@@ -8169,7 +8169,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               ),
           ),
           startTurn,
-          sessionInsights: acpInsights.insights, // Fork add-on: session details.
+          sessionInsights: acpInsights.insights, // Fork add-on(session-details)
           ...(flavor.supportsCompaction === true
             ? {
                 compactThread: (turnInput: ProviderAdapter.ProviderAdapterV2TurnInput) =>

@@ -101,7 +101,7 @@ graph LR
 
 ### Fork add-ons
 
-- [Fork add-ons](fork-add-ons.md): fork-owned files, one-line hooks, marker check.
+- [Fork add-ons](fork-add-ons.md): fork-owned files, one-line hooks, add-on ids and the `fork/addons.json` manifest, marker check.
 - [Local source updates](local-source-updates.md): packaged fork builds updating from their checkout.
 - [External sessions](external-sessions.md): Other Agents sessions from outside T3.
 - [Session search](session-search.md): searching other agents' session messages.

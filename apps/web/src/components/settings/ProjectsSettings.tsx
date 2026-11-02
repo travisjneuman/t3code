@@ -2,7 +2,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import { LayersIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
-import { FindCheckoutsButton } from "./FindCheckoutsDialog"; // Fork add-on: find checkouts
+import { FindCheckoutsButton } from "./FindCheckoutsDialog"; // Fork add-on(existing-checkout)
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsScopeNotice } from "./SettingsScopeNotice";
@@ -47,7 +47,7 @@ export function ProjectsSettings() {
       ) : unavailable ? (
         unavailable
       ) : (
-        // Fork add-on: find checkouts. One container, so the scope sentence renders once.
+        // Fork add-on(existing-checkout): One container, so the scope sentence renders once.
         <SettingsPageContainer>
           <SettingsScopeNotice inline target="project">
             Choose a project to manage its name, icon, checkouts and actions.

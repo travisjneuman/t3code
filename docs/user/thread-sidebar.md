@@ -19,13 +19,6 @@ machine, the thread starts on a connected one if any is connected.
 When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
-To run a project on a machine that does not have it yet, pick **Add to another
-machine** in the machine menu. If that machine already has the repository checked
-out in its add-project folder, beside its other projects, or one level below
-either, T3 Code offers to add that folder instead of cloning a second copy. If
-the checkout is somewhere else, choose **Use a folder already there** and enter
-its folder; T3 Code adds it only if it is a checkout of the same repository.
-
 ### Start without a project
 
 A thread does not need a project. To start one without a project, click **or

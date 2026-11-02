@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { useEnvironmentProviders, useEnvironments } from "~/state/environments";
 import { serverEnvironment } from "~/state/server";
 import { useEnvironmentsWithScope } from "~/state/session";
-import { useQueuedProviderUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
+import { useQueuedProviderUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
 import {
   canOneClickUpdateProviderCandidate,
   collectProviderUpdateCandidates,
@@ -20,7 +20,7 @@ export function useProviderUpdates() {
   const { environments } = useEnvironments();
   const manageableIds = useEnvironmentsWithScope(environments, AuthProvidersManageScope);
   const providersByEnvironment = useEnvironmentProviders();
-  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on: maintenance queue.
+  const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on(maintenance-queue)
   const machines = environments.flatMap((environment) => {
     const providers = providersByEnvironment.get(environment.environmentId) ?? [];
     if (

@@ -30,8 +30,8 @@ import {
   updateReleasePackageVersions,
 } from "./update-release-package-versions.ts";
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
-import { resolveWebAssetBrandForChannel, type WebAssetBrand } from "./lib/brand-assets.ts"; // Fork add-on: ndev app icon.
-import { FORK_BRAND_ASSET_PATHS } from "./lib/fork-brand-assets.mjs"; // Fork add-on: ndev app icon.
+import { resolveWebAssetBrandForChannel, type WebAssetBrand } from "./lib/brand-assets.ts"; // Fork add-on(ndev-icons)
+import { FORK_BRAND_ASSET_PATHS } from "./lib/fork-brand-assets.mjs"; // Fork add-on(ndev-icons)
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
@@ -57,10 +57,10 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import * as Fork from "./lib/fork-desktop-artifact.ts"; // Fork add-on: identity and local source updates.
+import * as Fork from "./lib/fork-desktop-artifact.ts"; // Fork add-on(identity,upstream-sync)
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = Fork.REMOTE_APP_DISTRIBUTION.appId; // Fork add-on: identity.
+const DESKTOP_APP_ID = Fork.REMOTE_APP_DISTRIBUTION.appId; // Fork add-on(identity)
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2499,7 +2499,7 @@ const stageMacIcons = Effect.fn("build-desktop-artifact.stageMacIcons")(function
   }
 
   const tmpRoot = yield* fs.makeTempDirectoryScoped({
-    directory: stageResourcesDir, // Fork add-on: icon packaging stays inside the build stage.
+    directory: stageResourcesDir, // Fork add-on(ndev-icons): icon packaging stays inside the build stage.
     prefix: "t3code-icon-build-",
   });
 
@@ -2716,14 +2716,14 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
-// Fork add-on: latest and nightly packages use the same fork-owned artwork.
+// Fork add-on(ndev-icons): latest and nightly packages use the same fork-owned artwork.
 export function resolveDesktopBuildIconAssets(
-  _version: string, // Fork add-on
+  _version: string, // Fork add-on(ndev-icons)
 ): DesktopBuildIconAssets {
   return {
-    macIconPng: FORK_BRAND_ASSET_PATHS.macIconPng, // Fork add-on
-    linuxIconPng: FORK_BRAND_ASSET_PATHS.universalIconPng, // Fork add-on
-    windowsIconIco: FORK_BRAND_ASSET_PATHS.windowsIconIco, // Fork add-on
+    macIconPng: FORK_BRAND_ASSET_PATHS.macIconPng, // Fork add-on(ndev-icons)
+    linuxIconPng: FORK_BRAND_ASSET_PATHS.universalIconPng, // Fork add-on(ndev-icons)
+    windowsIconIco: FORK_BRAND_ASSET_PATHS.windowsIconIco, // Fork add-on(ndev-icons)
   };
 }
 
@@ -2742,9 +2742,9 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
-// Fork add-on: one app name for every channel, without a stage label.
-export function resolveDesktopProductName(_version: string): string /* Fork add-on */ {
-  return Fork.REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on: identity.
+// Fork add-on(identity): one app name for every channel, without a stage label.
+export function resolveDesktopProductName(_version: string): string /* Fork add-on(identity) */ {
+  return Fork.REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on(identity)
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2812,9 +2812,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
-    // Fork add-on: seal unsigned builds, and record the checkout for local source updates.
-    if (!signed) buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs"); // Fork add-on
-    buildConfig.extraMetadata = { t3codeSourceRepositoryPath: repoRoot }; // Fork add-on
+    // Fork add-on(upstream-sync): seal unsigned builds, and record the checkout for local source updates.
+    if (!signed) buildConfig.afterPack = path.join(repoRoot, "scripts/sign-macos-ad-hoc.cjs"); // Fork add-on(upstream-sync)
+    buildConfig.extraMetadata = { t3codeSourceRepositoryPath: repoRoot }; // Fork add-on(upstream-sync)
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -2844,7 +2844,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "T3 Code",
-          schemes: [Fork.forkAppScheme(false), Fork.forkAppScheme(true)], // Fork add-on: identity.
+          schemes: [Fork.forkAppScheme(false), Fork.forkAppScheme(true)], // Fork add-on(identity)
         },
         {
           name: "Web site URL",
@@ -2888,7 +2888,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: Fork.forkAppScheme(false), // Fork add-on: identity.
+      executableName: Fork.forkAppScheme(false), // Fork add-on(identity)
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
@@ -2896,12 +2896,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "T3 Code",
-          schemes: [Fork.forkAppScheme(false), Fork.forkAppScheme(true)], // Fork add-on: identity.
+          schemes: [Fork.forkAppScheme(false), Fork.forkAppScheme(true)], // Fork add-on(identity)
         },
       ],
       desktop: {
         entry: {
-          StartupWMClass: Fork.forkAppScheme(false), // Fork add-on: identity.
+          StartupWMClass: Fork.forkAppScheme(false), // Fork add-on(identity)
         },
       },
     };
@@ -3634,9 +3634,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const iconAssets = resolveDesktopBuildIconAssets(appVersion);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
-  yield* fs.makeDirectory(options.outputDir, { recursive: true }); // Fork add-on: no builds in OS temp.
+  yield* fs.makeDirectory(options.outputDir, { recursive: true }); // Fork add-on(upstream-sync): no builds in OS temp.
   const stageRoot = yield* mkdir({
-    directory: options.outputDir, // Fork add-on: scoped staging is cleaned after packaging.
+    directory: options.outputDir, // Fork add-on(upstream-sync): scoped staging is cleaned after packaging.
     prefix: `t3code-desktop-${options.platform}-stage-`,
   });
 
@@ -3851,7 +3851,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: Fork.REMOTE_APP_DISTRIBUTION.packageName, // Fork add-on: its own ShipIt cache.
+    name: Fork.REMOTE_APP_DISTRIBUTION.packageName, // Fork add-on(identity): its own ShipIt cache.
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
@@ -4186,7 +4186,7 @@ const cliRuntimeLayer = Layer.mergeAll(Logger.layer([Logger.consolePretty()]), N
 
 if (import.meta.main) {
   Command.run(buildDesktopArtifactCli, { version: "0.0.0" }).pipe(
-    Fork.withCheckoutBuildLock, // Fork add-on: one desktop build per checkout.
+    Fork.withCheckoutBuildLock, // Fork add-on(upstream-sync): one desktop build per checkout.
     Effect.scoped,
     Effect.provide(cliRuntimeLayer),
     NodeRuntime.runMain,

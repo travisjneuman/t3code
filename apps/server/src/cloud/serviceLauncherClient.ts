@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts"; // Fork add-on
+import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts"; // Fork add-on(host-releases)
 import {
   decodeServiceLauncherContext,
   decodeServiceLauncherParentMessage,
@@ -112,7 +112,7 @@ const resolveStartup = Effect.fn("cloud.service_launcher_client.resolve_startup"
   function* (options?: { readonly currentVersion?: string }) {
     const host = yield* ServiceLauncherHostProcess;
     const environment = yield* HostProcess.Environment;
-    const currentVersion = options?.currentVersion ?? SERVICE_RUNTIME_VERSION; // Fork add-on: fork build suffix.
+    const currentVersion = options?.currentVersion ?? SERVICE_RUNTIME_VERSION; // Fork add-on(host-releases): fork build suffix.
     // IPC channels are not inherited; without one, launcher context belongs to an ancestor.
     const rawContext = host.connected ? environment[SERVICE_LAUNCHER_CONTEXT_ENV] : undefined;
     const context = rawContext === undefined ? undefined : decodeServiceLauncherContext(rawContext);

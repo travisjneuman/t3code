@@ -11,12 +11,12 @@ import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@t3tools/shared/cli
 import { compareSemverVersions } from "@t3tools/shared/semver";
 
 import {
-  resolveRuntimeVersionMismatch, // Fork add-on: fork builds.
+  resolveRuntimeVersionMismatch, // Fork add-on(host-releases): fork builds.
   resolveServerSelfUpdateCapability,
   supportsDesktopAppUpdate,
 } from "~/versionSkew";
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
-import { hostReleaseSourceOf, nonForkBulkSkipReason } from "~/host-release/hostReleaseSource"; // Fork add-on: release source.
+import { hostReleaseSourceOf, nonForkBulkSkipReason } from "~/host-release/hostReleaseSource"; // Fork add-on(host-releases): release source.
 
 export interface UpdateEverythingMachine {
   readonly environmentId: EnvironmentId;
@@ -84,7 +84,7 @@ export function collectServerUpdateTargets(
     if (machine.hostedByThisApp) continue;
     if (
       config !== null &&
-      resolveRuntimeVersionMismatch(config.environment, targetVersion) === null // Fork add-on: fork builds.
+      resolveRuntimeVersionMismatch(config.environment, targetVersion) === null // Fork add-on(host-releases): fork builds.
     ) {
       continue;
     }
@@ -95,11 +95,11 @@ export function collectServerUpdateTargets(
       skip(unavailable ?? "not connected");
       continue;
     }
-    const sourceSkip = nonForkBulkSkipReason(hostReleaseSourceOf(config.environment)); // Fork add-on: release source.
-    if (sourceSkip !== undefined /* Fork add-on */) {
-      skip(sourceSkip); // Fork add-on
-      continue; // Fork add-on
-    } // Fork add-on
+    const sourceSkip = nonForkBulkSkipReason(hostReleaseSourceOf(config.environment)); // Fork add-on(host-releases): release source.
+    if (sourceSkip !== undefined /* Fork add-on(host-releases) */) {
+      skip(sourceSkip); // Fork add-on(host-releases)
+      continue; // Fork add-on(host-releases)
+    } // Fork add-on(host-releases)
     const selfUpdate = resolveServerSelfUpdateCapability(config);
     const managedDenial = managedMachineUpdateDenial(
       config,
@@ -485,11 +485,11 @@ export function describeUpdateCapsule(
     };
   }
   const done = machines.filter(({ status }) => status === "done").length;
-  // Fork add-on: "This app" is a row in the run too, so it counts toward the total.
-  const total = machines.length + (local === null ? 0 : 1); // Fork add-on
+  // Fork add-on(maintenance-queue): "This app" is a row in the run too, so it counts toward the total.
+  const total = machines.length + (local === null ? 0 : 1); // Fork add-on(maintenance-queue)
   if (machines.some(({ status }) => isActive(status))) {
-    // Fork add-on: count This app.
-    return { tone: "default", label: `${done} of ${total} updated`, action: null }; // Fork add-on
+    // Fork add-on(maintenance-queue): count This app.
+    return { tone: "default", label: `${done} of ${total} updated`, action: null }; // Fork add-on(maintenance-queue)
   }
   if (local?.status === "downloading") {
     return {
@@ -509,8 +509,8 @@ export function describeUpdateCapsule(
           : "dismiss",
     };
   }
-  // Fork add-on: count This app.
-  return { tone: "default", label: `${done} of ${total} updated`, action: null }; // Fork add-on
+  // Fork add-on(maintenance-queue): count This app.
+  return { tone: "default", label: `${done} of ${total} updated`, action: null }; // Fork add-on(maintenance-queue)
 }
 
 export const RUN_STATUS_LABELS: Record<UpdateRunMachineStatus, string> = {

@@ -45,7 +45,7 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
-import { CheckoutUnlinkButton, ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on: project links
+import { CheckoutUnlinkButton, ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on(project-links)
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
@@ -337,7 +337,7 @@ function ProjectDetail({
   }
   const checkoutRemoveButton = (member: SidebarProjectGroupMember) => (
     <div className="flex items-center gap-2">
-      {/* Fork add-on: project links */}
+      {/* Fork add-on(project-links) */}
       <CheckoutUnlinkButton
         group={group}
         member={member}
@@ -354,7 +354,7 @@ function ProjectDetail({
       </Button>
     </div>
   );
-  // Fork add-on: project links. The rows also render inside ProjectMachineLinks' section.
+  // Fork add-on(project-links): The rows also render inside ProjectMachineLinks' section.
   const checkoutRows = (
     <>
       {Array.from(checkoutsByEnvironment, ([environmentId, members]) => {
@@ -576,7 +576,7 @@ function ProjectDetail({
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
-        {/* Fork add-on: project links. One Checkouts section with the link and add rows. */}
+        {/* Fork add-on(project-links): One Checkouts section with the link and add rows. */}
         {hasOtherMembers ? (
           hasMultipleCheckouts ? (
             checkoutChoices
@@ -588,7 +588,7 @@ function ProjectDetail({
             checkoutRows={hasMultipleCheckouts ? checkoutRows : null}
           />
         )}
-        {representative.isScratch ? null /* Fork add-on: each server keeps one No project. */ : (
+        {representative.isScratch ? null /* Fork add-on(no-project-start): each server keeps one No project. */ : (
           <SettingsSection title="Danger">
             <SettingsRow
               title={
@@ -623,7 +623,7 @@ function ProjectDetail({
             />
           </SettingsSection>
         )}{" "}
-        {/* Fork add-on: each server keeps one No project. */}
+        {/* Fork add-on(no-project-start): each server keeps one No project. */}
       </SettingsPageContainer>
 
       <ProjectFaviconPickerDialog

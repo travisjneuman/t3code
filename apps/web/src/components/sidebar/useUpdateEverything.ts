@@ -3,10 +3,10 @@ import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
-import { collectHostUpdateTargets, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on: host releases.
-import { useHostReleaseCheck } from "~/host-release/hostRelease"; // Fork add-on: release check states.
-import { skippedAsFailed } from "~/host-release/hostRelease"; // Fork add-on: skipped updates stay retryable.
-import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on: maintenance queue.
+import { collectHostUpdateTargets, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on(host-releases)
+import { useHostReleaseCheck } from "~/host-release/hostRelease"; // Fork add-on(host-releases): release check states.
+import { skippedAsFailed } from "~/host-release/hostRelease"; // Fork add-on(host-releases): skipped updates stay retryable.
+import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
 import { useEnvironments } from "~/state/environments";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { environmentUpdateStatesAtom } from "~/state/server";
@@ -54,8 +54,8 @@ export function useUpdateEverything(
   localUpdateVersion: string | null,
   channelSwitch?: ChannelSwitchRelease,
 ) {
-  const targetVersion = useHostUpdateTarget(); // Fork add-on: host releases.
-  const hostReleaseCheck = useHostReleaseCheck(); // Fork add-on: release check states.
+  const targetVersion = useHostUpdateTarget(); // Fork add-on(host-releases)
+  const hostReleaseCheck = useHostReleaseCheck(); // Fork add-on(host-releases): release check states.
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));
@@ -71,15 +71,15 @@ export function useUpdateEverything(
   }));
   const { targets: servers, skipped } = channelSwitch
     ? collectChannelSwitchTargets(machines, channelSwitch)
-    : // Fork add-on: host builds: remote fork hosts move to the latest successfully staged target.
-      collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck); // Fork add-on
+    : // Fork add-on(host-releases): host builds: remote fork hosts move to the latest successfully staged target.
+      collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck); // Fork add-on(host-releases)
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
   const moving = servers.filter((server) => server.trackOnly !== true);
   const restarts = collectRestartingMachines(machines, moving, localUpdateVersion !== null);
   const providerUpdates = useProviderUpdates();
   // A track switch moves app and servers only; provider updates stay a separate choice.
   const providers = channelSwitch ? { machines: [], updateAll: async () => [] } : providerUpdates;
-  const updateServer = skippedAsFailed(useServerUpdate()); // Fork add-on: skipped updates stay retryable.
+  const updateServer = skippedAsFailed(useServerUpdate()); // Fork add-on(host-releases): skipped updates stay retryable.
 
   const view = describeUpdateEverything({
     localVersion: localUpdateVersion,
@@ -161,7 +161,7 @@ export function useUpdateEverything(
                   run.environmentId,
                   runOutcome.status === "failed"
                     ? runOutcome.line
-                    : interruptedProviderUpdateLine(run.environmentId), // Fork add-on: maintenance queue.
+                    : interruptedProviderUpdateLine(run.environmentId), // Fork add-on(maintenance-queue)
                 );
               }
               return runOutcome;

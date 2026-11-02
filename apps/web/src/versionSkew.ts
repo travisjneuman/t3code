@@ -1,7 +1,7 @@
 import {
-  environmentRuntimeVersion, // Fork add-on: same-nightly fork builds.
+  environmentRuntimeVersion, // Fork add-on(host-releases): same-nightly fork builds.
   type EnvironmentId,
-  type ExecutionEnvironmentDescriptor, // Fork add-on
+  type ExecutionEnvironmentDescriptor, // Fork add-on(host-releases)
   type ServerConfig,
   type ServerInstallation,
   type ServerSelfUpdateCapability,
@@ -79,7 +79,7 @@ export function resolveVersionMismatch(
   };
 }
 
-// Fork add-on: a fork host release targets `<nightly>+<fork build>`. A host on that nightly from
+// Fork add-on(host-releases): a fork host release targets `<nightly>+<fork build>`. A host on that nightly from
 // another fork build is behind too, which semver alone cannot see.
 export function resolveRuntimeVersionMismatch(
   environment:

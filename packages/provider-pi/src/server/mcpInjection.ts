@@ -2,10 +2,10 @@ import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
-/* Fork add-on */ import {
-  type ForkAgentScope, // Fork add-on
-  forkAgentInstructionsBlock, // Fork add-on
-} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+/* Fork add-on(agent-instructions) */ import {
+  type ForkAgentScope, // Fork add-on(agent-instructions)
+  forkAgentInstructionsBlock, // Fork add-on(agent-instructions)
+} from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on(agent-instructions)
 import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
 import {
   PI_T3_MCP_EXTENSION_FILENAME,
@@ -14,7 +14,7 @@ import {
   T3_MCP_URL_ENV,
   T3_PI_RUNTIME_MODE_ENV,
   T3_PI_MCP_EXTENSION_PATH_ENV,
-  T3_AGENT_INSTRUCTIONS_ENV, // Fork add-on: agent instructions.
+  T3_AGENT_INSTRUCTIONS_ENV, // Fork add-on(agent-instructions)
 } from "./mcpExtensionSource.ts";
 
 const RESERVED_PI_LAUNCH_ARGUMENTS = new Set([
@@ -252,7 +252,7 @@ export function buildPiRpcLaunch(input: {
   readonly disableExtensions?: boolean;
   readonly disableTools?: boolean;
   readonly runtimeMode?: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
-  readonly agentScope?: ForkAgentScope | undefined; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope | undefined; // Fork add-on(agent-instructions)
 }): {
   readonly args: ReadonlyArray<string>;
   readonly env: NodeJS.ProcessEnv;
@@ -298,9 +298,9 @@ export function buildPiRpcLaunch(input: {
       ...(hasT3Extension && input.extensionPath !== undefined
         ? { [T3_PI_MCP_EXTENSION_PATH_ENV]: input.extensionPath }
         : {}),
-      ...(hasT3Extension // Fork add-on
-        ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock(input.agentScope) } // Fork add-on
-        : {}), // Fork add-on: agent instructions.
+      ...(hasT3Extension // Fork add-on(agent-instructions)
+        ? { [T3_AGENT_INSTRUCTIONS_ENV]: forkAgentInstructionsBlock(input.agentScope) } // Fork add-on(agent-instructions)
+        : {}), // Fork add-on(agent-instructions)
       ...(hasT3Extension && input.runtimeMode !== undefined
         ? {
             [T3_PI_RUNTIME_MODE_ENV]:

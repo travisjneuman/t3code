@@ -14,7 +14,7 @@ import { ChangedFilesCard } from "./ChangedFilesTree";
 import { useFileContextMenuHandler } from "../../fileContextMenu";
 import { useAssistantMessageText, useProject, useThreadShell } from "../../state/entities";
 import { MessageCopyButton } from "./MessageCopyButton";
-import { RemoteAppSendMessageAction } from "~/remote-apps/RemoteAppSendMessageAction"; // Fork add-on: send replies to desktop web apps.
+import { RemoteAppSendMessageAction } from "~/remote-apps/RemoteAppSendMessageAction"; // Fork add-on(web-apps): send replies to desktop web apps.
 import { AssistantCitationSource } from "./AssistantCitationSource";
 import { resolveAssistantMessageCopyState } from "./MessagesTimeline.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -193,9 +193,9 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
-      <RemoteAppSendMessageAction // Fork add-on
-        message={message} // Fork add-on
-        visible={showCopyButton && !copyStreaming} // Fork add-on
+      <RemoteAppSendMessageAction // Fork add-on(web-apps)
+        message={message} // Fork add-on(web-apps)
+        visible={showCopyButton && !copyStreaming} // Fork add-on(web-apps)
       />
       {projectedItem?.item.type === "assistant_message" ? (
         <AssistantForkButton projectedItem={projectedItem} />

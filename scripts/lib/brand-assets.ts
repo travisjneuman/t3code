@@ -1,4 +1,4 @@
-import { FORK_BRAND_ASSET_PATHS } from "./fork-brand-assets.mjs"; // Fork add-on: ndev web icons.
+import { FORK_BRAND_ASSET_PATHS } from "./fork-brand-assets.mjs"; // Fork add-on(ndev-icons)
 
 export const BRAND_ASSET_PATHS = {
   developmentIconComposerProject: "assets/dev/app-icon.icon",
@@ -55,31 +55,31 @@ const WEB_ICON_TARGET_FILENAMES = {
   appleTouchIconPng: "apple-touch-icon.png",
 } as const;
 
-// Fork add-on: every brand serves the fork's web icons.
-const FORK_WEB_ICON_SOURCE_PATHS = /* Fork add-on */ {
-  faviconIco: FORK_BRAND_ASSET_PATHS.faviconIco, // Fork add-on
-  favicon16Png: FORK_BRAND_ASSET_PATHS.favicon16Png, // Fork add-on
-  favicon32Png: FORK_BRAND_ASSET_PATHS.favicon32Png, // Fork add-on
-  appleTouchIconPng: FORK_BRAND_ASSET_PATHS.appleTouchIconPng, // Fork add-on
-} as const; // Fork add-on
+// Fork add-on(ndev-icons): every brand serves the fork's web icons.
+const FORK_WEB_ICON_SOURCE_PATHS = /* Fork add-on(ndev-icons) */ {
+  faviconIco: FORK_BRAND_ASSET_PATHS.faviconIco, // Fork add-on(ndev-icons)
+  favicon16Png: FORK_BRAND_ASSET_PATHS.favicon16Png, // Fork add-on(ndev-icons)
+  favicon32Png: FORK_BRAND_ASSET_PATHS.favicon32Png, // Fork add-on(ndev-icons)
+  appleTouchIconPng: FORK_BRAND_ASSET_PATHS.appleTouchIconPng, // Fork add-on(ndev-icons)
+} as const; // Fork add-on(ndev-icons)
 
 const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
-  development: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on
-  nightly: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on
-  production: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on
+  development: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on(ndev-icons)
+  nightly: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on(ndev-icons)
+  production: FORK_WEB_ICON_SOURCE_PATHS, // Fork add-on(ndev-icons)
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 
-// Fork add-on: Icon Composer's export still refreshes upstream's development icons.
-const UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS = /* Fork add-on */ {
+// Fork add-on(ndev-icons): Icon Composer's export still refreshes upstream's development icons.
+const UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS = /* Fork add-on(ndev-icons) */ {
   faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
   favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
   favicon32Png: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
   appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
-} as const; // Fork add-on
+} as const; // Fork add-on(ndev-icons)
 
-// Fork add-on: shared by the fork and upstream source maps.
-function resolveIconOverridesFromSources /* Fork add-on */(
-  sourcePaths: Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>, // Fork add-on
+// Fork add-on(ndev-icons): shared by the fork and upstream source maps.
+function resolveIconOverridesFromSources /* Fork add-on(ndev-icons) */(
+  sourcePaths: Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>, // Fork add-on(ndev-icons)
   targetDirectory: string,
 ): ReadonlyArray<IconOverride> {
   return [
@@ -107,14 +107,14 @@ export function resolveWebIconOverrides(
   targetDirectory: string,
 ): ReadonlyArray<IconOverride> {
   const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
-  return resolveIconOverridesFromSources(sourcePaths, targetDirectory); // Fork add-on
+  return resolveIconOverridesFromSources(sourcePaths, targetDirectory); // Fork add-on(ndev-icons)
 }
 
 export const DEVELOPMENT_ICON_OVERRIDES = resolveWebIconOverrides("development", "dist/client");
 
-// Fork add-on: keep Icon Composer's upstream development exports intact. The fork's own
+// Fork add-on(ndev-icons): keep Icon Composer's upstream development exports intact. The fork's own
 // artwork is wired by resolveWebIconOverrides and supplied in assets/ndev.
-export const DEVELOPMENT_PUBLIC_ICON_OVERRIDES = /* Fork add-on */ resolveIconOverridesFromSources(
-  UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS, // Fork add-on
+export const DEVELOPMENT_PUBLIC_ICON_OVERRIDES = /* Fork add-on(ndev-icons) */ resolveIconOverridesFromSources(
+  UPSTREAM_DEVELOPMENT_PUBLIC_ICON_SOURCE_PATHS, // Fork add-on(ndev-icons)
   "apps/web/public",
 );

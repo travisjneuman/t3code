@@ -31,7 +31,7 @@ import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
-import { forkOmittedSubagents } from "./forkOmittedSubagents.ts"; // Fork add-on: nested subagents.
+import { forkOmittedSubagents } from "./forkOmittedSubagents.ts"; // Fork add-on(subagent-tree)
 import { bufferLatestLiveStream } from "./LiveStreamBudget.ts";
 import type { ActiveShellIndexEntry } from "./ProjectionStore.ts";
 
@@ -324,11 +324,11 @@ export const loadSubscriberShellSnapshot = Effect.fn("ShellStream.loadSubscriber
       snapshotSequence: read.snapshotSequence,
     });
     const facts = shellTrimFacts(read.index ?? base.threads);
-    const named = forkOmittedSubagents(read.index ?? base.threads, input.options); // Fork add-on: nested subagents.
-    return named({ // Fork add-on
+    const named = forkOmittedSubagents(read.index ?? base.threads, input.options); // Fork add-on(subagent-tree)
+    return named({ // Fork add-on(subagent-tree)
       snapshot: trimShellSnapshot(base, facts, { ...input.options, now: yield* DateTime.now }),
       subagentThreadIds: facts.subagentThreadIds,
-    }); // Fork add-on
+    }); // Fork add-on(subagent-tree)
   },
 );
 

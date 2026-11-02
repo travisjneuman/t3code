@@ -164,7 +164,7 @@ export async function writeTextToClipboard(
     await navigator.clipboard.writeText(value);
     return true;
   } catch (cause) {
-    // Fork add-on: Chromium rejects async writes while the window is unfocused (a right-click on a background window).
+    // Fork add-on(clipboard-focus): Chromium rejects async writes while the window is unfocused (a right-click on a background window).
     if (writeTextWithExecCommand(value, extraFlavors)) return true;
     throw new ClipboardWriteError({
       target,

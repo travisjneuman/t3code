@@ -275,10 +275,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       <div className={ITEM_ROW_INNER_CLASSNAME}>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
-            {/* Fork add-on: an unused, unexpired link is waiting, not a problem. */}
+            {/* Fork add-on(status-colors): an unused, unexpired link is waiting, not a problem. */}
             <ConnectionStatusDot
-              tooltipText={`Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}`} // Fork add-on: unused link status.
-              dotClassName={"bg-info" /* Fork add-on: unused link status. */}
+              tooltipText={`Waiting to be used · created ${formatAccessTimestamp(pairingLink.createdAt)}`} // Fork add-on(status-colors): unused link status.
+              dotClassName={"bg-info" /* Fork add-on(status-colors): unused link status. */}
             />
             <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
           </div>
@@ -935,10 +935,10 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
           ) : null}
         </div>
       </div>
-      {/* Fork add-on: says what Tailscale HTTPS still needs. */}
-      {needsTailscaleSetup && endpoint.description ? ( // Fork add-on
-        <p className="mt-1 text-xs text-muted-foreground">{endpoint.description}</p> // Fork add-on
-      ) : /* Fork add-on */ null}{" "}
+      {/* Fork add-on(tailscale-https): says what Tailscale HTTPS still needs. */}
+      {needsTailscaleSetup && endpoint.description ? ( // Fork add-on(tailscale-https)
+        <p className="mt-1 text-xs text-muted-foreground">{endpoint.description}</p> // Fork add-on(tailscale-https)
+      ) : /* Fork add-on(tailscale-https) */ null}{" "}
     </div>
   );
 });

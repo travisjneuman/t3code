@@ -309,8 +309,8 @@ import { useProactivePanels } from "../hooks/useProactivePanels";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import { useRightPanelSurfaceClose } from "../hooks/useRightPanelSurfaceClose";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
-import { useForkComposerBanners } from "../forkComposerBanners"; // Fork add-on: external sessions, compare agents.
-import { useRemoteAppPanelThread } from "../remote-apps/panel/remoteAppPanelThread"; // Fork add-on: remote app panel.
+import { useForkComposerBanners } from "../forkComposerBanners"; // Fork add-on(other-agents,compare-agents)
+import { useRemoteAppPanelThread } from "../remote-apps/panel/remoteAppPanelThread"; // Fork add-on(web-apps)
 import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
@@ -353,7 +353,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { observeResize } from "~/lib/observeResize";
-import { resolveHermesChatPresentation } from "../fork-chat/hermesChatPresentation"; // Fork add-on: Hermes provider.
+import { resolveHermesChatPresentation } from "../fork-chat/hermesChatPresentation"; // Fork add-on(hermes)
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
@@ -979,7 +979,7 @@ export default function ChatView(props: ChatViewProps) {
   })();
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
-  useRemoteAppPanelThread(activeThreadRef); // Fork add-on: remote app panel.
+  useRemoteAppPanelThread(activeThreadRef); // Fork add-on(web-apps)
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
     activeThreadRef?.environmentId ?? null,
   );
@@ -1304,13 +1304,13 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
-  const { hermesAgent, hermesFixedRunLocation } /* Fork add-on */ = resolveHermesChatPresentation(
-    selectedProvider, // Fork add-on
-    activeProviderInstanceId, // Fork add-on
-    multipleModelSelections !== null, // Fork add-on
-    settings, // Fork add-on
-    logicalProjectEnvironments, // Fork add-on
-  ); // Fork add-on: Hermes provider and fixed host.
+  const { hermesAgent, hermesFixedRunLocation } /* Fork add-on(hermes) */ = resolveHermesChatPresentation(
+    selectedProvider, // Fork add-on(hermes)
+    activeProviderInstanceId, // Fork add-on(hermes)
+    multipleModelSelections !== null, // Fork add-on(hermes)
+    settings, // Fork add-on(hermes)
+    logicalProjectEnvironments, // Fork add-on(hermes)
+  ); // Fork add-on(hermes): Hermes provider and fixed host.
   const { enabled: interactionModeEnabled, interactionMode } = resolveComposerInteractionMode({
     planModeEnabled: settings.planModeEnabled,
     provider: activeProviderStatus,
@@ -1754,7 +1754,7 @@ export default function ChatView(props: ChatViewProps) {
       persistInActiveThreads: settings.persistComposerContextStrip,
       hasActiveProject: activeProject !== null && !showProviderSubagentBar,
       isGitRepo,
-      showEnvironmentIndicator: showComposerEnvironmentIndicator || hermesAgent !== null, // Fork add-on: Hermes provider.
+      showEnvironmentIndicator: showComposerEnvironmentIndicator || hermesAgent !== null, // Fork add-on(hermes)
     });
   const terminalShortcutLabelOptions = {
     context: {
@@ -1808,7 +1808,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProjectIsScratch,
     projectGroupingSettings,
     sendInFlightRef,
-    hermesAgent: hermesAgent !== null, // Fork add-on: Hermes provider.
+    hermesAgent: hermesAgent !== null, // Fork add-on(hermes)
   });
 
   const focusComposer = () => {
@@ -2645,7 +2645,7 @@ export default function ChatView(props: ChatViewProps) {
       }),
     ];
   })() as ComposerBannerStackItem[];
-  const bannerStack = useForkComposerBanners(composerBannerItems, environmentId, threadId); // Fork add-on: external sessions, compare agents.
+  const bannerStack = useForkComposerBanners(composerBannerItems, environmentId, threadId); // Fork add-on(other-agents,compare-agents)
 
   if (
     terminalUiLaunchContext !== null &&
@@ -2724,7 +2724,7 @@ export default function ChatView(props: ChatViewProps) {
         openThreadFind(activeThreadKey);
       },
       "composer.cycleHost": ({ event }) => {
-        if (!canChangeEnvironment || hermesAgent) return false; // Fork add-on: Hermes provider.
+        if (!canChangeEnvironment || hermesAgent) return false; // Fork add-on(hermes)
         if (event.repeat) return;
         const currentId = readPendingEnvironmentChange()?.environmentId ?? environmentId;
         const index = logicalProjectEnvironments.findIndex(
@@ -3343,7 +3343,7 @@ export default function ChatView(props: ChatViewProps) {
               isServerThread={isServerThread}
               activeThreadTitle={activeThread.title}
               activeThreadLinkOrigin={activeThreadShell?.linkOrigin?.label ?? null}
-              activeProject={hermesAgent ? null : (activeProject ?? null)} // Fork add-on: Hermes works outside projects.
+              activeProject={hermesAgent ? null : (activeProject ?? null)} // Fork add-on(hermes): Hermes works outside projects.
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
@@ -3539,7 +3539,7 @@ export default function ChatView(props: ChatViewProps) {
                           draftId={draftId}
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
-                          hermesAgent={hermesAgent} // Fork add-on: Hermes provider.
+                          hermesAgent={hermesAgent} // Fork add-on(hermes)
                         />
                       </div>
                     </div>
@@ -3635,9 +3635,9 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                               bannerItems={
-                                isDraftHeroState || bannerStack.length === 0 // Fork add-on: external sessions.
+                                isDraftHeroState || bannerStack.length === 0 // Fork add-on(other-agents)
                                   ? EMPTY_COMPOSER_BANNER_ITEMS
-                                  : bannerStack // Fork add-on: external sessions.
+                                  : bannerStack // Fork add-on(other-agents)
                               }
                               resumeCompactionTokens={resumeCompactionTokens}
                               keepFullHistory={keepFullHistory}
@@ -3757,7 +3757,7 @@ export default function ChatView(props: ChatViewProps) {
                                 projectId={activeThread.projectId}
                                 worktreePath={activeThread.worktreePath}
                                 isServerThread={isServerThread}
-                                showGitControls={isGitRepo && !hermesAgent} // Fork add-on: Hermes works in its own workspace.
+                                showGitControls={isGitRepo && !hermesAgent} // Fork add-on(hermes): Hermes works in its own workspace.
                                 {...(routeKind === "draft" && draftId ? { draftId } : {})}
                                 onEnvModeChange={onEnvModeChangeStable}
                                 startFromOrigin={startFromOrigin}
@@ -3788,7 +3788,7 @@ export default function ChatView(props: ChatViewProps) {
                                     : undefined
                                 }
                                 availableEnvironments={logicalProjectEnvironments}
-                                fixedRunLocation={hermesFixedRunLocation} // Fork add-on: Hermes provider.
+                                fixedRunLocation={hermesFixedRunLocation} // Fork add-on(hermes)
                                 {...(isServerThread
                                   ? {}
                                   : {
@@ -3913,16 +3913,16 @@ export default function ChatView(props: ChatViewProps) {
                     sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                     contextWindow: activeContextWindow,
                   }}
-                  contextWindow={activeContextWindow} // Fork add-on: session details in the full card.
-                  {...(manualCompactionProviderAvailable // Fork add-on
-                    ? /* Fork add-on */ {
-                        onCompactContext: onComposerCompactContextStable, // Fork add-on
-                        compactDisabled, // Fork add-on
-                        compactDisabledReason, // Fork add-on
-                      } // Fork add-on
-                    : {})} // Fork add-on: session compaction.
-                  {...(isServerThread ? { onOpenTurnDiff: onOpenTurnDiffStable } : {})} // Fork add-on: session diffs.
-                  {...(hermesAgent ? { hermesMachine: hermesAgent.machine } : {})} // Fork add-on: Hermes provider.
+                  contextWindow={activeContextWindow} // Fork add-on(session-details): session details in the full card.
+                  {...(manualCompactionProviderAvailable // Fork add-on(session-details)
+                    ? /* Fork add-on(session-details) */ {
+                        onCompactContext: onComposerCompactContextStable, // Fork add-on(session-details)
+                        compactDisabled, // Fork add-on(session-details)
+                        compactDisabledReason, // Fork add-on(session-details)
+                      } // Fork add-on(session-details)
+                    : {})} // Fork add-on(session-details)
+                  {...(isServerThread ? { onOpenTurnDiff: onOpenTurnDiffStable } : {})} // Fork add-on(session-details)
+                  {...(hermesAgent ? { hermesMachine: hermesAgent.machine } : {})} // Fork add-on(hermes)
                 />
 
                 <PullRequestThreadDialogHost
@@ -3957,7 +3957,7 @@ export default function ChatView(props: ChatViewProps) {
         <ChatRightPanel
           sheet={shouldUsePlanSidebarSheet}
           workspaceLayoutElement={workspaceLayoutElement}
-          widthStorageKey="t3code:preview-panel-width" // Fork add-on: one width for every thread and Other Agents session, not one per thread.
+          widthStorageKey="t3code:preview-panel-width" // Fork add-on(compact-cards): one width for every thread and Other Agents session, not one per thread.
           sheetAnimationDurationMs={panelAnimationsActive ? panelAnimationDurationMs : 0}
           onCloseSheet={closePreviewPanelStable}
           open={rightPanelOpen}

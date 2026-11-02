@@ -1,6 +1,6 @@
 import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app-server/schema";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
-import type { ForkAgentScope } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on: agent instructions.
+import type { ForkAgentScope } from "@t3tools/provider-core/server/forkAgentInstructions"; // Fork add-on(agent-instructions)
 
 import {
   T3_CODE_BROWSER_TOOL_INSTRUCTIONS,
@@ -8,7 +8,7 @@ import {
   T3_CODE_ORCHESTRATION_SECTIONS,
 } from "@t3tools/provider-core/server/orchestrationInstructions";
 
-import { codexForkAgentContext } from "./codexForkAgentContext.ts"; // Fork add-on: agent instructions.
+import { codexForkAgentContext } from "./codexForkAgentContext.ts"; // Fork add-on(agent-instructions)
 
 /** Codex silently truncates additionalContext values over 1,000 tokens, counted as UTF-8 bytes / 4. */
 export const CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES = 4_000;
@@ -38,7 +38,7 @@ export interface CodexRuntimeInfo {
   readonly model: string;
   readonly modelName?: string | undefined;
   readonly reasoningEffort?: string | undefined;
-  readonly agentScope?: ForkAgentScope | undefined; // Fork add-on: agent instructions.
+  readonly agentScope?: ForkAgentScope | undefined; // Fork add-on(agent-instructions)
 }
 
 /** Keep this outside collaboration mode; model-catalog mode text overrides client developer_instructions. */
@@ -57,9 +57,9 @@ export function buildCodexAdditionalContext(
     ),
     t3_code_runtime: {
       kind: "application",
-      value: buildRuntimeInstructions({ harness: "Codex", ...runtime, agentScope: null }), // Fork add-on: agent instructions get their own entries.
+      value: buildRuntimeInstructions({ harness: "Codex", ...runtime, agentScope: null }), // Fork add-on(agent-instructions): agent instructions get their own entries.
     },
     ...(tools ? { t3_code_tools: { kind: "application", value: tools } } : {}),
-    ...codexForkAgentContext(runtime.agentScope, CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES), // Fork add-on: agent instructions.
+    ...codexForkAgentContext(runtime.agentScope, CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES), // Fork add-on(agent-instructions)
   };
 }

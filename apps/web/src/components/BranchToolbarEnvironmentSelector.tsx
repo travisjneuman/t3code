@@ -9,7 +9,7 @@ import { PlusIcon, ScaleIcon } from "lucide-react";
 import { memo } from "react";
 
 import { ADD_TO_MACHINE_LABEL_CLASS, type EnvironmentOption } from "./BranchToolbar.logic";
-import type { FixedRunLocation } from "../hermes/hermesSessions"; // Fork add-on: Hermes provider.
+import type { FixedRunLocation } from "../hermes/hermesSessions"; // Fork add-on(hermes)
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import {
@@ -29,7 +29,7 @@ interface BranchToolbarEnvironmentSelectorProps {
   availableEnvironments: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   onAddToMachine?: (() => void) | undefined;
-  fixedLocation?: FixedRunLocation | undefined; // Fork add-on: Hermes provider.
+  fixedLocation?: FixedRunLocation | undefined; // Fork add-on(hermes)
 }
 
 // Action values cannot collide with server-minted environment IDs.
@@ -45,7 +45,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   availableEnvironments,
   onEnvironmentChange,
   onAddToMachine,
-  fixedLocation, // Fork add-on: Hermes provider.
+  fixedLocation, // Fork add-on(hermes)
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const shortcutLabel = shortcutLabelForCommand(
@@ -69,7 +69,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // Match the xs control's height and padding: the composer strip has no min-height,
   // and its glass seam assumes that height even when this label is the only control.
   if (
-    fixedLocation /* Fork add-on: Hermes provider. */ ||
+    fixedLocation /* Fork add-on(hermes) */ ||
     envLocked ||
     (onEnvironmentChange === undefined && onAddToMachine === undefined)
   ) {
@@ -79,11 +79,11 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         data-composer-context-control
       >
         <EnvironmentMachineIcon
-          kind={fixedLocation?.machine ?? activeEnvironment?.machine ?? "server"} // Fork add-on: Hermes provider.
+          kind={fixedLocation?.machine ?? activeEnvironment?.machine ?? "server"} // Fork add-on(hermes)
           className="size-3 shrink-0"
         />
         <ComposerContextLabel>
-          {fixedLocation?.label /* Fork add-on: Hermes provider. */ ??
+          {fixedLocation?.label /* Fork add-on(hermes) */ ??
             activeEnvironment?.label ??
             "Run on"}
         </ComposerContextLabel>
@@ -93,7 +93,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       <Tooltip>
         <TooltipTrigger render={lockedRow} />
         <TooltipPopup>
-          {fixedLocation?.tooltip /* Fork add-on: Hermes provider. */ ??
+          {fixedLocation?.tooltip /* Fork add-on(hermes) */ ??
             activeEnvironment?.label ??
             "Run on"}
         </TooltipPopup>

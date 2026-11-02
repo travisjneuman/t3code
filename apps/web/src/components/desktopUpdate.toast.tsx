@@ -6,7 +6,7 @@ import {
   getDesktopUpdateReleaseUrl,
 } from "./desktopUpdate.logic";
 import { toastManager } from "./ui/toast";
-import { showSourceUpdateBuiltToast } from "../source-updates/sourceUpdateToast"; // Fork add-on: local source updates.
+import { showSourceUpdateBuiltToast } from "../source-updates/sourceUpdateToast"; // Fork add-on(upstream-sync)
 
 type DesktopUpdateShell = Pick<DesktopBridge, "openExternal">;
 
@@ -49,7 +49,7 @@ export function showDesktopUpdateDownloadedToast(
   shell: DesktopUpdateShell,
   state: DesktopUpdateState,
 ): void {
-  if (state.sourceUpdate) return showSourceUpdateBuiltToast(); // Fork add-on: local source updates.
+  if (state.sourceUpdate) return showSourceUpdateBuiltToast(); // Fork add-on(upstream-sync)
   const releaseUrl = getDesktopUpdateReleaseUrl(getDesktopUpdateDownloadedVersion(state));
   toastManager.add({
     type: "success",

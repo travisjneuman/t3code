@@ -40,7 +40,7 @@ import {
 } from "../lib/addProjectToMachine";
 import { formatBytes } from "../lib/formatBytes";
 import { newProjectId } from "../lib/utils";
-import { appAtomRegistry } from "../rpc/atomRegistry"; // Fork add-on: existing checkout.
+import { appAtomRegistry } from "../rpc/atomRegistry"; // Fork add-on(existing-checkout)
 import { readProject, subscribeProject, useProject } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import { projectEnvironment } from "../state/projects";
@@ -93,7 +93,7 @@ function close() {
   useRequest.setState({ request: null });
 }
 
-// Fork add-on: existing checkout. Idle TTL 0: it reads the other machine's disk, so it runs only
+// Fork add-on(existing-checkout): Idle TTL 0: it reads the other machine's disk, so it runs only
 // while the dialog is open and is read fresh each time.
 export const existingCheckoutQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:existing-checkout:find",
@@ -135,7 +135,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const [pathOverride, setPathOverride] = useState<string | null>(null);
   const destinationPath = pathOverride ?? defaultPath;
 
-  // Fork add-on: existing checkout. A machine that already has the repository adds that folder.
+  // Fork add-on(existing-checkout): A machine that already has the repository adds that folder.
   const subdirectory = project
     ? projectSubdirectory(project.repositoryIdentity?.rootPath, project.workspaceRoot)
     : "";
@@ -195,8 +195,8 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const unavailable =
     project === null ||
     target === null ||
-    searching || // Fork add-on: existing checkout.
-    (!addExisting && canListFiles && ignoredFiles.data === null && ignoredFiles.error === null); // Fork add-on: existing checkout.
+    searching || // Fork add-on(existing-checkout)
+    (!addExisting && canListFiles && ignoredFiles.data === null && ignoredFiles.error === null); // Fork add-on(existing-checkout)
   const toggleFile = (path: string, checked: boolean) => {
     const next = new Set(selectedFiles);
     if (checked) next.add(path);
@@ -398,10 +398,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               <Label htmlFor={`${id}-path`}>Folder on {target?.label ?? "the other machine"}</Label>
               <Input
                 id={`${id}-path`}
-                value={folderPath} // Fork add-on: existing checkouts
+                value={folderPath} // Fork add-on(existing-checkout)
                 onChange={(event) =>
-                  addExisting // Fork add-on: existing checkouts
-                    ? setExistingPathOverride(resolvePastedPath(existingPath, event.target.value)) // Fork add-on: existing checkouts
+                  addExisting // Fork add-on(existing-checkout)
+                    ? setExistingPathOverride(resolvePastedPath(existingPath, event.target.value)) // Fork add-on(existing-checkout)
                     : setPathOverride(resolvePastedPath(destinationPath, event.target.value))
                 }
                 spellCheck={false}
@@ -527,7 +527,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 
 /**
  * Checks the folder on the other machine is a checkout of this repository. Naming its top folder
- * adds the same subfolder the source project uses. Fork add-on: existing checkout.
+ * adds the same subfolder the source project uses. Fork add-on(existing-checkout)
  */
 async function checkedWorkspaceRoot(input: {
   readonly environmentId: EnvironmentId;

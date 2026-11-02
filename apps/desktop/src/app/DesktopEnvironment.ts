@@ -16,7 +16,7 @@ import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
-import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on: identity.
+import { REMOTE_APP_DISTRIBUTION } from "../remote-apps/RemoteAppDistribution.ts"; // Fork add-on(identity)
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
 export interface MakeDesktopEnvironmentInput {
@@ -86,7 +86,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on: identity.
+const APP_BASE_NAME = REMOTE_APP_DISTRIBUTION.baseName; // Fork add-on(identity)
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -107,7 +107,7 @@ export function resolveDesktopAppBranding(input: {
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
-    displayName: APP_BASE_NAME, // Fork add-on: the Dock and window name carry no stage label.
+    displayName: APP_BASE_NAME, // Fork add-on(identity): the Dock and window name carry no stage label.
   };
 }
 
@@ -229,7 +229,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? `${REMOTE_APP_DISTRIBUTION.appId}.dev` : REMOTE_APP_DISTRIBUTION.appId, // Fork add-on: identity.
+      isDevelopment ? `${REMOTE_APP_DISTRIBUTION.appId}.dev` : REMOTE_APP_DISTRIBUTION.appId, // Fork add-on(identity)
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     linuxApplicationsDir,

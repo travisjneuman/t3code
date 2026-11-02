@@ -49,16 +49,16 @@ export function ThreadRelationshipIcon({
   providerEntries = [],
   status,
   fallbackIcon: FallbackIcon = BotIcon,
-  compact = false, // Fork add-on: compact lineage agents
+  compact = false, // Fork add-on(subagent-tree)
 }: {
   driver?: ProviderDriverKind | undefined;
   provider?: ServerProvider | undefined;
   providerEntries?: ReadonlyArray<ProviderInstanceEntry>;
   status: string | null;
   fallbackIcon?: LucideIcon;
-  compact?: boolean; // Fork add-on: compact lineage agents
+  compact?: boolean; // Fork add-on(subagent-tree)
 }) {
-  const iconClassName = `${compact ? "size-3" : "size-4"} shrink-0 text-muted-foreground`; // Fork add-on: compact lineage agents
+  const iconClassName = `${compact ? "size-3" : "size-4"} shrink-0 text-muted-foreground`; // Fork add-on(subagent-tree)
   const entry = driver
     ? providerEntries.find((candidate) => candidate.instanceId === provider?.instanceId)
     : undefined;
@@ -66,7 +66,7 @@ export function ThreadRelationshipIcon({
   return (
     <span
       className={
-        `relative inline-flex ${compact ? "size-3" : "size-4"} shrink-0 items-center justify-center` /* Fork add-on: compact lineage agents */
+        `relative inline-flex ${compact ? "size-3" : "size-4"} shrink-0 items-center justify-center` /* Fork add-on(subagent-tree) */
       }
     >
       {driver ? (
@@ -86,15 +86,15 @@ export function ThreadRelationshipIcon({
       )}
       <span
         className={cn(
-          compact // Fork add-on: compact lineage agents
-            ? "absolute size-1.5 rounded-full border border-card" // Fork add-on: compact lineage agents
-            : "absolute size-2 rounded-full border-2 border-card", // Fork add-on: compact lineage agents
+          compact // Fork add-on(subagent-tree)
+            ? "absolute size-1.5 rounded-full border border-card" // Fork add-on(subagent-tree)
+            : "absolute size-2 rounded-full border-2 border-card", // Fork add-on(subagent-tree)
           showInstanceBadge
-            ? compact // Fork add-on: compact lineage agents
-              ? "-left-0.5 -top-0.5" // Fork add-on: compact lineage agents
+            ? compact // Fork add-on(subagent-tree)
+              ? "-left-0.5 -top-0.5" // Fork add-on(subagent-tree)
               : "-left-1 -top-1"
-            : compact // Fork add-on: compact lineage agents
-              ? "-bottom-0.5 -right-0.5" // Fork add-on: compact lineage agents
+            : compact // Fork add-on(subagent-tree)
+              ? "-bottom-0.5 -right-0.5" // Fork add-on(subagent-tree)
               : "-bottom-1 -right-1",
           status === "running" ||
             status === "in_progress" ||

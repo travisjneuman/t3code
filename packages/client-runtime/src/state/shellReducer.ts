@@ -8,7 +8,7 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
-import * as ForkOmitted from "./forkOmittedSubagents.ts"; // Fork add-on: nested subagents.
+import * as ForkOmitted from "./forkOmittedSubagents.ts"; // Fork add-on(subagent-tree)
 
 const sameThreadShell = Schema.toEquivalence(OrchestrationV2ThreadShell);
 const sameProjectShell = Schema.toEquivalence(OrchestrationProjectShell);
@@ -180,7 +180,7 @@ export function applyShellStreamEvent(
         // still send archive-located deltas here; remove them from the normal
         // shell instead of growing its persisted cache again.
         archivedThreads: withoutThread(snapshot.archivedThreads),
-        ...ForkOmitted.omittedSubagentsAfterUpdate(snapshot, event), // Fork add-on: nested subagents.
+        ...ForkOmitted.omittedSubagentsAfterUpdate(snapshot, event), // Fork add-on(subagent-tree)
         snapshotSequence: event.sequence,
       };
     }
@@ -189,7 +189,7 @@ export function applyShellStreamEvent(
         ...snapshot,
         threads: snapshot.threads.filter((thread) => thread.id !== event.threadId),
         archivedThreads: snapshot.archivedThreads.filter((thread) => thread.id !== event.threadId),
-        ...ForkOmitted.withoutOmittedSubagent(snapshot, event.threadId), // Fork add-on: nested subagents.
+        ...ForkOmitted.withoutOmittedSubagent(snapshot, event.threadId), // Fork add-on(subagent-tree)
         snapshotSequence: event.sequence,
       };
     default:

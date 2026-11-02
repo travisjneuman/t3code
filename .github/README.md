@@ -11,7 +11,7 @@
 [![Built for macOS](https://img.shields.io/badge/built_for-macOS-3f3f46?style=flat-square&logo=apple)](#build-it-yourself)
 [![MIT license](https://img.shields.io/badge/license-MIT-3f3f46?style=flat-square)](https://github.com/travisjneuman/t3code/blob/main/LICENSE)
 
-[What's added](#whats-added) · [Build it yourself](#build-it-yourself) · [Upstream source](https://github.com/pingdotgg/t3code)
+[What's added](#whats-added) · [Every add-on](#every-add-on) · [Build it yourself](#build-it-yourself) · [Upstream source](https://github.com/pingdotgg/t3code)
 
 </div>
 
@@ -19,7 +19,7 @@
 
 Everything T3 Code does comes from the official project at **[pingdotgg/t3code](https://github.com/pingdotgg/t3code)**. Go there to learn about T3 Code itself, its providers, the mobile app and contributing.
 
-This fork follows the upstream nightly and adds the features below. Each add-on lives in its own files, and upstream files get only one-line hooks marked `Fork add-on`. That keeps merges from upstream small ([how the fork is built](https://github.com/travisjneuman/t3code/blob/main/docs/internals/fork-add-ons.md)).
+This fork follows the upstream nightly and adds the features below. Each add-on lives in its own files, and upstream files get only one-line hooks marked `Fork add-on(<id>)`, listed in [`fork/addons.json`](https://github.com/travisjneuman/t3code/blob/main/fork/addons.json). That keeps merges from upstream small ([how the fork is built](https://github.com/travisjneuman/t3code/blob/main/docs/internals/fork-add-ons.md)).
 
 ## What's added
 
@@ -141,6 +141,60 @@ A Mac app you build yourself updates from the checkout it was built from instead
 ### Compact cards
 
 Thread cards in the sidebar keep their three lines (project, title, branch) one text size smaller, with a thin outline and tighter spacing, so more threads fit on screen.
+
+## Every add-on
+
+Every add-on has an id, and each fork line in an upstream file carries `Fork add-on(<id>)`. [`fork/addons.json`](https://github.com/travisjneuman/t3code/blob/main/fork/addons.json) lists each add-on's files, the upstream files it hooks, the data it adds and the add-ons it depends on. Personal add-ons are the owner's own tooling; skip them when adopting add-ons.
+
+| Id                        | Tier         | Add-on                                    | What it does                                                                                                                              |
+| ------------------------- | ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`                    | core         | Fork core                                 | Shared plumbing the add-ons plug into: RPC scope merge, desktop bridge and IPC, fork migrations, menu icons, the fork's docs front doors. |
+| `web-apps`                | feature      | [Web apps](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app.                                                                  |
+| `other-agents`            | feature      | [Other Agents](#other-agents)             | Follow, continue and hand back sessions started in other agent apps.                                                                      |
+| `hermes`                  | feature      | [Hermes Agent](#hermes-agent)             | A Hermes Agent provider, local or remote, with its own sidebar section.                                                                   |
+| `compare-agents`          | feature      | [Compare agents](#compare-agents)         | One prompt to two models, side by side, with review swap.                                                                                 |
+| `agent-instructions`      | feature      | [Agent instructions](#agent-instructions) | Delegation, worker models and agent rules as settings, globally or per project.                                                           |
+| `save-to-notes`           | feature      | [Save to notes](#save-to-notes)           | Files a thread into a notes folder as a summary or a full copy.                                                                           |
+| `thread-export`           | feature      | [Export a thread](#export-a-thread)       | Saves a thread's full server record as Markdown or JSON.                                                                                  |
+| `session-details`         | feature      | [Session details](#session-details)       | Session, context, connectors and outputs of any session in the thread details card.                                                       |
+| `compact-cards`           | feature      | [Compact cards](#compact-cards)           | Outlined, smaller sidebar thread cards that always name their machine.                                                                    |
+| `subagent-tree`           | feature      | Subagent tree                             | Subagents nest under their thread in the sidebar and the Lineage panel.                                                                   |
+| `session-search`          | feature      | Session search                            | Command palette search across T3 threads and other agents' sessions.                                                                      |
+| `maintenance-queue`       | feature      | Maintenance queue                         | Server and provider updates wait in one queue that closes idle sessions first and counts this app.                                        |
+| `existing-checkout`       | feature      | Existing checkouts                        | Add a machine's existing checkout instead of cloning, and find checkouts on other machines.                                               |
+| `project-links`           | feature      | Project links                             | Link folder projects across machines into one project.                                                                                    |
+| `thread-retention`        | feature      | Thread retention                          | Settled and archived threads clean themselves up.                                                                                         |
+| `host-backups`            | feature      | Host backups                              | Lists the backups the host tooling keeps on a machine and the version each would restore.                                                 |
+| `remote-pairing`          | feature      | Remote pairing                            | Pair a phone with any connected machine.                                                                                                  |
+| `usage-by-model`          | feature      | Usage by model                            | Usage shows one row per model across harnesses.                                                                                           |
+| `usage-pace`              | feature      | Usage pace                                | Pace for weekly and monthly usage windows.                                                                                                |
+| `codex-hidden-models`     | feature      | Codex hidden models                       | A switch that lists the models Codex keeps out of its picker.                                                                             |
+| `retired-models`          | feature      | Retired models                            | Threads on a retired model move to its successor.                                                                                         |
+| `mcp-hub`                 | feature      | MCP hub                                   | `t3 mcp token` and `t3 mcp stdio` for agents without OAuth.                                                                               |
+| `multi-select-menu`       | feature      | Multi-select menu                         | Selected threads get the whole thread menu.                                                                                               |
+| `collapsible-details`     | feature      | Collapsible details                       | Thread details sections collapse and remember it.                                                                                         |
+| `no-project-start`        | feature      | No-project start                          | New threads start without a project; one No project per machine.                                                                          |
+| `status-colors`           | feature      | Status colors                             | Status colors mean the same thing everywhere.                                                                                             |
+| `model-brand-names`       | feature      | Model brand names                         | Providers and models carry their vendors' names.                                                                                          |
+| `renamed-hosts`           | feature      | Renamed hosts                             | Machines renamed after pairing keep their new name.                                                                                       |
+| `tailscale-https`         | feature      | Tailscale HTTPS                           | Connections says when the tailnet has HTTPS certificates turned off.                                                                      |
+| `claude-release-channel`  | feature      | Claude release channel                    | Claude updates follow Claude's own release channel.                                                                                       |
+| `vpn-lan`                 | fix          | VPN addresses                             | Full-tunnel VPN addresses are not offered as LAN addresses.                                                                               |
+| `windows-taskkill`        | fix          | Windows taskkill                          | A Windows taskkill that exits non-zero after every named process is gone counts as success.                                               |
+| `stdio-eio`               | fix          | stdio EIO                                 | An EIO on a closed stdout pipe does not crash the desktop app on macOS.                                                                   |
+| `bootstrap-retry`         | fix          | Auth bootstrap retry                      | Retries a settling desktop backend's 500 during auth bootstrap.                                                                           |
+| `clipboard-focus`         | fix          | Clipboard focus                           | Copying works when the window is unfocused.                                                                                               |
+| `route-crash-escape`      | fix          | Route crash escape                        | Leave a crashing route instead of being stuck on it.                                                                                      |
+| `grok-zero-usage`         | fix          | Grok zero usage                           | An omitted Grok percentage still shows as 0% used.                                                                                        |
+| `telemetry-check-failure` | fix          | Telemetry check failure                   | A failed telemetry endpoint check shows Check failed instead of Not checked.                                                              |
+| `scheduled-tasks-error`   | fix          | Scheduled tasks error                     | A failed delivery list shows its error without a stuck loading line.                                                                      |
+| `identity`                | distribution | Identity                                  | App id, profile, link scheme and app name, so the fork installs beside official T3 Code.                                                  |
+| `ndev-icons`              | distribution | ndev artwork                              | The fork's app and web icons.                                                                                                             |
+| `keychain-free-secrets`   | distribution | Keychain-free secrets                     | On macOS, saved connections use a file key, so updates stop asking for the keychain password.                                             |
+| `upstream-sync`           | distribution | [Upstream sync](#upstream-sync)           | Merges new upstream nightlies and rebuilds the app from its source checkout.                                                              |
+| `host-releases`           | distribution | Host releases                             | Connected hosts run fork builds: release source, HTTPS mirrors, version facts and runtime retention.                                      |
+| `tjn-fleet`               | personal     | TJN fleet                                 | Owner's fleet host tooling and workflows; not useful to other people.                                                                     |
+| `owner-policy`            | personal     | Owner policy                              | Owner's agent-instruction overrides in AGENTS.md.                                                                                         |
 
 ## Build it yourself
 

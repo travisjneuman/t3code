@@ -108,7 +108,7 @@ function curatedCauseMessages(cause: unknown): {
         case "ClaudeSettingsLaunchArgError":
         case "ClaudeMcpRegistrationTimeoutError":
         case "CursorModelUnavailableError":
-        case "HermesTurnNotSentError": // Fork add-on: Hermes provider.
+        case "HermesTurnNotSentError": // Fork add-on(hermes)
         case "ProviderSetupError":
           return { known: stringField(cause, "message"), category: categoryMessage() };
         case "AcpProcessExitedError": {

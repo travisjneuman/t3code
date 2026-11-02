@@ -34,7 +34,7 @@ export interface ProjectMetaUpdateCommand {
   readonly defaultModelSelection?: ModelSelection | null;
   readonly defaultThreadEnvMode?: ThreadEnvMode | null;
   readonly autoPull?: boolean;
-  readonly linkKey?: string | null; // Fork add-on
+  readonly linkKey?: string | null; // Fork add-on(project-links)
   readonly faviconPath?: string | null;
   readonly projectIcon?: ProjectIconOverride | null;
   readonly scripts?: ReadonlyArray<ProjectScript>;
@@ -208,7 +208,7 @@ export function planProjectCommand(input: {
             ? {}
             : { defaultThreadEnvMode: command.defaultThreadEnvMode }),
           ...(command.autoPull === undefined ? {} : { autoPull: command.autoPull }),
-          ...(command.linkKey === undefined ? {} : { linkKey: command.linkKey }), // Fork add-on
+          ...(command.linkKey === undefined ? {} : { linkKey: command.linkKey }), // Fork add-on(project-links)
           ...(command.faviconPath === undefined ? {} : { faviconPath: command.faviconPath }),
           ...(command.projectIcon === undefined ? {} : { projectIcon: command.projectIcon }),
           ...(command.scripts === undefined ? {} : { scripts: command.scripts }),

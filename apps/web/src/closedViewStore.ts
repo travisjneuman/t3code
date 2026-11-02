@@ -11,7 +11,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 import { randomUUID } from "./lib/utils";
-import { isRemoteAppPanelSurface } from "./remote-apps/panel/remoteAppPanelSurface"; // Fork add-on: remote app panel.
+import { isRemoteAppPanelSurface } from "./remote-apps/panel/remoteAppPanelSurface"; // Fork add-on(web-apps)
 import { type RightPanelSurface } from "./rightPanelStore";
 
 export type ClosedView =
@@ -96,8 +96,8 @@ const isClosedViewEntry = (entry: unknown): entry is ClosedViewEntry => {
         (surface.host === undefined || typeof surface.host === "string") &&
         (surface.url === undefined || typeof surface.url === "string")
       );
-    case "remote-app": // Fork add-on: remote app panel.
-      return isRemoteAppPanelSurface(surface); // Fork add-on: remote app panel.
+    case "remote-app": // Fork add-on(web-apps)
+      return isRemoteAppPanelSurface(surface); // Fork add-on(web-apps)
     default:
       return false;
   }

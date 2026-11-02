@@ -188,7 +188,7 @@ import {
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { handoffHistoryOrigin } from "../external-sessions/importedHistory.ts"; // Fork add-on: continued external sessions.
+import { handoffHistoryOrigin } from "../external-sessions/importedHistory.ts"; // Fork add-on(other-agents)
 import * as ServerSettings from "../serverSettings.ts";
 
 const isMessageQuestionAnswer = Schema.is(
@@ -1845,7 +1845,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             );
       const needsFullContext = deliveryProviderThread.nativeThreadRef === null;
       const legacyImportItems =
-        handoffHistoryOrigin(projection.thread) === "v1_import" // Fork add-on: continued external sessions.
+        handoffHistoryOrigin(projection.thread) === "v1_import" // Fork add-on(other-agents)
           ? yield* readHandoffItems(threadId, [null])
           : [];
       const handoffStrategy = needsFullContext
@@ -6191,7 +6191,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const latestCompletedRun = projection.runs.findLast((run) => run.status === "completed");
     const latestHandoffRun = projection.runs.findLast(isHandoffSourceRun);
     const legacyImportItems =
-      handoffHistoryOrigin(projection.thread) === "v1_import" // Fork add-on: continued external sessions.
+      handoffHistoryOrigin(projection.thread) === "v1_import" // Fork add-on(other-agents)
         ? yield* readHandoffItems(command.threadId, [null])
         : [];
     const isProviderSwitch =
@@ -6782,7 +6782,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...sourceRunsAfterFork.filter((run) => run.status !== "queued").map((run) => run.id),
       ...(sourceRun === null &&
       sourceProjection !== null &&
-      handoffHistoryOrigin(sourceProjection.thread) === "v1_import" // Fork add-on: continued external sessions.
+      handoffHistoryOrigin(sourceProjection.thread) === "v1_import" // Fork add-on(other-agents)
         ? [null]
         : []),
     ];

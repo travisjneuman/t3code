@@ -61,7 +61,7 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { RemoteAppTitlebar } from "../remote-apps/RemoteAppTitlebar"; // Fork add-on: remote apps.
+import { RemoteAppTitlebar } from "../remote-apps/RemoteAppTitlebar"; // Fork add-on(web-apps)
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { registerCommands, registerMenuAction } from "../shortcuts/dispatcher";
 import { resolveThreadRouteRef } from "../threadRoutes";
@@ -474,7 +474,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           <SidebarRail onDoubleClick={resetSidebarWidth} />
         </Sidebar>
         {children}
-        <RemoteAppTitlebar /> {/* Fork add-on: remote apps. */}
+        <RemoteAppTitlebar /> {/* Fork add-on(web-apps) */}
         <BackgroundThreadAnnouncer />
         <SidebarControl />
         {isElectron ? <HistorySwipeNavigation /> : null}

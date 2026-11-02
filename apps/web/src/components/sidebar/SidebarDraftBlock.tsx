@@ -21,7 +21,7 @@ import {
   type DraftSessionState,
 } from "../../composerDraftStore";
 import { draftPenClassName, draftSurfaceClassName } from "./SidebarThreadRow";
-import { THREAD_CARD_LAYOUT } from "../../sidebar-compact/threadCardLayout"; // Fork add-on: compact sidebar cards.
+import { THREAD_CARD_LAYOUT } from "../../sidebar-compact/threadCardLayout"; // Fork add-on(compact-cards)
 
 const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   draftId: DraftId;
@@ -81,7 +81,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     onDiscard(draftId);
   };
   return (
-    <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5" /* Fork add-on */>
+    <li data-fork-thread-card={THREAD_CARD_LAYOUT} className="list-none py-0.5" /* Fork add-on(compact-cards) */>
       <div
         role="treeitem"
         tabIndex={-1}
@@ -89,7 +89,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         aria-label={accessibility.label}
         aria-current={accessibility.current}
         data-testid="sidebar-draft-row"
-        data-fork-card-part="surface" // Fork add-on: compact sidebar cards.
+        data-fork-card-part="surface" // Fork add-on(compact-cards)
         className={cn(
           "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left text-sidebar-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
           props.isActive ? "bg-sidebar-row-active" : draftSurfaceClassName,
@@ -100,11 +100,11 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
       >
         <span className="sr-only">{preview}</span>
         <div
-          data-fork-card-part="box" // Fork add-on
+          data-fork-card-part="box" // Fork add-on(compact-cards)
           className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
         >
           <div
-            data-fork-card-part="head" // Fork add-on
+            data-fork-card-part="head" // Fork add-on(compact-cards)
             className="flex h-5 min-w-0 items-center gap-1.5"
           >
             <SquarePenIcon aria-hidden className={draftPenClassName} />
@@ -112,13 +112,13 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
             <span
-              data-fork-card-part="project" // Fork add-on
+              data-fork-card-part="project" // Fork add-on(compact-cards)
               className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label"
             >
               {props.projectDisplayName}
             </span>
             <span
-              data-fork-card-part="status" // Fork add-on
+              data-fork-card-part="status" // Fork add-on(compact-cards)
               className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end"
             >
               <Tooltip>
@@ -140,7 +140,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
           </div>
           <div
             aria-hidden
-            data-fork-card-part="title" // Fork add-on
+            data-fork-card-part="title" // Fork add-on(compact-cards)
             className="mt-0.5 truncate text-sm font-medium text-foreground/90"
           >
             {preview}

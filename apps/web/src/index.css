@@ -115,7 +115,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   /* App layer order: the bottom terminal drawer (45, above the timeline minimap),
      docked sheets, then the floating preview player (47–49, see
      previewMiniPlayerLayout.ts), then dialogs and popovers (50 and up). */
-  /* Fork add-on: web pages placed in a sheet use 47 (BrowserSurfaceSlot.tsx). */
+  /* Fork add-on(web-apps): web pages placed in a sheet use 47 (BrowserSurfaceSlot.tsx). */
   --z-sheet: 46;
   --glass-blur: 12px;
   --glass-opacity: 80%;

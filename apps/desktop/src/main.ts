@@ -1,7 +1,7 @@
 import * as MacPermissions from "./permissions/MacPermissions.ts";
 for (const stream of [process.stdout, process.stderr]) {
   stream.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EPIPE" && err.code !== "EIO") throw err; // Fork add-on: macOS reports EIO too.
+    if (err.code !== "EPIPE" && err.code !== "EIO") throw err; // Fork add-on(stdio-eio): macOS reports EIO too.
   });
 }
 
@@ -28,7 +28,7 @@ import * as ElectronDialog from "./electron/ElectronDialog.ts";
 import * as ElectronMenu from "./electron/ElectronMenu.ts";
 import * as ElectronPowerMonitor from "./electron/ElectronPowerMonitor.ts";
 import * as ElectronProtocol from "./electron/ElectronProtocol.ts";
-// Fork add-on: ElectronSafeStorage is provided by ./fork/fileSafeStorage.ts.
+// Fork add-on(keychain-free-secrets): ElectronSafeStorage is provided by ./fork/fileSafeStorage.ts.
 import * as ElectronShell from "./electron/ElectronShell.ts";
 import * as ElectronTheme from "./electron/ElectronTheme.ts";
 import * as ElectronUpdater from "./electron/ElectronUpdater.ts";
@@ -67,8 +67,8 @@ import * as DesktopLegacyLocalStorage from "./app/DesktopLegacyLocalStorage.ts";
 import * as DesktopTelemetryPublisher from "./telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopRendererHistory from "./telemetry/DesktopRendererHistory.ts";
 import * as DesktopUpdatePolicy from "./updates/DesktopUpdatePolicy.ts";
-import * as ForkDesktopUpdates from "./updates/ForkDesktopUpdates.ts"; // Fork add-on: replaces DesktopUpdates.
-import * as ForkFileSafeStorage from "./fork/fileSafeStorage.ts"; // Fork add-on: replaces ElectronSafeStorage.
+import * as ForkDesktopUpdates from "./updates/ForkDesktopUpdates.ts"; // Fork add-on(upstream-sync): replaces DesktopUpdates.
+import * as ForkFileSafeStorage from "./fork/fileSafeStorage.ts"; // Fork add-on(keychain-free-secrets): replaces ElectronSafeStorage.
 import * as BrowserImport from "./preview/BrowserImport/BrowserImport.ts";
 import * as LinuxBrowserSecret from "./preview/BrowserImport/LinuxBrowserSecret.ts";
 import * as BrowserSession from "./preview/BrowserSession.ts";
@@ -79,7 +79,7 @@ import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
-import * as ForkLayers from "./fork/layers.ts"; // Fork add-on: remote apps.
+import * as ForkLayers from "./fork/layers.ts"; // Fork add-on(web-apps)
 
 if (process.argv.includes("--version")) {
   try {
@@ -135,7 +135,7 @@ const layerElectron = Layer.mergeAll(
   ElectronMenu.layer,
   ElectronPowerMonitor.layer,
   ElectronProtocol.layer,
-  ForkFileSafeStorage.layer, // Fork add-on: replaces ElectronSafeStorage.layer.
+  ForkFileSafeStorage.layer, // Fork add-on(keychain-free-secrets): replaces ElectronSafeStorage.layer.
   ElectronShell.layer,
   ElectronTheme.layer,
   ElectronUpdater.layer,
@@ -217,7 +217,7 @@ const layerDesktopApplication = Layer.mergeAll(
 ).pipe(
   Layer.provideMerge(layerDesktopSnapShot),
   Layer.provideMerge(
-    ForkDesktopUpdates.layer.pipe( // Fork add-on: replaces DesktopUpdates.layer.
+    ForkDesktopUpdates.layer.pipe( // Fork add-on(upstream-sync): replaces DesktopUpdates.layer.
       Layer.provide(DesktopUpdatePolicy.layer),
       // The same layer as the foundation's, so the policy is still read once.
       Layer.provide(DesktopManagedPolicy.layer),
@@ -225,7 +225,7 @@ const layerDesktopApplication = Layer.mergeAll(
   ),
   Layer.provideMerge(layerDesktopWslBackend),
   Layer.provideMerge(layerDesktopLocalEnvironmentAuth),
-  Layer.provideMerge(ForkLayers.remoteApps.pipe(Layer.provideMerge(layerDesktopFoundation))), // Fork add-on: remote apps.
+  Layer.provideMerge(ForkLayers.remoteApps.pipe(Layer.provideMerge(layerDesktopFoundation))), // Fork add-on(web-apps)
 );
 
 // Clerk resolves userData before Electron is ready, so it gets the synchronous FileSystem.

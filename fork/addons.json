@@ -1,0 +1,1708 @@
+{
+  "$comment": "Every fork add-on. files: fork-owned files it owns (absent upstream). hooks: upstream files where its lines carry `Fork add-on(<id>)`. unmarkedUpstreamEdits: upstream files that cannot hold a marker. dependsOn: add-ons whose fork-owned files it imports. Update this in the same change as the code. See docs/internals/fork-add-ons.md.",
+  "upstream": "https://github.com/pingdotgg/t3code",
+  "tiers": {
+    "core": "Shared plumbing every other add-on hooks into.",
+    "feature": "A user-visible feature.",
+    "fix": "A small behavior fix to upstream code that upstream does not have.",
+    "distribution": "How the fork is built, named, signed, installed and updated.",
+    "personal": "The owner's own tooling and instructions; skip when adopting add-ons."
+  },
+  "mobile": "No add-on changes the mobile app. Fork wire additions are optional fields that upstream clients ignore.",
+  "addons": [
+    {
+      "id": "core",
+      "tier": "core",
+      "title": "Fork core",
+      "summary": "Shared plumbing the add-ons plug into: RPC scope merge, desktop bridge and IPC, fork migrations, menu icons, the fork's docs front doors.",
+      "docs": [
+        "docs/internals/fork-add-ons.md",
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "compare-agents",
+        "existing-checkout",
+        "hermes",
+        "host-backups",
+        "host-releases",
+        "maintenance-queue",
+        "other-agents",
+        "project-links",
+        "save-to-notes",
+        "session-details",
+        "session-search",
+        "thread-export",
+        "thread-retention",
+        "upstream-sync",
+        "web-apps"
+      ],
+      "surfaces": [
+        "ci",
+        "contracts",
+        "desktop",
+        "server",
+        "web"
+      ],
+      "files": [
+        ".github/README.md",
+        "apps/desktop/src/fork/channels.ts",
+        "apps/desktop/src/fork/confirm.ts",
+        "apps/desktop/src/fork/ipcHandlers.ts",
+        "apps/desktop/src/fork/layers.ts",
+        "apps/desktop/src/fork/menu.ts",
+        "apps/desktop/src/fork/preloadBridge.ts",
+        "apps/desktop/src/fork/window.ts",
+        "apps/server/src/auth/forkRpcScopes.ts",
+        "apps/server/src/forkRpcHandlers.ts",
+        "apps/server/src/observability/forkRpcAggregates.ts",
+        "apps/server/src/persistence/ForkMigrations.ts",
+        "apps/web/src/forkComposerBanners.ts",
+        "apps/web/src/forkContextMenuIcons.ts",
+        "apps/web/src/forkThreadMenu.ts",
+        "apps/web/src/forkTimelineLiveFollow.ts",
+        "apps/web/src/sidebar-compact/AgentSectionParts.tsx",
+        "apps/web/src/sidebar-compact/agentLines.ts",
+        "docs/internals/README.md",
+        "docs/internals/fork-add-ons.md",
+        "docs/user/README.md",
+        "docs/user/fork-behavior.md",
+        "packages/contracts/src/forkClientRpcScopes.ts",
+        "packages/contracts/src/forkDesktopBridge.ts"
+      ],
+      "tests": [
+        "apps/desktop/src/fork/confirm.test.ts"
+      ],
+      "hooks": [
+        "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
+        "apps/desktop/src/preload.ts",
+        "apps/server/src/auth/RpcAuthorization.ts",
+        "apps/server/src/observability/RpcInstrumentation.ts",
+        "apps/server/src/ws.ts",
+        "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/contextMenuFallback.ts",
+        "apps/web/src/hooks/useThreadActionMenu.ts",
+        "packages/contracts/src/clientRpcPermissions.ts",
+        "packages/contracts/src/index.ts"
+      ],
+      "data": {
+        "migrations": [
+          "apps/server/src/persistence/ForkMigrations.ts runs fork migrations in their own ledger, after upstream's"
+        ]
+      }
+    },
+    {
+      "id": "web-apps",
+      "tier": "feature",
+      "title": "Web apps",
+      "summary": "ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app.",
+      "docs": [
+        "docs/user/desktop-remote-apps.md",
+        "docs/internals/remote-apps.md"
+      ],
+      "dependsOn": [
+        "core",
+        "identity"
+      ],
+      "surfaces": [
+        "contracts",
+        "desktop",
+        "web"
+      ],
+      "files": [
+        "apps/desktop/src/remote-apps/RemoteAppChatImport.ts",
+        "apps/desktop/src/remote-apps/RemoteAppDownloads.ts",
+        "apps/desktop/src/remote-apps/RemoteAppFiles.ts",
+        "apps/desktop/src/remote-apps/RemoteAppIpc.ts",
+        "apps/desktop/src/remote-apps/RemoteAppManager.ts",
+        "apps/desktop/src/remote-apps/RemoteAppMarkdown.ts",
+        "apps/desktop/src/remote-apps/RemoteAppPageScripts.ts",
+        "apps/desktop/src/remote-apps/RemoteAppPolicy.ts",
+        "apps/desktop/src/remote-apps/RemoteAppSession.ts",
+        "apps/desktop/src/remote-apps/RemoteAppSiteTheme.ts",
+        "apps/desktop/src/remote-apps/RemoteAppStateStore.ts",
+        "apps/desktop/src/remote-apps/RemoteAppSurfaceIcons.ts",
+        "apps/desktop/src/remote-apps/RemoteAppTheme.ts",
+        "apps/desktop/src/remote-apps/RemoteAppTypes.ts",
+        "apps/desktop/src/remote-apps/RemoteAppWebview.ts",
+        "apps/web/src/remote-apps/RemoteAppChatImportRow.tsx",
+        "apps/web/src/remote-apps/RemoteAppSendMessageAction.tsx",
+        "apps/web/src/remote-apps/RemoteAppSendToThreadHost.tsx",
+        "apps/web/src/remote-apps/RemoteAppSiteIcon.tsx",
+        "apps/web/src/remote-apps/RemoteAppSiteSync.tsx",
+        "apps/web/src/remote-apps/RemoteAppSitesSettings.tsx",
+        "apps/web/src/remote-apps/RemoteAppSwitcher.tsx",
+        "apps/web/src/remote-apps/RemoteAppSync.tsx",
+        "apps/web/src/remote-apps/RemoteAppThemeSync.tsx",
+        "apps/web/src/remote-apps/RemoteAppTitlebar.tsx",
+        "apps/web/src/remote-apps/confirmAboveRemoteApp.ts",
+        "apps/web/src/remote-apps/panel/RemoteAppPanelHost.tsx",
+        "apps/web/src/remote-apps/panel/RemoteAppPanelTab.tsx",
+        "apps/web/src/remote-apps/panel/RemoteAppPanelView.tsx",
+        "apps/web/src/remote-apps/panel/remoteAppPanelMemory.ts",
+        "apps/web/src/remote-apps/panel/remoteAppPanelPalette.tsx",
+        "apps/web/src/remote-apps/panel/remoteAppPanelRuntime.ts",
+        "apps/web/src/remote-apps/panel/remoteAppPanelSurface.ts",
+        "apps/web/src/remote-apps/panel/remoteAppPanelTabs.ts",
+        "apps/web/src/remote-apps/panel/remoteAppPanelThread.ts",
+        "apps/web/src/remote-apps/remoteAppState.ts",
+        "apps/web/src/remote-apps/remoteAppSurface.css",
+        "apps/web/src/remote-apps/themeChangeEvent.ts",
+        "apps/web/src/remote-apps/useRemoteAppSites.ts",
+        "apps/web/src/remote-apps/useRemoteAppState.ts",
+        "apps/web/src/remote-apps/useT3SurfaceNavigate.ts",
+        "docs/internals/remote-apps.md",
+        "docs/user/desktop-remote-apps.md",
+        "packages/contracts/src/remote-apps.ts",
+        "packages/contracts/src/remoteAppIcons.ts"
+      ],
+      "tests": [
+        "apps/desktop/src/remote-apps/RemoteAppIpc.test.ts",
+        "apps/desktop/src/remote-apps/RemoteAppManager.test.ts",
+        "apps/desktop/src/remote-apps/RemoteAppPolicy.test.ts",
+        "apps/desktop/src/remote-apps/RemoteAppStateStore.test.ts",
+        "apps/desktop/src/remote-apps/RemoteAppTheme.test.ts",
+        "apps/web/src/remote-apps/RemoteAppThemeSync.test.ts",
+        "apps/web/src/remote-apps/confirmAboveRemoteApp.test.ts",
+        "apps/web/src/remote-apps/remoteAppState.test.ts"
+      ],
+      "hooks": [
+        "apps/desktop/src/electron/ElectronProtocol.ts",
+        "apps/desktop/src/main.ts",
+        "apps/desktop/src/window/DesktopApplicationMenu.ts",
+        "apps/desktop/src/window/DesktopWindow.ts",
+        "apps/web/src/AppRoot.tsx",
+        "apps/web/src/browser/BrowserSurfaceSlot.tsx",
+        "apps/web/src/closedViewStore.ts",
+        "apps/web/src/components/AppSidebarLayout.tsx",
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/RightPanelTabs.tsx",
+        "apps/web/src/components/chat/RightPanelSurfaceContent.tsx",
+        "apps/web/src/components/chat/TimelineAssistantRows.tsx",
+        "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
+        "apps/web/src/components/sidebar/SidebarChrome.tsx",
+        "apps/web/src/hooks/useTheme.ts",
+        "apps/web/src/index.css",
+        "apps/web/src/localApi.ts",
+        "apps/web/src/reopenClosedView.ts",
+        "apps/web/src/rightPanelStore.ts",
+        "packages/contracts/src/index.ts"
+      ]
+    },
+    {
+      "id": "other-agents",
+      "tier": "feature",
+      "title": "Other Agents",
+      "summary": "Follow, continue and hand back sessions started in other agent apps.",
+      "docs": [
+        "docs/user/other-agents.md",
+        "docs/internals/external-sessions.md"
+      ],
+      "dependsOn": [
+        "core",
+        "hermes",
+        "session-details",
+        "thread-retention",
+        "web-apps"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/external-sessions/ExternalSessionSource.ts",
+        "apps/server/src/external-sessions/ExternalSessions.ts",
+        "apps/server/src/external-sessions/ExternalSessionsRpc.ts",
+        "apps/server/src/external-sessions/antigravityInsights.ts",
+        "apps/server/src/external-sessions/antigravitySource.ts",
+        "apps/server/src/external-sessions/claudeContextWindow.ts",
+        "apps/server/src/external-sessions/claudeDesktopArchive.ts",
+        "apps/server/src/external-sessions/claudeSessionIndex.ts",
+        "apps/server/src/external-sessions/claudeSource.ts",
+        "apps/server/src/external-sessions/codexInsights.ts",
+        "apps/server/src/external-sessions/codexNativeArchive.ts",
+        "apps/server/src/external-sessions/codexSource.ts",
+        "apps/server/src/external-sessions/continueExternalSession.ts",
+        "apps/server/src/external-sessions/externalSessionArchive.ts",
+        "apps/server/src/external-sessions/externalSessionSync.ts",
+        "apps/server/src/external-sessions/grokInsights.ts",
+        "apps/server/src/external-sessions/grokSource.ts",
+        "apps/server/src/external-sessions/handBack.ts",
+        "apps/server/src/external-sessions/importedHistory.ts",
+        "apps/server/src/external-sessions/openInOrigin.ts",
+        "apps/server/src/external-sessions/piInsights.ts",
+        "apps/server/src/external-sessions/piSource.ts",
+        "apps/server/src/external-sessions/sessionHistory.ts",
+        "apps/server/src/external-sessions/sessionOutputs.ts",
+        "apps/web/src/external-sessions/ArchivedExternalSessions.tsx",
+        "apps/web/src/external-sessions/ExternalSessionDetails.tsx",
+        "apps/web/src/external-sessions/ExternalSessionPanel.tsx",
+        "apps/web/src/external-sessions/ExternalSessionView.tsx",
+        "apps/web/src/external-sessions/ExternalSessionsSidebarSection.tsx",
+        "apps/web/src/external-sessions/RunningElsewhereBanner.tsx",
+        "apps/web/src/external-sessions/atoms.ts",
+        "apps/web/src/external-sessions/handBack.tsx",
+        "apps/web/src/routes/_chat.external.$environmentId.$sessionKey.tsx",
+        "docs/internals/external-sessions.md",
+        "docs/user/other-agents.md",
+        "packages/contracts/src/externalSessions.ts"
+      ],
+      "hooks": [
+        "apps/server/src/orchestration-v2/ContextHandoffService.ts",
+        "apps/server/src/orchestration-v2/Orchestrator.ts",
+        "apps/server/src/orchestration-v2/runtimeLayer.ts",
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/CommandPalette.tsx",
+        "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
+        "apps/web/src/providerInstances.ts",
+        "apps/web/src/routeTree.gen.ts",
+        "apps/web/src/routes/_chat.settings.archived.tsx",
+        "packages/client-runtime/src/rpc/client.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ],
+      "unmarkedUpstreamEdits": {
+        "apps/web/src/routeTree.gen.ts": "generated from the fork routes"
+      }
+    },
+    {
+      "id": "hermes",
+      "tier": "feature",
+      "title": "Hermes Agent",
+      "summary": "A Hermes Agent provider, local or remote, with its own sidebar section.",
+      "docs": [
+        "docs/user/hermes.md",
+        "docs/internals/hermes.md"
+      ],
+      "dependsOn": [
+        "core",
+        "model-brand-names",
+        "other-agents",
+        "session-details"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/hermes/HermesMcpBridge.ts",
+        "apps/server/src/hermes/HermesSessions.ts",
+        "apps/server/src/hermes/HermesSessionsRpc.ts",
+        "apps/server/src/hermes/hermesDashboardRedaction.ts",
+        "apps/server/src/hermes/hermesSessionArchive.ts",
+        "apps/server/src/hermes/hermesSessionEntries.ts",
+        "apps/server/src/provider/hermesAccountCodexModels.ts",
+        "apps/web/src/fork-chat/hermesChatPresentation.ts",
+        "apps/web/src/hermes/ArchivedHermesSessions.tsx",
+        "apps/web/src/hermes/HermesModelGroupRow.tsx",
+        "apps/web/src/hermes/HermesModelsSection.tsx",
+        "apps/web/src/hermes/HermesSessionDetailsCard.tsx",
+        "apps/web/src/hermes/HermesSettingsSection.tsx",
+        "apps/web/src/hermes/HermesSidebarSection.tsx",
+        "apps/web/src/hermes/hermesModelGroups.ts",
+        "apps/web/src/hermes/hermesSessions.ts",
+        "apps/web/src/hermes/useHermesModelPickerSections.ts",
+        "docs/internals/hermes.md",
+        "docs/user/hermes.md",
+        "packages/contracts/src/hermesSessions.ts",
+        "packages/provider-hermes/package.json",
+        "packages/provider-hermes/src/client.ts",
+        "packages/provider-hermes/src/server.ts",
+        "packages/provider-hermes/src/server/adapter.ts",
+        "packages/provider-hermes/src/server/api.ts",
+        "packages/provider-hermes/src/server/driver.ts",
+        "packages/provider-hermes/src/server/insights.ts",
+        "packages/provider-hermes/src/server/models.ts",
+        "packages/provider-hermes/src/server/status.ts",
+        "packages/provider-hermes/src/server/textGeneration.ts",
+        "packages/provider-hermes/src/settings.ts",
+        "packages/provider-hermes/tsconfig.json"
+      ],
+      "hooks": [
+        "apps/server/package.json",
+        "apps/server/src/mcp/McpHttpServer.ts",
+        "apps/server/src/orchestration-v2/ThreadLaunchService.ts",
+        "apps/server/src/orchestration-v2/runtimeLayer.ts",
+        "apps/server/src/provider/ProviderRegistry.ts",
+        "apps/server/src/provider/builtInDrivers.ts",
+        "apps/server/src/server.ts",
+        "apps/server/src/settingsSecrets.ts",
+        "apps/web/src/components/BranchToolbar.tsx",
+        "apps/web/src/components/BranchToolbarEnvironmentSelector.tsx",
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/chat/ChatComposer.tsx",
+        "apps/web/src/components/chat/ComposerControlsBar.tsx",
+        "apps/web/src/components/chat/DraftHeroHeadline.tsx",
+        "apps/web/src/components/chat/ModelPickerContent.tsx",
+        "apps/web/src/components/chat/ThreadDetailsPanel.tsx",
+        "apps/web/src/components/chat/useDraftEnvironmentRouting.ts",
+        "apps/web/src/components/settings/ProviderInstanceCard.tsx",
+        "packages/client-runtime/package.json",
+        "packages/client-runtime/src/providerClients.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/model.ts",
+        "packages/contracts/src/rpc.ts",
+        "packages/contracts/src/settings.ts",
+        "packages/provider-core/src/server/failure.ts",
+        "pnpm-lock.yaml"
+      ],
+      "unmarkedUpstreamEdits": {
+        "apps/server/package.json": "dependency @t3tools/provider-hermes",
+        "packages/client-runtime/package.json": "dependency @t3tools/provider-hermes; export ./state/remotePairing",
+        "pnpm-lock.yaml": "generated; rebuilt from upstream's copy plus fork manifests"
+      },
+      "data": {
+        "settings": [
+          "hermes provider instance settings (provider-hermes/settings)"
+        ],
+        "wire": [
+          "hermes driver kind and default model"
+        ]
+      }
+    },
+    {
+      "id": "compare-agents",
+      "tier": "feature",
+      "title": "Compare agents",
+      "summary": "One prompt to two models, side by side, with review swap.",
+      "docs": [
+        "docs/user/compare-agents.md"
+      ],
+      "dependsOn": [
+        "core",
+        "existing-checkout",
+        "save-to-notes",
+        "web-apps"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/compare-agents/CompareAgents.ts",
+        "apps/server/src/compare-agents/CompareAgentsRpc.ts",
+        "apps/web/src/compare-agents/CompareAgentsSidebarItem.tsx",
+        "apps/web/src/compare-agents/CompareAgentsView.tsx",
+        "apps/web/src/compare-agents/CompareBanner.tsx",
+        "apps/web/src/compare-agents/CompareComposer.tsx",
+        "apps/web/src/compare-agents/CompareThreadColumn.tsx",
+        "apps/web/src/compare-agents/compareAgents.ts",
+        "apps/web/src/compare-agents/compareAgentsPalette.tsx",
+        "apps/web/src/compare-agents/comparePairs.ts",
+        "apps/web/src/compare-agents/compareRenameStore.ts",
+        "apps/web/src/compare-agents/compareThreadMenu.ts",
+        "apps/web/src/compare-agents/useComparePairMenu.ts",
+        "apps/web/src/routes/_chat.compare.$environmentId.tsx",
+        "docs/user/compare-agents.md",
+        "packages/contracts/src/compareAgents.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/CommandPalette.tsx",
+        "apps/web/src/components/sidebar/SidebarChrome.tsx",
+        "apps/web/src/routeTree.gen.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ],
+      "unmarkedUpstreamEdits": {
+        "apps/web/src/routeTree.gen.ts": "generated from the fork routes"
+      }
+    },
+    {
+      "id": "agent-instructions",
+      "tier": "feature",
+      "title": "Agent instructions",
+      "summary": "Delegation, worker models and agent rules as settings, globally or per project.",
+      "docs": [
+        "docs/user/agent-instructions.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server",
+        "shared",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/agent-instructions/AgentInstructionsSync.ts",
+        "apps/server/src/agent-instructions/DelegationPolicy.ts",
+        "apps/server/src/provider/codexForkAgentContext.ts",
+        "apps/web/src/agent-instructions/AgentInstructionsPreview.tsx",
+        "apps/web/src/agent-instructions/AgentInstructionsSettings.tsx",
+        "apps/web/src/agent-instructions/AgentPresetsControl.tsx",
+        "apps/web/src/agent-instructions/AgentThreadPresetControl.tsx",
+        "apps/web/src/agent-instructions/ChoiceSelect.tsx",
+        "apps/web/src/agent-instructions/ParallelWorkersControl.tsx",
+        "apps/web/src/agent-instructions/ProviderInstructionsControl.tsx",
+        "apps/web/src/agent-instructions/WorkerModelControl.tsx",
+        "apps/web/src/agent-instructions/agentInstructionsSettingsSearch.ts",
+        "docs/user/agent-instructions.md",
+        "packages/contracts/src/forkAgentSettings.ts",
+        "packages/provider-core/src/server/forkAgentInstructions.ts"
+      ],
+      "hooks": [
+        "apps/server/src/mcp/OrchestratorMcpService.ts",
+        "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+        "apps/server/src/orchestration-v2/ProviderSessionManager.ts",
+        "apps/server/src/provider/CodexDeveloperInstructions.ts",
+        "apps/server/src/server.ts",
+        "apps/web/src/components/chat/ChatComposer.tsx",
+        "apps/web/src/components/chat/CompactComposerControlsMenu.tsx",
+        "apps/web/src/components/chat/ComposerControlsBar.tsx",
+        "apps/web/src/components/settings/SettingsPanels.tsx",
+        "apps/web/src/components/settings/scopedSettings.ts",
+        "apps/web/src/components/settings/settingsSearch.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/settings.ts",
+        "packages/provider-acp/src/server/adapter.ts",
+        "packages/provider-core/package.json",
+        "packages/provider-core/src/server/ProviderAdapter.ts",
+        "packages/provider-core/src/server/runtimeInstructions.ts",
+        "packages/provider-cursor/src/server/adapter.ts",
+        "packages/provider-muse/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-pi/src/server/adapter.ts",
+        "packages/provider-pi/src/server/mcpExtensionSource.ts",
+        "packages/provider-pi/src/server/mcpInjection.ts",
+        "packages/shared/src/serverSettings.ts"
+      ],
+      "unmarkedUpstreamEdits": {
+        "packages/provider-core/package.json": "exports ./server/forkAgentInstructions, ./server/sessionInsights"
+      },
+      "data": {
+        "settings": [
+          "Agents fields in server settings, client settings and project settings (forkAgentSettings.ts)"
+        ]
+      }
+    },
+    {
+      "id": "save-to-notes",
+      "tier": "feature",
+      "title": "Save to notes",
+      "summary": "Files a thread into a notes folder as a summary or a full copy.",
+      "docs": [
+        "docs/user/save-and-export-threads.md"
+      ],
+      "dependsOn": [
+        "thread-export"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/save-to-notes/SaveToNotes.ts",
+        "apps/server/src/save-to-notes/SaveToNotesRpc.ts",
+        "apps/web/src/save-to-notes/SaveToNotesSettings.tsx",
+        "apps/web/src/save-to-notes/saveToNotes.ts",
+        "apps/web/src/save-to-notes/saveToNotesSettingsSearch.ts",
+        "docs/user/save-and-export-threads.md",
+        "packages/contracts/src/saveToNotes.ts",
+        "packages/contracts/src/threadExchanges.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/settings/SettingsPanels.tsx",
+        "apps/web/src/components/settings/settingsSearch.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts",
+        "packages/contracts/src/settings.ts"
+      ],
+      "data": {
+        "settings": [
+          "notesDirectory",
+          "savedThreadsDirectory"
+        ]
+      }
+    },
+    {
+      "id": "thread-export",
+      "tier": "feature",
+      "title": "Export a thread",
+      "summary": "Saves a thread's full server record as Markdown or JSON.",
+      "docs": [
+        "docs/user/save-and-export-threads.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/thread-export/ThreadExport.ts",
+        "apps/server/src/thread-export/ThreadExportRpc.ts",
+        "apps/server/src/thread-export/json.ts",
+        "apps/server/src/thread-export/markdown.ts",
+        "apps/server/src/thread-export/projectionView.ts",
+        "apps/server/src/thread-export/redact.ts",
+        "apps/web/src/thread-export/threadExport.ts",
+        "packages/contracts/src/threadExport.ts"
+      ],
+      "hooks": [
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ]
+    },
+    {
+      "id": "session-details",
+      "tier": "feature",
+      "title": "Session details",
+      "summary": "Session, context, connectors and outputs of any session in the thread details card.",
+      "docs": [
+        "docs/user/session-details.md",
+        "docs/internals/session-insights.md"
+      ],
+      "dependsOn": [
+        "core",
+        "hermes",
+        "other-agents"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/orchestration-v2/Adapters/claudeInsightsHooks.ts",
+        "apps/server/src/orchestration-v2/Adapters/claudeSessionInsights.ts",
+        "apps/server/src/orchestration-v2/Adapters/codexInsightsHooks.ts",
+        "apps/server/src/orchestration-v2/Adapters/codexSessionInsights.ts",
+        "apps/server/src/persistence/ForkMigrations/001_SessionInsightsReports.ts",
+        "apps/server/src/persistence/ForkMigrations/002_SessionInsightsOutputs.ts",
+        "apps/server/src/persistence/SessionInsightsReports.ts",
+        "apps/server/src/sessionInsights/SessionInsights.ts",
+        "apps/web/src/components/chat/SessionSummarySection.tsx",
+        "apps/web/src/components/chat/ThreadConnectorsSection.tsx",
+        "apps/web/src/components/chat/ThreadContextBreakdown.tsx",
+        "apps/web/src/components/chat/ThreadDetailsStatRow.tsx",
+        "apps/web/src/components/chat/ThreadOutputsSection.tsx",
+        "apps/web/src/components/chat/ThreadSessionInsightsSection.tsx",
+        "apps/web/src/components/chat/sessionInsights.logic.ts",
+        "apps/web/src/components/chat/useOpenSessionFile.ts",
+        "apps/web/src/state/sessionInsights.ts",
+        "docs/internals/session-insights.md",
+        "docs/user/session-details.md",
+        "packages/contracts/src/sessionInsights.ts",
+        "packages/provider-acp/src/server/acpSessionInsights.ts",
+        "packages/provider-core/src/server/sessionInsights.ts"
+      ],
+      "hooks": [
+        "apps/server/src/auth/RpcAuthorization.ts",
+        "apps/server/src/observability/RpcInstrumentation.ts",
+        "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+        "apps/server/src/orchestration-v2/runtimeLayer.ts",
+        "apps/server/src/ws.ts",
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/chat/ThreadDetailsCard.tsx",
+        "apps/web/src/components/chat/ThreadDetailsPanel.tsx",
+        "apps/web/src/providerInstances.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts",
+        "packages/provider-acp/src/server/adapter.ts",
+        "packages/provider-core/package.json",
+        "packages/provider-core/src/server/ProviderAdapter.ts",
+        "packages/provider-cursor/src/server/adapter.ts",
+        "packages/provider-muse/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-pi/src/server/adapter.ts"
+      ],
+      "unmarkedUpstreamEdits": {
+        "packages/provider-core/package.json": "exports ./server/forkAgentInstructions, ./server/sessionInsights"
+      },
+      "data": {
+        "migrations": [
+          "001_SessionInsightsReports: table session_insights_reports",
+          "002_SessionInsightsOutputs: outputs on session_insights_reports"
+        ],
+        "rpc": [
+          "sessionInsights.get"
+        ]
+      }
+    },
+    {
+      "id": "compact-cards",
+      "tier": "feature",
+      "title": "Compact cards",
+      "summary": "Outlined, smaller sidebar thread cards that always name their machine.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "other-agents",
+        "subagent-tree"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "files": [
+        "apps/web/src/fork-sidebar/ThreadCardMeta.tsx",
+        "apps/web/src/sidebar-compact/footerButtons.css",
+        "apps/web/src/sidebar-compact/sectionHeaders.css",
+        "apps/web/src/sidebar-compact/threadCardLayout.css",
+        "apps/web/src/sidebar-compact/threadCardLayout.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/Sidebar.drag.ts",
+        "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/sidebar/SidebarChrome.tsx",
+        "apps/web/src/components/sidebar/SidebarDraftBlock.tsx",
+        "apps/web/src/components/sidebar/SidebarListMarkers.tsx",
+        "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
+        "apps/web/src/components/ui/collapsible-section-header.tsx"
+      ]
+    },
+    {
+      "id": "subagent-tree",
+      "tier": "feature",
+      "title": "Subagent tree",
+      "summary": "Subagents nest under their thread in the sidebar and the Lineage panel.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "core",
+        "other-agents"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/orchestration-v2/forkOmittedSubagents.ts",
+        "apps/web/src/subagents/SidebarSubagentRows.tsx",
+        "apps/web/src/subagents/lineageTree.ts",
+        "apps/web/src/subagents/omittedSubagents.ts",
+        "packages/client-runtime/src/state/forkOmittedSubagents.ts",
+        "packages/contracts/src/forkShellSubagents.ts"
+      ],
+      "hooks": [
+        "apps/server/src/orchestration-v2/ShellStream.ts",
+        "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/chat/ThreadDetailsControl.tsx",
+        "apps/web/src/components/chat/ThreadLineageWorkflowRow.tsx",
+        "apps/web/src/components/chat/ThreadRelationshipIcon.tsx",
+        "apps/web/src/components/chat/ThreadRelationshipsControl.tsx",
+        "apps/web/src/components/chat/threadDetailsPanelStyles.ts",
+        "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
+        "apps/web/src/components/ui/collapsible-section-header.tsx",
+        "apps/web/src/components/ui/spinner.tsx",
+        "packages/client-runtime/src/state/shellReducer.ts",
+        "packages/contracts/src/orchestrationV2.ts"
+      ],
+      "data": {
+        "wire": [
+          "omittedSubagents on the orchestration v2 shell snapshot"
+        ]
+      }
+    },
+    {
+      "id": "session-search",
+      "tier": "feature",
+      "title": "Session search",
+      "summary": "Command palette search across T3 threads and other agents' sessions.",
+      "docs": [
+        "docs/internals/session-search.md"
+      ],
+      "dependsOn": [
+        "other-agents"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/session-search/SessionSearch.ts",
+        "apps/server/src/session-search/SessionSearchRpc.ts",
+        "apps/server/src/session-search/candidates.ts",
+        "apps/server/src/session-search/matcher.ts",
+        "apps/server/src/session-search/scanTranscript.ts",
+        "apps/server/src/session-search/transcriptLayout.ts",
+        "apps/web/src/session-search/SessionSearchResults.tsx",
+        "apps/web/src/session-search/atoms.ts",
+        "apps/web/src/session-search/commandPaletteGroup.tsx",
+        "docs/internals/session-search.md",
+        "packages/contracts/src/sessionSearch.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/CommandPalette.tsx",
+        "apps/web/src/components/Sidebar.tsx",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ]
+    },
+    {
+      "id": "maintenance-queue",
+      "tier": "feature",
+      "title": "Maintenance queue",
+      "summary": "Server and provider updates wait in one queue that closes idle sessions first and counts this app.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "core",
+        "hermes"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/maintenance-queue/MaintenanceQueue.ts",
+        "apps/server/src/maintenance-queue/MaintenanceQueueRpc.ts",
+        "apps/web/src/maintenance-queue/MaintenanceQueueCapsule.tsx",
+        "apps/web/src/maintenance-queue/MaintenanceQueueCoordinator.tsx",
+        "apps/web/src/maintenance-queue/activity.ts",
+        "apps/web/src/maintenance-queue/desktopGate.ts",
+        "apps/web/src/maintenance-queue/queueStore.ts",
+        "apps/web/src/maintenance-queue/runner.ts",
+        "apps/web/src/maintenance-queue/useQueuedUpdate.ts",
+        "packages/contracts/src/maintenanceQueue.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/ProviderUpdatesAction.tsx",
+        "apps/web/src/components/ServerUpdateAction.tsx",
+        "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
+        "apps/web/src/components/sidebar/SidebarChrome.tsx",
+        "apps/web/src/components/sidebar/SidebarUpdatePill.tsx",
+        "apps/web/src/components/sidebar/updateEverything.logic.ts",
+        "apps/web/src/components/sidebar/useUpdateEverything.ts",
+        "apps/web/src/routes/__root.tsx",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ]
+    },
+    {
+      "id": "existing-checkout",
+      "tier": "feature",
+      "title": "Existing checkouts",
+      "summary": "Add a machine's existing checkout instead of cloning, and find checkouts on other machines.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/existing-checkout/ExistingCheckout.ts",
+        "apps/server/src/existing-checkout/ExistingCheckoutRpc.ts",
+        "apps/web/src/components/settings/FindCheckoutsDialog.tsx",
+        "packages/contracts/src/existingCheckout.ts"
+      ],
+      "hooks": [
+        "apps/server/src/environment/ServerEnvironment.ts",
+        "apps/web/src/components/AddProjectToMachineDialog.tsx",
+        "apps/web/src/components/settings/ProjectsSettings.tsx",
+        "apps/web/src/lib/addProjectToMachine.ts",
+        "apps/web/src/routes/__root.tsx",
+        "packages/contracts/src/environment.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ],
+      "data": {
+        "wire": [
+          "capabilities existingCheckout, existingCheckoutFolder"
+        ]
+      }
+    },
+    {
+      "id": "project-links",
+      "tier": "feature",
+      "title": "Project links",
+      "summary": "Link folder projects across machines into one project.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "core"
+      ],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/persistence/ForkMigrations/003_ProjectLinks.ts",
+        "apps/server/src/persistence/ProjectLinks.ts",
+        "apps/web/src/components/settings/ProjectMachineLinks.tsx"
+      ],
+      "hooks": [
+        "apps/server/src/orchestration-v2/ProjectCommands.ts",
+        "apps/server/src/orchestration-v2/ProjectStore.ts",
+        "apps/server/src/project/ProjectMutation.ts",
+        "apps/server/src/project/ProjectService.ts",
+        "apps/web/src/components/settings/ProjectSettingsPanel.tsx",
+        "packages/client-runtime/src/operations/commands.ts",
+        "packages/client-runtime/src/state/projectGrouping.ts",
+        "packages/contracts/src/applicationEvent.ts",
+        "packages/contracts/src/orchestrationProject.ts",
+        "packages/contracts/src/project.ts"
+      ],
+      "data": {
+        "migrations": [
+          "003_ProjectLinks: table fork_project_links"
+        ],
+        "wire": [
+          "linkKey on project, orchestration project and application events"
+        ]
+      }
+    },
+    {
+      "id": "thread-retention",
+      "tier": "feature",
+      "title": "Thread retention",
+      "summary": "Settled and archived threads clean themselves up.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/thread-retention/ThreadRetention.ts",
+        "apps/server/src/thread-retention/ThreadRetentionRpc.ts",
+        "apps/server/src/thread-retention/ThreadRetentionStorage.ts",
+        "apps/server/src/thread-retention/threadFamily.ts",
+        "apps/web/src/thread-retention/ThreadRetentionSections.tsx",
+        "apps/web/src/thread-retention/threadRetentionSettingsSearch.ts",
+        "packages/contracts/src/threadRetention.ts"
+      ],
+      "hooks": [
+        "apps/server/src/environment/ServerEnvironment.ts",
+        "apps/server/src/server.ts",
+        "apps/web/src/components/settings/ArchivedThreadsPanel.tsx",
+        "apps/web/src/components/settings/settingsSearch.ts",
+        "packages/contracts/src/environment.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts",
+        "packages/contracts/src/settings.ts"
+      ],
+      "data": {
+        "settings": [
+          "thread retention fields (threadRetention.ts)"
+        ],
+        "wire": [
+          "capability threadRetention"
+        ]
+      }
+    },
+    {
+      "id": "host-backups",
+      "tier": "feature",
+      "title": "Host backups",
+      "summary": "Lists the backups the host tooling keeps on a machine and the version each would restore.",
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/host-backups/HostBackups.ts",
+        "apps/server/src/host-backups/HostBackupsRpc.ts",
+        "apps/web/src/host-release/HostBackupsDialog.tsx",
+        "packages/contracts/src/hostBackups.ts"
+      ],
+      "hooks": [
+        "apps/server/src/environment/ServerEnvironment.ts",
+        "apps/web/src/components/settings/SavedEnvironmentRows.tsx",
+        "packages/contracts/src/environment.ts",
+        "packages/contracts/src/index.ts",
+        "packages/contracts/src/rpc.ts"
+      ],
+      "data": {
+        "wire": [
+          "capability hostBackups"
+        ]
+      }
+    },
+    {
+      "id": "remote-pairing",
+      "tier": "feature",
+      "title": "Remote pairing",
+      "summary": "Pair a phone with any connected machine.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [
+        "apps/web/src/remote-pairing/RemotePairingDialog.tsx",
+        "packages/client-runtime/src/state/remotePairing.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/settings/SavedEnvironmentRows.tsx",
+        "packages/client-runtime/package.json"
+      ],
+      "unmarkedUpstreamEdits": {
+        "packages/client-runtime/package.json": "dependency @t3tools/provider-hermes; export ./state/remotePairing"
+      }
+    },
+    {
+      "id": "usage-by-model",
+      "tier": "feature",
+      "title": "Usage by model",
+      "summary": "Usage shows one row per model across harnesses.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "model-brand-names"
+      ],
+      "surfaces": [
+        "server",
+        "shared",
+        "web"
+      ],
+      "files": [
+        "apps/web/src/components/usage/UsageModelBreakdown.tsx",
+        "apps/web/src/components/usage/usageModelRows.ts",
+        "packages/shared/src/usageModelGroups.ts",
+        "packages/shared/src/usageModelIdentity.ts"
+      ],
+      "hooks": [
+        "apps/server/src/usage/usagePricing.ts",
+        "apps/web/src/components/usage/UsageModelDialog.tsx",
+        "apps/web/src/components/usage/UsagePage.tsx",
+        "apps/web/src/components/usage/UsagePriceOverrides.tsx",
+        "apps/web/src/state/usage.ts",
+        "packages/provider-grok/src/server/usage.ts",
+        "packages/shared/package.json"
+      ],
+      "unmarkedUpstreamEdits": {
+        "packages/shared/package.json": "exports ./branding, ./modelBrandNames, ./usageModelIdentity, ./usageModelGroups"
+      }
+    },
+    {
+      "id": "usage-pace",
+      "tier": "feature",
+      "title": "Usage pace",
+      "summary": "Pace for weekly and monthly usage windows.",
+      "dependsOn": [],
+      "surfaces": [
+        "shared"
+      ],
+      "files": [
+        "packages/shared/src/forkUsagePeriods.ts"
+      ],
+      "hooks": [
+        "packages/shared/src/usageLimits.ts"
+      ]
+    },
+    {
+      "id": "codex-hidden-models",
+      "tier": "feature",
+      "title": "Codex hidden models",
+      "summary": "A switch that lists the models Codex keeps out of its picker.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server"
+      ],
+      "files": [
+        "packages/contracts/src/forkCodexSettings.ts"
+      ],
+      "hooks": [
+        "apps/server/src/provider/CodexChatGptModels.ts",
+        "apps/server/src/provider/CodexProvider.ts",
+        "apps/server/src/provider/Drivers/CodexManagedProvider.ts",
+        "packages/contracts/src/settings.ts"
+      ],
+      "data": {
+        "settings": [
+          "Codex provider: show hidden models"
+        ]
+      }
+    },
+    {
+      "id": "retired-models",
+      "tier": "feature",
+      "title": "Retired models",
+      "summary": "Threads on a retired model move to its successor.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "contracts",
+        "server",
+        "shared",
+        "web"
+      ],
+      "files": [
+        "apps/server/src/provider/ModelReferenceRepair.ts"
+      ],
+      "hooks": [
+        "apps/server/src/server.ts",
+        "apps/web/src/components/chat/ModelPickerContent.tsx",
+        "apps/web/src/components/chat/providerIconUtils.ts",
+        "apps/web/src/modelSelection.ts",
+        "packages/contracts/src/server.ts",
+        "packages/provider-pi/src/server/status.ts",
+        "packages/shared/src/model.ts"
+      ]
+    },
+    {
+      "id": "mcp-hub",
+      "tier": "feature",
+      "title": "MCP hub",
+      "summary": "`t3 mcp token` and `t3 mcp stdio` for agents without OAuth.",
+      "docs": [
+        "docs/user/mcp-hub.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "server"
+      ],
+      "files": [
+        "apps/server/src/cli/forkMcp.ts",
+        "docs/user/mcp-hub.md"
+      ],
+      "hooks": [
+        "apps/server/src/binCli.ts"
+      ]
+    },
+    {
+      "id": "multi-select-menu",
+      "tier": "feature",
+      "title": "Multi-select menu",
+      "summary": "Selected threads get the whole thread menu.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "compare-agents",
+        "other-agents",
+        "save-to-notes",
+        "thread-export"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "files": [
+        "apps/web/src/fork-sidebar/useBulkThreadMenu.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/Sidebar.tsx"
+      ]
+    },
+    {
+      "id": "collapsible-details",
+      "tier": "feature",
+      "title": "Collapsible details",
+      "summary": "Thread details sections collapse and remember it.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [
+        "apps/web/src/components/chat/ThreadDetailsSectionToggle.tsx"
+      ],
+      "hooks": [
+        "apps/web/src/components/chat/ThreadDetailsSection.tsx"
+      ]
+    },
+    {
+      "id": "no-project-start",
+      "tier": "feature",
+      "title": "No-project start",
+      "summary": "New threads start without a project; one No project per machine.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [
+        "apps/web/src/fork-sidebar/useScratchThreadClick.ts"
+      ],
+      "hooks": [
+        "apps/web/src/components/CommandPaletteLookups.ts",
+        "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/settings/ProjectSettingsPanel.tsx",
+        "apps/web/src/components/settings/useSettingsProjectGroups.ts",
+        "apps/web/src/shortcuts/chatRouteCommands.ts"
+      ]
+    },
+    {
+      "id": "status-colors",
+      "tier": "feature",
+      "title": "Status colors",
+      "summary": "Status colors mean the same thing everywhere.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/components/Sidebar.logic.test.ts",
+        "apps/web/src/components/Sidebar.logic.ts",
+        "apps/web/src/components/chat/ProviderInstanceIcon.tsx",
+        "apps/web/src/components/chat/ThreadAutomationsPanel.tsx",
+        "apps/web/src/components/settings/AuthorizedClientsSettings.tsx",
+        "apps/web/src/components/settings/SavedEnvironmentRows.tsx"
+      ]
+    },
+    {
+      "id": "model-brand-names",
+      "tier": "feature",
+      "title": "Model brand names",
+      "summary": "Providers and models carry their vendors' names.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "server",
+        "shared",
+        "web"
+      ],
+      "files": [
+        "packages/shared/src/modelBrandNames.ts"
+      ],
+      "hooks": [
+        "apps/server/src/provider/ProviderRegistry.ts",
+        "apps/web/src/components/chat/providerIconUtils.ts",
+        "packages/client-runtime/src/state/subagentDisplay.ts",
+        "packages/provider-pi/src/server/status.ts",
+        "packages/shared/package.json"
+      ],
+      "unmarkedUpstreamEdits": {
+        "packages/shared/package.json": "exports ./branding, ./modelBrandNames, ./usageModelIdentity, ./usageModelGroups"
+      }
+    },
+    {
+      "id": "renamed-hosts",
+      "tier": "feature",
+      "title": "Renamed hosts",
+      "summary": "Machines renamed after pairing keep their new name.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [
+        "apps/web/src/connection/forkHostLabels.tsx",
+        "packages/client-runtime/src/connection/forkRelabel.ts"
+      ],
+      "hooks": [
+        "apps/web/src/routes/__root.tsx",
+        "packages/client-runtime/src/connection/registry.ts"
+      ]
+    },
+    {
+      "id": "tailscale-https",
+      "tier": "feature",
+      "title": "Tailscale HTTPS",
+      "summary": "Connections says when the tailnet has HTTPS certificates turned off.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "desktop",
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/desktop/src/backend/DesktopServerExposure.ts",
+        "apps/desktop/src/backend/tailscaleEndpointProvider.ts",
+        "apps/web/src/components/settings/AuthorizedClientsSettings.tsx"
+      ]
+    },
+    {
+      "id": "claude-release-channel",
+      "tier": "feature",
+      "title": "Claude release channel",
+      "summary": "Claude updates follow Claude's own release channel.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "server"
+      ],
+      "files": [
+        "apps/server/src/provider/Drivers/claudeNativeLatestVersion.ts"
+      ],
+      "hooks": [
+        "apps/server/src/provider/Drivers/ClaudeDriver.ts"
+      ]
+    },
+    {
+      "id": "vpn-lan",
+      "tier": "fix",
+      "title": "VPN addresses",
+      "summary": "Full-tunnel VPN addresses are not offered as LAN addresses.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "server"
+      ],
+      "files": [
+        "apps/server/src/environment/vpnTunnelInterfaces.ts"
+      ],
+      "hooks": [
+        "apps/server/src/environment/DirectEndpoints.ts",
+        "apps/server/src/startupAccess.ts"
+      ]
+    },
+    {
+      "id": "windows-taskkill",
+      "tier": "fix",
+      "title": "Windows taskkill",
+      "summary": "A Windows taskkill that exits non-zero after every named process is gone counts as success.",
+      "dependsOn": [],
+      "surfaces": [
+        "server"
+      ],
+      "files": [
+        "packages/provider-acp/src/server/windowsTaskkillExit.ts"
+      ],
+      "hooks": [
+        "packages/provider-acp/src/server/AcpSessionRuntime.ts"
+      ]
+    },
+    {
+      "id": "stdio-eio",
+      "tier": "fix",
+      "title": "stdio EIO",
+      "summary": "An EIO on a closed stdout pipe does not crash the desktop app on macOS.",
+      "dependsOn": [],
+      "surfaces": [
+        "desktop"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/desktop/src/main.ts"
+      ]
+    },
+    {
+      "id": "bootstrap-retry",
+      "tier": "fix",
+      "title": "Auth bootstrap retry",
+      "summary": "Retries a settling desktop backend's 500 during auth bootstrap.",
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "tests": [
+        "apps/web/src/forkAuthBootstrap.test.ts"
+      ],
+      "hooks": [
+        "apps/web/src/environments/primary/auth.ts"
+      ]
+    },
+    {
+      "id": "clipboard-focus",
+      "tier": "fix",
+      "title": "Clipboard focus",
+      "summary": "Copying works when the window is unfocused.",
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/hooks/useCopyToClipboard.ts"
+      ]
+    },
+    {
+      "id": "route-crash-escape",
+      "tier": "fix",
+      "title": "Route crash escape",
+      "summary": "Leave a crashing route instead of being stuck on it.",
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/routes/__root.tsx"
+      ]
+    },
+    {
+      "id": "grok-zero-usage",
+      "tier": "fix",
+      "title": "Grok zero usage",
+      "summary": "An omitted Grok percentage still shows as 0% used.",
+      "dependsOn": [],
+      "surfaces": [
+        "server"
+      ],
+      "files": [],
+      "hooks": [
+        "packages/provider-grok/src/server/usageLimits.ts"
+      ]
+    },
+    {
+      "id": "telemetry-check-failure",
+      "tier": "fix",
+      "title": "Telemetry check failure",
+      "summary": "A failed telemetry endpoint check shows Check failed instead of Not checked.",
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/components/settings/TelemetryExportSettings.tsx"
+      ]
+    },
+    {
+      "id": "scheduled-tasks-error",
+      "tier": "fix",
+      "title": "Scheduled tasks error",
+      "summary": "A failed delivery list shows its error without a stuck loading line.",
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/components/settings/ScheduledTasksSettings.tsx"
+      ]
+    },
+    {
+      "id": "identity",
+      "tier": "distribution",
+      "title": "Identity",
+      "summary": "App id, profile, link scheme and app name, so the fork installs beside official T3 Code.",
+      "docs": [
+        "docs/internals/fork-add-ons.md#identity"
+      ],
+      "dependsOn": [
+        "upstream-sync"
+      ],
+      "surfaces": [
+        "build",
+        "desktop",
+        "shared"
+      ],
+      "files": [
+        "apps/desktop/src/remote-apps/RemoteAppDistribution.ts",
+        "packages/shared/src/branding.ts",
+        "scripts/lib/fork-desktop-artifact.ts",
+        "scripts/sign-macos-ad-hoc.cjs"
+      ],
+      "tests": [
+        "scripts/build-desktop-artifact.fork.test.ts"
+      ],
+      "hooks": [
+        "apps/desktop/resources/dmg/dmg-background-latest.svg",
+        "apps/desktop/resources/dmg/dmg-background-nightly.svg",
+        "apps/desktop/src/app/DesktopEarlyElectronStartup.ts",
+        "apps/desktop/src/app/DesktopEnvironment.ts",
+        "apps/desktop/src/app/DesktopUserData.ts",
+        "apps/desktop/src/electron/ElectronProtocol.ts",
+        "packages/shared/package.json",
+        "scripts/build-desktop-artifact.ts",
+        "scripts/tsconfig.json"
+      ],
+      "unmarkedUpstreamEdits": {
+        "packages/shared/package.json": "exports ./branding, ./modelBrandNames, ./usageModelIdentity, ./usageModelGroups"
+      }
+    },
+    {
+      "id": "ndev-icons",
+      "tier": "distribution",
+      "title": "ndev artwork",
+      "summary": "The fork's app and web icons.",
+      "docs": [
+        "assets/ndev/README.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "build",
+        "desktop",
+        "web"
+      ],
+      "files": [
+        "apps/web/public/icon-192.png",
+        "apps/web/public/icon-512.png",
+        "assets/ndev/README.md",
+        "assets/ndev/app-icon-1024.png",
+        "assets/ndev/app-icon-macos-1024.png",
+        "assets/ndev/app-icon.icns",
+        "assets/ndev/app-icon.ico",
+        "assets/ndev/apple-touch-icon.png",
+        "assets/ndev/favicon-16x16.png",
+        "assets/ndev/favicon-32x32.png",
+        "assets/ndev/favicon-48x48.png",
+        "assets/ndev/favicon.ico",
+        "assets/ndev/favicon.svg",
+        "assets/ndev/icon-192.png",
+        "assets/ndev/icon-512.png",
+        "assets/ndev/mobile/adaptive-background.png",
+        "assets/ndev/mobile/adaptive-foreground.png",
+        "assets/ndev/mobile/adaptive-foreground.svg",
+        "assets/ndev/mobile/ios-icon-1024.png",
+        "assets/ndev/mobile/monochrome.png",
+        "assets/ndev/mobile/monochrome.svg",
+        "assets/ndev/mobile/notification-96.png",
+        "assets/ndev/mobile/splash-mark.png",
+        "assets/ndev/ndev-immersion.svg",
+        "assets/ndev/ndev-pill.svg",
+        "assets/ndev/ndev-ribbon.svg",
+        "assets/ndev/og-image.png",
+        "assets/ndev/og-image@2x.png",
+        "assets/ndev/site-icon.webp",
+        "assets/ndev/source/master.png",
+        "scripts/export-ndev-brand-assets.mjs",
+        "scripts/lib/fork-brand-assets.d.mts",
+        "scripts/lib/fork-brand-assets.mjs"
+      ],
+      "hooks": [
+        "apps/desktop/scripts/electron-launcher.mjs",
+        "apps/desktop/src/app/DesktopAssets.ts",
+        "apps/web/public/apple-touch-icon.png",
+        "apps/web/public/favicon-16x16.png",
+        "apps/web/public/favicon-32x32.png",
+        "apps/web/public/favicon.ico",
+        "apps/web/public/manifest.webmanifest",
+        "package.json",
+        "scripts/build-desktop-artifact.ts",
+        "scripts/lib/brand-assets.ts"
+      ],
+      "unmarkedUpstreamEdits": {
+        "package.json": "script icons:export:ndev",
+        "apps/web/public/manifest.webmanifest": "icon-192 and icon-512 entries",
+        "apps/web/public/apple-touch-icon.png": "replaced artwork",
+        "apps/web/public/favicon-16x16.png": "replaced artwork",
+        "apps/web/public/favicon-32x32.png": "replaced artwork",
+        "apps/web/public/favicon.ico": "replaced artwork"
+      }
+    },
+    {
+      "id": "keychain-free-secrets",
+      "tier": "distribution",
+      "title": "Keychain-free secrets",
+      "summary": "On macOS, saved connections use a file key, so updates stop asking for the keychain password.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "desktop"
+      ],
+      "files": [
+        "apps/desktop/src/fork/fileSafeStorage.ts"
+      ],
+      "hooks": [
+        "apps/desktop/src/app/DesktopConnectionCatalogStore.ts",
+        "apps/desktop/src/electron/ElectronSafeStorage.ts",
+        "apps/desktop/src/main.ts"
+      ]
+    },
+    {
+      "id": "upstream-sync",
+      "tier": "distribution",
+      "title": "Upstream sync",
+      "summary": "Merges new upstream nightlies and rebuilds the app from its source checkout.",
+      "docs": [
+        "docs/user/fork-updating.md",
+        "docs/internals/local-source-updates.md"
+      ],
+      "dependsOn": [
+        "core",
+        "host-releases",
+        "identity",
+        "maintenance-queue",
+        "other-agents"
+      ],
+      "surfaces": [
+        "build",
+        "ci",
+        "contracts",
+        "desktop",
+        "web"
+      ],
+      "files": [
+        ".github/workflows/tjn-upstream-sync.yml",
+        "apps/desktop/src/updates/CheckoutBuildLock.ts",
+        "apps/desktop/src/updates/DesktopUpdateGate.ts",
+        "apps/desktop/src/updates/ForkDesktopUpdates.ts",
+        "apps/desktop/src/updates/LocalSourceIpc.ts",
+        "apps/desktop/src/updates/LocalSourceUpdates.ts",
+        "apps/desktop/src/updates/UpdateGateIpc.ts",
+        "apps/web/src/source-updates/SidebarSourceSyncButton.tsx",
+        "apps/web/src/source-updates/sourceSync.css",
+        "apps/web/src/source-updates/sourceUpdateToast.ts",
+        "apps/web/src/source-updates/sourceUpdateWording.ts",
+        "docs/internals/local-source-updates.md",
+        "docs/user/fork-updating.md"
+      ],
+      "tests": [
+        "apps/desktop/src/updates/ForkDesktopUpdates.test.ts",
+        "apps/desktop/src/updates/LocalSourceUpdates.test.ts",
+        "apps/web/src/source-updates/sourceUpdateWording.test.ts"
+      ],
+      "hooks": [
+        "apps/desktop/src/main.ts",
+        "apps/web/src/components/desktopUpdate.logic.ts",
+        "apps/web/src/components/desktopUpdate.toast.tsx",
+        "apps/web/src/components/settings/SettingsPanels.tsx",
+        "apps/web/src/components/sidebar/SidebarChrome.tsx",
+        "packages/contracts/src/ipc.ts",
+        "scripts/build-desktop-artifact.ts"
+      ],
+      "data": {
+        "wire": [
+          "desktop update state sourceUpdate"
+        ]
+      }
+    },
+    {
+      "id": "host-releases",
+      "tier": "distribution",
+      "title": "Host releases",
+      "summary": "Connected hosts run fork builds: release source, HTTPS mirrors, version facts and runtime retention.",
+      "docs": [
+        "docs/operations/fork-host-releases.md",
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [
+        "core",
+        "upstream-sync"
+      ],
+      "surfaces": [
+        "ci",
+        "contracts",
+        "desktop",
+        "server",
+        "shared",
+        "web"
+      ],
+      "files": [
+        ".github/workflows/tjn-macos-nightly-release.yml",
+        "apps/desktop/src/updates/HostReleaseIpc.ts",
+        "apps/desktop/src/updates/HostReleasePublisher.ts",
+        "apps/server/src/cloud/bootServiceGuards.ts",
+        "apps/server/src/cloud/currentRuntime.ts",
+        "apps/server/src/cloud/currentRuntimeMove.ts",
+        "apps/server/src/cloud/pinnedRuntimeGuards.ts",
+        "apps/server/src/cloud/runtimeRetention.ts",
+        "apps/server/src/cloud/runtimeVersion.ts",
+        "apps/server/src/environment/ServerReleaseFacts.ts",
+        "apps/web/src/host-release/HostReleaseAutoUpdate.tsx",
+        "apps/web/src/host-release/HostReleaseCheckNotice.tsx",
+        "apps/web/src/host-release/hostRelease.ts",
+        "apps/web/src/host-release/hostReleaseGuard.ts",
+        "apps/web/src/host-release/hostReleaseSource.ts",
+        "apps/web/src/host-release/hostRowFacts.ts",
+        "docs/operations/fork-host-releases.md",
+        "packages/shared/src/cliReleaseGuards.ts",
+        "packages/ssh/src/releaseMirror.ts"
+      ],
+      "hooks": [
+        "apps/server/src/cli/service.ts",
+        "apps/server/src/cli/up.ts",
+        "apps/server/src/cli/update.ts",
+        "apps/server/src/cloud/bootService.ts",
+        "apps/server/src/cloud/pinnedRuntime.ts",
+        "apps/server/src/cloud/selfUpdate.ts",
+        "apps/server/src/cloud/serviceLauncherClient.ts",
+        "apps/server/src/cloud/servicePreflight.ts",
+        "apps/server/src/cloud/serviceProtocol.ts",
+        "apps/server/src/environment/ServerEnvironment.ts",
+        "apps/server/src/serverRuntimeStartup.ts",
+        "apps/server/src/serviceLauncher.ts",
+        "apps/web/src/components/ServerUpdateAction.tsx",
+        "apps/web/src/components/chat/useAutoBalanceUpdateBanner.tsx",
+        "apps/web/src/components/chat/useSystemComposerBanners.tsx",
+        "apps/web/src/components/settings/ConnectionsSettings.tsx",
+        "apps/web/src/components/settings/SavedEnvironmentRows.tsx",
+        "apps/web/src/components/sidebar/SidebarUpdatePill.tsx",
+        "apps/web/src/components/sidebar/updateEverything.logic.ts",
+        "apps/web/src/components/sidebar/updateEverythingRun.tsx",
+        "apps/web/src/components/sidebar/useUpdateEverything.ts",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/versionSkew.ts",
+        "packages/client-runtime/src/state/server.ts",
+        "packages/contracts/src/environment.ts",
+        "packages/shared/src/cliRelease.ts",
+        "packages/ssh/src/tunnel.ts"
+      ],
+      "data": {
+        "wire": [
+          "server facts releaseSource, startedAt, forkBuild"
+        ]
+      }
+    },
+    {
+      "id": "tjn-fleet",
+      "tier": "personal",
+      "title": "TJN fleet",
+      "summary": "Owner's fleet host tooling and workflows; not useful to other people.",
+      "dependsOn": [
+        "host-releases"
+      ],
+      "surfaces": [
+        "build",
+        "desktop",
+        "server",
+        "web"
+      ],
+      "files": [
+        "scripts/lib/tjn-hosts/remote.ts",
+        "scripts/lib/tjn-hosts/runs.ts",
+        "scripts/tjn-build-host-archive.ts",
+        "scripts/tjn-hosts.ts"
+      ],
+      "hooks": [
+        ".gitignore",
+        "apps/desktop/src/shell/DesktopShellEnvironment.ts",
+        "apps/server/vite.config.ts",
+        "apps/web/vite.config.ts",
+        "scripts/build-cli-archive.ts"
+      ]
+    },
+    {
+      "id": "owner-policy",
+      "tier": "personal",
+      "title": "Owner policy",
+      "summary": "Owner's agent-instruction overrides in AGENTS.md.",
+      "dependsOn": [],
+      "surfaces": [],
+      "files": [],
+      "hooks": [
+        "AGENTS.md"
+      ]
+    }
+  ]
+}

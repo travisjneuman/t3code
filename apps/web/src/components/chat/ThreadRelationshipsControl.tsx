@@ -77,8 +77,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { AgentElapsed } from "./AgentElapsed";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
 import { ThreadLineageWorkflowRow } from "./ThreadLineageWorkflowRow";
-import { lineageIndentStyle, nestSubagentLineage } from "../../subagents/lineageTree"; // Fork add-on: nested lineage
-import { useSubagentDescendantShells } from "../../subagents/lineageTree"; // Fork add-on: nested lineage
+import { lineageIndentStyle, nestSubagentLineage } from "../../subagents/lineageTree"; // Fork add-on(subagent-tree)
+import { useSubagentDescendantShells } from "../../subagents/lineageTree"; // Fork add-on(subagent-tree)
 import { openSideChatTab } from "../../lib/sideChatPane";
 
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
@@ -91,7 +91,7 @@ import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LABEL_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
-  THREAD_DETAILS_PANEL_AGENT_LINE_CLASS, // Fork add-on: compact lineage agents
+  THREAD_DETAILS_PANEL_AGENT_LINE_CLASS, // Fork add-on(subagent-tree)
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
@@ -108,7 +108,7 @@ function resolveThreadLineageWindow<Row>(
 }
 
 function ThreadLineageRowList(props: {
-  readonly compact: boolean; // Fork add-on: compact lineage agents
+  readonly compact: boolean; // Fork add-on(subagent-tree)
   readonly hiddenCount: number;
   readonly onShowMore: () => void;
   readonly children: ReactNode;
@@ -127,7 +127,7 @@ function ThreadLineageRowList(props: {
           type="button"
           onClick={props.onShowMore}
           className={
-            props.compact // Fork add-on: compact lineage agents
+            props.compact // Fork add-on(subagent-tree)
               ? cn(
                   THREAD_DETAILS_PANEL_AGENT_LINE_CLASS,
                   "text-muted-foreground/70 hover:text-foreground/80",
@@ -140,7 +140,7 @@ function ThreadLineageRowList(props: {
             className={
               props.compact
                 ? "size-3 shrink-0"
-                : "size-4 shrink-0" /* Fork add-on: compact lineage agents */
+                : "size-4 shrink-0" /* Fork add-on(subagent-tree) */
             }
           />
           Show {Math.min(props.hiddenCount, THREAD_LINEAGE_PAGE_COUNT)} more
@@ -154,7 +154,7 @@ function ThreadLineageGroup(props: {
   readonly label: string | null;
   readonly rows: ReadonlyArray<ThreadRelationshipWalkRow>;
   readonly expanded: boolean;
-  readonly compact: boolean; // Fork add-on: compact lineage agents
+  readonly compact: boolean; // Fork add-on(subagent-tree)
   readonly children: (rows: ReadonlyArray<ThreadRelationshipWalkRow>) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(props.expanded);
@@ -190,7 +190,7 @@ function ThreadLineageGroup(props: {
       ) : null}
       {expanded ? (
         <ThreadLineageRowList
-          compact={props.compact /* Fork add-on: compact lineage agents */}
+          compact={props.compact /* Fork add-on(subagent-tree) */}
           hiddenCount={hiddenCount}
           onShowMore={() => setVisibleCount((count) => count + THREAD_LINEAGE_PAGE_COUNT)}
         >
@@ -204,7 +204,7 @@ function ThreadLineageGroup(props: {
 function relationshipLabel(edge: ThreadRelationshipEdge, currentThreadId: ThreadId) {
   if (edge.kind === "transfer") return "Context transfer";
   if (edge.kind === "subagent") {
-    return edge.targetThreadId === currentThreadId ? "Parent agent" : "Subagent"; // Fork add-on: nested lineage
+    return edge.targetThreadId === currentThreadId ? "Parent agent" : "Subagent"; // Fork add-on(subagent-tree)
   }
   return edge.sourceThreadId === currentThreadId ? "Fork" : "Parent thread";
 }
@@ -406,7 +406,7 @@ export function ThreadRelationshipsPanel(props: {
   const providersByEnvironment = useEnvironmentProviders();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(props.environmentId));
   const relationshipShells = useThreadRelationshipShells(ref);
-  const descendantShells = useSubagentDescendantShells(ref); // Fork add-on: nested lineage
+  const descendantShells = useSubagentDescendantShells(ref); // Fork add-on(subagent-tree)
   const allProjects = useProjects();
   const archived = useArchivedThreadSnapshots([props.environmentId]);
   const archivedShells = archived.snapshots.find(
@@ -482,7 +482,7 @@ export function ThreadRelationshipsPanel(props: {
   );
   const shells: ReadonlyArray<OrchestrationV2ThreadShell> = [
     ...relationshipShells,
-    ...descendantShells, // Fork add-on: nested lineage
+    ...descendantShells, // Fork add-on(subagent-tree)
     ...(archivedShells ?? []),
   ];
   const graph = deriveThreadRelationshipGraph({ threads: shells, projection });
@@ -523,12 +523,12 @@ export function ThreadRelationshipsPanel(props: {
       ? "previous"
       : "active";
   });
-  const lineage = nestSubagentLineage(graph, projection, props.threadId, active, previous); // Fork add-on: nested lineage
+  const lineage = nestSubagentLineage(graph, projection, props.threadId, active, previous); // Fork add-on(subagent-tree)
   const groups = [
-    { id: "related", label: null, rows: related, expanded: true, compact: false }, // Fork add-on: compact lineage agents
-    { id: "active", label: null, rows: lineage.active, expanded: true, compact: true }, // Fork add-on: nested lineage, compact lineage agents
+    { id: "related", label: null, rows: related, expanded: true, compact: false }, // Fork add-on(subagent-tree)
+    { id: "active", label: null, rows: lineage.active, expanded: true, compact: true }, // Fork add-on(subagent-tree)
     {
-      id: "previous", // Fork add-on: nested lineage, compact lineage agents
+      id: "previous", // Fork add-on(subagent-tree)
       label: "Previous agents",
       rows: lineage.previous,
       expanded: false,
@@ -543,7 +543,7 @@ export function ThreadRelationshipsPanel(props: {
   const runningCount =
     (projection?.subagents.filter(
       (agent) => agent.childThreadId === null && agent.status === "running",
-    ).length ?? 0) + lineage.active.filter(({ edge }) => edge.status === "running").length; // Fork add-on: nested lineage
+    ).length ?? 0) + lineage.active.filter(({ edge }) => edge.status === "running").length; // Fork add-on(subagent-tree)
 
   // A linked environment's agent may have delegated this thread from there.
   const delegatedFrom = currentThread?.delegatedFrom;
@@ -657,7 +657,7 @@ export function ThreadRelationshipsPanel(props: {
   const renderRelationshipRow = ({
     threadId,
     edge,
-    depth /* Fork add-on: nested lineage */,
+    depth /* Fork add-on(subagent-tree) */,
   }: ThreadRelationshipWalkRow) => {
     const node = graph.nodes.get(threadId);
     const isSubagent = edge.kind === "subagent";
@@ -709,7 +709,7 @@ export function ThreadRelationshipsPanel(props: {
       workflowGroup?.workflow.status === "running" &&
       agent?.origin === "provider_native" &&
       providerDriver === "claudeAgent";
-    const compact = isSubagent && !isParent; // Fork add-on: compact lineage agents
+    const compact = isSubagent && !isParent; // Fork add-on(subagent-tree)
     const trailingVisibilityClass = (workflowGroup ? canStopWorkflow : canStop)
       ? "group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0 [@media(hover:none)]:opacity-0"
       : "";
@@ -746,12 +746,12 @@ export function ThreadRelationshipsPanel(props: {
           providerEntries={providerEntries}
           fallbackIcon={RelationshipIcon}
           status={rowStatus}
-          compact={compact /* Fork add-on: compact lineage agents */}
+          compact={compact /* Fork add-on(subagent-tree) */}
         />
         <span className="min-w-0 flex-1">
           <span
             className={
-              compact // Fork add-on: compact lineage agents
+              compact // Fork add-on(subagent-tree)
                 ? "block truncate text-left"
                 : "block truncate text-left text-sm font-medium leading-4 text-foreground/85"
             }
@@ -765,7 +765,7 @@ export function ThreadRelationshipsPanel(props: {
         {agent && !failed && (deriveSubagentElapsedMs(agent, 0) !== null || canStopWorkflow) ? (
           <span
             className={
-              `shrink-0 ${compact ? "" : "text-2xs"} font-normal tabular-nums text-muted-foreground ${canStopWorkflow ? "min-w-6 text-end" : ""} ${trailingVisibilityClass}` /* Fork add-on: compact lineage agents */
+              `shrink-0 ${compact ? "" : "text-2xs"} font-normal tabular-nums text-muted-foreground ${canStopWorkflow ? "min-w-6 text-end" : ""} ${trailingVisibilityClass}` /* Fork add-on(subagent-tree) */
             }
           >
             <AgentElapsed agent={agent} compact />
@@ -775,7 +775,7 @@ export function ThreadRelationshipsPanel(props: {
             className={
               workflowGroup
                 ? "sr-only"
-                : `shrink-0 ${compact ? "" : "text-2xs"} ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}` // Fork add-on: compact lineage agents
+                : `shrink-0 ${compact ? "" : "text-2xs"} ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}` // Fork add-on(subagent-tree)
             }
           >
             {threadRelationshipStatusLabel(rowStatus)}
@@ -793,10 +793,10 @@ export function ThreadRelationshipsPanel(props: {
               variant="ghost"
               part={
                 workflowGroup
-                  ? "agentPrimary" // Fork add-on: compact lineage agents
+                  ? "agentPrimary" // Fork add-on(subagent-tree)
                   : compact
                     ? "agentLine"
-                    : "row" /* Fork add-on: compact lineage agents */
+                    : "row" /* Fork add-on(subagent-tree) */
               }
               onClick={() => openThread(threadId)}
             />
@@ -828,9 +828,9 @@ export function ThreadRelationshipsPanel(props: {
     return (
       <li
         key={threadId}
-        style={lineageIndentStyle(depth) /* Fork add-on: nested lineage */}
+        style={lineageIndentStyle(depth) /* Fork add-on(subagent-tree) */}
         className={
-          `group relative flex items-center ${compact ? "h-5 rounded-md" : "h-8 rounded-lg"}` /* Fork add-on: compact lineage agents */
+          `group relative flex items-center ${compact ? "h-5 rounded-md" : "h-8 rounded-lg"}` /* Fork add-on(subagent-tree) */
         }
       >
         {isMergeTarget ? (
@@ -894,7 +894,7 @@ export function ThreadRelationshipsPanel(props: {
         {canStop && agent ? (
           <div
             className={
-              `pointer-events-none absolute ${compact ? "right-0.5" : "right-1"} top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100` /* Fork add-on: compact lineage agents */
+              `pointer-events-none absolute ${compact ? "right-0.5" : "right-1"} top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100` /* Fork add-on(subagent-tree) */
             }
           >
             <Tooltip>
@@ -903,7 +903,7 @@ export function ThreadRelationshipsPanel(props: {
                   <ThreadDetailsControl
                     size="icon-xs"
                     variant="ghost"
-                    part={compact ? "agentIcon" : "icon" /* Fork add-on: compact lineage agents */}
+                    part={compact ? "agentIcon" : "icon" /* Fork add-on(subagent-tree) */}
                     tone="destructive"
                     aria-label={`Stop subagent ${threadTitle}`}
                     disabled={stoppingId !== null}
@@ -914,13 +914,13 @@ export function ThreadRelationshipsPanel(props: {
                 {stoppingId === threadId ? (
                   <Spinner
                     aria-hidden
-                    size={compact ? "2xs" : "xs" /* Fork add-on: compact lineage agents */}
+                    size={compact ? "2xs" : "xs" /* Fork add-on(subagent-tree) */}
                   />
                 ) : (
                   <SquareIcon
                     aria-hidden
                     className={
-                      `${compact ? "size-2.5" : "size-3"} fill-current` /* Fork add-on: compact lineage agents */
+                      `${compact ? "size-2.5" : "size-3"} fill-current` /* Fork add-on(subagent-tree) */
                     }
                   />
                 )}
@@ -976,7 +976,7 @@ export function ThreadRelationshipsPanel(props: {
         >
           {delegatedFrom === undefined ? null : (
             <ThreadLineageRowList
-              compact={false /* Fork add-on: compact lineage agents */}
+              compact={false /* Fork add-on(subagent-tree) */}
               hiddenCount={0}
               onShowMore={() => {}}
             >
@@ -993,7 +993,7 @@ export function ThreadRelationshipsPanel(props: {
           ))}
           {remoteSubagents.length > 0 ? (
             <ThreadLineageRowList
-              compact={false /* Fork add-on: compact lineage agents */}
+              compact={false /* Fork add-on(subagent-tree) */}
               hiddenCount={0}
               onShowMore={() => {}}
             >
@@ -1022,7 +1022,7 @@ export function ThreadRelationshipsPanel(props: {
             label={null}
             rows={sideChats}
             expanded
-            compact={false /* Fork add-on: compact lineage agents */}
+            compact={false /* Fork add-on(subagent-tree) */}
           >
             {(visibleRows) => visibleRows.map(renderRelationshipRow)}
           </ThreadLineageGroup>

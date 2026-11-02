@@ -45,10 +45,10 @@ import { parsePiCompactCommand, type PiCompactCommand } from "./commands.ts";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-/* Fork add-on */ import {
-  sessionTotalsBreakdown, // Fork add-on
-  sessionUsageBreakdown, // Fork add-on
-} from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
+/* Fork add-on(session-details) */ import {
+  sessionTotalsBreakdown, // Fork add-on(session-details)
+  sessionUsageBreakdown, // Fork add-on(session-details)
+} from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on(session-details)
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import {
   ProviderAdapterDriverCreateError,
@@ -471,7 +471,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         mcpSession,
         extensionPath,
         runtimeMode: input.runtimePolicy.runtimeMode,
-        agentScope: { threadId: input.threadId, projectId: input.projectId, provider: PI_PROVIDER }, // Fork add-on: agent instructions.
+        agentScope: { threadId: input.threadId, projectId: input.projectId, provider: PI_PROVIDER }, // Fork add-on(agent-instructions)
       });
       const scopedLaunch = yield* agentScope.wrap({
         command: options.settings.binaryPath || "pi",
@@ -2402,18 +2402,18 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           Effect.sync(
             () => pendingWake !== null && pendingWake.state.providerThread.id === providerThread.id,
           ),
-        sessionInsights: /* Fork add-on */ {
-          contextBreakdown: ({ providerThread } /* Fork add-on */) =>
-            /* Fork add-on */ DateTime.now.pipe(
-              Effect.flatMap((now) => readTokenUsage(null, now)), // Fork add-on
-              /* Fork add-on */ Effect.map(
-                (usage /* Fork add-on */) =>
-                  usage === undefined // Fork add-on
-                    ? sessionUsageBreakdown(providerThread.contextUsage) // Fork add-on
-                    : sessionTotalsBreakdown(usage), // Fork add-on
-              ), // Fork add-on
-            ), // Fork add-on
-        }, // Fork add-on: session details.
+        sessionInsights: /* Fork add-on(session-details) */ {
+          contextBreakdown: ({ providerThread } /* Fork add-on(session-details) */) =>
+            /* Fork add-on(session-details) */ DateTime.now.pipe(
+              Effect.flatMap((now) => readTokenUsage(null, now)), // Fork add-on(session-details)
+              /* Fork add-on(session-details) */ Effect.map(
+                (usage /* Fork add-on(session-details) */) =>
+                  usage === undefined // Fork add-on(session-details)
+                    ? sessionUsageBreakdown(providerThread.contextUsage) // Fork add-on(session-details)
+                    : sessionTotalsBreakdown(usage), // Fork add-on(session-details)
+              ), // Fork add-on(session-details)
+            ), // Fork add-on(session-details)
+        }, // Fork add-on(session-details)
         getModelContextWindow: (selection) => {
           if (selection.instanceId !== options.instanceId) return undefined;
           const slug =

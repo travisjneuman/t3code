@@ -41,7 +41,7 @@ export interface AddProjectToMachineInput {
   readonly files: ReadonlyArray<string>;
 }
 
-/** Adds a checkout the other machine already has as the project there, instead of cloning. Fork add-on: existing checkout. */
+/** Adds a checkout the other machine already has as the project there, instead of cloning. Fork add-on(existing-checkout) */
 export async function addExistingCheckout(input: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;

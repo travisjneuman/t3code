@@ -1,6 +1,6 @@
 import type {
   Event as OpenCodeEvent,
-  McpStatus as OpenCodeMcpStatus, // Fork add-on: session details.
+  McpStatus as OpenCodeMcpStatus, // Fork add-on(session-details)
   Message as OpenCodeMessage,
   Part as OpenCodePart,
   PermissionRequest,
@@ -35,7 +35,7 @@ import {
   type ProviderRequestKind,
   type ProviderSessionId,
   type RuntimeRequestId,
-  type SessionMcpServer, // Fork add-on: session details.
+  type SessionMcpServer, // Fork add-on(session-details)
   type ThreadId,
 } from "@t3tools/contracts";
 import { OpenCodeSettings } from "../settings.ts";
@@ -57,7 +57,7 @@ import * as Stream from "effect/Stream";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { mcpToolPresentation } from "@t3tools/provider-core/server/mcpToolPresentation";
-import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on: session details.
+import { sessionMcpServer } from "@t3tools/provider-core/server/sessionInsights"; // Fork add-on(session-details)
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import {
@@ -911,21 +911,21 @@ function isOpenCodeNotFound(cause: unknown): boolean {
   return false;
 }
 
-function openCodeMcpServers(statuses: /* Fork add-on */ {
-  readonly [name: string]: OpenCodeMcpStatus; // Fork add-on
-}): ReadonlyArray<SessionMcpServer> /* Fork add-on */ {
-  /* Fork add-on */ return Object.entries(statuses).flatMap(([name, status]) => {
-    const server /* Fork add-on */ = sessionMcpServer({
-      name, // Fork add-on
-      status: // Fork add-on
-        status.status === "needs_auth" || status.status === "needs_client_registration" // Fork add-on
-          ? "needs-auth" // Fork add-on
-          : status.status, // Fork add-on
-      error: "error" in status ? status.error : undefined, // Fork add-on
-    }); // Fork add-on
-    return server === undefined ? [] : [server]; // Fork add-on
-  }); // Fork add-on
-} // Fork add-on
+function openCodeMcpServers(statuses: /* Fork add-on(session-details) */ {
+  readonly [name: string]: OpenCodeMcpStatus; // Fork add-on(session-details)
+}): ReadonlyArray<SessionMcpServer> /* Fork add-on(session-details) */ {
+  /* Fork add-on(session-details) */ return Object.entries(statuses).flatMap(([name, status]) => {
+    const server /* Fork add-on(session-details) */ = sessionMcpServer({
+      name, // Fork add-on(session-details)
+      status: // Fork add-on(session-details)
+        status.status === "needs_auth" || status.status === "needs_client_registration" // Fork add-on(session-details)
+          ? "needs-auth" // Fork add-on(session-details)
+          : status.status, // Fork add-on(session-details)
+      error: "error" in status ? status.error : undefined, // Fork add-on(session-details)
+    }); // Fork add-on(session-details)
+    return server === undefined ? [] : [server]; // Fork add-on(session-details)
+  }); // Fork add-on(session-details)
+} // Fork add-on(session-details)
 
 function unwrapData<A>(operation: string, result: { readonly data?: A }): NonNullable<A> {
   if (result.data === undefined) {
@@ -2977,7 +2977,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
               buildRuntimeInstructions({
                 harness: "OpenCode",
                 model: turn.modelSelection.model,
-                agentScope: { thread: turn.appThread, provider: OPENCODE_PROVIDER }, // Fork add-on: agent instructions.
+                agentScope: { thread: turn.appThread, provider: OPENCODE_PROVIDER }, // Fork add-on(agent-instructions)
               }),
             ]
               .filter(Boolean)
@@ -3752,27 +3752,27 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 ),
               ),
           ),
-          // Fork add-on: The client is bound to the session's directory, so this lists the
+          // Fork add-on(session-details): The client is bound to the session's directory, so this lists the
           // servers every thread of the session runs with. Not logged: status
           // errors can echo a server's configured headers.
-          sessionInsights: /* Fork add-on */ {
-            mcpServers: (/* Fork add-on */) =>
-              /* Fork add-on */ OpenCodeRuntime.runOpenCodeSdk(
-                "mcp.status", // Fork add-on
-                (signal) => client.mcp.status(undefined, { signal, throwOnError: true }), // Fork add-on
-              ) // Fork add-on
-                /* Fork add-on */ .pipe(
-                  Effect.map((response) => openCodeMcpServers(response.data ?? {})), // Fork add-on
-                  /* Fork add-on */ Effect.mapError(
-                    (cause /* Fork add-on */) =>
-                      /* Fork add-on */ new ProviderAdapter.ProviderAdapterProtocolError({
-                        driver: OPENCODE_PROVIDER, // Fork add-on
-                        detail: "OpenCode MCP status request failed", // Fork add-on
-                        cause, // Fork add-on
-                      }), // Fork add-on
-                  ), // Fork add-on
-                ), // Fork add-on
-          }, // Fork add-on
+          sessionInsights: /* Fork add-on(session-details) */ {
+            mcpServers: (/* Fork add-on(session-details) */) =>
+              /* Fork add-on(session-details) */ OpenCodeRuntime.runOpenCodeSdk(
+                "mcp.status", // Fork add-on(session-details)
+                (signal) => client.mcp.status(undefined, { signal, throwOnError: true }), // Fork add-on(session-details)
+              ) // Fork add-on(session-details)
+                /* Fork add-on(session-details) */ .pipe(
+                  Effect.map((response) => openCodeMcpServers(response.data ?? {})), // Fork add-on(session-details)
+                  /* Fork add-on(session-details) */ Effect.mapError(
+                    (cause /* Fork add-on(session-details) */) =>
+                      /* Fork add-on(session-details) */ new ProviderAdapter.ProviderAdapterProtocolError({
+                        driver: OPENCODE_PROVIDER, // Fork add-on(session-details)
+                        detail: "OpenCode MCP status request failed", // Fork add-on(session-details)
+                        cause, // Fork add-on(session-details)
+                      }), // Fork add-on(session-details)
+                  ), // Fork add-on(session-details)
+                ), // Fork add-on(session-details)
+          }, // Fork add-on(session-details)
         };
 
         return runtimeSession;

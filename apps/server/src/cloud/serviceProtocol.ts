@@ -139,7 +139,7 @@ export function compareExactServiceVersions(left: string, right: string): number
   return 0;
 }
 
-// Fork add-on: another fork build of the same nightly (`<version>+<build>`) is an update too.
+// Fork add-on(host-releases): another fork build of the same nightly (`<version>+<build>`) is an update too.
 export const isServiceUpdateTarget = (target: string, from: string): boolean => {
   const order = compareExactServiceVersions(target, from);
   return order > 0 || (order === 0 && target !== from);

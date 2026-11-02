@@ -116,7 +116,7 @@ import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
-import * as SessionInsights from "./sessionInsights/SessionInsights.ts"; // Fork add-on: session details.
+import * as SessionInsights from "./sessionInsights/SessionInsights.ts"; // Fork add-on(session-details)
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
@@ -270,7 +270,7 @@ import {
 } from "@t3tools/shared/usageLimits";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
-import * as ForkRpcHandlers from "./forkRpcHandlers.ts"; // Fork add-on: add-on RPC handlers.
+import * as ForkRpcHandlers from "./forkRpcHandlers.ts"; // Fork add-on(core)
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -1291,7 +1291,7 @@ export const layerWsRpc = (
 
       const providerSessionsV2 = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const mcpAppRequests = yield* McpAppRequests.McpAppRequests;
-      const sessionInsights = yield* SessionInsights.SessionInsights; // Fork add-on: session details.
+      const sessionInsights = yield* SessionInsights.SessionInsights; // Fork add-on(session-details)
       const analytics = yield* AnalyticsService.AnalyticsService;
       const originProps = clientAnalyticsProps;
       const recordClientCommandAnalytics = (command: OrchestrationV2Command) => {
@@ -1913,7 +1913,7 @@ export const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
-        ...(yield* ForkRpcHandlers.makeHandlers), // Fork add-on: add-on RPC handlers.
+        ...(yield* ForkRpcHandlers.makeHandlers), // Fork add-on(core)
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -2432,7 +2432,7 @@ export const layerWsRpc = (
         [WS_METHODS.mcpAppsToolInfo]: (input) => mcpAppRequests.toolInfo(input),
         [WS_METHODS.mcpAppsUpdateModelContext]: (input) => mcpAppRequests.updateModelContext(input),
         [WS_METHODS.mcpAppsReadResource]: (input) => mcpAppRequests.readResource(input),
-        [WS_METHODS.sessionInsightsGet]: (input) => sessionInsights.get(input), // Fork add-on: session details.
+        [WS_METHODS.sessionInsightsGet]: (input) => sessionInsights.get(input), // Fork add-on(session-details)
         [WS_METHODS.providerUploadFeedback]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(

@@ -5,7 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { ensureElectronRuntime } from "./ensure-electron-runtime.mjs";
-import { FORK_BRAND_ASSET_PATHS } from "../../../scripts/lib/fork-brand-assets.mjs"; // Fork add-on: ndev app icon.
+import { FORK_BRAND_ASSET_PATHS } from "../../../scripts/lib/fork-brand-assets.mjs"; // Fork add-on(ndev-icons)
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
@@ -19,8 +19,8 @@ const APP_BUNDLE_ID = isDevelopment
   ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
   : "com.t3tools.t3code";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
-const LAUNCHER_VERSION = 21; // Fork add-on: ndev app icon (regenerates the launcher).
-const macIconPngPath = NodePath.join(repoRoot, FORK_BRAND_ASSET_PATHS.macIconPng); // Fork add-on: ndev app icon.
+const LAUNCHER_VERSION = 21; // Fork add-on(ndev-icons): ndev app icon (regenerates the launcher).
+const macIconPngPath = NodePath.join(repoRoot, FORK_BRAND_ASSET_PATHS.macIconPng); // Fork add-on(ndev-icons)
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
@@ -198,7 +198,7 @@ function registerMacLauncherBundle(appBundlePath) {
 // Bundle-internal paths are macOS paths whatever host builds them.
 function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopment) {
   return {
-    sourceIconPath: macIconPngPath, // Fork add-on: ndev app icon.
+    sourceIconPath: macIconPngPath, // Fork add-on(ndev-icons)
     generatedIconPath: NodePath.posix.join(
       runtimeDir,
       development ? "icon-dev.icns" : "icon-prod.icns",

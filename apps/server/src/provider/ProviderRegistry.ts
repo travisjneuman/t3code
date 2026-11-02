@@ -47,7 +47,7 @@ import {
   latestProviderVersionCacheKeys,
 } from "@t3tools/provider-core/server/maintenanceResolver";
 import type { ProviderSnapshotSource } from "./builtInProviderCatalog.ts";
-import { withHermesAccountCodexModels } from "./hermesAccountCodexModels.ts"; // Fork add-on: Hermes Codex lists the account's live models
+import { withHermesAccountCodexModels } from "./hermesAccountCodexModels.ts"; // Fork add-on(hermes): Hermes Codex lists the account's live models
 
 export type ProviderMaintenanceActionKind = "update";
 
@@ -158,8 +158,8 @@ export function upsertProviderWorkspaceSnapshot(
   };
 }
 
-// Fork add-on: provider and model brand names. Hermes reports its full catalog when signed in, so a stale row must not outlive it.
-const GATEWAY_INVENTORY_DRIVERS: ReadonlySet<string> = new Set(["hermes"]); // Fork add-on: provider and model brand names
+// Fork add-on(model-brand-names): Hermes reports its full catalog when signed in, so a stale row must not outlive it.
+const GATEWAY_INVENTORY_DRIVERS: ReadonlySet<string> = new Set(["hermes"]); // Fork add-on(model-brand-names)
 
 const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean => {
   if (provider.driver === ProviderDriverKind.make("pi")) {
@@ -173,7 +173,7 @@ const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean =>
 
   if (
     provider.driver === ProviderDriverKind.make("acpRegistry") ||
-    GATEWAY_INVENTORY_DRIVERS.has(provider.driver) // Fork add-on: provider and model brand names
+    GATEWAY_INVENTORY_DRIVERS.has(provider.driver) // Fork add-on(model-brand-names)
   ) {
     // Only completed ACP discovery provides nativeSessions and inventory; placeholder probes cannot establish auth for agents without sign-in.
     return !(
@@ -512,7 +512,7 @@ export const layer = Layer.effect(
           }
 
           const providers = orderProviderSnapshots(
-            /* Fork add-on */ withHermesAccountCodexModels([...mergedProviders.values()]).map(
+            /* Fork add-on(hermes) */ withHermesAccountCodexModels([...mergedProviders.values()]).map(
               (provider) => classifyCompatibility(provider, manifest),
             ),
           );

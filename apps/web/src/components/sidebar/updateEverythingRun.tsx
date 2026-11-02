@@ -9,7 +9,7 @@ import { APP_VERSION } from "~/branding";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { desktopUpdateStateAtom } from "~/state/desktopUpdate";
 import { serverEnvironment } from "~/state/server";
-import { resolveRuntimeVersionMismatch } from "~/versionSkew"; // Fork add-on: fork builds.
+import { resolveRuntimeVersionMismatch } from "~/versionSkew"; // Fork add-on(host-releases): fork builds.
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
@@ -311,7 +311,7 @@ function followHandedOffServers(servers: ReadonlyArray<HandedOffServer>): void {
       (config) => {
         if (
           config !== null &&
-          resolveRuntimeVersionMismatch(config.environment, server.targetVersion) === null // Fork add-on: fork builds.
+          resolveRuntimeVersionMismatch(config.environment, server.targetVersion) === null // Fork add-on(host-releases): fork builds.
         ) {
           settle(null);
         }

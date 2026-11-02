@@ -86,8 +86,8 @@ import { UsagePriceOverrides } from "./UsagePriceOverrides";
 import { UsageProviderChart } from "./UsageProviderChart";
 import { SpeedPremium, UsageModelDialog } from "./UsageModelDialog";
 import { UsageShareBar } from "./UsageShareBar";
-import { UsageModelBreakdownBody } from "./UsageModelBreakdown"; // Fork add-on: one usage row per model.
-import { usageModelSelectionKey } from "./usageModelRows"; // Fork add-on: one usage row per model.
+import { UsageModelBreakdownBody } from "./UsageModelBreakdown"; // Fork add-on(usage-by-model)
+import { usageModelSelectionKey } from "./usageModelRows"; // Fork add-on(usage-by-model)
 import {
   costTypeSegments,
   sortModelsByTokens,
@@ -159,7 +159,7 @@ function UsageModelDialogHost({
   const model =
     selectedKey === null
       ? undefined
-      : models.find((candidate) => usageModelSelectionKey(candidate) === selectedKey); // Fork add-on: one usage row per model.
+      : models.find((candidate) => usageModelSelectionKey(candidate) === selectedKey); // Fork add-on(usage-by-model)
   if (model === undefined) return null;
   return (
     <UsageModelDialog
@@ -923,11 +923,11 @@ function UsageOverview({
                 <th className="py-2 pl-6 font-normal">Tokens</th>
               </tr>
             </thead>
-            <UsageModelBreakdownBody // Fork add-on: one usage row per model.
-              models={breakdownModels} // Fork add-on
-              metric={metric} // Fork add-on
-              loadingProviders={loadingProviders} // Fork add-on
-              onSelectModel={onSelectModel} // Fork add-on
+            <UsageModelBreakdownBody // Fork add-on(usage-by-model)
+              models={breakdownModels} // Fork add-on(usage-by-model)
+              metric={metric} // Fork add-on(usage-by-model)
+              loadingProviders={loadingProviders} // Fork add-on(usage-by-model)
+              onSelectModel={onSelectModel} // Fork add-on(usage-by-model)
             />
           </table>
         ) : (

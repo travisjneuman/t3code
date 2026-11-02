@@ -4,13 +4,13 @@ import type {
   ProjectId,
   ProjectScript,
   ResolvedKeybindingsConfig,
-  RunId, // Fork add-on: session details.
+  RunId, // Fork add-on(session-details)
   ThreadId,
 } from "@t3tools/contracts";
 
 import type { DraftId } from "../../composerDraftStore";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
-import type { ContextWindowSnapshot } from "../../lib/contextWindow"; // Fork add-on: session details.
+import type { ContextWindowSnapshot } from "../../lib/contextWindow"; // Fork add-on(session-details)
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
 import BaseGitActionsControl from "../GitActionsControl";
@@ -25,7 +25,7 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadServersPanel } from "./ThreadServersPanel";
-import { ThreadSessionDetails } from "./ThreadSessionInsightsSection"; // Fork add-on: session details.
+import { ThreadSessionDetails } from "./ThreadSessionInsightsSection"; // Fork add-on(session-details)
 import {
   ThreadDetailsContext,
   ThreadDetailsUsage,
@@ -87,22 +87,22 @@ interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   usage: ThreadDetailsUsageInput;
-  contextWindow?: ContextWindowSnapshot | null; // Fork add-on
-  /** Fork add-on: Present when the provider can compact on request; the button follows the composer's. */
-  onCompactContext?: () => void; // Fork add-on
-  compactDisabled?: boolean; // Fork add-on
-  compactDisabledReason?: string | null; // Fork add-on
-  onOpenTurnDiff?: (runId: RunId, filePath?: string) => void; // Fork add-on
-  /** Fork add-on: Hermes provider.
+  contextWindow?: ContextWindowSnapshot | null; // Fork add-on(session-details)
+  /** Fork add-on(session-details): Present when the provider can compact on request; the button follows the composer's. */
+  onCompactContext?: () => void; // Fork add-on(session-details)
+  compactDisabled?: boolean; // Fork add-on(session-details)
+  compactDisabledReason?: string | null; // Fork add-on(session-details)
+  onOpenTurnDiff?: (runId: RunId, filePath?: string) => void; // Fork add-on(session-details)
+  /** Fork add-on(hermes)
    * Set for a Hermes thread: the machine Hermes works on. Hermes never uses
    * the project's folder, so the workspace and version control controls give
    * way to that machine's name.
    */
-  hermesMachine?: string; // Fork add-on
+  hermesMachine?: string; // Fork add-on(hermes)
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
-  const localWorkspace = props.hermesMachine === undefined; // Fork add-on: Hermes provider.
+  const localWorkspace = props.hermesMachine === undefined; // Fork add-on(hermes)
   const visible = useClientSettings(resolveThreadDetailsVisibility);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const fileScripts = useT3ProjectFileScripts(
@@ -166,23 +166,23 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
       {(density) => {
         // Section flags follow the rows that will render, so no empty section steals the divider rule.
         const show = {
-          environment: localWorkspace /* Fork add-on */ && density === "full" && visible.environment,
+          environment: localWorkspace /* Fork add-on(hermes) */ && density === "full" && visible.environment,
           openIn:
-            localWorkspace /* Fork add-on */ &&
+            localWorkspace /* Fork add-on(hermes) */ &&
             density !== "essential" &&
             visible.openIn &&
             props.showOpenInPicker,
           scripts:
-            localWorkspace /* Fork add-on */ &&
+            localWorkspace /* Fork add-on(hermes) */ &&
             visible.scripts &&
             props.activeProjectScripts !== undefined,
           branch:
-            localWorkspace /* Fork add-on */ &&
+            localWorkspace /* Fork add-on(hermes) */ &&
             props.gitCwd !== null &&
             props.isGitRepo &&
             visible.branch,
           git:
-            localWorkspace /* Fork add-on */ &&
+            localWorkspace /* Fork add-on(hermes) */ &&
             props.gitCwd !== null &&
             props.activeProjectName !== undefined &&
             (visible.gitActions || (visible.changes && props.isGitRepo)),
@@ -190,7 +190,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
         return (
           <>
             <div className="group/details-items">
-              {!localWorkspace /* Fork add-on */ ||
+              {!localWorkspace /* Fork add-on(hermes) */ ||
               show.environment ||
               show.openIn ||
               show.scripts ? (
@@ -201,11 +201,11 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   showHeading={false}
                 >
                   <div className="flex flex-col">
-                    {props.hermesMachine !== undefined ? ( // Fork add-on
-                      <p className="px-1.5 py-1 text-muted-foreground text-sm" /* Fork add-on */>
-                        Runs on {props.hermesMachine /* Fork add-on */}, in Hermes's own workspace
-                      </p> // Fork add-on
-                    ) : /* Fork add-on */ null}
+                    {props.hermesMachine !== undefined ? ( // Fork add-on(hermes)
+                      <p className="px-1.5 py-1 text-muted-foreground text-sm" /* Fork add-on(hermes) */>
+                        Runs on {props.hermesMachine /* Fork add-on(hermes) */}, in Hermes's own workspace
+                      </p> // Fork add-on(hermes)
+                    ) : /* Fork add-on(hermes) */ null}
                     {show.environment ? (
                       <BranchToolbar
                         layout="panel"
@@ -285,18 +285,18 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {density === "full" && !props.draftId ? ( // Fork add-on
-                <ThreadSessionDetails // Fork add-on
-                  environmentId={props.environmentId} // Fork add-on
-                  threadId={props.threadId} // Fork add-on
-                  workspaceRoot={props.gitCwd ?? undefined} // Fork add-on
-                  contextWindow={props.contextWindow ?? null} // Fork add-on
-                  onCompactContext={props.onCompactContext} // Fork add-on
-                  compactDisabled={props.compactDisabled ?? true} // Fork add-on
-                  compactDisabledReason={props.compactDisabledReason ?? null} // Fork add-on
-                  onOpenTurnDiff={props.onOpenTurnDiff} // Fork add-on
-                /> // Fork add-on
-              ) : /* Fork add-on */ null}
+              {density === "full" && !props.draftId ? ( // Fork add-on(session-details)
+                <ThreadSessionDetails // Fork add-on(session-details)
+                  environmentId={props.environmentId} // Fork add-on(session-details)
+                  threadId={props.threadId} // Fork add-on(session-details)
+                  workspaceRoot={props.gitCwd ?? undefined} // Fork add-on(session-details)
+                  contextWindow={props.contextWindow ?? null} // Fork add-on(session-details)
+                  onCompactContext={props.onCompactContext} // Fork add-on(session-details)
+                  compactDisabled={props.compactDisabled ?? true} // Fork add-on(session-details)
+                  compactDisabledReason={props.compactDisabledReason ?? null} // Fork add-on(session-details)
+                  onOpenTurnDiff={props.onOpenTurnDiff} // Fork add-on(session-details)
+                /> // Fork add-on(session-details)
+              ) : /* Fork add-on(session-details) */ null}
 
               {density === "full" && !props.draftId && (visible.lineage || visible.sideChats) ? (
                 <ThreadRelationshipsPanel

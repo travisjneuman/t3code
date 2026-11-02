@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
-import { SectionCollapseToggle, useSectionCollapse } from "./ThreadDetailsSectionToggle"; // Fork add-on: collapsible sections.
+import { SectionCollapseToggle, useSectionCollapse } from "./ThreadDetailsSectionToggle"; // Fork add-on(collapsible-details)
 
 export function ThreadDetailsSection({
   headingId,
@@ -18,8 +18,8 @@ export function ThreadDetailsSection({
   separated?: boolean;
   showHeading?: boolean;
 }) {
-  const collapse = useSectionCollapse(headingId, showHeading); // Fork add-on: collapsible sections.
-  const heading = <SectionCollapseToggle title={title} collapse={collapse} />; // Fork add-on: collapsible sections.
+  const collapse = useSectionCollapse(headingId, showHeading); // Fork add-on(collapsible-details)
+  const heading = <SectionCollapseToggle title={title} collapse={collapse} />; // Fork add-on(collapsible-details)
   return (
     <section
       {...props}
@@ -42,11 +42,11 @@ export function ThreadDetailsSection({
           id={headingId}
           className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none"
         >
-          {heading /* Fork add-on: collapsible sections. */}
+          {heading /* Fork add-on(collapsible-details) */}
         </h3>
         {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </div>
-      {collapse.collapsed ? null : children /* Fork add-on: collapsible sections. */}
+      {collapse.collapsed ? null : children /* Fork add-on(collapsible-details) */}
     </section>
   );
 }

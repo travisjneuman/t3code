@@ -13,7 +13,7 @@ import { acpRegistryClient } from "@t3tools/provider-acp-registry/client";
 import { cursorClient } from "@t3tools/provider-cursor/client";
 import { grokClient } from "@t3tools/provider-grok/client";
 import { museClient } from "@t3tools/provider-muse/client";
-import { hermesClient } from "@t3tools/provider-hermes/client"; // Fork add-on: Hermes provider.
+import { hermesClient } from "@t3tools/provider-hermes/client"; // Fork add-on(hermes)
 import { openCodeClient } from "@t3tools/provider-opencode/client";
 import { piClient } from "@t3tools/provider-pi/client";
 import {
@@ -33,7 +33,7 @@ const providerSecretFields = new Map([
     cursorClient,
     grokClient,
     museClient,
-    hermesClient, // Fork add-on
+    hermesClient, // Fork add-on(hermes)
     openCodeClient,
     piClient,
     acpRegistryClient,
