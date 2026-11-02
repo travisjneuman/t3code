@@ -151,12 +151,18 @@ export const turnContext = (location: OpenBotLocation, agentId: string) =>
              WHERE agent_id = ?`,
       params: [agentId],
     },
+    {
+      sql: `SELECT COUNT(*) AS count FROM projection_thread_messages WHERE thread_id = ?`,
+      params: [mainThreadId(agentId)],
+    },
   ]).pipe(
-    Effect.map(([names = [], [sequence] = [], [agent] = []]) => ({
+    Effect.map(([names = [], [sequence] = [], [agent] = [], [messages] = []]) => ({
       names: namesFrom(names),
       sequence: Number(sequence?.sequence ?? 0),
       provider: text(agent?.provider),
       model: text(agent?.model),
+      /** Messages in the agent's main conversation. */
+      messageCount: Number(messages?.count ?? 0),
     })),
   );
 

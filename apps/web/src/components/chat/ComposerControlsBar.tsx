@@ -8,6 +8,8 @@ import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
   AgentThreadPresetControl, // Fork add-on(agent-instructions)
   AgentThreadPresetMenuItems, // Fork add-on(agent-instructions)
 } from "../../agent-instructions/AgentThreadPresetControl"; // Fork add-on(agent-instructions)
+import { OpenBotAgentControl } from "../../openbot/OpenBotAgentControl"; // Fork add-on(openbot)
+import { OPENBOT_DRIVER } from "../../openbot/openbotSessions"; // Fork add-on(openbot)
 import { ComposerControl } from "./ComposerControl";
 import {
   ComposerFooterModeControls,
@@ -293,6 +295,15 @@ export function ComposerControlsBar(props: {
     </ComposerControl>
   ) : (
     <>
+      {selectedProvider === OPENBOT_DRIVER && activeThreadId ? ( // Fork add-on(openbot)
+        <OpenBotAgentControl // Fork add-on(openbot)
+          environmentId={environmentId} // Fork add-on(openbot)
+          instanceId={selectedInstanceId} // Fork add-on(openbot)
+          threadId={activeThreadId} // Fork add-on(openbot)
+          size={controlSize} // Fork add-on(openbot)
+          hidden={composerControlsHidden} // Fork add-on(openbot)
+        /> // Fork add-on(openbot)
+      ) : null /* Fork add-on(openbot) */}
       {composerModelPicker}
 
       <>

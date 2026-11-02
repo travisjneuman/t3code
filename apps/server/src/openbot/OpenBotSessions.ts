@@ -1,8 +1,9 @@
 /**
  * The OpenBot section's server side: `list` reads every conversation from openbot.db, read-only,
  * with the T3 thread bound to each; `open` opens one as a Scratch thread holding its history,
- * whose turns go to the same agent, and syncs what OpenBot added since; `newChat` starts a fresh
- * chat with an agent in a new thread. Fork add-on; see docs/user/openbot.md.
+ * whose turns go to the same agent, and syncs what OpenBot added since; `newChat` makes a new
+ * chat's thread, whose agent `setAgent` can change until its first message starts the chat in
+ * OpenBot. Fork add-on; see docs/user/openbot.md.
  *
  * @module openbot/OpenBotSessions
  */
@@ -11,6 +12,8 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   EventId,
+  isOpenBotNewChatThread,
+  openBotNewChatThreadId,
   type OpenBotConversationSummary,
   OpenBotSessionsError,
   type OpenBotSessionsListInput,
@@ -18,6 +21,7 @@ import {
   type OpenBotSessionsNewChatInput,
   type OpenBotSessionsOpenInput,
   type OpenBotSessionsOpenResult,
+  type OpenBotSessionsSetAgentInput,
   type OrchestrationV2AppThread,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
@@ -57,6 +61,9 @@ export class OpenBotSessions extends Context.Service<
     ) => Effect.Effect<OpenBotSessionsOpenResult, OpenBotSessionsError>;
     readonly newChat: (
       input: OpenBotSessionsNewChatInput,
+    ) => Effect.Effect<OpenBotSessionsOpenResult, OpenBotSessionsError>;
+    readonly setAgent: (
+      input: OpenBotSessionsSetAgentInput,
     ) => Effect.Effect<OpenBotSessionsOpenResult, OpenBotSessionsError>;
   }
 >()("t3/openbot/OpenBotSessions") {}
@@ -155,18 +162,25 @@ const make = Effect.gen(function* () {
   });
 
   /**
-   * The T3 thread bound to each OpenBot conversation of this instance. A new chat binds another
-   * thread to the same conversation, so the newest unarchived one wins.
+   * This instance's threads by OpenBot conversation. A new chat binds another thread to the same
+   * conversation, so the newest unarchived one wins; until its first message it binds nothing
+   * and is pending. A started new chat supersedes the threads before it that saw no activity
+   * since, such as by an unarchive.
    */
-  const boundThreads = (instanceId: ProviderInstanceId) =>
+  const threadsOf = (instanceId: ProviderInstanceId) =>
     sql<{
       readonly thread_id: string;
       readonly native_id: string | null;
       readonly archived_at: string | null;
+      readonly updated_at: string;
+      readonly first_run_at: string | null;
     }>`
       SELECT p.thread_id AS thread_id,
         json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id,
-        t.archived_at AS archived_at
+        t.archived_at AS archived_at,
+        t.updated_at AS updated_at,
+        (SELECT MIN(r.requested_at) FROM orchestration_v2_projection_runs r
+          WHERE r.thread_id = p.thread_id) AS first_run_at
       FROM orchestration_v2_projection_provider_threads p
       JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
       WHERE json_valid(p.payload_json)
@@ -176,20 +190,49 @@ const make = Effect.gen(function* () {
       ORDER BY t.created_at
     `.pipe(
       Effect.map((rows) => {
-        const byNativeId = new Map<string, { threadId: ThreadId; archived: boolean }>();
+        const bound = new Map<string, { threadId: ThreadId; archived: boolean }>();
+        const pending: Array<{ threadId: ThreadId; agentId: string }> = [];
+        const superseded: Array<ThreadId> = [];
+        const live = new Map<string, Array<(typeof rows)[number]>>();
         for (const row of rows) {
           if (typeof row.native_id !== "string") continue;
           const archived = row.archived_at !== null;
-          if (archived && byNativeId.get(row.native_id)?.archived === false) continue;
-          byNativeId.set(row.native_id, {
-            threadId: ThreadId.make(row.thread_id),
-            archived,
-          });
+          if (isOpenBotNewChatThread(row.thread_id) && row.first_run_at === null) {
+            const agentId = OpenBotDb.agentOfThread(row.native_id);
+            if (!archived && agentId !== undefined) {
+              pending.push({ threadId: ThreadId.make(row.thread_id), agentId });
+            }
+            continue;
+          }
+          if (!archived) live.set(row.native_id, [...(live.get(row.native_id) ?? []), row]);
+          if (archived && bound.get(row.native_id)?.archived === false) continue;
+          bound.set(row.native_id, { threadId: ThreadId.make(row.thread_id), archived });
         }
-        return byNativeId;
+        for (const threads of live.values()) {
+          const winner = threads.at(-1);
+          const startedAt = winner?.first_run_at;
+          if (!winner || !startedAt || !isOpenBotNewChatThread(winner.thread_id)) continue;
+          for (const thread of threads) {
+            if (thread !== winner && thread.updated_at < startedAt) {
+              superseded.push(ThreadId.make(thread.thread_id));
+            }
+          }
+        }
+        return { bound, pending, superseded };
       }),
       Effect.mapError(failed("Could not read T3's OpenBot threads.")),
     );
+  const boundThreads = (instanceId: ProviderInstanceId) =>
+    threadsOf(instanceId).pipe(Effect.map(({ bound }) => bound));
+
+  const archiveThread = (threadId: ThreadId) =>
+    Effect.gen(function* () {
+      yield* orchestrator.dispatch({
+        type: "thread.archive",
+        commandId: yield* commandId("archive"),
+        threadId,
+      });
+    }).pipe(Effect.ignore({ log: true }));
 
   const list: OpenBotSessions["Service"]["list"] = Effect.fn("OpenBotSessions.list")(
     function* (input) {
@@ -197,7 +240,9 @@ const make = Effect.gen(function* () {
       const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
         Effect.mapError(fromOpenBot),
       );
-      const bound = yield* boundThreads(input.instanceId);
+      const { bound, pending, superseded } = yield* threadsOf(input.instanceId);
+      // The earlier chat stays in T3, under Settings › Archive.
+      yield* Effect.forEach(superseded, archiveThread, { discard: true });
       const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
       const conversations = withMainConversations(agents, threads).map(
         (thread): OpenBotConversationSummary => {
@@ -220,7 +265,17 @@ const make = Effect.gen(function* () {
           };
         },
       );
-      return { label, conversations };
+      return {
+        label,
+        conversations,
+        agents: agents.map((agent) => ({
+          id: agent.id,
+          name: agent.name,
+          ...(agent.title === undefined ? {} : { title: agent.title }),
+          sendable: agent.localScripts,
+        })),
+        pendingChats: pending,
+      };
     },
   );
 
@@ -501,43 +556,135 @@ const make = Effect.gen(function* () {
   const open: OpenBotSessions["Service"]["open"] = (input) =>
     Cache.get(opening, `${input.instanceId}\u0000${input.conversationId}`);
 
+  /** The agent and its main conversation, if T3 can message it. */
+  const sendableAgent = Effect.fn("OpenBotSessions.sendableAgent")(function* (
+    instanceId: ProviderInstanceId,
+    agentId: string | undefined,
+  ) {
+    const { location } = yield* instanceOf(instanceId);
+    const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
+      Effect.mapError(fromOpenBot),
+    );
+    const sendable = agents
+      .filter((agent) => agent.localScripts)
+      .toSorted((a, b) => a.name.localeCompare(b.name));
+    const wanted = (agentId ?? location.defaultAgent).trim().toLowerCase();
+    const agent = wanted
+      ? sendable.find((candidate) =>
+          [candidate.id, candidate.name, OpenBotDb.agentLabel(candidate)].some(
+            (key) => key.toLowerCase() === wanted,
+          ),
+        )
+      : sendable[0];
+    const conversation =
+      agent &&
+      withMainConversations(agents, threads).find(
+        (candidate) => candidate.id === OpenBotDb.mainThreadId(agent.id),
+      );
+    if (agent === undefined || !conversation) {
+      return yield* new OpenBotSessionsError({
+        message:
+          agentId === undefined && sendable.length > 0
+            ? `No OpenBot agent with Local scripts on is named "${location.defaultAgent}". Check Default agent in the provider's settings.`
+            : "Turn on Local scripts for this agent in OpenBot to start a chat from T3 Code.",
+      });
+    }
+    return { agent, conversation };
+  });
+
+  const setAgent: OpenBotSessions["Service"]["setAgent"] = Effect.fn("OpenBotSessions.setAgent")(
+    function* (input) {
+      const { instanceId, threadId } = input;
+      const records = yield* orchestrator
+        .getThreadRecords(threadId, ["runs", "providerThreads"])
+        .pipe(Effect.mapError(failed("T3 has no such thread.")));
+      const providerThread = records.providerThreads.find(
+        (candidate) => candidate.id === records.thread.activeProviderThreadId,
+      );
+      if (
+        !isOpenBotNewChatThread(threadId) ||
+        records.runs.length > 0 ||
+        providerThread === undefined ||
+        providerThread.providerInstanceId !== instanceId
+      ) {
+        return yield* new OpenBotSessionsError({
+          message: "A chat keeps its agent once it has started. Start a new chat to talk to another.",
+        });
+      }
+      const opened = { threadId, projectId: records.thread.projectId };
+      const { agent, conversation } = yield* sendableAgent(instanceId, input.agentId);
+      if (providerThread.nativeThreadRef?.nativeId === conversation.id) return opened;
+      const [eventKey, now] = [
+        yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("Could not change the agent."))),
+        yield* DateTime.now,
+      ];
+      yield* eventSink
+        .write({
+          events: [
+            {
+              id: EventId.make(
+                `${IMPORT_EVENT_PREFIX}:provider-thread:${providerThread.id}:agent:${eventKey}`,
+              ),
+              type: "provider-thread.updated",
+              threadId,
+              driver: OPENBOT_DRIVER,
+              providerInstanceId: instanceId,
+              occurredAt: now,
+              payload: {
+                ...providerThread,
+                nativeThreadRef: {
+                  driver: OPENBOT_DRIVER,
+                  nativeId: conversation.id,
+                  strength: "strong",
+                },
+                updatedAt: now,
+              },
+            },
+          ],
+        })
+        .pipe(Effect.mapError(failed("Could not change the agent.")));
+      yield* orchestrator
+        .dispatch({
+          type: "thread.model-selection.set",
+          commandId: yield* commandId("model"),
+          threadId,
+          modelSelection: { instanceId, model: agentModel(agent) },
+        })
+        .pipe(Effect.ignore({ log: true }));
+      yield* orchestrator
+        .dispatch({
+          type: "thread.metadata.update",
+          commandId: yield* commandId("title"),
+          threadId,
+          title: OpenBotDb.agentLabel(agent),
+          expectedEmpty: true,
+        })
+        .pipe(Effect.ignore({ log: true }));
+      return opened;
+    },
+  );
+
   const newChat: OpenBotSessions["Service"]["newChat"] = Effect.fn("OpenBotSessions.newChat")(
     function* (input) {
       const { instanceId, agentId } = input;
-      const { location } = yield* instanceOf(instanceId);
-      const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
-        Effect.mapError(fromOpenBot),
-      );
-      const agent = agents.find((candidate) => candidate.id === agentId);
-      const conversationId = OpenBotDb.mainThreadId(agentId);
-      const conversation = withMainConversations(agents, threads).find(
-        (candidate) => candidate.id === conversationId,
-      );
-      if (agent === undefined || conversation === undefined || !agent.localScripts) {
-        return yield* new OpenBotSessionsError({
-          message: "Turn on Local scripts for this agent in OpenBot to start a chat from T3 Code.",
-        });
+      // One pending chat per instance: + again returns to it, with its agent unless one is named.
+      const [waiting] = (yield* threadsOf(instanceId)).pending;
+      if (waiting !== undefined && agentId !== undefined) {
+        return yield* setAgent({ instanceId, threadId: waiting.threadId, agentId });
       }
-      if (conversation.messageCount > 0) {
-        yield* OpenBotApi.clearContext(location, agentId).pipe(Effect.mapError(fromOpenBot));
+      if (waiting !== undefined) {
+        const records = yield* orchestrator
+          .getThreadRecords(waiting.threadId, [])
+          .pipe(Effect.mapError(failed("Could not open the new chat.")));
+        return { threadId: waiting.threadId, projectId: records.thread.projectId };
       }
-      // The earlier chat stays in T3, under Settings › Archive.
-      const previous = (yield* boundThreads(instanceId)).get(conversationId);
-      if (previous !== undefined && !previous.archived) {
-        yield* orchestrator
-          .dispatch({
-            type: "thread.archive",
-            commandId: yield* commandId("archive"),
-            threadId: previous.threadId,
-          })
-          .pipe(Effect.ignore({ log: true }));
-      }
+      const { agent, conversation } = yield* sendableAgent(instanceId, agentId);
       const chatId = yield* crypto
         .randomUUIDv4()
         .pipe(Effect.mapError(failed("Could not start a new chat.")));
       return yield* createThread({
         instanceId,
-        threadId: ThreadId.make(`openbot:${instanceId}:${conversationId}:${chatId}`),
+        threadId: ThreadId.make(openBotNewChatThreadId(instanceId, chatId)),
         conversation,
         agent,
         entries: [],
@@ -546,7 +693,7 @@ const make = Effect.gen(function* () {
     },
   );
 
-  return OpenBotSessions.of({ list, open, newChat });
+  return OpenBotSessions.of({ list, open, newChat, setAgent });
 });
 
 export const layer = Layer.effect(OpenBotSessions, make);

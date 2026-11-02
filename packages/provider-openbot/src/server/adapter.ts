@@ -5,6 +5,7 @@
  * steered or sent attachments from outside, so T3 refuses those honestly.
  */
 import {
+  isOpenBotNewChatThread,
   ProviderDriverKind,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2ExecutionNode,
@@ -645,9 +646,21 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           );
         const text = turnInput.message.text.trim();
         if (!text) return yield* notSentError("OpenBot needs a text message");
-        const context = yield* OpenBotDb.turnContext(location, agentId).pipe(
+        const readContext = OpenBotDb.turnContext(location, agentId).pipe(
           Effect.mapError((error) => notSentError(error.detail, error)),
         );
+        let context = yield* readContext;
+        // A new chat's first message starts it in OpenBot, as OpenBot's own New chat does.
+        if (
+          isOpenBotNewChatThread(turnInput.threadId) &&
+          turnInput.providerThread.firstRunOrdinal === null &&
+          context.messageCount > 0
+        ) {
+          yield* OpenBotApi.clearContext(location, agentId).pipe(
+            Effect.mapError((error) => notSentError(error.detail, error)),
+          );
+          context = yield* readContext;
+        }
         const chosen = OpenBotDb.parseModelSlug(selection.model);
         if (chosen && (chosen.provider !== context.provider || chosen.model !== context.model))
           yield* OpenBotApi.setAgentModel(location, agentId, chosen.provider, chosen.model).pipe(

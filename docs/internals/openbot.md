@@ -38,12 +38,18 @@ Opening a conversation from the section creates or reuses one Scratch thread for
 ids, so a re-sync writes only new rows. Rows that fall inside the window of a T3 turn (30 s either
 side) are skipped, because the adapter already wrote them as turn items.
 
-A new chat clears the agent's context in OpenBot (`POST /v1/agents/:id/context/clear`, which keeps
-the old messages in the same OpenBot thread) and binds a fresh T3 thread to the same conversation.
+A new chat binds a fresh T3 thread (`openbot:<instance>:new-chat:<id>`) to the agent's
+conversation. Until its first run it is pending: the section's binding skips it, and `setAgent`
+can rebind it to another agent by rewriting its provider thread's native id. The model picker
+can't carry the agent, because a model option would show up as its effort. The adapter clears the
+agent's context (`POST /v1/agents/:id/context/clear`, which keeps the old messages in the same
+OpenBot thread) on the first send rather than at creation, so an abandoned new chat costs nothing.
 So one conversation can have several T3 threads: each new chat's provider thread id is derived from
 `<conversation>#<thread>` so it doesn't take over the earlier chat's, the section follows the newest
-unarchived one, and a sync imports only rows from after the thread was created. Local scripts
-can't start OpenBot side threads, so a new chat is the only "new session" T3 can offer.
+started unarchived one, and a sync imports only rows from after the thread was created. Once a new
+chat has a run, the next list archives the conversation's other threads whose last update came
+before that run; an unarchive bumps the update time, so the thread stays. Local scripts can't
+start OpenBot side threads, so a new chat is the only "new session" T3 can offer.
 
 ## Known gaps
 

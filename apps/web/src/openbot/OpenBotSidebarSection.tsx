@@ -166,6 +166,7 @@ function mergeRows(
   target: OpenBotTarget,
   conversations: ReadonlyArray<OpenBotConversationSummary>,
   threads: ReadonlyArray<EnvironmentThreadShell>,
+  pendingChats: ReadonlySet<string>,
 ): OpenBotRow[] {
   const byThreadId = new Map(threads.map((thread) => [thread.id as string, thread]));
   const claimed = new Set<string>();
@@ -199,17 +200,18 @@ function mergeRows(
       runningInOpenBot: conversation.running,
     };
   });
-  // Threads OpenBot no longer lists.
+  // New chats before their first message, and threads OpenBot no longer lists.
   for (const thread of threads) {
     if (claimed.has(thread.id)) continue;
+    const title = pendingChats.has(thread.id) ? `New chat · ${thread.title}` : thread.title;
     rows.push({
       key: `${targetKey(target)}\u0000thread:${thread.id}`,
       environmentId: target.environmentId,
       instanceId: target.instanceId,
       conversation: null,
       thread,
-      title: thread.title,
-      hint: thread.title,
+      title,
+      hint: title,
       lastActiveAt: Date.parse(thread.updatedAt),
       running: threadRuntimeIsActive(thread.runtime),
       runningInOpenBot: false,
@@ -366,7 +368,12 @@ export function OpenBotSidebarSection() {
   const sections = targets.map((target) => {
     const key = targetKey(target);
     const listing = listed.get(key);
-    const rows = mergeRows(target, listing?.conversations ?? [], threadsByTarget.get(key) ?? []);
+    const rows = mergeRows(
+      target,
+      listing?.conversations ?? [],
+      threadsByTarget.get(key) ?? [],
+      new Set(listing?.pendingChats?.map((chat) => chat.threadId) ?? []),
+    );
     const providerName = serverConfigs
       .get(target.environmentId)
       ?.providers.find((provider) => provider.instanceId === target.instanceId)?.displayName;
@@ -448,8 +455,11 @@ export function OpenBotSidebarSection() {
     }
   };
 
-  /** A fresh chat with the agent in a new thread; the earlier chat's thread is archived. */
-  const startNewChat = async (target: OpenBotTarget, agentId: string) => {
+  /**
+   * A new chat's thread, with the default agent unless one is named; its first message starts the
+   * chat in OpenBot, and the earlier chat's thread is archived then.
+   */
+  const startNewChat = async (target: OpenBotTarget, agentId?: string) => {
     if (!appAtomRegistry.get(openbotSessionsNewChat.permissionAtom(target.environmentId))) {
       toastManager.add({
         type: "info",
@@ -461,35 +471,12 @@ export function OpenBotSidebarSection() {
     const result = await runOpenBot(
       openbotSessionsNewChat,
       target.environmentId,
-      { instanceId: target.instanceId, agentId },
+      { instanceId: target.instanceId, ...(agentId === undefined ? {} : { agentId }) },
       "Could not start a new OpenBot chat",
     );
     if (result === null) return;
     refresh();
     await openThread(target.environmentId, result.threadId);
-  };
-
-  const showNewChatMenu = async (
-    target: OpenBotTarget,
-    rows: ReadonlyArray<OpenBotRow>,
-    event: MouseEvent<HTMLButtonElement>,
-  ) => {
-    const api = readLocalApi();
-    if (api === undefined) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const agents = rows
-      .flatMap((row) => (canChat(row) && row.conversation !== null ? [row.conversation] : []))
-      .toSorted((left, right) => left.agentName.localeCompare(right.agentName));
-    const clicked = await api.contextMenu.show(
-      agents.length === 0
-        ? [{ id: "", label: "No agent has Local scripts on", disabled: true }]
-        : [
-            { id: "", label: "New chat with", header: true },
-            ...agents.map((agent) => ({ id: agent.agentId, label: agentLabel(agent) })),
-          ],
-      { x: bounds.left, y: bounds.bottom },
-    );
-    if (clicked) await startNewChat(target, clicked);
   };
 
   const showRowMenu = async (row: OpenBotRow, position: MenuPosition) => {
@@ -508,7 +495,6 @@ export function OpenBotSidebarSection() {
         id: "new-chat",
         label: "New chat",
         icon: "message-square-plus",
-        disabled: isBusy(row),
       });
     }
     if (row.conversation !== null) {
@@ -651,7 +637,7 @@ export function OpenBotSidebarSection() {
                 aria-label={`New ${section.label} chat`}
                 title={`New ${section.label} chat`}
                 onMouseDown={preventMouseFocus}
-                onClick={(event) => void showNewChatMenu(section.target, section.rows, event)}
+                onClick={() => void startNewChat(section.target)}
                 className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
               >
                 <PlusIcon aria-hidden className="size-3.5" />

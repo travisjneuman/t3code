@@ -40,6 +40,11 @@ export const openbotSessionsNewChat = createEnvironmentRpcCommand(connectionAtom
   tag: OPENBOT_SESSIONS_WS_METHODS.newChat,
 });
 
+export const openbotSessionsSetAgent = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:openbot-sessions:set-agent",
+  tag: OPENBOT_SESSIONS_WS_METHODS.setAgent,
+});
+
 /** The enabled OpenBot provider instances an environment offers. */
 export function openbotInstanceIds(
   config: Pick<ServerConfig, "providers"> | null | undefined,

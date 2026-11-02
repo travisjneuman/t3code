@@ -1,4 +1,6 @@
 import type { ServerProviderModel } from "@t3tools/contracts";
+import { formatModelSlugName } from "@t3tools/shared/model";
+import { brandModelName } from "@t3tools/shared/modelBrandNames";
 import {
   buildServerProvider,
   providerModelsFromSettings,
@@ -56,9 +58,15 @@ export const makePendingOpenBotProvider = Effect.fn("makePendingOpenBotProvider"
 
 const providerLabel = (provider: string) => provider.charAt(0).toUpperCase() + provider.slice(1);
 
+/** The name T3 shows this model by everywhere else: "Claude Opus 5.5", "GPT-6.1-Sol". */
+const modelName = (provider: string, model: string) => {
+  const named = formatModelSlugName(model);
+  return named === model ? brandModelName(provider, model) : named;
+};
+
 /**
  * The models are OpenBot's provider and model pairs; picking one moves the thread's agent to it.
- * Agents are not models: each T3 thread belongs to one agent, opened from the sidebar.
+ * Agents are not models: a thread keeps one agent, picked beside the model for a new chat.
  */
 export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus")(function* (
   settings: OpenBotSettings,
@@ -83,7 +91,7 @@ export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus"
           : { installed: true, version: null, status: "ready", auth: { status: "authenticated" } },
         models.map((pair, index) => ({
           slug: modelSlug(pair.provider, pair.model),
-          name: pair.model,
+          name: modelName(pair.provider, pair.model),
           subProvider: providerLabel(pair.provider),
           isCustom: false,
           isDefault: index === 0,

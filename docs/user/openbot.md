@@ -18,6 +18,8 @@ scripts** API, so OpenBot keeps running as it is, with its schedules, side threa
    (`~/Library/Application Support/OpenBot` on macOS, `%APPDATA%\OpenBot` on Windows,
    `~/.config/OpenBot` on Linux). Set it when OpenBot keeps its data somewhere else, for example a
    Docker install whose data folder is mounted at another path.
+5. Set **Default agent** to the OpenBot name of the agent a new chat starts with. Blank uses the
+   first agent, by name, that has Local scripts on.
 
 The provider shows **Authenticated** once it has read OpenBot's agents. OpenBot writes a new Local scripts
 token each time it starts; T3 reads it on OpenBot's machine for every request and never copies it,
@@ -48,17 +50,21 @@ to show them all. Collapsed, the section still shows the conversations that are 
 
 ## Start a new chat
 
-Click **+** beside the OpenBot section's title and pick an agent, or right-click an agent and choose
-**New chat**. T3 opens a new thread and OpenBot starts a new chat with that agent, as its own
-**New chat** button does: the agent no longer carries the earlier conversation in its context.
-Pick a provider and model in the new thread's model picker before you send; the agent moves there
-with your first message.
+Click **+** beside the OpenBot section's title. T3 opens a new thread with your default agent,
+listed in the section as **New chat**. Pick another agent with the agent control to the left of
+the model picker, and a provider and model in the model picker, before you send. Your first
+message starts a new chat with that agent, as OpenBot's own **New chat** button does: the agent no
+longer carries the earlier conversation in its context. Right-click an agent and choose
+**New chat** to start one with that agent.
 
-- Only agents with Local scripts on are offered. OpenBot refuses a new chat while the agent is
+- Only agents with Local scripts on can be picked. OpenBot refuses a new chat while the agent is
   working.
+- Once you send, the chat keeps its agent. Start another new chat to talk to a different one.
+  Agents can still message each other inside OpenBot, as they always do.
+- Clicking **+** again goes back to the new chat you haven't sent yet.
 - OpenBot keeps one main conversation per agent, so the earlier chat is still there in OpenBot's app.
-  In T3, its thread moves to **Settings › Archive**; unarchive it to see it in the section
-  again.
+  In T3, its thread moves to **Settings › Archive** once the new chat starts; unarchive it to see
+  it in the section again.
 - T3 can't start OpenBot side threads; OpenBot starts those itself.
 
 ## What you can send
@@ -72,7 +78,7 @@ message them.
   running session. Picking one moves the agent there from your next message, in OpenBot too and for
   all of its conversations, since OpenBot sets the model per agent. OpenBot refuses a model it has
   not listed, and a change of provider while the agent is working; T3 then shows OpenBot's reason
-  and does not send. Pick the agent itself in the sidebar, not the picker.
+  and does not send. Models are named as everywhere else in T3, such as Claude Opus 5.5.
 - A turn can't be stopped or steered from T3, because OpenBot offers no way to do that from
   outside. Stop it in OpenBot if you need to.
 - A conversation OpenBot is working on outside T3 shows **Running in OpenBot**. That state comes

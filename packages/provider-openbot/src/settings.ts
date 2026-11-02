@@ -32,11 +32,20 @@ export const OpenBotSettings = makeProviderSettingsSchema(
         providerSettingsForm: { placeholder: "~/.config/OpenBot", clearWhenEmpty: "omit" },
       }),
     ),
+    defaultAgent: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Default agent",
+        description:
+          "The agent a new chat starts with, by its OpenBot name. Blank uses the first agent, by name, that has Local scripts on.",
+        providerSettingsForm: { placeholder: "Buster", clearWhenEmpty: "omit" },
+      }),
+    ),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["sshHost", "configDir"] },
+  { order: ["sshHost", "configDir", "defaultAgent"] },
 );
 export type OpenBotSettings = typeof OpenBotSettings.Type;

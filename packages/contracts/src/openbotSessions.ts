@@ -18,6 +18,7 @@ export const OPENBOT_SESSIONS_WS_METHODS = {
   list: "openbotSessions.list",
   open: "openbotSessions.open",
   newChat: "openbotSessions.newChat",
+  setAgent: "openbotSessions.setAgent",
 } as const;
 
 export const OpenBotConversationSummary = Schema.Struct({
@@ -63,6 +64,28 @@ const abbreviateOpenBotRole = (role: string) => {
 export const openBotAgentLabel = (name: string, role: string | undefined) =>
   role?.trim() ? `${name} - ${abbreviateOpenBotRole(role)}` : name;
 
+/** A T3 thread for a new chat, and whether a thread id is one. */
+export const openBotNewChatThreadId = (instanceId: string, chatId: string) =>
+  `openbot:${instanceId}:new-chat:${chatId}`;
+export const isOpenBotNewChatThread = (threadId: string) =>
+  threadId.startsWith("openbot:") && threadId.includes(":new-chat:");
+
+export const OpenBotAgentSummary = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: Schema.String,
+  title: Schema.optional(Schema.String),
+  /** Local scripts is on, so T3 can message it. */
+  sendable: Schema.Boolean,
+});
+export type OpenBotAgentSummary = typeof OpenBotAgentSummary.Type;
+
+/** A new chat's thread before its first message, while its agent can still change. */
+export const OpenBotPendingChat = Schema.Struct({
+  threadId: ThreadId,
+  agentId: TrimmedNonEmptyString,
+});
+export type OpenBotPendingChat = typeof OpenBotPendingChat.Type;
+
 export const OpenBotSessionsListInput = Schema.Struct({
   instanceId: ProviderInstanceId,
 });
@@ -73,6 +96,9 @@ export const OpenBotSessionsListResult = Schema.Struct({
   label: Schema.optional(Schema.String),
   /** Newest first. */
   conversations: Schema.Array(OpenBotConversationSummary),
+  /** Every agent, in OpenBot's order. */
+  agents: Schema.optional(Schema.Array(OpenBotAgentSummary)),
+  pendingChats: Schema.optional(Schema.Array(OpenBotPendingChat)),
 });
 export type OpenBotSessionsListResult = typeof OpenBotSessionsListResult.Type;
 
@@ -88,12 +114,22 @@ export const OpenBotSessionsOpenResult = Schema.Struct({
 });
 export type OpenBotSessionsOpenResult = typeof OpenBotSessionsOpenResult.Type;
 
-/** Starts a fresh chat with an agent that has Local scripts on, in a new thread. */
+/**
+ * A new chat's thread, with the instance's default agent unless `agentId` names one. Its first
+ * message starts the fresh chat in OpenBot; until then its agent can change.
+ */
 export const OpenBotSessionsNewChatInput = Schema.Struct({
   instanceId: ProviderInstanceId,
-  agentId: TrimmedNonEmptyString,
+  agentId: Schema.optional(TrimmedNonEmptyString),
 });
 export type OpenBotSessionsNewChatInput = typeof OpenBotSessionsNewChatInput.Type;
+
+export const OpenBotSessionsSetAgentInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  threadId: ThreadId,
+  agentId: TrimmedNonEmptyString,
+});
+export type OpenBotSessionsSetAgentInput = typeof OpenBotSessionsSetAgentInput.Type;
 
 export class OpenBotSessionsError extends Schema.TaggedError<OpenBotSessionsError>()(
   "OpenBotSessionsError",
@@ -123,10 +159,17 @@ export const OpenBotSessionsNewChatRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.ne
   error: OpenBotSessionsRpcError,
 });
 
+export const OpenBotSessionsSetAgentRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.setAgent, {
+  payload: OpenBotSessionsSetAgentInput,
+  success: OpenBotSessionsOpenResult,
+  error: OpenBotSessionsRpcError,
+});
+
 export const OpenBotSessionsRpcs = [
   OpenBotSessionsListRpc,
   OpenBotSessionsOpenRpc,
   OpenBotSessionsNewChatRpc,
+  OpenBotSessionsSetAgentRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -134,4 +177,5 @@ export const OPENBOT_SESSIONS_RPC_SCOPES = {
   [OPENBOT_SESSIONS_WS_METHODS.list]: AuthOrchestrationReadScope,
   [OPENBOT_SESSIONS_WS_METHODS.open]: AuthOrchestrationOperateScope,
   [OPENBOT_SESSIONS_WS_METHODS.newChat]: AuthOrchestrationOperateScope,
+  [OPENBOT_SESSIONS_WS_METHODS.setAgent]: AuthOrchestrationOperateScope,
 } as const;
