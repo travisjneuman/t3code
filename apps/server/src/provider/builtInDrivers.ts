@@ -69,4 +69,6 @@ export const BUILT_IN_USAGE_DRIVERS: ReadonlyArray<
   MuseDriver,
   AntigravityDriver,
   CursorDriver,
+  HermesDriver, // Fork add-on(hermes)
+  OpenBotDriver, // Fork add-on(openbot)
 ];

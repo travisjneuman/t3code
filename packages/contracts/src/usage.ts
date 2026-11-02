@@ -16,6 +16,8 @@ export const UsageProviderKind = Schema.Literals([
   "antigravity",
   "pi",
   "muse",
+  "hermes", // Fork add-on(hermes)
+  "openbot", // Fork add-on(openbot)
 ]);
 export type UsageProviderKind = typeof UsageProviderKind.Type;
 

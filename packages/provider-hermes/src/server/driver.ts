@@ -24,6 +24,7 @@ import { HermesSettings } from "../settings.ts";
 import { makeHermesAdapterV2 } from "./adapter.ts";
 import { checkHermesProviderStatus, makePendingHermesProvider } from "./status.ts";
 import { hermesTextGeneration } from "./textGeneration.ts";
+import { hermesUsageReader } from "./usage.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("hermes");
 const decodeHermesSettings = Schema.decodeSync(HermesSettings);
@@ -43,6 +44,7 @@ export const HermesDriver: ProviderDriver<HermesSettings, HermesDriverEnv> = {
   metadata: { displayName: "Hermes Agent", supportsMultipleInstances: true },
   configSchema: HermesSettings,
   defaultConfig: () => decodeHermesSettings({}),
+  usage: hermesUsageReader,
   create: ({ instanceId, displayName, accentColor, enabled, config }) =>
     Effect.gen(function* () {
       const effectiveConfig = { ...config, enabled } satisfies HermesSettings;

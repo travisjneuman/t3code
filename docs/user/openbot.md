@@ -23,17 +23,22 @@ The provider shows **Authenticated** once it has read OpenBot's agents. OpenBot 
 token each time it starts; T3 reads it on OpenBot's machine for every request and never copies it,
 stores it or sends it to a client.
 
+The **Usage** page shows the tokens and cost OpenBot records for each turn, by model.
+
 ## Find and open conversations
 
-OpenBot has its own section in the sidebar, above **Other Agents**. It lists every conversation of
-every agent, newest first, with the T3 threads you opened from them. Collapsed, it still shows the
-conversations that are running.
+Each OpenBot provider has its own section in the sidebar, above **Other Agents**. It is titled with
+the provider's name from **Settings › Providers**, or **OpenBot · <SSH host>** when OpenBot runs on
+another machine and you have not named it. It lists each agent's main conversation as
+**Name - Role**, newest first, with the agent's side threads nested under it like subagents. A
+side thread shows when it is running; click the count beside the agent to show them all. Collapsed,
+the section still shows the conversations that are running.
 
 - Click a conversation to open it in T3 with its history, tool calls and reasoning included. It
   opens in the Scratch project, since OpenBot works in its own folders. Clicking it again later
   brings in whatever OpenBot added since.
-- You can also pick **OpenBot** and an agent in any new thread's model picker. That thread talks to
-  the agent's main conversation.
+- Agents with Local scripts on are listed even before they have a conversation, so you can start
+  one from the sidebar.
 - Right-click for **Open**, **Copy conversation ID**, and, once opened, **Archive thread** and
   **Delete thread**. These act on the T3 thread only; the conversation stays in OpenBot. Opening
   it again brings back an archived thread.
@@ -47,6 +52,11 @@ Side threads and agents without Local scripts show an eye icon: you can read the
 message them.
 
 - Messages are text only. Attachments are refused.
+- The model picker lists the provider and model pairs OpenBot already uses for an agent or a
+  running session. Picking one moves the agent there from your next message, in OpenBot too and for
+  all of its conversations, since OpenBot sets the model per agent. OpenBot refuses a model it has
+  not listed, and a change of provider while the agent is working; T3 then shows OpenBot's reason
+  and does not send. Pick the agent itself in the sidebar, not the picker.
 - A turn can't be stopped or steered from T3, because OpenBot offers no way to do that from
   outside. Stop it in OpenBot if you need to.
 - A conversation OpenBot is working on outside T3 shows **Running in OpenBot**. That state comes

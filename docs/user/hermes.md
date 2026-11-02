@@ -63,6 +63,9 @@ shows **Enabled** until the session calls one of its tools: then it shows **Conn
 with the error when its latest call failed. The card doesn't show the thread's T3 folder or
 branch, since Hermes works in its own folders.
 
+The **Usage** page counts each Hermes session's tokens and cost on the day it was last active,
+under its first model.
+
 ## Models
 
 With Hermes selected, the composer shows the usual model chip, labelled with the agent's name and

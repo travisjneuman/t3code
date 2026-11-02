@@ -23,6 +23,7 @@ import { OpenBotSettings } from "../settings.ts";
 import { makeOpenBotAdapterV2 } from "./adapter.ts";
 import { checkOpenBotProviderStatus, makePendingOpenBotProvider } from "./status.ts";
 import { openbotTextGeneration } from "./textGeneration.ts";
+import { openBotUsageReader } from "./usage.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("openbot");
 const decodeOpenBotSettings = Schema.decodeSync(OpenBotSettings);
@@ -39,6 +40,7 @@ export const OpenBotDriver: ProviderDriver<OpenBotSettings, OpenBotDriverEnv> = 
   metadata: { displayName: "OpenBot", supportsMultipleInstances: true },
   configSchema: OpenBotSettings,
   defaultConfig: () => decodeOpenBotSettings({}),
+  usage: openBotUsageReader,
   create: ({ instanceId, displayName, accentColor, enabled, config }) =>
     Effect.gen(function* () {
       const effectiveConfig = { ...config, enabled } satisfies OpenBotSettings;
