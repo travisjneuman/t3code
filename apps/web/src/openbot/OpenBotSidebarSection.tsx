@@ -16,6 +16,7 @@ import {
   type ContextMenuItem,
   type EnvironmentId,
   type OpenBotConversationSummary,
+  type OpenBotPendingChat,
   openBotAgentLabel,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
@@ -110,6 +111,7 @@ interface OpenBotGroup {
 interface OpenBotListing {
   readonly label: string | undefined;
   readonly conversations: ReadonlyArray<OpenBotConversationSummary>;
+  readonly pendingChats: ReadonlyArray<OpenBotPendingChat>;
 }
 
 const agentLabel = (conversation: OpenBotConversationSummary) =>
@@ -332,7 +334,13 @@ export function OpenBotSidebarSection() {
         );
         return [
           targetKey(target),
-          result === null ? null : { label: result.label, conversations: result.conversations },
+          result === null
+            ? null
+            : {
+                label: result.label,
+                conversations: result.conversations,
+                pendingChats: result.pendingChats ?? [],
+              },
         ] as const;
       }),
     ).then((results) => {
