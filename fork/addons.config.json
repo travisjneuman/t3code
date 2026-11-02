@@ -1,0 +1,4 @@
+{
+  "$comment": "Add-ons compiled into this build: \"all\", or a list of ids from fork/addons.json. core and each add-on's dependsOn are always added. After a change run `node scripts/fork-addons.ts`, commit its output, then rebuild. See docs/internals/fork-add-ons.md.",
+  "addons": "all"
+}

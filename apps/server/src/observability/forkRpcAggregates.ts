@@ -4,13 +4,14 @@
  *
  * @module observability/forkRpcAggregates
  */
+// fork-addons:begin
 import {
-  COMPARE_AGENTS_WS_METHODS,
-  EXTERNAL_SESSIONS_WS_METHODS,
-  HERMES_SESSIONS_WS_METHODS,
-  SAVE_TO_NOTES_WS_METHODS,
-  SESSION_SEARCH_WS_METHODS,
-  THREAD_EXPORT_WS_METHODS,
+  COMPARE_AGENTS_WS_METHODS, // Fork add-on(compare-agents)
+  EXTERNAL_SESSIONS_WS_METHODS, // Fork add-on(other-agents)
+  HERMES_SESSIONS_WS_METHODS, // Fork add-on(hermes)
+  SAVE_TO_NOTES_WS_METHODS, // Fork add-on(save-to-notes)
+  SESSION_SEARCH_WS_METHODS, // Fork add-on(session-search)
+  THREAD_EXPORT_WS_METHODS, // Fork add-on(thread-export)
 } from "@t3tools/contracts";
 
 const label = <const M extends Record<string, string>, const A extends string>(
@@ -30,3 +31,4 @@ export const FORK_RPC_AGGREGATES = {
   ...label(COMPARE_AGENTS_WS_METHODS, "compareAgents"), // Fork add-on(compare-agents)
   ...label(HERMES_SESSIONS_WS_METHODS, "hermesSessions"), // Fork add-on(hermes)
 };
+// fork-addons:end

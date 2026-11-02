@@ -9,12 +9,13 @@ import type { ComponentType } from "react";
 import { ArchivedThreadsPanel as UpstreamArchivedThreadsPanel } from "./components/settings/ArchivedThreadsPanel";
 import { useSettingsScope } from "./components/settings/SettingsScopeContext";
 import { WorkspacePageContainer } from "./components/WorkspacePageContainer";
-import { ArchivedExternalSessions } from "./external-sessions/ArchivedExternalSessions";
-import { ArchivedHermesSessions } from "./hermes/ArchivedHermesSessions";
+// fork-addons:begin
+import { ArchivedExternalSessions } from "./external-sessions/ArchivedExternalSessions"; // Fork add-on(other-agents)
+import { ArchivedHermesSessions } from "./hermes/ArchivedHermesSessions"; // Fork add-on(hermes)
 import { useArchivedThreadSnapshots } from "./lib/archivedThreadsState";
 import { cn } from "./lib/utils";
 import { useEnvironmentIdentities } from "./state/environments";
-import { ThreadRetentionSections } from "./thread-retention/ThreadRetentionSections";
+import { ThreadRetentionSections } from "./thread-retention/ThreadRetentionSections"; // Fork add-on(thread-retention)
 
 /** One environment's archived sessions from an agent's own store; renders null when it has none. */
 type ArchivedSection = ComponentType<{
@@ -26,6 +27,12 @@ const FORK_ARCHIVED_SECTIONS: ReadonlyArray<readonly [key: string, ArchivedSecti
   ["external", ArchivedExternalSessions], // Fork add-on(other-agents)
   ["hermes", ArchivedHermesSessions], // Fork add-on(hermes)
 ];
+
+/** Sections above the upstream panel, for every scope. */
+const FORK_ARCHIVED_HEADERS: ReadonlyArray<readonly [key: string, ComponentType]> = [
+  ["thread-retention", ThreadRetentionSections], // Fork add-on(thread-retention)
+];
+// fork-addons:end
 
 /**
  * Replaces the route's component. The upstream panel owns a scroll container;
@@ -49,7 +56,7 @@ export function ArchivedThreadsPanel() {
           "[&:has(>[data-fork-archived-sections]>*)>[data-settings-page-scroll]]:hidden",
       )}
     >
-      <ThreadRetentionSections /> {/* Fork add-on(thread-retention) */}
+      {FORK_ARCHIVED_HEADERS.map(([key, Header]) => <Header key={key} />)}
       <UpstreamArchivedThreadsPanel />
       <ForkArchivedSections flushTop={!t3ArchiveEmpty} />
     </div>

@@ -4,16 +4,20 @@
  *
  * @module forkRootHosts
  */
-import { FindCheckoutsDialogHost } from "./components/settings/FindCheckoutsDialog";
-import { HostReleaseAutoUpdate } from "./host-release/HostReleaseAutoUpdate";
-import { MaintenanceQueueCoordinator } from "./maintenance-queue/MaintenanceQueueCoordinator";
+import type { ComponentType } from "react";
+
+// fork-addons:begin
+import { FindCheckoutsDialogHost } from "./components/settings/FindCheckoutsDialog"; // Fork add-on(existing-checkout)
+import { HostReleaseAutoUpdate } from "./host-release/HostReleaseAutoUpdate"; // Fork add-on(host-releases)
+import { MaintenanceQueueCoordinator } from "./maintenance-queue/MaintenanceQueueCoordinator"; // Fork add-on(maintenance-queue)
+
+const FORK_ROOT_HOSTS: ReadonlyArray<readonly [key: string, ComponentType]> = [
+  ["maintenance-queue", MaintenanceQueueCoordinator], // Fork add-on(maintenance-queue)
+  ["host-releases", HostReleaseAutoUpdate], // Fork add-on(host-releases)
+  ["existing-checkout", FindCheckoutsDialogHost], // Fork add-on(existing-checkout)
+];
+// fork-addons:end
 
 export function ForkRootHosts() {
-  return (
-    <>
-      <MaintenanceQueueCoordinator /> {/* Fork add-on(maintenance-queue) */}
-      <HostReleaseAutoUpdate /> {/* Fork add-on(host-releases) */}
-      <FindCheckoutsDialogHost /> {/* Fork add-on(existing-checkout) */}
-    </>
-  );
+  return <>{FORK_ROOT_HOSTS.map(([key, Host]) => <Host key={key} />)}</>;
 }

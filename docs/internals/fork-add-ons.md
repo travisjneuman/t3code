@@ -77,6 +77,55 @@ add-ons registered there.
 - A new add-on that plugs into an existing spot adds a registry entry. One that needs a new shared
   spot adds a registry and its `extensionPoints` entry in the same change.
 
+## Choosing add-ons
+
+[`fork/addons.config.json`](../../fork/addons.config.json) names the add-ons a build compiles in:
+`"addons": "all"` (the default) or a list of ids. `core` and each chosen add-on's `dependsOn` are
+always added, and an unknown id is an error.
+
+- `node scripts/fork-addons.ts` applies the config to the registries' generated regions, the lines
+  between `// fork-addons:begin` and `// fork-addons:end`. A marked line in a region whose add-ons
+  were all left out is commented out with a `// fork-addons:off ` prefix, together with the
+  comment lines directly above it, and a later run restores it. Marker counts never change, so
+  the upstream sync marker check is unaffected. It also writes `FORK_ADDONS` in
+  [`forkCapabilities.ts`](../../packages/contracts/src/forkCapabilities.ts). Commit its output
+  with the config. The selection is compiled in: changing it needs a rebuild of every surface.
+- A region marked `fork-addons:begin export only` (the contracts barrel, the settings fields, the
+  capability fields, the desktop artifact hooks) is kept whole in the tree, so stored settings
+  and wire fields still decode, and is filtered only by the exporter below.
+- Fork migrations are never left out (see above). Before leaving out an add-on whose migration a
+  database already ran, check by hand that the server is safe without it: its tables and columns
+  stay, nothing drops them, and no remaining code may depend on what it migrated.
+- An add-on can be left out in the tree only when nothing outside a generated region still calls
+  it. Hooks in upstream files, unmarked upstream edits, deleted upstream lines and registries
+  without a region (the composer banners, the thread menu, the context menu icons, the desktop
+  registries) all block it, and the script then writes nothing and lists the blockers. Today every
+  add-on but `core` has such a hook, so the in-tree build is always `all`; a subset is built from
+  the exported patches instead.
+
+The server advertises the ids it was built with as the optional `forkAddOns` server capability,
+which upstream clients ignore, and web Settings › About shows them as "Fork add-ons". An upstream
+server sends none and the row is hidden.
+
+`node scripts/fork-addons-export.ts [--out <dir>] [--base <commit>] [<id> ...]` writes `core` and
+each chosen add-on (the config's choice when no ids are given) as one patch each against the
+merge-base of `HEAD` and `upstream/main` (or `--base`), numbered in dependency order:
+`00-core.patch`, then each add-on, each applied with `git apply` after the ones before it. The
+output defaults to the gitignored `release/fork-addons/` and must be new or empty. It reads only
+committed `HEAD`, with read-only git commands.
+
+- A fork-owned file goes to the add-on listing it, migrations and `fork/` to `core`. Generated
+  regions are filtered by marker, empty import or export statements left behind are removed, and
+  `FORK_ADDONS` lists the add-ons applied so far.
+- In an upstream file, each added line goes to its marker's add-ons, an unmarked line to the
+  nearest marked line in its hunk (above first), and a hunk with no marker to the nearest marked
+  hunk, else `core`. A removed line goes to the add-on whose `upstreamDeletions` name it, else to
+  the hunk's first marker. Files in `unmarkedUpstreamEdits` move whole, with their first chosen
+  add-on. The exporter prints a warning for each guess it falls back on.
+- Registries without a generated region are exported whole and so still register every add-on.
+  The exporter warns about each, and the result needs those entries removed by hand before it
+  compiles.
+
 ## Hook modules for large fork blocks
 
 A large fork feature inside an upstream adapter or component lives in a fork-only module beside

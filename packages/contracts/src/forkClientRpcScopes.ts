@@ -3,13 +3,17 @@
  * `*_RPC_SCOPES` entry; change both together. Imports only the fork groups and auth, because
  * `clientRpcPermissions.ts` imports this file. See docs/internals/fork-add-ons.md.
  */
-import { AuthOrchestrationOperateScope, AuthProvidersManageScope } from "./auth.ts";
-import { COMPARE_AGENTS_WS_METHODS } from "./compareAgents.ts";
-import { EXTERNAL_SESSIONS_WS_METHODS } from "./externalSessions.ts";
-import { HERMES_SESSIONS_WS_METHODS } from "./hermesSessions.ts";
-import { MAINTENANCE_QUEUE_WS_METHODS } from "./maintenanceQueue.ts";
-import { OPENBOT_SESSIONS_WS_METHODS } from "./openbotSessions.ts";
-import { SAVE_TO_NOTES_WS_METHODS } from "./saveToNotes.ts";
+// fork-addons:begin
+import {
+  AuthOrchestrationOperateScope, // Fork add-on(other-agents,hermes,openbot,save-to-notes,compare-agents)
+  AuthProvidersManageScope, // Fork add-on(hermes,maintenance-queue)
+} from "./auth.ts";
+import { COMPARE_AGENTS_WS_METHODS } from "./compareAgents.ts"; // Fork add-on(compare-agents)
+import { EXTERNAL_SESSIONS_WS_METHODS } from "./externalSessions.ts"; // Fork add-on(other-agents)
+import { HERMES_SESSIONS_WS_METHODS } from "./hermesSessions.ts"; // Fork add-on(hermes)
+import { MAINTENANCE_QUEUE_WS_METHODS } from "./maintenanceQueue.ts"; // Fork add-on(maintenance-queue)
+import { OPENBOT_SESSIONS_WS_METHODS } from "./openbotSessions.ts"; // Fork add-on(openbot)
+import { SAVE_TO_NOTES_WS_METHODS } from "./saveToNotes.ts"; // Fork add-on(save-to-notes)
 
 export const FORK_CLIENT_GUARDED_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.continue]: AuthOrchestrationOperateScope, // Fork add-on(other-agents)
@@ -35,3 +39,4 @@ export const FORK_CLIENT_GUARDED_RPC_SCOPES = {
   [COMPARE_AGENTS_WS_METHODS.stop]: AuthOrchestrationOperateScope, // Fork add-on(compare-agents)
   [MAINTENANCE_QUEUE_WS_METHODS.releaseProviderSessions]: AuthProvidersManageScope, // Fork add-on(maintenance-queue)
 } as const;
+// fork-addons:end

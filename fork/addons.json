@@ -383,6 +383,7 @@
         "apps/server/src/observability/forkRpcAggregates.ts",
         "apps/server/src/orchestration-v2/forkRuntimeLayers.ts",
         "apps/server/src/persistence/ForkMigrations.ts",
+        "apps/web/src/components/settings/ForkAddOnsRow.tsx",
         "apps/web/src/forkArchivedPanel.tsx",
         "apps/web/src/forkComposerBanners.ts",
         "apps/web/src/forkContextMenuIcons.ts",
@@ -403,6 +404,9 @@
         "packages/contracts/src/forkExports.ts",
         "packages/contracts/src/forkRpcs.ts",
         "packages/contracts/src/forkServerSettings.ts",
+        "scripts/fork-addons-export.ts",
+        "scripts/fork-addons.ts",
+        "scripts/lib/fork-addons.ts",
         "scripts/lib/fork-desktop-artifact.ts"
       ],
       "tests": [
@@ -419,6 +423,7 @@
         "apps/server/src/server.ts",
         "apps/server/src/ws.ts",
         "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/settings/SettingsPanels.tsx",
         "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
         "apps/web/src/components/usage/UsagePage.tsx",
         "apps/web/src/contextMenuFallback.ts",
@@ -659,6 +664,7 @@
         "packages/provider-hermes/src/server/models.ts",
         "packages/provider-hermes/src/server/status.ts",
         "packages/provider-hermes/src/server/textGeneration.ts",
+        "packages/provider-hermes/src/server/usage.ts",
         "packages/provider-hermes/src/settings.ts",
         "packages/provider-hermes/tsconfig.json"
       ],
@@ -681,10 +687,12 @@
         "apps/web/src/components/chat/ThreadDetailsPanel.tsx",
         "apps/web/src/components/chat/useDraftEnvironmentRouting.ts",
         "apps/web/src/components/settings/ProviderInstanceCard.tsx",
+        "apps/web/src/components/usage/usageProviders.ts",
         "packages/client-runtime/package.json",
         "packages/client-runtime/src/providerClients.ts",
         "packages/contracts/src/model.ts",
         "packages/contracts/src/settings.ts",
+        "packages/contracts/src/usage.ts",
         "packages/provider-core/src/server/failure.ts",
         "pnpm-lock.yaml"
       ],
@@ -739,6 +747,7 @@
         "packages/provider-openbot/src/server/host.ts",
         "packages/provider-openbot/src/server/status.ts",
         "packages/provider-openbot/src/server/textGeneration.ts",
+        "packages/provider-openbot/src/server/usage.ts",
         "packages/provider-openbot/src/settings.ts",
         "packages/provider-openbot/tsconfig.json"
       ],
@@ -748,10 +757,12 @@
         "apps/server/src/provider/ProviderRegistry.ts",
         "apps/server/src/provider/builtInDrivers.ts",
         "apps/web/src/components/Sidebar.tsx",
+        "apps/web/src/components/usage/usageProviders.ts",
         "packages/client-runtime/package.json",
         "packages/client-runtime/src/providerClients.ts",
         "packages/contracts/src/model.ts",
         "packages/contracts/src/settings.ts",
+        "packages/contracts/src/usage.ts",
         "pnpm-lock.yaml"
       ],
       "unmarkedUpstreamEdits": {
@@ -1766,6 +1777,25 @@
       "files": [],
       "hooks": [
         "packages/provider-grok/src/server/usageLimits.ts"
+      ]
+    },
+    {
+      "id": "update-wrappers",
+      "tier": "fix",
+      "title": "Update through wrapper scripts",
+      "summary": "A launcher script that wraps a package-manager install names it with a `t3-update-target:` line, so provider updates reach the install instead of going manual-only.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "server"
+      ],
+      "files": [
+        "packages/provider-core/src/server/updateTarget.ts"
+      ],
+      "hooks": [
+        "packages/provider-core/src/server/maintenanceResolver.ts"
       ]
     },
     {

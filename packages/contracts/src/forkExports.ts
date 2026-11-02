@@ -2,6 +2,7 @@
  * Every fork contracts module, re-exported from `index.ts` with one line.
  * Fork add-on; see docs/internals/fork-add-ons.md.
  */
+// fork-addons:begin export only
 export * from "./forkCapabilities.ts"; // Fork add-on(core)
 export * from "./forkDesktopBridge.ts"; // Fork add-on(core)
 export * from "./sessionInsights.ts"; // Fork add-on(session-details)
@@ -22,3 +23,4 @@ export * from "./existingCheckout.ts"; // Fork add-on(existing-checkout)
 export * from "./threadRetention.ts"; // Fork add-on(thread-retention)
 export * from "./desktopSourceSync.ts"; // Fork add-on(upstream-sync)
 export * from "./desktopHostRelease.ts"; // Fork add-on(host-releases)
+// fork-addons:end

@@ -5,17 +5,18 @@
  */
 import * as Effect from "effect/Effect";
 
-import * as CompareAgentsRpc from "./compare-agents/CompareAgentsRpc.ts";
-import * as ExistingCheckoutRpc from "./existing-checkout/ExistingCheckoutRpc.ts";
-import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts";
-import * as HermesSessionsRpc from "./hermes/HermesSessionsRpc.ts";
-import * as HostBackupsRpc from "./host-backups/HostBackupsRpc.ts";
-import * as MaintenanceQueueRpc from "./maintenance-queue/MaintenanceQueueRpc.ts";
-import * as OpenBotSessionsRpc from "./openbot/OpenBotSessionsRpc.ts";
-import * as SaveToNotesRpc from "./save-to-notes/SaveToNotesRpc.ts";
-import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts";
-import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts";
-import * as ThreadRetentionRpc from "./thread-retention/ThreadRetentionRpc.ts";
+// fork-addons:begin
+import * as CompareAgentsRpc from "./compare-agents/CompareAgentsRpc.ts"; // Fork add-on(compare-agents)
+import * as ExistingCheckoutRpc from "./existing-checkout/ExistingCheckoutRpc.ts"; // Fork add-on(existing-checkout)
+import * as ExternalSessionsRpc from "./external-sessions/ExternalSessionsRpc.ts"; // Fork add-on(other-agents)
+import * as HermesSessionsRpc from "./hermes/HermesSessionsRpc.ts"; // Fork add-on(hermes)
+import * as HostBackupsRpc from "./host-backups/HostBackupsRpc.ts"; // Fork add-on(host-backups)
+import * as MaintenanceQueueRpc from "./maintenance-queue/MaintenanceQueueRpc.ts"; // Fork add-on(maintenance-queue)
+import * as OpenBotSessionsRpc from "./openbot/OpenBotSessionsRpc.ts"; // Fork add-on(openbot)
+import * as SaveToNotesRpc from "./save-to-notes/SaveToNotesRpc.ts"; // Fork add-on(save-to-notes)
+import * as SessionSearchRpc from "./session-search/SessionSearchRpc.ts"; // Fork add-on(session-search)
+import * as ThreadExportRpc from "./thread-export/ThreadExportRpc.ts"; // Fork add-on(thread-export)
+import * as ThreadRetentionRpc from "./thread-retention/ThreadRetentionRpc.ts"; // Fork add-on(thread-retention)
 
 export const makeHandlers = Effect.gen(function* () {
   return {
@@ -32,3 +33,4 @@ export const makeHandlers = Effect.gen(function* () {
     ...(yield* ThreadRetentionRpc.makeHandlers), // Fork add-on(thread-retention)
   };
 });
+// fork-addons:end

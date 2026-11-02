@@ -75,10 +75,11 @@ Talk to a [Hermes Agent](https://github.com/NousResearch/hermes-agent) from T3 o
 
 ### OpenBot
 
-Chat with your OpenBot agents from T3 on the machine where OpenBot runs, and follow every conversation they hold, side threads and scheduled runs included.
+Chat with your OpenBot agents from T3, on OpenBot's machine or over SSH from another one, and follow every conversation they hold, side threads and scheduled runs included.
 
-- Conversations have their own **OpenBot** section above Other Agents. Click one to open it with its history; click again later to bring in what OpenBot added.
-- T3 messages an agent's main conversation when the agent has Local scripts on. Side threads and other agents are watch-only, and turns can't be stopped from T3.
+- Each OpenBot gets its own sidebar section above Other Agents, named after the provider or the host it reaches. Agents show as "Name - Role", with their side threads nested under them. Click one to open it with its history.
+- T3 messages an agent's main conversation when the agent has Local scripts on. The model picker moves that agent to another provider and model OpenBot already uses; side threads are watch-only, and turns can't be stopped from T3.
+- OpenBot's token use and cost show on the Usage page.
 
 [Guide →](https://github.com/travisjneuman/t3code/blob/main/docs/user/openbot.md)
 
@@ -197,6 +198,7 @@ Every add-on has an id, and each fork line in an upstream file carries `Fork add
 | `clipboard-focus`         | fix          | Clipboard focus                           | Copying works when the window is unfocused.                                                                                               |
 | `route-crash-escape`      | fix          | Route crash escape                        | Leave a crashing route instead of being stuck on it.                                                                                      |
 | `grok-zero-usage`         | fix          | Grok zero usage                           | An omitted Grok percentage still shows as 0% used.                                                                                        |
+| `update-wrappers`         | fix          | Update through wrapper scripts            | A launcher script can name the install it runs, so provider updates still reach it.                                                       |
 | `telemetry-check-failure` | fix          | Telemetry check failure                   | A failed telemetry endpoint check shows Check failed instead of Not checked.                                                              |
 | `scheduled-tasks-error`   | fix          | Scheduled tasks error                     | A failed delivery list shows its error without a stuck loading line.                                                                      |
 | `identity`                | distribution | Identity                                  | App id, profile, link scheme and app name, so the fork installs beside official T3 Code.                                                  |

@@ -7,9 +7,11 @@ import type { EnvironmentMachineKind, UsageProviderKind } from "@t3tools/contrac
 import type { ModelTotals } from "@t3tools/shared/usageMerge";
 import type { ComponentType, ReactNode } from "react";
 
-import { usageModelSelectionKey } from "./components/usage/usageModelRows";
-import { UsageModelBreakdownBody } from "./components/usage/UsageModelBreakdown";
-import { ThreadCardMeta } from "./fork-sidebar/ThreadCardMeta";
+// fork-addons:begin
+import { usageModelSelectionKey } from "./components/usage/usageModelRows"; // Fork add-on(usage-by-model)
+import { UsageModelBreakdownBody } from "./components/usage/UsageModelBreakdown"; // Fork add-on(usage-by-model)
+import { ThreadCardMeta } from "./fork-sidebar/ThreadCardMeta"; // Fork add-on(compact-cards)
+// fork-addons:end
 import type { SidebarThreadSummary } from "./types";
 
 interface ForkSlots {
@@ -39,6 +41,8 @@ interface ForkSlots {
 }
 
 export const forkSlots: ForkSlots = {
+  // fork-addons:begin
   usageModelRows: { Body: UsageModelBreakdownBody, selectionKey: usageModelSelectionKey }, // Fork add-on(usage-by-model)
   threadCardMeta: ThreadCardMeta, // Fork add-on(compact-cards)
+  // fork-addons:end
 };
