@@ -44,6 +44,23 @@ export function openbotInstanceIds(
   );
 }
 
+const withoutOpenBotCache = new WeakMap<ReadonlyArray<unknown>, ReadonlyArray<unknown>>();
+
+/**
+ * The providers a picker may start work on. OpenBot only continues conversations it holds, opened
+ * from its sidebar section, so it is left out. Stable per input array.
+ */
+export function withoutOpenBot<P extends { readonly driver: ProviderDriverKind }>(
+  providers: ReadonlyArray<P>,
+): ReadonlyArray<P> {
+  if (!providers.some((provider) => provider.driver === OPENBOT_DRIVER)) return providers;
+  const cached = withoutOpenBotCache.get(providers) as ReadonlyArray<P> | undefined;
+  if (cached !== undefined) return cached;
+  const kept = providers.filter((provider) => provider.driver !== OPENBOT_DRIVER);
+  withoutOpenBotCache.set(providers, kept);
+  return kept;
+}
+
 /** True when the thread runs on an OpenBot instance of its environment. */
 export function isOpenBotThread(
   thread: { readonly environmentId: string; readonly providerInstanceId: string },

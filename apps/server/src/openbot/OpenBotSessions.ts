@@ -250,6 +250,7 @@ const make = Effect.gen(function* () {
           name: agent.name,
           ...(agent.title === undefined ? {} : { title: agent.title }),
           sendable: agent.localScripts,
+          conversationId: OpenBotDb.mainThreadId(agent.id),
         })),
       };
     },

@@ -355,7 +355,7 @@ import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { observeResize } from "~/lib/observeResize";
 import { resolveHermesChatPresentation } from "../fork-chat/hermesChatPresentation"; // Fork add-on(hermes)
-import { OPENBOT_DRIVER } from "../openbot/openbotSessions"; // Fork add-on(openbot)
+import { OPENBOT_DRIVER, withoutOpenBot } from "../openbot/openbotSessions"; // Fork add-on(openbot)
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
@@ -1220,10 +1220,17 @@ export default function ChatView(props: ChatViewProps) {
     : (primaryEnvironment?.serverConfig ?? null);
   const providerEnvironmentId = (activeThread ? activeEnvironment : primaryEnvironment)
     ?.environmentId;
-  const providerStatuses =
+  const environmentProviders = // Fork add-on(openbot)
     (providerEnvironmentId === undefined
       ? undefined
       : providersByEnvironment.get(providerEnvironmentId)) ?? EMPTY_PROVIDERS;
+  const providerStatuses = // Fork add-on(openbot): only threads already on OpenBot keep it.
+    isServerThread &&
+    environmentProviders.find(
+      (provider) => provider.instanceId === activeThread?.modelSelection.instanceId,
+    )?.driver === OPENBOT_DRIVER
+      ? environmentProviders
+      : withoutOpenBot(environmentProviders);
   const selectedProviderByThreadId = composerActiveProvider ?? null;
   const threadProvider =
     activeThread?.modelSelection.instanceId ??

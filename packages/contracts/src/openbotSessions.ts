@@ -68,6 +68,8 @@ export const OpenBotAgentSummary = Schema.Struct({
   title: Schema.optional(Schema.String),
   /** Local scripts is on, so T3 can message it. */
   sendable: Schema.Boolean,
+  /** OpenBot's id for its main conversation, which a first message from T3 starts. */
+  conversationId: Schema.optional(TrimmedNonEmptyString),
 });
 export type OpenBotAgentSummary = typeof OpenBotAgentSummary.Type;
 

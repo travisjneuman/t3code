@@ -48,6 +48,7 @@ import { formatRelativeTime } from "../../timestampFormat";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import { providerInstanceEntriesFor } from "../../providerInstances";
+import { withoutOpenBot } from "../../openbot/openbotSessions"; // Fork add-on(openbot)
 import { usePrimaryCloudLinkState } from "../../cloud/primaryCloudLinkState";
 import { requestConfirmDialog } from "../../confirmDialog";
 import { webhookAddress } from "@t3tools/client-runtime/webhook-address";
@@ -1208,8 +1209,9 @@ function ScheduledTaskEditorForm({
     );
   const scopedProjects = projectsOn(environmentId);
   const settings = useEnvironmentSettings(environmentId);
-  const providers =
-    useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
+  const providers = withoutOpenBot( // Fork add-on(openbot): OpenBot can't start a conversation.
+    useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS,
+  );
   const canOperate = useAtomValue(
     serverEnvironment.upsertScheduledTask.permissionAtom(environmentId),
   );

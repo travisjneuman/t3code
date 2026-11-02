@@ -51,6 +51,7 @@ import {
 import { cn, randomUUID } from "../lib/utils";
 import { getCustomModelOptionsByInstance } from "../modelSelection";
 import { type ProviderInstanceEntry, providerInstanceEntriesFor } from "../providerInstances";
+import { withoutOpenBot } from "../openbot/openbotSessions"; // Fork add-on(openbot)
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../state/server";
 import {
   compareFollowUpPermissionAtom,
@@ -64,8 +65,9 @@ import {
 /** An environment's settings, providers, and their instance entries as the pickers list them. */
 export function useCompareProviders(environmentId: EnvironmentId) {
   const settings = useEnvironmentSettings(environmentId);
-  const providers =
-    useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
+  const providers = withoutOpenBot( // Fork add-on(openbot): OpenBot can't start a conversation.
+    useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS,
+  );
   const entries = providerInstanceEntriesFor(providers, settings, null);
   return { settings, providers, entries };
 }

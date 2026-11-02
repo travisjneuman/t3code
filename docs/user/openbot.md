@@ -38,7 +38,9 @@ to show them all. Collapsed, the section still shows the conversations that are 
 - Click a conversation to open it in T3 with its history, tool calls and reasoning included. It
   opens in the Scratch project, since OpenBot works in its own folders. Clicking it again later
   brings in whatever OpenBot added since.
-- An agent is listed once it has a conversation or a side thread in OpenBot.
+- An agent is listed once it has a conversation or a side thread in OpenBot. To message one that
+  has neither, right-click the section header and pick it under **Message an agent**. Its main
+  conversation opens empty, and your first message starts it in OpenBot.
 - Right-click for **Open**, **Copy conversation ID**, and, once opened, **Archive thread** and
   **Delete thread**. These act on the T3 thread only; the conversation stays in OpenBot. Opening
   it again brings back an archived thread.
@@ -50,7 +52,8 @@ to show them all. Collapsed, the section still shows the conversations that are 
 T3 sends only to an agent's **main conversation**, and only when that agent has Local scripts on.
 Side threads and agents without Local scripts show an eye icon: you can read them in T3 but not
 message them. T3 can't start new chats or side threads: OpenBot's Local scripts API only posts to
-an agent's main conversation, so start those in OpenBot. The agent shown left of the model picker
+an agent's main conversation, so start those in OpenBot, or ask an agent in its main conversation to
+bring another agent in. OpenBot isn't offered for a new thread, Compare agents or a scheduled task. The agent shown left of the model picker
 stays with the chat; agents still message each other inside OpenBot, as they always do.
 
 - Messages are text only. Attachments are refused.

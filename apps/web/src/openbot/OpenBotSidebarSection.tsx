@@ -15,6 +15,7 @@ import { arrayElementsEqual } from "@t3tools/client-runtime/state/entities";
 import {
   type ContextMenuItem,
   type EnvironmentId,
+  type OpenBotAgentSummary,
   type OpenBotConversationSummary,
   openBotAgentLabel,
   type ProviderInstanceId,
@@ -74,7 +75,9 @@ const KeysSchema = Schema.Array(Schema.String);
 const NO_KEYS: ReadonlyArray<string> = [];
 const WATCH_ONLY = "Watch-only: T3 sends only to an agent's main conversation, with Local scripts on";
 
-type MenuAction = "open" | "archive" | "delete" | "copy-id" | "refresh";
+type MenuAction = "open" | "archive" | "delete" | "copy-id";
+/** The header's pick of an agent to message, by its main conversation. */
+type HeaderAction = "refresh" | `agent:${string}`;
 type MenuPosition = { readonly x: number; readonly y: number };
 
 interface OpenBotTarget {
@@ -109,6 +112,7 @@ interface OpenBotGroup {
 interface OpenBotListing {
   readonly label: string | undefined;
   readonly conversations: ReadonlyArray<OpenBotConversationSummary>;
+  readonly agents: ReadonlyArray<OpenBotAgentSummary>;
 }
 
 const agentLabel = (conversation: OpenBotConversationSummary) =>
@@ -328,7 +332,11 @@ export function OpenBotSidebarSection() {
           targetKey(target),
           result === null
             ? null
-            : { label: result.label, conversations: result.conversations },
+            : {
+                label: result.label,
+                conversations: result.conversations,
+                agents: result.agents ?? [],
+              },
         ] as const;
       }),
     ).then((results) => {
@@ -376,6 +384,12 @@ export function OpenBotSidebarSection() {
       key,
       target,
       label: listing?.label ?? providerName ?? "OpenBot",
+      // Agents OpenBot holds nothing for yet; their main conversation starts with a first message.
+      unlistedAgents: (listing?.agents ?? []).filter(
+        (agent) =>
+          agent.conversationId !== undefined &&
+          !listing?.conversations.some((conversation) => conversation.agentId === agent.id),
+      ),
       rows,
       groups: groupRows(rows),
     };
@@ -533,15 +547,53 @@ export function OpenBotSidebarSection() {
     }
   });
 
-  const handleHeaderContextMenu = async (event: MouseEvent) => {
+  /** Opens an agent's main conversation, empty until the first message T3 sends starts it. */
+  const openAgent = async (target: OpenBotTarget, conversationId: string) => {
+    const result = await runOpenBot(
+      openbotSessionsOpen,
+      target.environmentId,
+      { instanceId: target.instanceId, conversationId },
+      "Could not open this OpenBot agent",
+    );
+    if (result !== null) await openThread(target.environmentId, result.threadId);
+  };
+
+  const handleHeaderContextMenu = async (
+    target: OpenBotTarget,
+    unlistedAgents: ReadonlyArray<OpenBotAgentSummary>,
+    event: MouseEvent,
+  ) => {
     const api = readLocalApi();
     if (api === undefined) return;
     event.preventDefault();
-    const clicked = await api.contextMenu.show<MenuAction>(
-      [{ id: "refresh", label: "Refresh", icon: "refresh-cw" }],
-      { x: event.clientX, y: event.clientY },
+    const items: Array<ContextMenuItem<HeaderAction>> = [
+      { id: "refresh", label: "Refresh", icon: "refresh-cw" },
+    ];
+    const mayOpenAgents = appAtomRegistry.get(
+      openbotSessionsOpen.permissionAtom(target.environmentId),
     );
+    if (unlistedAgents.length > 0 && mayOpenAgents) {
+      items.push({
+        id: "agent:",
+        label: "Message an agent",
+        icon: "message-square-plus",
+        children: unlistedAgents.map((agent) => ({
+          id: `agent:${agent.conversationId ?? ""}`,
+          label: agent.sendable
+            ? openBotAgentLabel(agent.name, agent.title)
+            : `${openBotAgentLabel(agent.name, agent.title)} (Local scripts off)`,
+          disabled: !agent.sendable,
+        })),
+      });
+    }
+    const clicked = await api.contextMenu.show<HeaderAction>(items, {
+      x: event.clientX,
+      y: event.clientY,
+    });
     if (clicked === "refresh") refresh();
+    else if (clicked?.startsWith("agent:") && clicked.length > "agent:".length) {
+      await openAgent(target, clicked.slice("agent:".length));
+    }
   };
 
   if (targets.length === 0) return null;
@@ -575,7 +627,9 @@ export function OpenBotSidebarSection() {
           <section key={section.key} aria-label={section.label} className="mt-1">
             <div
               className="mx-0.5 flex h-5 items-center gap-0.5"
-              onContextMenu={(event) => void handleHeaderContextMenu(event)}
+              onContextMenu={(event) =>
+                void handleHeaderContextMenu(section.target, section.unlistedAgents, event)
+              }
             >
               <div className="min-w-0 flex-1">
                 <CollapsibleSectionHeader

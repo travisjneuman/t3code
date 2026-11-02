@@ -55,7 +55,10 @@ threads OpenBot no longer lists skips T3 threads with no items.
 
 T3 starts neither new chats nor side threads. Local scripts posts only to the main conversation and
 has no route that starts a side thread, and a new chat would have to clear the agent's context
-(`context/clear`) in the conversation OpenBot keeps running. An earlier New chat left T3 threads
+(`context/clear`) in the conversation OpenBot keeps running. An agent OpenBot holds nothing for is
+reached through its main conversation, which the first message starts; the section header's menu
+opens it. Pickers that start work leave OpenBot out (`withoutOpenBot`), and the chat view keeps it
+only for a server thread already on an OpenBot instance. An earlier New chat left T3 threads
 beside a conversation's own import (`openbot:<instance>:<conversation>`); the next list archives
 any of those that never ran, so the section binds the import again.
 
