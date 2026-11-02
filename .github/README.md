@@ -148,7 +148,7 @@ Every add-on has an id, and each fork line in an upstream file carries `Fork add
 
 | Id                        | Tier         | Add-on                                    | What it does                                                                                                                              |
 | ------------------------- | ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`                    | core         | Fork core                                 | Shared plumbing the add-ons plug into: RPC scope merge, desktop bridge and IPC, fork migrations, menu icons, the fork's docs front doors. |
+| `core`                    | core         | Fork core                                 | Shared plumbing the add-ons plug into: one registry per extension point (see extensionPoints), the desktop bridge, fork migrations, and the fork's docs front doors. |
 | `web-apps`                | feature      | [Web apps](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app.                                                                  |
 | `other-agents`            | feature      | [Other Agents](#other-agents)             | Follow, continue and hand back sessions started in other agent apps.                                                                      |
 | `hermes`                  | feature      | [Hermes Agent](#hermes-agent)             | A Hermes Agent provider, local or remote, with its own sidebar section.                                                                   |

@@ -14,8 +14,6 @@ import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as AgentSessionImporter from "../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../project/AgentSessionScanner.ts";
-import * as ExternalSessions from "../external-sessions/ExternalSessions.ts"; // Fork add-on(other-agents)
-import * as HermesSessions from "../hermes/HermesSessions.ts"; // Fork add-on(hermes)
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -30,6 +28,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
+import * as ForkRuntimeLayers from "./forkRuntimeLayers.ts"; // Fork add-on(core)
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as LegacyV1ThreadImporter from "./legacy/LegacyV1ThreadImporter.ts";
 import * as Orchestrator from "./Orchestrator.ts";
@@ -400,29 +399,15 @@ export const layerProduction = Layer.mergeAll(
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
-  /* Fork add-on(other-agents): read-only sessions from agents running outside T3. */ ExternalSessions.layer.pipe(
-    /* Fork add-on(other-agents) */ Layer.provide(
-      /* Fork add-on(other-agents) */ Layer.mergeAll(
-        layerProjectService, // Fork add-on(other-agents)
-        layerOrchestratorProvided, // Fork add-on(other-agents)
-        layerEventSink, // Fork add-on(other-agents)
-        layerEventStoreProvided, // Fork add-on(other-agents)
-        IdAllocator.layer, // Fork add-on(other-agents)
-        ProviderSessionRuntime.layer, // Fork add-on(other-agents)
-      ), // Fork add-on(other-agents)
-    ), // Fork add-on(other-agents)
-  ), // Fork add-on(other-agents)
-  /* Fork add-on(hermes) */ HermesSessions.layer.pipe(
-    /* Fork add-on(hermes) */ Layer.provide(
-      /* Fork add-on(hermes) */ Layer.mergeAll(
-        layerOrchestratorProvided, // Fork add-on(hermes)
-        layerEventSink, // Fork add-on(hermes)
-        layerManagedProjectFoldersProvided, // Fork add-on(hermes)
-        IdAllocator.layer, // Fork add-on(hermes)
-        TurnItemPositionStore.layer, // Fork add-on(hermes)
-      ), // Fork add-on(hermes)
-    ), // Fork add-on(hermes)
-  ), // Fork add-on(hermes)
+  /* Fork add-on(core) */ ForkRuntimeLayers.make(
+    /* Fork add-on(core) */ Layer.mergeAll(
+      layerProjectService, // Fork add-on(core)
+      layerOrchestratorProvided, // Fork add-on(core)
+      layerEventSink, // Fork add-on(core)
+      layerEventStoreProvided, // Fork add-on(core)
+      layerManagedProjectFoldersProvided, // Fork add-on(core)
+    ), // Fork add-on(core)
+  ), // Fork add-on(core)
 ).pipe(
   Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),
   Layer.provide(Scheduler.layer),

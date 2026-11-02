@@ -10,6 +10,7 @@ import {
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { SourceControlProviderKind } from "./sourceControl.ts";
+import { ForkCapabilityFields } from "./forkCapabilities.ts"; // Fork add-on(core)
 
 export const ORCHESTRATION_PROTOCOL_VERSION = 2;
 export const ORCHESTRATION_PROTOCOL_VERSION_TEXT = "2";
@@ -164,10 +165,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   triage: Schema.optionalKey(Schema.Boolean),
   /** Server accepts `{ type: "once" }` scheduled tasks; older servers reject them on save. */
   oneTimeSchedules: Schema.optionalKey(Schema.Boolean),
-  hostBackups: Schema.optionalKey(Schema.Boolean), // Fork add-on(host-backups): server answers hostBackups.list.
-  existingCheckout: Schema.optionalKey(Schema.Boolean), // Fork add-on(existing-checkout): server answers existingCheckout.find.
-  existingCheckoutFolder: Schema.optionalKey(Schema.Boolean), // Fork add-on(existing-checkout): existingCheckout.find takes a folder to check.
-  threadRetention: Schema.optionalKey(Schema.Boolean), // Fork add-on(thread-retention): server answers threadRetention.storage and runs thread retention.
+  ...ForkCapabilityFields, // Fork add-on(core)
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

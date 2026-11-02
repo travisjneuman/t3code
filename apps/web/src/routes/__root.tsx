@@ -19,7 +19,6 @@ import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
 import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachineDialog";
-import { FindCheckoutsDialogHost } from "../components/settings/FindCheckoutsDialog"; // Fork add-on(existing-checkout)
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { DevReplayHost } from "../components/DevReplayHost";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
@@ -30,8 +29,7 @@ import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
 import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkCoordinator";
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
-import { MaintenanceQueueCoordinator } from "../maintenance-queue/MaintenanceQueueCoordinator"; // Fork add-on(maintenance-queue)
-import { HostReleaseAutoUpdate } from "../host-release/HostReleaseAutoUpdate"; // Fork add-on(host-releases)
+import { ForkRootHosts } from "../forkRootHosts"; // Fork add-on(core)
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
@@ -211,15 +209,13 @@ function RootRouteBranch() {
         <ConnectOnboardingDialog />
         <SshPasswordPromptDialog />
         <SnapShotCoordinator />
-        <MaintenanceQueueCoordinator /> {/* Fork add-on(maintenance-queue) */}
-        <HostReleaseAutoUpdate /> {/* Fork add-on(host-releases) */}
+        <ForkRootHosts /> {/* Fork add-on(core) */}
         <ReopenClosedViewShortcut />
         <ConfirmDialogHost />
         <CustomSnoozeDialogHost />
         <GuestShareDialogHost />
         <ProjectCloneToastCoordinator />
         <AddProjectToMachineDialogHost />
-        <FindCheckoutsDialogHost /> {/* Fork add-on(existing-checkout) */}
         {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
         {primaryEnvironmentAuthenticated ? (
           <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />

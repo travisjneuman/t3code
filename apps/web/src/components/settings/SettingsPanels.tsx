@@ -100,7 +100,7 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on(save-to-notes)
-import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on(save-to-notes)
+import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on(agent-instructions)
 /* Fork add-on(upstream-sync) */ import {
   SOURCE_UPDATE_ACTION_LABELS, // Fork add-on(upstream-sync)
   withSourceUpdateDescription, // Fork add-on(upstream-sync)

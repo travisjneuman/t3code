@@ -23,10 +23,10 @@ import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
-import * as AgentInstructionsSync from "./agent-instructions/AgentInstructionsSync.ts"; // Fork add-on(agent-instructions)
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
 import * as ServerConfig from "./config.ts";
+import * as ForkServerLayers from "./forkServerLayers.ts"; // Fork add-on(core)
 import { withUntracedRequests } from "./http.ts";
 import * as ServerHttp from "./http.ts";
 import {
@@ -68,8 +68,6 @@ import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
-import * as ModelReferenceRepair from "./provider/ModelReferenceRepair.ts"; // Fork add-on(retired-models): retired model repair.
-import * as ThreadRetention from "./thread-retention/ThreadRetention.ts"; // Fork add-on(thread-retention)
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as PeerForwarding from "./peer/PeerForwarding.ts";
@@ -625,7 +623,6 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   AgentAwarenessRelay.layer,
-  AgentInstructionsSync.layer, // Fork add-on(agent-instructions)
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
   layerIdleCompactionWorker,
@@ -668,8 +665,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerProviderInstallationRefresh,
   ReplayMarkers.layer,
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),
-  ModelReferenceRepair.layer, // Fork add-on(retired-models): retired model repair.
-  ThreadRetention.layer.pipe(Layer.provide(ProjectionStoreV2.layer)), // Fork add-on(thread-retention)
+  ForkServerLayers.layer, // Fork add-on(core)
 ).pipe(
   Layer.provideMerge(layerOrchestrationApplication),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),

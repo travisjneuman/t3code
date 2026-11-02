@@ -4,13 +4,13 @@
 // Native confirmation that stays above embedded WebContentsViews.
 export const CONFIRM_DIALOG_CHANNEL = "desktop:confirm-dialog";
 
-// Local source builds: merge upstream into the source checkout.
+// Fork add-on(upstream-sync): merge upstream into the source checkout.
 export const SOURCE_SYNC_CHANNEL = "desktop:update-sync-source";
 export const SOURCE_SYNC_ENABLED_CHANNEL = "desktop:source-sync-enabled";
 export const SOURCE_SYNC_PROGRESS_CHANNEL = "desktop:source-sync-progress";
 export const SOURCE_SYNC_PROGRESS_GET_CHANNEL = "desktop:source-sync-progress-get";
 
-// Remote apps.
+// Fork add-on(web-apps): remote apps.
 export const REMOTE_APP_GET_STATE_CHANNEL = "remote-app:get-state";
 export const REMOTE_APP_SET_THEME_CHANNEL = "remote-app:set-theme";
 export const REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL = "remote-app:open-surface-menu";
@@ -39,7 +39,7 @@ export const REMOTE_APP_PANEL_NAVIGATED_CHANNEL = "remote-app:panel-navigated";
 // Main to renderer: the surface menu's "Open in Side Panel" chose a site.
 export const REMOTE_APP_OPEN_IN_PANEL_CHANNEL = "remote-app:open-in-panel";
 
-// Maintenance queue: hold the update restart while sessions on this computer are active.
+// Fork add-on(maintenance-queue): hold the update restart while sessions on this computer are active.
 export const UPDATE_GATE_REPORT_BUSY_CHANNEL = "desktop:update-gate-report-busy";
 export const UPDATE_GATE_GET_STATE_CHANNEL = "desktop:update-gate-get-state";
 export const UPDATE_GATE_HOLD_IF_BUSY_CHANNEL = "desktop:update-gate-hold-if-busy";
@@ -48,7 +48,7 @@ export const UPDATE_GATE_CANCEL_CHANNEL = "desktop:update-gate-cancel";
 // Main to renderer: a held install was added, released, or cancelled.
 export const UPDATE_GATE_STATE_CHANGE_CHANNEL = "desktop:update-gate-state-change";
 
-// Local source builds: the host release started for the installed build.
+// Fork add-on(host-releases): the host release started for the installed build.
 export const HOST_RELEASE_GET_STATUS_CHANNEL = "desktop:host-release-get-status";
 export const HOST_RELEASE_RETRY_CHANNEL = "desktop:host-release-retry";
 // Main to renderer: the host release status changed.

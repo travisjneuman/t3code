@@ -404,16 +404,7 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
-import { ExternalSessionsRpcs } from "./externalSessions.ts"; // Fork add-on(other-agents)
-import { SessionSearchRpc } from "./sessionSearch.ts"; // Fork add-on(session-search)
-import { ThreadExportRpc } from "./threadExport.ts"; // Fork add-on(thread-export)
-import { SaveToNotesRpcs } from "./saveToNotes.ts"; // Fork add-on(save-to-notes)
-import { CompareAgentsRpcs } from "./compareAgents.ts"; // Fork add-on(compare-agents)
-import { HermesSessionsRpcs } from "./hermesSessions.ts"; // Fork add-on(hermes)
-import { MaintenanceQueueRpcs } from "./maintenanceQueue.ts"; // Fork add-on(maintenance-queue)
-import { HostBackupsRpcs } from "./hostBackups.ts"; // Fork add-on(host-backups)
-import { ExistingCheckoutRpcs } from "./existingCheckout.ts"; // Fork add-on(existing-checkout)
-import { ThreadRetentionRpcs } from "./threadRetention.ts"; // Fork add-on(thread-retention)
+import { FORK_WS_RPCS } from "./forkRpcs.ts"; // Fork add-on(core)
 
 export const WS_METHODS = {
   projectsListEntries: "projects.listEntries",
@@ -2198,14 +2189,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
-  ...ExternalSessionsRpcs, // Fork add-on(other-agents)
-  SessionSearchRpc, // Fork add-on(session-search)
-  ThreadExportRpc, // Fork add-on(thread-export)
-  ...SaveToNotesRpcs, // Fork add-on(save-to-notes)
-  ...CompareAgentsRpcs, // Fork add-on(compare-agents)
-  ...HermesSessionsRpcs, // Fork add-on(hermes)
-  ...MaintenanceQueueRpcs, // Fork add-on(maintenance-queue)
-  ...HostBackupsRpcs, // Fork add-on(host-backups)
-  ...ExistingCheckoutRpcs, // Fork add-on(existing-checkout)
-  ...ThreadRetentionRpcs, // Fork add-on(thread-retention)
+  ...FORK_WS_RPCS, // Fork add-on(core)
 ).middleware(RpcScopeAuthorization);

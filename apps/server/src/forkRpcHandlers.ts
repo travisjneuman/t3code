@@ -18,15 +18,15 @@ import * as ThreadRetentionRpc from "./thread-retention/ThreadRetentionRpc.ts";
 
 export const makeHandlers = Effect.gen(function* () {
   return {
-    ...(yield* ExternalSessionsRpc.makeHandlers),
-    ...(yield* SessionSearchRpc.makeHandlers),
-    ...(yield* ThreadExportRpc.makeHandlers),
-    ...(yield* SaveToNotesRpc.makeHandlers),
-    ...(yield* CompareAgentsRpc.makeHandlers),
-    ...(yield* HermesSessionsRpc.makeHandlers),
-    ...(yield* MaintenanceQueueRpc.makeHandlers),
-    ...(yield* HostBackupsRpc.makeHandlers),
-    ...(yield* ExistingCheckoutRpc.makeHandlers),
-    ...(yield* ThreadRetentionRpc.makeHandlers),
+    ...(yield* ExternalSessionsRpc.makeHandlers), // Fork add-on(other-agents)
+    ...(yield* SessionSearchRpc.makeHandlers), // Fork add-on(session-search)
+    ...(yield* ThreadExportRpc.makeHandlers), // Fork add-on(thread-export)
+    ...(yield* SaveToNotesRpc.makeHandlers), // Fork add-on(save-to-notes)
+    ...(yield* CompareAgentsRpc.makeHandlers), // Fork add-on(compare-agents)
+    ...(yield* HermesSessionsRpc.makeHandlers), // Fork add-on(hermes)
+    ...(yield* MaintenanceQueueRpc.makeHandlers), // Fork add-on(maintenance-queue)
+    ...(yield* HostBackupsRpc.makeHandlers), // Fork add-on(host-backups)
+    ...(yield* ExistingCheckoutRpc.makeHandlers), // Fork add-on(existing-checkout)
+    ...(yield* ThreadRetentionRpc.makeHandlers), // Fork add-on(thread-retention)
   };
 });

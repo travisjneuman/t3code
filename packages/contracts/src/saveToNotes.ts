@@ -1,16 +1,24 @@
 /**
- * Save to notes: files a thread into the user's notes folder. "Save full
- * copy" writes the thread's prompts and final answers (no tool output) as one
- * Markdown file in the saved-threads folder. "Save summary" asks the thread's
- * own agent to write a summary note into the notes folder, filed by that
- * folder's own instructions. Both folders are server settings. Fork add-on;
- * see docs/user/save-and-export-threads.md#save-a-thread-to-your-notes.
+ * Save to notes: a full copy into the saved-threads folder, or a summary the thread's own agent
+ * files into the notes folder. Both folders are server settings. Fork add-on; see
+ * docs/user/save-and-export-threads.md#save-a-thread-to-your-notes.
  */
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 
 import { AuthOrchestrationOperateScope, EnvironmentAuthorizationError } from "./auth.ts";
-import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ThreadId, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
+
+export const SaveToNotesSettingsFields = {
+  notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+};
+
+export const SaveToNotesSettingsPatchFields = {
+  notesDirectory: Schema.optionalKey(TrimmedString),
+  savedThreadsDirectory: Schema.optionalKey(TrimmedString),
+};
 
 export const SAVE_TO_NOTES_WS_METHODS = {
   saveCopy: "saveToNotes.saveCopy",

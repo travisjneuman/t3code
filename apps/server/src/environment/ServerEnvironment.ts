@@ -1,5 +1,6 @@
 import {
   EnvironmentId,
+  FORK_SERVER_CAPABILITIES, // Fork add-on(core)
   ORCHESTRATION_PROTOCOL_VERSION,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
@@ -282,10 +283,7 @@ export const make = Effect.gen(function* () {
       peerLinks: true,
       mcpModeLimitHeader: true,
       linkFence: true,
-      hostBackups: true, // Fork add-on(host-backups)
-      existingCheckout: true, // Fork add-on(existing-checkout)
-      existingCheckoutFolder: true, // Fork add-on(existing-checkout)
-      threadRetention: true, // Fork add-on(thread-retention)
+      ...FORK_SERVER_CAPABILITIES, // Fork add-on(core)
     },
   };
 

@@ -34,15 +34,10 @@ import { ModelSelection } from "./modelSelection.ts";
 /* Fork add-on(agent-instructions) */ import {
   AGENT_NULLABLE_PROJECT_SETTING_KEYS, // Fork add-on(agent-instructions)
   AGENT_PROJECT_SCOPED_SETTING_KEYS, // Fork add-on(agent-instructions)
-  AgentServerSettingsFields, // Fork add-on(agent-instructions)
   AgentSettingsOptionalFields, // Fork add-on(agent-instructions)
-  AgentSettingsPatchFields, // Fork add-on(agent-instructions)
 } from "./forkAgentSettings.ts"; // Fork add-on(agent-instructions)
 import { CodexHiddenModelsSettingFields } from "./forkCodexSettings.ts"; // Fork add-on(codex-hidden-models)
-import {
-  ThreadRetentionSettingsFields,
-  ThreadRetentionSettingsPatchFields,
-} from "./threadRetention.ts"; // Fork add-on(thread-retention)
+import { ForkServerSettingsFields, ForkServerSettingsPatchFields } from "./forkServerSettings.ts"; // Fork add-on(core)
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -1315,10 +1310,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  notesDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on(save-to-notes)
-  savedThreadsDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))), // Fork add-on(save-to-notes)
-  ...AgentServerSettingsFields, // Fork add-on(agent-instructions)
-  ...ThreadRetentionSettingsFields, // Fork add-on(thread-retention)
+  ...ForkServerSettingsFields, // Fork add-on(core)
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1677,10 +1669,7 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
-  notesDirectory: Schema.optionalKey(TrimmedString), // Fork add-on(save-to-notes)
-  savedThreadsDirectory: Schema.optionalKey(TrimmedString), // Fork add-on(save-to-notes)
-  ...AgentSettingsPatchFields, // Fork add-on(agent-instructions)
-  ...ThreadRetentionSettingsPatchFields, // Fork add-on(thread-retention)
+  ...ForkServerSettingsPatchFields, // Fork add-on(core)
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
