@@ -46,6 +46,21 @@ to show them all. Collapsed, the section still shows the conversations that are 
 - Right-click the section header to **Refresh**. The section also refreshes when T3 comes back to
   the front.
 
+## Start a new chat
+
+Click **+** beside the OpenBot section's title and pick an agent, or right-click an agent and choose
+**New chat**. T3 opens a new thread and OpenBot starts a new chat with that agent, as its own
+**New chat** button does: the agent no longer carries the earlier conversation in its context.
+Pick a provider and model in the new thread's model picker before you send; the agent moves there
+with your first message.
+
+- Only agents with Local scripts on are offered. OpenBot refuses a new chat while the agent is
+  working.
+- OpenBot keeps one main conversation per agent, so the earlier chat is still there in OpenBot's app.
+  In T3, its thread moves to **Settings › Archive**; unarchive it to see it in the section
+  again.
+- T3 can't start OpenBot side threads; OpenBot starts those itself.
+
 ## What you can send
 
 T3 sends only to an agent's **main conversation**, and only when that agent has Local scripts on.

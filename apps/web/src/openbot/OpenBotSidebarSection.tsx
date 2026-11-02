@@ -2,8 +2,8 @@
  * OpenBot shelves above Other Agents, one per OpenBot instance: each agent's
  * main conversation, read from OpenBot's database and merged with the T3
  * threads opened from them, with its side threads nested under it like
- * subagents. Side threads and agents without Local scripts are watch-only.
- * Fork add-on: OpenBot provider.
+ * subagents. Side threads and agents without Local scripts are watch-only;
+ * the rest can start a new chat in a new thread. Fork add-on: OpenBot provider.
  */
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -22,7 +22,7 @@ import {
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
-import { ChevronRightIcon, CircleDashedIcon, EyeIcon } from "lucide-react";
+import { ChevronRightIcon, CircleDashedIcon, EyeIcon, PlusIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -62,6 +62,7 @@ import {
   OPENBOT_DRIVER,
   openbotInstanceIds,
   openbotSessionsList,
+  openbotSessionsNewChat,
   openbotSessionsOpen,
   runOpenBot,
 } from "./openbotSessions";
@@ -74,7 +75,7 @@ const KeysSchema = Schema.Array(Schema.String);
 const NO_KEYS: ReadonlyArray<string> = [];
 const WATCH_ONLY = "Watch-only: T3 sends only to an agent's main conversation, with Local scripts on";
 
-type MenuAction = "open" | "archive" | "delete" | "copy-id" | "refresh";
+type MenuAction = "open" | "new-chat" | "archive" | "delete" | "copy-id" | "refresh";
 type MenuPosition = { readonly x: number; readonly y: number };
 
 interface OpenBotTarget {
@@ -121,6 +122,10 @@ const agentFullLabel = (conversation: OpenBotConversationSummary) =>
     : conversation.agentName;
 
 const isBusy = (row: OpenBotRow) => row.running || row.runningInOpenBot;
+
+/** An agent's main conversation that T3 may message, so it can start a new chat there. */
+const canChat = (row: OpenBotRow) =>
+  row.conversation !== null && row.conversation.side !== true && row.conversation.sendable;
 
 const targetKey = (target: OpenBotTarget) =>
   `${target.environmentId}\u0000${target.instanceId}`;
@@ -367,6 +372,7 @@ export function OpenBotSidebarSection() {
       ?.providers.find((provider) => provider.instanceId === target.instanceId)?.displayName;
     return {
       key,
+      target,
       label: listing?.label ?? providerName ?? "OpenBot",
       rows,
       groups: groupRows(rows),
@@ -442,6 +448,50 @@ export function OpenBotSidebarSection() {
     }
   };
 
+  /** A fresh chat with the agent in a new thread; the earlier chat's thread is archived. */
+  const startNewChat = async (target: OpenBotTarget, agentId: string) => {
+    if (!appAtomRegistry.get(openbotSessionsNewChat.permissionAtom(target.environmentId))) {
+      toastManager.add({
+        type: "info",
+        title: "Cannot start an OpenBot chat",
+        description: "Needs operate access on this connection.",
+      });
+      return;
+    }
+    const result = await runOpenBot(
+      openbotSessionsNewChat,
+      target.environmentId,
+      { instanceId: target.instanceId, agentId },
+      "Could not start a new OpenBot chat",
+    );
+    if (result === null) return;
+    refresh();
+    await openThread(target.environmentId, result.threadId);
+  };
+
+  const showNewChatMenu = async (
+    target: OpenBotTarget,
+    rows: ReadonlyArray<OpenBotRow>,
+    event: MouseEvent<HTMLButtonElement>,
+  ) => {
+    const api = readLocalApi();
+    if (api === undefined) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const agents = rows
+      .flatMap((row) => (canChat(row) && row.conversation !== null ? [row.conversation] : []))
+      .toSorted((left, right) => left.agentName.localeCompare(right.agentName));
+    const clicked = await api.contextMenu.show(
+      agents.length === 0
+        ? [{ id: "", label: "No agent has Local scripts on", disabled: true }]
+        : [
+            { id: "", label: "New chat with", header: true },
+            ...agents.map((agent) => ({ id: agent.agentId, label: agentLabel(agent) })),
+          ],
+      { x: bounds.left, y: bounds.bottom },
+    );
+    if (clicked) await startNewChat(target, clicked);
+  };
+
   const showRowMenu = async (row: OpenBotRow, position: MenuPosition) => {
     const api = readLocalApi();
     if (api === undefined) return;
@@ -451,6 +501,14 @@ export function OpenBotSidebarSection() {
         id: "open",
         label: row.thread !== null ? "Open" : "Open in T3",
         icon: "message-square-plus",
+      });
+    }
+    if (canChat(row) && mayOpen(row)) {
+      items.push({
+        id: "new-chat",
+        label: "New chat",
+        icon: "message-square-plus",
+        disabled: isBusy(row),
       });
     }
     if (row.conversation !== null) {
@@ -479,6 +537,9 @@ export function OpenBotSidebarSection() {
     switch (clicked) {
       case "open":
         await openRow(row);
+        return;
+      case "new-chat":
+        if (row.conversation !== null) await startNewChat(row, row.conversation.agentId);
         return;
       case "copy-id":
         if (row.conversation !== null) {
@@ -585,6 +646,16 @@ export function OpenBotSidebarSection() {
                   {section.label}
                 </CollapsibleSectionHeader>
               </div>
+              <button
+                type="button"
+                aria-label={`New ${section.label} chat`}
+                title={`New ${section.label} chat`}
+                onMouseDown={preventMouseFocus}
+                onClick={(event) => void showNewChatMenu(section.target, section.rows, event)}
+                className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              >
+                <PlusIcon aria-hidden className="size-3.5" />
+              </button>
             </div>
             {groups.length > 0 ? (
               <ul className="flex flex-col">

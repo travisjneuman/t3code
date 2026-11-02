@@ -1,8 +1,8 @@
 /**
  * The OpenBot section's server side: `list` reads every conversation from openbot.db, read-only,
  * with the T3 thread bound to each; `open` opens one as a Scratch thread holding its history,
- * whose turns go to the same agent, and syncs what OpenBot added since. Fork add-on; see
- * docs/user/openbot.md.
+ * whose turns go to the same agent, and syncs what OpenBot added since; `newChat` starts a fresh
+ * chat with an agent in a new thread. Fork add-on; see docs/user/openbot.md.
  *
  * @module openbot/OpenBotSessions
  */
@@ -15,6 +15,7 @@ import {
   OpenBotSessionsError,
   type OpenBotSessionsListInput,
   type OpenBotSessionsListResult,
+  type OpenBotSessionsNewChatInput,
   type OpenBotSessionsOpenInput,
   type OpenBotSessionsOpenResult,
   type OrchestrationV2AppThread,
@@ -53,6 +54,9 @@ export class OpenBotSessions extends Context.Service<
     ) => Effect.Effect<OpenBotSessionsListResult, OpenBotSessionsError>;
     readonly open: (
       input: OpenBotSessionsOpenInput,
+    ) => Effect.Effect<OpenBotSessionsOpenResult, OpenBotSessionsError>;
+    readonly newChat: (
+      input: OpenBotSessionsNewChatInput,
     ) => Effect.Effect<OpenBotSessionsOpenResult, OpenBotSessionsError>;
   }
 >()("t3/openbot/OpenBotSessions") {}
@@ -150,7 +154,10 @@ const make = Effect.gen(function* () {
     return { location, label };
   });
 
-  /** The live T3 thread bound to each OpenBot conversation of this instance. */
+  /**
+   * The T3 thread bound to each OpenBot conversation of this instance. A new chat binds another
+   * thread to the same conversation, so the newest unarchived one wins.
+   */
   const boundThreads = (instanceId: ProviderInstanceId) =>
     sql<{
       readonly thread_id: string;
@@ -166,14 +173,17 @@ const make = Effect.gen(function* () {
         AND json_extract(p.payload_json, '$.driver') = ${OPENBOT_DRIVER}
         AND json_extract(p.payload_json, '$.providerInstanceId') = ${instanceId}
         AND t.deleted_at IS NULL
+      ORDER BY t.created_at
     `.pipe(
       Effect.map((rows) => {
         const byNativeId = new Map<string, { threadId: ThreadId; archived: boolean }>();
         for (const row of rows) {
           if (typeof row.native_id !== "string") continue;
+          const archived = row.archived_at !== null;
+          if (archived && byNativeId.get(row.native_id)?.archived === false) continue;
           byNativeId.set(row.native_id, {
             threadId: ThreadId.make(row.thread_id),
-            archived: row.archived_at !== null,
+            archived,
           });
         }
         return byNativeId;
@@ -286,26 +296,31 @@ const make = Effect.gen(function* () {
       .pipe(Effect.mapError(failed("Could not sync this conversation.")));
   });
 
-  /** A new thread holding the whole conversation, bound to it. */
+  /**
+   * A new thread bound to the conversation: holding its whole history, or, for a new chat, empty
+   * and with a provider thread of its own beside the earlier chat's.
+   */
   const createThread = Effect.fn("OpenBotSessions.createThread")(function* (input: {
     readonly instanceId: ProviderInstanceId;
     readonly threadId: ThreadId;
     readonly conversation: OpenBotDb.OpenBotThreadRecord;
     readonly agent: OpenBotDb.OpenBotAgentRecord;
     readonly entries: ReadonlyArray<OpenBotDb.OpenBotEntry>;
+    readonly newChat?: boolean;
   }) {
-    const { instanceId, threadId, conversation, agent, entries } = input;
+    const { instanceId, threadId, conversation, agent, entries, newChat = false } = input;
     const { projectId } = yield* managedFolders.ensureScratchProject.pipe(
       Effect.mapError(failed("The Scratch project is unavailable.")),
     );
     const now = yield* DateTime.now;
     const startedAt = entries[0] === undefined ? now : DateTime.makeUnsafe(entries[0].atMs);
     const updatedMs = Date.parse(conversation.updatedAt);
-    const updatedAt = Number.isFinite(updatedMs) ? DateTime.makeUnsafe(updatedMs) : now;
+    const updatedAt =
+      !newChat && Number.isFinite(updatedMs) ? DateTime.makeUnsafe(updatedMs) : now;
     const providerThreadId = idAllocator.derive.providerThread({
       driver: OPENBOT_DRIVER,
       providerInstanceId: instanceId,
-      nativeThreadId: conversation.id,
+      nativeThreadId: newChat ? `${conversation.id}#${threadId}` : conversation.id,
     });
     const appThread: OrchestrationV2AppThread = {
       createdBy: "system",
@@ -398,7 +413,8 @@ const make = Effect.gen(function* () {
     function* (input) {
       const { instanceId, conversationId } = input;
       const bound = (yield* boundThreads(instanceId)).get(conversationId);
-      const threadId = bound?.threadId ?? ThreadId.make(`openbot:${instanceId}:${conversationId}`);
+      const importedId = ThreadId.make(`openbot:${instanceId}:${conversationId}`);
+      const threadId = bound?.threadId ?? importedId;
       const existing = yield* Effect.option(
         orchestrator.getThreadRecords(threadId, ["runs", "turnItems"]),
       );
@@ -451,8 +467,12 @@ const make = Effect.gen(function* () {
           },
         ];
       });
+      // A new chat's thread starts empty; what came before it is the earlier chat's.
+      const startedMs =
+        threadId === importedId ? 0 : DateTime.toEpochMillis(records.thread.createdAt);
       const added = entries.filter(
         (entry) =>
+          entry.atMs >= startedMs &&
           !written.has(entryItemId(IMPORT_EVENT_PREFIX, threadId, entry.key)) &&
           !(entry.kind === "message" && shownText.has(entry.text.trim())) &&
           !windows.some((window) => entry.atMs >= window.start && entry.atMs <= window.end),
@@ -481,7 +501,52 @@ const make = Effect.gen(function* () {
   const open: OpenBotSessions["Service"]["open"] = (input) =>
     Cache.get(opening, `${input.instanceId}\u0000${input.conversationId}`);
 
-  return OpenBotSessions.of({ list, open });
+  const newChat: OpenBotSessions["Service"]["newChat"] = Effect.fn("OpenBotSessions.newChat")(
+    function* (input) {
+      const { instanceId, agentId } = input;
+      const { location } = yield* instanceOf(instanceId);
+      const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
+        Effect.mapError(fromOpenBot),
+      );
+      const agent = agents.find((candidate) => candidate.id === agentId);
+      const conversationId = OpenBotDb.mainThreadId(agentId);
+      const conversation = withMainConversations(agents, threads).find(
+        (candidate) => candidate.id === conversationId,
+      );
+      if (agent === undefined || conversation === undefined || !agent.localScripts) {
+        return yield* new OpenBotSessionsError({
+          message: "Turn on Local scripts for this agent in OpenBot to start a chat from T3 Code.",
+        });
+      }
+      if (conversation.messageCount > 0) {
+        yield* OpenBotApi.clearContext(location, agentId).pipe(Effect.mapError(fromOpenBot));
+      }
+      // The earlier chat stays in T3, under Settings › Archive.
+      const previous = (yield* boundThreads(instanceId)).get(conversationId);
+      if (previous !== undefined && !previous.archived) {
+        yield* orchestrator
+          .dispatch({
+            type: "thread.archive",
+            commandId: yield* commandId("archive"),
+            threadId: previous.threadId,
+          })
+          .pipe(Effect.ignore({ log: true }));
+      }
+      const chatId = yield* crypto
+        .randomUUIDv4()
+        .pipe(Effect.mapError(failed("Could not start a new chat.")));
+      return yield* createThread({
+        instanceId,
+        threadId: ThreadId.make(`openbot:${instanceId}:${conversationId}:${chatId}`),
+        conversation,
+        agent,
+        entries: [],
+        newChat: true,
+      });
+    },
+  );
+
+  return OpenBotSessions.of({ list, open, newChat });
 });
 
 export const layer = Layer.effect(OpenBotSessions, make);

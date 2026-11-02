@@ -7,6 +7,7 @@
 import {
   OPENBOT_SESSIONS_WS_METHODS,
   type OpenBotSessionsListInput,
+  type OpenBotSessionsNewChatInput,
   type OpenBotSessionsOpenInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -18,5 +19,7 @@ export const makeHandlers = Effect.gen(function* () {
   return {
     [OPENBOT_SESSIONS_WS_METHODS.list]: (input: OpenBotSessionsListInput) => openbot.list(input),
     [OPENBOT_SESSIONS_WS_METHODS.open]: (input: OpenBotSessionsOpenInput) => openbot.open(input),
+    [OPENBOT_SESSIONS_WS_METHODS.newChat]: (input: OpenBotSessionsNewChatInput) =>
+      openbot.newChat(input),
   };
 });

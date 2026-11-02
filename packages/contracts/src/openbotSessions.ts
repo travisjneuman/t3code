@@ -17,6 +17,7 @@ import { ProviderInstanceId } from "./providerInstance.ts";
 export const OPENBOT_SESSIONS_WS_METHODS = {
   list: "openbotSessions.list",
   open: "openbotSessions.open",
+  newChat: "openbotSessions.newChat",
 } as const;
 
 export const OpenBotConversationSummary = Schema.Struct({
@@ -87,6 +88,13 @@ export const OpenBotSessionsOpenResult = Schema.Struct({
 });
 export type OpenBotSessionsOpenResult = typeof OpenBotSessionsOpenResult.Type;
 
+/** Starts a fresh chat with an agent that has Local scripts on, in a new thread. */
+export const OpenBotSessionsNewChatInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  agentId: TrimmedNonEmptyString,
+});
+export type OpenBotSessionsNewChatInput = typeof OpenBotSessionsNewChatInput.Type;
+
 export class OpenBotSessionsError extends Schema.TaggedError<OpenBotSessionsError>()(
   "OpenBotSessionsError",
   {
@@ -109,10 +117,21 @@ export const OpenBotSessionsOpenRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.open,
   error: OpenBotSessionsRpcError,
 });
 
-export const OpenBotSessionsRpcs = [OpenBotSessionsListRpc, OpenBotSessionsOpenRpc] as const;
+export const OpenBotSessionsNewChatRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.newChat, {
+  payload: OpenBotSessionsNewChatInput,
+  success: OpenBotSessionsOpenResult,
+  error: OpenBotSessionsRpcError,
+});
+
+export const OpenBotSessionsRpcs = [
+  OpenBotSessionsListRpc,
+  OpenBotSessionsOpenRpc,
+  OpenBotSessionsNewChatRpc,
+] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
 export const OPENBOT_SESSIONS_RPC_SCOPES = {
   [OPENBOT_SESSIONS_WS_METHODS.list]: AuthOrchestrationReadScope,
   [OPENBOT_SESSIONS_WS_METHODS.open]: AuthOrchestrationOperateScope,
+  [OPENBOT_SESSIONS_WS_METHODS.newChat]: AuthOrchestrationOperateScope,
 } as const;

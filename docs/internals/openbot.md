@@ -30,18 +30,23 @@ provider with its own section rather than another Other Agents source.
 
 ## Binding
 
-The model slug is the OpenBot agent id. A T3 thread on OpenBot binds to the agent's main
-conversation (`openbot-thread-<agentId>`), the only one Local scripts posts to. Side threads, and
-agents without Local scripts, are listed but watch-only. Opening a conversation from the section
-creates or reuses one Scratch thread for it (`openbot:<instance>:<conversation>`) and imports its
-rows with keys taken from OpenBot's message ids, so a re-sync writes only new rows. Rows that fall
-inside the window of a T3 turn (30 s either side) are skipped, because the adapter already wrote them as
-turn items.
+The model slug is an OpenBot `provider/model` pair; the agent comes from the thread's binding. A T3
+thread on OpenBot binds to the agent's main conversation (`openbot-thread-<agentId>`), the only one
+Local scripts posts to. Side threads, and agents without Local scripts, are listed but watch-only.
+Opening a conversation from the section creates or reuses one Scratch thread for it
+(`openbot:<instance>:<conversation>`) and imports its rows with keys taken from OpenBot's message
+ids, so a re-sync writes only new rows. Rows that fall inside the window of a T3 turn (30 s either
+side) are skipped, because the adapter already wrote them as turn items.
+
+A new chat clears the agent's context in OpenBot (`POST /v1/agents/:id/context/clear`, which keeps
+the old messages in the same OpenBot thread) and binds a fresh T3 thread to the same conversation.
+So one conversation can have several T3 threads: each new chat's provider thread id is derived from
+`<conversation>#<thread>` so it doesn't take over the earlier chat's, the section follows the newest
+unarchived one, and a sync imports only rows from after the thread was created. Local scripts
+can't start OpenBot side threads, so a new chat is the only "new session" T3 can offer.
 
 ## Known gaps
 
-- A thread started from the model picker and a thread opened from the section both bind to the
-  agent's main conversation, so two T3 threads can follow it.
 - Messages sent from OpenBot's own app during a T3 turn can land in that turn.
 - The OpenBot section reuses `importedMessageEvents` from the Other Agents add-on, so `openbot`
   depends on `other-agents`.
