@@ -749,11 +749,12 @@ const OpenBotLine = memo(function OpenBotLine(props: {
         <span aria-hidden title={status} className="flex shrink-0">
           <CircleDashedIcon className="size-3 text-info-foreground" />
         </span>
-      ) : (
+      ) : row.lastActiveAt > 0 ? (
+        // An agent with no conversation yet has no activity time.
         <span className="shrink-0 tabular-nums text-secondary-label">
           {compactTimeLabel(row.lastActiveAt, props.nowMinute)}
         </span>
-      )}
+      ) : null}
     </>
   );
   const label = [row.title, watchOnly ? "watch-only" : null, status?.toLowerCase() ?? null]
