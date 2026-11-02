@@ -38,6 +38,14 @@ Opening a conversation from the section creates or reuses one Scratch thread for
 ids, so a re-sync writes only new rows. Rows that fall inside the window of a T3 turn (30 s either
 side) are skipped, because the adapter already wrote them as turn items.
 
+Before sending, the adapter moves the agent to the picked pair and reasoning effort through
+`POST /v1/agents/:id/settings`, which accepts only `provider`, `model`, `reasoningEffort` and
+`providerAccountId` and refuses any other key, so access, computer use and notifications stay
+OpenBot-only. OpenBot learns each model's efforts from its provider CLI and keeps them in memory, so
+the picker offers all five (Haiku only medium), defaults to the effort most agents on that model use,
+and shows OpenBot's 409 when a model lacks one. Effort is sent only when picked and different from
+the agent's.
+
 A new chat binds a fresh T3 thread (`openbot:<instance>:new-chat:<id>`) to the agent's
 conversation. Until its first run it is pending: the section's binding skips it, and `setAgent`
 can rebind it to another agent by rewriting its provider thread's native id. The model picker

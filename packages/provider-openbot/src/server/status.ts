@@ -1,5 +1,5 @@
 import type { ServerProviderModel } from "@t3tools/contracts";
-import { formatModelSlugName } from "@t3tools/shared/model";
+import { createModelCapabilities, formatModelSlugName } from "@t3tools/shared/model";
 import { brandModelName } from "@t3tools/shared/modelBrandNames";
 import {
   buildServerProvider,
@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 
 import type { OpenBotSettings } from "../settings.ts";
 import { listAgents } from "./api.ts";
-import { modelSlug, readModels } from "./db.ts";
+import { modelSlug, type OpenBotModelPair, readModels } from "./db.ts";
 
 const OPENBOT_PRESENTATION = {
   displayName: "OpenBot",
@@ -64,6 +64,50 @@ const modelName = (provider: string, model: string) => {
   return named === model ? brandModelName(provider, model) : named;
 };
 
+const REASONING_EFFORT_LABELS = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra High",
+  max: "Max",
+} as const;
+type ReasoningEffort = keyof typeof REASONING_EFFORT_LABELS;
+
+const isReasoningEffort = (value: string | undefined): value is ReasoningEffort =>
+  value !== undefined && Object.hasOwn(REASONING_EFFORT_LABELS, value);
+
+/**
+ * OpenBot's reasoning efforts. It learns each model's levels from the provider CLI and does not
+ * expose them, so this offers all of them but Haiku's and lets OpenBot refuse one a model lacks.
+ * The default is the effort the agents on this model use, as OpenBot falls back to high.
+ */
+const effortCapabilities = (pair: OpenBotModelPair) => {
+  const efforts: ReadonlyArray<ReasoningEffort> = pair.model.startsWith("claude-haiku")
+    ? ["medium"]
+    : ["low", "medium", "high", "xhigh", "max"];
+  const effort =
+    isReasoningEffort(pair.effort) && efforts.includes(pair.effort)
+      ? pair.effort
+      : efforts.includes("high")
+        ? "high"
+        : "medium";
+  return createModelCapabilities({
+    optionDescriptors: [
+      {
+        id: "reasoningEffort",
+        label: "Reasoning",
+        type: "select",
+        currentValue: effort,
+        options: efforts.map((id) => ({
+          id,
+          label: REASONING_EFFORT_LABELS[id],
+          ...(id === effort ? { isDefault: true } : {}),
+        })),
+      },
+    ],
+  });
+};
+
 /**
  * The models are OpenBot's provider and model pairs; picking one moves the thread's agent to it.
  * Agents are not models: a thread keeps one agent, picked beside the model for a new chat.
@@ -95,7 +139,7 @@ export const checkOpenBotProviderStatus = Effect.fn("checkOpenBotProviderStatus"
           subProvider: providerLabel(pair.provider),
           isCustom: false,
           isDefault: index === 0,
-          capabilities: null,
+          capabilities: effortCapabilities(pair),
         })),
       ),
     ),

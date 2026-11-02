@@ -17,6 +17,7 @@ import {
   type OrchestrationV2TurnItemStatus,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -662,8 +663,15 @@ export const makeOpenBotAdapterV2 = Effect.fn("makeOpenBotAdapterV2")(function* 
           context = yield* readContext;
         }
         const chosen = OpenBotDb.parseModelSlug(selection.model);
-        if (chosen && (chosen.provider !== context.provider || chosen.model !== context.model))
-          yield* OpenBotApi.setAgentModel(location, agentId, chosen.provider, chosen.model).pipe(
+        const effort = getModelSelectionStringOptionValue(selection, "reasoningEffort");
+        const change: OpenBotApi.OpenBotAgentSettings = {
+          ...(chosen && (chosen.provider !== context.provider || chosen.model !== context.model)
+            ? chosen
+            : {}),
+          ...(effort && effort !== context.reasoningEffort ? { reasoningEffort: effort } : {}),
+        };
+        if (Object.keys(change).length > 0)
+          yield* OpenBotApi.setAgentSettings(location, agentId, change).pipe(
             Effect.mapError((error) => notSentError(error.detail, error)),
           );
         const nativeId = String(turnInput.attemptId);

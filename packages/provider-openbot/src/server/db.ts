@@ -138,7 +138,7 @@ const namesFrom = (rows: ReadonlyArray<Row>): ReadonlyMap<string, string> =>
 
 /**
  * What a turn needs before it sends, in one read: agent names for exchanges, the newest event
- * sequence (the turn reads only rows changed after it), and the agent's provider and model.
+ * sequence (the turn reads only rows changed after it), and the agent's provider, model and effort.
  */
 export const turnContext = (location: OpenBotLocation, agentId: string) =>
   query(location, [
@@ -146,7 +146,8 @@ export const turnContext = (location: OpenBotLocation, agentId: string) =>
     { sql: `SELECT MAX(last_event_sequence) AS sequence FROM projection_thread_messages` },
     {
       sql: `SELECT json_extract(agent_json, '$.provider') AS provider,
-                   json_extract(agent_json, '$.model') AS model
+                   json_extract(agent_json, '$.model') AS model,
+                   json_extract(agent_json, '$.reasoningEffort') AS effort
               FROM projection_agents
              WHERE agent_id = ?`,
       params: [agentId],
@@ -161,10 +162,18 @@ export const turnContext = (location: OpenBotLocation, agentId: string) =>
       sequence: Number(sequence?.sequence ?? 0),
       provider: text(agent?.provider),
       model: text(agent?.model),
+      reasoningEffort: text(agent?.effort),
       /** Messages in the agent's main conversation. */
       messageCount: Number(messages?.count ?? 0),
     })),
   );
+
+export interface OpenBotModelPair {
+  readonly provider: string;
+  readonly model: string;
+  /** The reasoning effort most of the agents on this model use. */
+  readonly effort: string | undefined;
+}
 
 /**
  * The provider and model pairs OpenBot runs: those its agents use and those of its active
@@ -174,18 +183,37 @@ export const readModels = (location: OpenBotLocation) =>
   queryOne(
     location,
     `SELECT json_extract(agent_json, '$.provider') AS provider,
-            json_extract(agent_json, '$.model') AS model
+            json_extract(agent_json, '$.model') AS model,
+            json_extract(agent_json, '$.reasoningEffort') AS effort
        FROM projection_agents
-     UNION
-     SELECT provider, model FROM projection_provider_sessions WHERE state = 'active'`,
+     UNION ALL
+     SELECT provider, model, NULL FROM projection_provider_sessions WHERE state = 'active'`,
   ).pipe(
-    Effect.map((rows) =>
-      rows.flatMap((row: Row) => {
+    Effect.map((rows) => {
+      const pairs = new Map<
+        string,
+        { provider: string; model: string; efforts: Map<string, number> }
+      >();
+      for (const row of rows) {
         const provider = text(row.provider);
         const model = text(row.model);
-        return provider && model && !provider.includes("/") ? [{ provider, model }] : [];
-      }),
-    ),
+        if (!provider || !model || provider.includes("/")) continue;
+        const key = modelSlug(provider, model);
+        const pair = pairs.get(key) ?? { provider, model, efforts: new Map() };
+        pairs.set(key, pair);
+        const effort = text(row.effort);
+        if (effort) pair.efforts.set(effort, (pair.efforts.get(effort) ?? 0) + 1);
+      }
+      return [...pairs.values()]
+        .toSorted((a, b) => a.provider.localeCompare(b.provider) || a.model.localeCompare(b.model))
+        .map(
+          ({ provider, model, efforts }): OpenBotModelPair => ({
+            provider,
+            model,
+            effort: [...efforts].toSorted((a, b) => b[1] - a[1])[0]?.[0],
+          }),
+        );
+    }),
   );
 
 export interface OpenBotMessageRow {

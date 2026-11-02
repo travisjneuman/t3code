@@ -140,18 +140,27 @@ export const getDelivery = (location: OpenBotLocation, agentId: string, delivery
     ),
   );
 
+/** What OpenBot's Local scripts may change on an agent; it refuses every other setting. */
+export interface OpenBotAgentSettings {
+  readonly provider?: string;
+  readonly model?: string;
+  readonly reasoningEffort?: string;
+}
+
 /**
- * Moves the agent to another provider and model, as its model control in OpenBot does. It
- * applies to all of the agent's conversations from its next message. OpenBot answers 409 for a
- * model its providers do not list, and for a provider change while the agent is working.
+ * Moves the agent to another provider, model or reasoning effort, as its controls in OpenBot do.
+ * It applies to all of the agent's conversations from its next message. OpenBot answers 409 for
+ * a model or effort its providers do not list, and for a provider change while the agent works.
  */
-export const setAgentModel = (
+export const setAgentSettings = (
   location: OpenBotLocation,
   agentId: string,
-  provider: string,
-  model: string,
-) =>
-  request(location, "POST", `${agentPath(agentId)}/settings`, { provider, model }).pipe(
+  settings: OpenBotAgentSettings,
+) => {
+  const target = [settings.model, settings.reasoningEffort && `${settings.reasoningEffort} effort`]
+    .filter(Boolean)
+    .join(" at ");
+  return request(location, "POST", `${agentPath(agentId)}/settings`, settings).pipe(
     Effect.asVoid,
     Effect.mapError(
       (error) =>
@@ -159,11 +168,12 @@ export const setAgentModel = (
           ...(error.status === undefined ? {} : { status: error.status }),
           detail:
             error.status === 409
-              ? `OpenBot would not move this agent to ${model}: ${error.detail.replace(/^.*? failed: /, "")}`
+              ? `OpenBot would not move this agent to ${target}: ${error.detail.replace(/^.*? failed: /, "")}`
               : error.detail,
         }),
     ),
   );
+};
 
 /**
  * Starts a new chat in the agent's main conversation, as OpenBot's own New chat does: earlier

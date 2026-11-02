@@ -79,6 +79,10 @@ message them.
   all of its conversations, since OpenBot sets the model per agent. OpenBot refuses a model it has
   not listed, and a change of provider while the agent is working; T3 then shows OpenBot's reason
   and does not send. Models are named as everywhere else in T3, such as Claude Opus 5.5.
+- The model picker's **Reasoning** sets the agent's reasoning effort the same way, for all of its
+  conversations from your next message. It starts at the effort the agents on that model use. If
+  a model doesn't offer the level you pick, OpenBot says which levels it does and T3 does not send.
+- Access, computer use and notifications can only be changed in OpenBot.
 - A turn can't be stopped or steered from T3, because OpenBot offers no way to do that from
   outside. Stop it in OpenBot if you need to.
 - A conversation OpenBot is working on outside T3 shows **Running in OpenBot**. That state comes
