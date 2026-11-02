@@ -1,6 +1,6 @@
 /**
  * The `rpc.aggregate` span labels of the fork's add-on RPCs, spread into `RPC_AGGREGATES`.
- * Fork add-on: add-on RPCs.
+ * Each entry is tagged with the add-on that owns it.
  *
  * @module observability/forkRpcAggregates
  */
@@ -23,10 +23,10 @@ const label = <const M extends Record<string, string>, const A extends string>(
   >;
 
 export const FORK_RPC_AGGREGATES = {
-  ...label(EXTERNAL_SESSIONS_WS_METHODS, "externalSessions"),
-  ...label(SESSION_SEARCH_WS_METHODS, "sessionSearch"),
-  ...label(THREAD_EXPORT_WS_METHODS, "threadExport"),
-  ...label(SAVE_TO_NOTES_WS_METHODS, "saveToNotes"),
-  ...label(COMPARE_AGENTS_WS_METHODS, "compareAgents"),
-  ...label(HERMES_SESSIONS_WS_METHODS, "hermesSessions"),
+  ...label(EXTERNAL_SESSIONS_WS_METHODS, "externalSessions"), // Fork add-on(other-agents)
+  ...label(SESSION_SEARCH_WS_METHODS, "sessionSearch"), // Fork add-on(session-search)
+  ...label(THREAD_EXPORT_WS_METHODS, "threadExport"), // Fork add-on(thread-export)
+  ...label(SAVE_TO_NOTES_WS_METHODS, "saveToNotes"), // Fork add-on(save-to-notes)
+  ...label(COMPARE_AGENTS_WS_METHODS, "compareAgents"), // Fork add-on(compare-agents)
+  ...label(HERMES_SESSIONS_WS_METHODS, "hermesSessions"), // Fork add-on(hermes)
 };

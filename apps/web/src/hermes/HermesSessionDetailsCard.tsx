@@ -14,6 +14,7 @@ import { memo } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import {
+  labelSessionRecordSettings,
   mergeSessionRecord,
   RECORD_STATUS_PRESENTATION,
   SESSION_STATUS_PRESENTATION,
@@ -29,7 +30,7 @@ import { ThreadContextBreakdown } from "../components/chat/ThreadContextBreakdow
 import { SessionOutputsList } from "../components/chat/ThreadOutputsSection";
 import { Popover, PopoverPopup } from "../components/ui/popover";
 import { ScrollArea } from "../components/ui/scroll-area";
-import { labelSessionRecordSettings, shortModelLabel } from "../external-sessions/atoms";
+import { shortModelLabel } from "../external-sessions/atoms";
 import { HERMES_DRIVER, useHermesSessionInsights } from "./hermesSessions";
 
 export interface HermesSessionDetailsTarget {

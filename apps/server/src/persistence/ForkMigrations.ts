@@ -22,11 +22,14 @@ import ForkMigration0003 from "./ForkMigrations/003_ProjectLinks.ts";
 
 const FORK_MIGRATIONS_TABLE = "fork_sql_migrations";
 
-/** Key format `{id}_{name}`, as upstream's loader; ids are the fork's own sequence. */
+/**
+ * Key format `{id}_{name}`, as upstream's loader; ids are the fork's own sequence.
+ * Keep every entry when an add-on is left out: the migrator skips ids below the highest run.
+ */
 const forkMigrationEntries = [
-  [1, "SessionInsightsReports", ForkMigration0001],
-  [2, "SessionInsightsOutputs", ForkMigration0002],
-  [3, "ProjectLinks", ForkMigration0003],
+  [1, "SessionInsightsReports", ForkMigration0001], // Fork add-on(session-details)
+  [2, "SessionInsightsOutputs", ForkMigration0002], // Fork add-on(session-details)
+  [3, "ProjectLinks", ForkMigration0003], // Fork add-on(project-links)
 ] as const;
 
 const loader = Migrator.fromRecord(

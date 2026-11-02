@@ -32,7 +32,6 @@ import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopUpdateGate from "./DesktopUpdateGate.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
-import * as HostReleasePublisher from "./HostReleasePublisher.ts";
 import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 import {
   createInitialDesktopUpdateState,
@@ -675,8 +674,7 @@ const gateInstalls = Effect.fn("desktop.updates.gateInstalls")(function* (
 
 /**
  * Provides DesktopUpdates, and the LocalSourceUpdates it decides with. Local
- * source builds get the source updater and publish each installed build to the
- * fork hosts (HostReleasePublisher); every other build gets upstream's.
+ * source builds get the source updater; every other build gets upstream's.
  * Either way, installs wait for this computer's sessions (DesktopUpdateGate).
  */
 export const layer = Layer.effect(
@@ -685,11 +683,9 @@ export const layer = Layer.effect(
     const localSourceUpdates = yield* LocalSourceUpdates.LocalSourceUpdates;
     const sourceBuild = yield* localSourceUpdates.enabled;
     const updates = sourceBuild ? yield* makeLocalSource : yield* DesktopUpdates.make;
-    if (sourceBuild) yield* (yield* HostReleasePublisher.HostReleasePublisher).start;
     return yield* gateInstalls(updates);
   }),
 ).pipe(
-  Layer.provideMerge(HostReleasePublisher.layer),
   Layer.provideMerge(LocalSourceUpdates.layer),
   Layer.provideMerge(DesktopUpdateGate.layer),
 );

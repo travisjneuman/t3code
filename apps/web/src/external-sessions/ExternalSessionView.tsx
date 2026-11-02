@@ -32,6 +32,7 @@ import { createChatCanvasStore } from "../components/chat/canvasStore";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
+import { sessionSettingLabel } from "../components/chat/sessionInsights.logic";
 import { ProjectFavicon } from "../components/ProjectFavicon";
 import {
   WorkspaceBreadcrumb,
@@ -72,7 +73,6 @@ import {
   externalSessionOriginIsLocalAtom,
   externalSessionOriginLabel,
   externalSessionProductName,
-  externalSessionSettingLabel,
   externalSessionTitle,
   externalSessionTranscript,
   LIVENESS_LABEL,
@@ -503,7 +503,7 @@ function ExternalSessionComposerBlock(props: {
 }) {
   const { environmentId, sessionKey, summary } = props;
   const details = summary?.details;
-  const effort = details?.effort === undefined ? null : externalSessionSettingLabel(details.effort);
+  const effort = details?.effort === undefined ? null : sessionSettingLabel(details.effort);
   const effortKind = summary?.driver === "pi" ? "Thinking level" : "Reasoning effort";
   const branches = details?.gitBranches ?? [];
   const navigate = useNavigate();
@@ -812,7 +812,7 @@ function sessionDetailItems(
     );
   };
   const setting = (value: string | undefined) =>
-    value === undefined ? undefined : externalSessionSettingLabel(value);
+    value === undefined ? undefined : sessionSettingLabel(value);
 
   timestamp("Last active", summary.updatedAt);
   timestamp("Started", details?.createdAt);

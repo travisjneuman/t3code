@@ -15,7 +15,6 @@ import {
   type ExternalSessionEvent,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
-  type SessionRecord,
 } from "@t3tools/contracts";
 import {
   createEnvironmentRpcCommand,
@@ -27,7 +26,6 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { AsyncResult, Atom } from "effect/reactivity";
 
-import { sessionRecordFrom } from "../components/chat/sessionInsights.logic";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { formatProviderDriverKindLabel } from "../providerModels";
 import { resolveRemoteOpenState } from "../remoteOpen";
@@ -524,45 +522,4 @@ export function shortModelLabel(model: string | null): string | null {
   if (model === null || model.trim().length === 0) return null;
   const label = formatModelSlugName(model.trim());
   return label.startsWith("Claude ") ? label.slice("Claude ".length) : label;
-}
-
-// Mode and effort values arrive in each agent's own terms; known ones read
-// better spelled out, the rest are split into words.
-const SETTING_LABELS: Record<string, string> = {
-  xhigh: "Extra High",
-  acceptEdits: "Accept edits",
-  bypassPermissions: "Bypass permissions",
-  dontAsk: "Don't ask",
-  never: "Never ask",
-  "on-request": "On request",
-  "on-failure": "On failure",
-  yolo: "Yolo (auto-approve)",
-  "danger-full-access": "Full access",
-  "workspace-write": "Workspace write",
-  "read-only": "Read-only",
-};
-
-/** "bypassPermissions" reads "Bypass permissions", "high" reads "High". */
-export function externalSessionSettingLabel(value: string): string {
-  const known = SETTING_LABELS[value];
-  if (known !== undefined) return known;
-  const words = value
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[-_]+/g, " ")
-    .trim()
-    .toLowerCase();
-  return words.length === 0 ? value : `${words[0]!.toUpperCase()}${words.slice(1)}`;
-}
-
-/** The record's mode, sandbox, effort, and speed values, spelled out for display. */
-export function labelSessionRecordSettings(record: SessionRecord): SessionRecord {
-  const label = (value: string | undefined) =>
-    value === undefined ? undefined : externalSessionSettingLabel(value);
-  return sessionRecordFrom({
-    ...record,
-    effort: label(record.effort),
-    permissionMode: label(record.permissionMode),
-    sandbox: label(record.sandbox),
-    serviceTier: label(record.serviceTier),
-  });
 }

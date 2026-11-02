@@ -3,6 +3,7 @@ import { memo, type RefObject } from "react";
 
 import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
 import {
+  labelSessionRecordSettings,
   mergeSessionRecord,
   RECORD_STATUS_PRESENTATION,
   sessionRecordFrom,
@@ -19,7 +20,6 @@ import { SessionOutputsList } from "../components/chat/ThreadOutputsSection";
 import type { ContextWindowSnapshot } from "../lib/contextWindow";
 import {
   externalSessionOriginLabel,
-  labelSessionRecordSettings,
   LIVENESS_LABEL,
   shortModelLabel,
   useExternalSessionInsights,

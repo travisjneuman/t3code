@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { ArchivedThreadsPanel } from "../external-sessions/ArchivedExternalSessions"; // Fork add-on(other-agents): archived Other Agents sessions.
+import { ArchivedThreadsPanel } from "../forkArchivedPanel"; // Fork add-on(core): archived sections from add-ons.
 
 export const Route = createFileRoute("/_chat/settings/archived")({
   component: ArchivedThreadsPanel,

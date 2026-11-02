@@ -5,7 +5,7 @@ from that checkout instead of a release feed. `LocalSourceUpdates`
 (`apps/desktop/src/updates/LocalSourceUpdates.ts`) turns the desktop update button
 into "merge the newest upstream nightly into the fork, build it here, push it, swap
 the bundle". `ForkDesktopUpdates` (`updates/ForkDesktopUpdates.ts`), which `main.ts`
-provides in place of upstream's `DesktopUpdates.layer`, routes check, download, and
+provides through `fork/layers.ts` in place of upstream's `DesktopUpdates.layer`, routes check, download, and
 install to it whenever it reports `enabled`; otherwise the release feed is the repository named at build
 time (`T3CODE_DESKTOP_UPDATE_REPOSITORY` or `GITHUB_REPOSITORY`), and a build without
 one has no feed.

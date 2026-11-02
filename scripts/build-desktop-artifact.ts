@@ -57,7 +57,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import * as Fork from "./lib/fork-desktop-artifact.ts"; // Fork add-on(identity,upstream-sync)
+import * as Fork from "./lib/fork-desktop-artifact.ts"; // Fork add-on(core)
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = Fork.REMOTE_APP_DISTRIBUTION.appId; // Fork add-on(identity)

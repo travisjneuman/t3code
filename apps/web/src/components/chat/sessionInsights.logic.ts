@@ -172,6 +172,47 @@ export function mergeSessionRecord(
   return record ? { ...fallback, ...record } : fallback;
 }
 
+// Mode and effort values arrive in each agent's own terms; known ones read
+// better spelled out, the rest are split into words.
+const SETTING_LABELS: Record<string, string> = {
+  xhigh: "Extra High",
+  acceptEdits: "Accept edits",
+  bypassPermissions: "Bypass permissions",
+  dontAsk: "Don't ask",
+  never: "Never ask",
+  "on-request": "On request",
+  "on-failure": "On failure",
+  yolo: "Yolo (auto-approve)",
+  "danger-full-access": "Full access",
+  "workspace-write": "Workspace write",
+  "read-only": "Read-only",
+};
+
+/** "bypassPermissions" reads "Bypass permissions", "high" reads "High". */
+export function sessionSettingLabel(value: string): string {
+  const known = SETTING_LABELS[value];
+  if (known !== undefined) return known;
+  const words = value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .toLowerCase();
+  return words.length === 0 ? value : `${words[0]!.toUpperCase()}${words.slice(1)}`;
+}
+
+/** The record's mode, sandbox, effort, and speed values, spelled out for display. */
+export function labelSessionRecordSettings(record: SessionRecord): SessionRecord {
+  const label = (value: string | undefined) =>
+    value === undefined ? undefined : sessionSettingLabel(value);
+  return sessionRecordFrom({
+    ...record,
+    effort: label(record.effort),
+    permissionMode: label(record.permissionMode),
+    sandbox: label(record.sandbox),
+    serviceTier: label(record.serviceTier),
+  });
+}
+
 export const MCP_SERVER_STATUS_PRESENTATION: Record<
   SessionMcpServerStatus,
   { readonly label: string; readonly dotClassName: string }

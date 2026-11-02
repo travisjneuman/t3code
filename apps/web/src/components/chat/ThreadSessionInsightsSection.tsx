@@ -12,8 +12,7 @@ import {
 import { getModelSelectionBooleanOptionValue } from "@t3tools/shared/model";
 import { memo } from "react";
 
-import { labelSessionRecordSettings } from "../../external-sessions/atoms";
-import { HERMES_DRIVER } from "../../hermes/hermesSessions";
+import { FORK_OWN_WORKSPACE_DRIVERS } from "../../forkOwnWorkspaceDrivers";
 import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import { getProviderInstanceEntry } from "../../providerInstances";
 import { formatProviderDriverKindLabel } from "../../providerModels";
@@ -23,6 +22,7 @@ import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { runtimeModeConfig } from "./runtimeModeConfig";
 import {
+  labelSessionRecordSettings,
   mergeSessionRecord,
   RECORD_STATUS_PRESENTATION,
   SESSION_STATUS_PRESENTATION,
@@ -62,10 +62,12 @@ export const ThreadSessionDetails = memo(function ThreadSessionDetails(props: {
     insightsQuery.failure.reason === "no-provider-thread";
   const insights = notStarted ? null : insightsQuery.data;
   const summary = useThreadSessionSummary(threadRef);
-  // An agent with its own session store (Hermes) works in its own folders,
-  // not the T3 project's. The driver settles it before the insights load, so
-  // the T3 folder never flashes in.
-  const ownsWorkspace = summary?.driver === HERMES_DRIVER || insights?.session !== undefined;
+  // An agent with its own session store works in its own folders, not the T3
+  // project's. The driver settles it before the insights load, so the T3
+  // folder never flashes in.
+  const driver = summary?.driver ?? null;
+  const ownsWorkspace =
+    (driver !== null && FORK_OWN_WORKSPACE_DRIVERS.has(driver)) || insights?.session !== undefined;
   const sessionFolder = ownsWorkspace ? undefined : props.workspaceRoot;
 
   return (

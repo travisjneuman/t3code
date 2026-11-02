@@ -3,7 +3,7 @@
  * (archive settled threads, delete archived ones), and the settled threads with
  * their sizes. Settled threads come from the storage listing, not the sidebar,
  * because older ones are not loaded on a cold connect. Mounted by the archive
- * wrapper in external-sessions/ArchivedExternalSessions.tsx. Sizes include each thread's
+ * page in forkArchivedPanel.tsx. Sizes include each thread's
  * subagent threads, which follow their parent. Fork add-on: thread retention.
  */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";

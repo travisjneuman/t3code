@@ -1,5 +1,5 @@
 {
-  "$comment": "Every fork add-on. files: fork-owned files it owns (absent upstream). hooks: upstream files where its lines carry `Fork add-on(<id>)`. extensionPoints: the fork-owned registries upstream files hook once, and the add-ons registered in each. unmarkedUpstreamEdits: upstream files that cannot hold a marker. dependsOn: add-ons whose fork-owned files it imports. Update this in the same change as the code. See docs/internals/fork-add-ons.md.",
+  "$comment": "Every fork add-on. files: fork-owned files it owns (absent upstream). hooks: upstream files where its lines carry `Fork add-on(<id>)`. extensionPoints: the core registries an upstream file (or the feature that owns them) hooks once, and the add-ons registered in each. unmarkedUpstreamEdits: upstream files that cannot hold a marker. dependsOn: add-ons whose fork-owned files it imports; a registry importing an add-on registers it, so core depends on none. Update this in the same change as the code. See docs/internals/fork-add-ons.md.",
   "upstream": "https://github.com/pingdotgg/t3code",
   "tiers": {
     "core": "Shared plumbing every other add-on hooks into.",
@@ -29,7 +29,9 @@
         "maintenance-queue",
         "existing-checkout",
         "thread-retention",
-        "host-backups"
+        "host-backups",
+        "upstream-sync",
+        "host-releases"
       ]
     },
     {
@@ -177,12 +179,12 @@
       "name": "thread menu",
       "registry": "apps/web/src/forkThreadMenu.ts",
       "hookedFrom": [
+        "apps/web/src/compare-agents/useComparePairMenu.ts",
         "apps/web/src/components/Sidebar.tsx",
         "apps/web/src/hooks/useThreadActionMenu.ts"
       ],
       "addons": [
         "other-agents",
-        "compare-agents",
         "save-to-notes",
         "thread-export"
       ]
@@ -231,7 +233,9 @@
         "apps/desktop/src/main.ts"
       ],
       "addons": [
-        "web-apps"
+        "web-apps",
+        "upstream-sync",
+        "host-releases"
       ]
     },
     {
@@ -253,6 +257,76 @@
       "addons": [
         "web-apps"
       ]
+    },
+    {
+      "name": "archived page sections",
+      "registry": "apps/web/src/forkArchivedPanel.tsx",
+      "hookedFrom": [
+        "apps/web/src/routes/_chat.settings.archived.tsx"
+      ],
+      "addons": [
+        "other-agents",
+        "hermes",
+        "thread-retention"
+      ]
+    },
+    {
+      "name": "own-workspace drivers",
+      "registry": "apps/web/src/forkOwnWorkspaceDrivers.ts",
+      "hookedFrom": [
+        "apps/web/src/components/chat/ThreadSessionInsightsSection.tsx"
+      ],
+      "addons": [
+        "hermes"
+      ]
+    },
+    {
+      "name": "session insights readers",
+      "registry": "apps/server/src/forkInsightsReaders.ts",
+      "hookedFrom": [
+        "apps/server/src/sessionInsights/SessionInsights.ts"
+      ],
+      "addons": [
+        "hermes"
+      ]
+    },
+    {
+      "name": "RPC span labels",
+      "registry": "apps/server/src/observability/forkRpcAggregates.ts",
+      "hookedFrom": [
+        "apps/server/src/observability/RpcInstrumentation.ts"
+      ],
+      "addons": [
+        "other-agents",
+        "hermes",
+        "compare-agents",
+        "save-to-notes",
+        "thread-export",
+        "session-search"
+      ]
+    },
+    {
+      "name": "fork migrations",
+      "registry": "apps/server/src/persistence/ForkMigrations.ts",
+      "hookedFrom": [
+        "apps/server/src/persistence/ProjectLinks.ts",
+        "apps/server/src/persistence/SessionInsightsReports.ts"
+      ],
+      "addons": [
+        "session-details",
+        "project-links"
+      ]
+    },
+    {
+      "name": "desktop artifact build",
+      "registry": "scripts/lib/fork-desktop-artifact.ts",
+      "hookedFrom": [
+        "scripts/build-desktop-artifact.ts"
+      ],
+      "addons": [
+        "identity",
+        "upstream-sync"
+      ]
     }
   ],
   "addons": [
@@ -260,31 +334,14 @@
       "id": "core",
       "tier": "core",
       "title": "Fork core",
-      "summary": "Shared plumbing the add-ons plug into: one registry per extension point (see extensionPoints), the desktop bridge, fork migrations, and the fork's docs front doors.",
+      "summary": "Shared plumbing the add-ons plug into: one registry per extension point (see extensionPoints), the fork migration ledger, and the fork's docs front doors. It depends on no add-on.",
       "docs": [
         "docs/internals/fork-add-ons.md",
         "docs/user/fork-behavior.md"
       ],
-      "dependsOn": [
-        "agent-instructions",
-        "compare-agents",
-        "existing-checkout",
-        "hermes",
-        "host-backups",
-        "host-releases",
-        "maintenance-queue",
-        "other-agents",
-        "project-links",
-        "retired-models",
-        "save-to-notes",
-        "session-details",
-        "session-search",
-        "thread-export",
-        "thread-retention",
-        "upstream-sync",
-        "web-apps"
-      ],
+      "dependsOn": [],
       "surfaces": [
+        "build",
         "ci",
         "contracts",
         "desktop",
@@ -301,13 +358,16 @@
         "apps/desktop/src/fork/preloadBridge.ts",
         "apps/desktop/src/fork/window.ts",
         "apps/server/src/auth/forkRpcScopes.ts",
+        "apps/server/src/forkInsightsReaders.ts",
         "apps/server/src/forkRpcHandlers.ts",
         "apps/server/src/forkServerLayers.ts",
         "apps/server/src/observability/forkRpcAggregates.ts",
         "apps/server/src/orchestration-v2/forkRuntimeLayers.ts",
         "apps/server/src/persistence/ForkMigrations.ts",
+        "apps/web/src/forkArchivedPanel.tsx",
         "apps/web/src/forkComposerBanners.ts",
         "apps/web/src/forkContextMenuIcons.ts",
+        "apps/web/src/forkOwnWorkspaceDrivers.ts",
         "apps/web/src/forkRootHosts.tsx",
         "apps/web/src/forkThreadMenu.ts",
         "apps/web/src/forkTimelineLiveFollow.ts",
@@ -322,13 +382,15 @@
         "packages/contracts/src/forkDesktopBridge.ts",
         "packages/contracts/src/forkExports.ts",
         "packages/contracts/src/forkRpcs.ts",
-        "packages/contracts/src/forkServerSettings.ts"
+        "packages/contracts/src/forkServerSettings.ts",
+        "scripts/lib/fork-desktop-artifact.ts"
       ],
       "tests": [
         "apps/desktop/src/fork/confirm.test.ts"
       ],
       "hooks": [
         "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
+        "apps/desktop/src/main.ts",
         "apps/desktop/src/preload.ts",
         "apps/server/src/auth/RpcAuthorization.ts",
         "apps/server/src/environment/ServerEnvironment.ts",
@@ -340,11 +402,13 @@
         "apps/web/src/contextMenuFallback.ts",
         "apps/web/src/hooks/useThreadActionMenu.ts",
         "apps/web/src/routes/__root.tsx",
+        "apps/web/src/routes/_chat.settings.archived.tsx",
         "packages/contracts/src/clientRpcPermissions.ts",
         "packages/contracts/src/environment.ts",
         "packages/contracts/src/index.ts",
         "packages/contracts/src/rpc.ts",
-        "packages/contracts/src/settings.ts"
+        "packages/contracts/src/settings.ts",
+        "scripts/build-desktop-artifact.ts"
       ],
       "data": {
         "migrations": [
@@ -460,9 +524,7 @@
       ],
       "dependsOn": [
         "core",
-        "hermes",
         "session-details",
-        "thread-retention",
         "web-apps"
       ],
       "surfaces": [
@@ -517,7 +579,6 @@
         "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
         "apps/web/src/providerInstances.ts",
         "apps/web/src/routeTree.gen.ts",
-        "apps/web/src/routes/_chat.settings.archived.tsx",
         "packages/client-runtime/src/rpc/client.ts"
       ],
       "unmarkedUpstreamEdits": {
@@ -549,6 +610,7 @@
         "apps/server/src/hermes/HermesSessions.ts",
         "apps/server/src/hermes/HermesSessionsRpc.ts",
         "apps/server/src/hermes/hermesDashboardRedaction.ts",
+        "apps/server/src/hermes/hermesInsightsReader.ts",
         "apps/server/src/hermes/hermesSessionArchive.ts",
         "apps/server/src/hermes/hermesSessionEntries.ts",
         "apps/server/src/provider/hermesAccountCodexModels.ts",
@@ -805,9 +867,7 @@
         "docs/internals/session-insights.md"
       ],
       "dependsOn": [
-        "core",
-        "hermes",
-        "other-agents"
+        "core"
       ],
       "surfaces": [
         "contracts",
@@ -1014,6 +1074,7 @@
         "apps/web/src/maintenance-queue/queueStore.ts",
         "apps/web/src/maintenance-queue/runner.ts",
         "apps/web/src/maintenance-queue/useQueuedUpdate.ts",
+        "packages/contracts/src/desktopUpdateGate.ts",
         "packages/contracts/src/maintenanceQueue.ts"
       ],
       "hooks": [
@@ -1633,7 +1694,7 @@
         "docs/internals/fork-add-ons.md#identity"
       ],
       "dependsOn": [
-        "upstream-sync"
+        "core"
       ],
       "surfaces": [
         "build",
@@ -1643,7 +1704,6 @@
       "files": [
         "apps/desktop/src/remote-apps/RemoteAppDistribution.ts",
         "packages/shared/src/branding.ts",
-        "scripts/lib/fork-desktop-artifact.ts",
         "scripts/sign-macos-ad-hoc.cjs"
       ],
       "tests": [
@@ -1766,7 +1826,6 @@
       ],
       "dependsOn": [
         "core",
-        "host-releases",
         "identity",
         "maintenance-queue",
         "other-agents"
@@ -1789,7 +1848,9 @@
         "apps/web/src/source-updates/sourceUpdateToast.ts",
         "apps/web/src/source-updates/sourceUpdateWording.ts",
         "docs/internals/local-source-updates.md",
-        "docs/user/fork-updating.md"
+        "docs/user/fork-updating.md",
+        "packages/contracts/src/desktopSourceSync.ts",
+        "scripts/lib/fork-checkout-build-lock.ts"
       ],
       "tests": [
         "apps/desktop/src/updates/ForkDesktopUpdates.test.ts",
@@ -1797,7 +1858,6 @@
         "apps/web/src/source-updates/sourceUpdateWording.test.ts"
       ],
       "hooks": [
-        "apps/desktop/src/main.ts",
         "apps/web/src/components/desktopUpdate.logic.ts",
         "apps/web/src/components/desktopUpdate.toast.tsx",
         "apps/web/src/components/settings/SettingsPanels.tsx",
@@ -1850,6 +1910,7 @@
         "apps/web/src/host-release/hostReleaseSource.ts",
         "apps/web/src/host-release/hostRowFacts.ts",
         "docs/operations/fork-host-releases.md",
+        "packages/contracts/src/desktopHostRelease.ts",
         "packages/shared/src/cliReleaseGuards.ts",
         "packages/ssh/src/releaseMirror.ts"
       ],

@@ -144,11 +144,11 @@ Thread cards in the sidebar keep their three lines (project, title, branch) one 
 
 ## Every add-on
 
-Every add-on has an id, and each fork line in an upstream file carries `Fork add-on(<id>)`. [`fork/addons.json`](https://github.com/travisjneuman/t3code/blob/main/fork/addons.json) lists each add-on's files, the upstream files it hooks, the data it adds and the add-ons it depends on. Personal add-ons are the owner's own tooling; skip them when adopting add-ons.
+Every add-on has an id, and each fork line in an upstream file carries `Fork add-on(<id>)`. [`fork/addons.json`](https://github.com/travisjneuman/t3code/blob/main/fork/addons.json) lists each add-on's files, the upstream files it hooks, the data it adds and the add-ons it depends on. Dependencies run one way, so keeping an add-on means keeping its `dependsOn`, and core needs none. Personal add-ons are the owner's own tooling; skip them when adopting add-ons.
 
 | Id                        | Tier         | Add-on                                    | What it does                                                                                                                              |
 | ------------------------- | ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`                    | core         | Fork core                                 | Shared plumbing the add-ons plug into: one registry per extension point (see extensionPoints), the desktop bridge, fork migrations, and the fork's docs front doors. |
+| `core`                    | core         | Fork core                                 | Shared plumbing the add-ons plug into: one registry per extension point (see extensionPoints), the fork migration ledger, and the fork's docs front doors. It depends on no add-on. |
 | `web-apps`                | feature      | [Web apps](#web-apps)                     | ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app.                                                                  |
 | `other-agents`            | feature      | [Other Agents](#other-agents)             | Follow, continue and hand back sessions started in other agent apps.                                                                      |
 | `hermes`                  | feature      | [Hermes Agent](#hermes-agent)             | A Hermes Agent provider, local or remote, with its own sidebar section.                                                                   |

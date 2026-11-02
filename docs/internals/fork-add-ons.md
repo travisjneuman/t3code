@@ -33,8 +33,8 @@ that cannot carry a marker, the data it adds (migrations, wire fields, settings)
 the add-ons whose fork-owned files it imports. Every fork-owned file belongs to exactly one
 add-on. Tiers:
 
-- `core`: plumbing the other add-ons hook into: the extension-point registries below, the desktop
-  bridge and the fork migration ledger.
+- `core`: plumbing the other add-ons hook into: the extension-point registries below and the fork
+  migration ledger. `core` depends on no add-on.
 - `feature`: a user-visible feature.
 - `fix`: a small behavior fix to upstream code.
 - `distribution`: how the fork is named, built, signed, installed and updated.
@@ -42,29 +42,38 @@ add-on. Tiers:
 
 A new add-on gets an entry and an id before its first marker. Keep the entry in the same change as
 the code: a new fork-owned file goes into one add-on's `files`, and a new hooked upstream file
-into its `hooks`. `core` currently imports from the features it registers, so `dependsOn` is not
-yet a clean graph; read it as what an add-on needs today, not what it should need.
+into its `hooks`. A registry importing an add-on registers it, so those imports are not counted in
+`dependsOn`. What is left is one-way: `core` depends on nothing, and no two add-ons depend on each
+other. Keeping an add-on means keeping everything in its `dependsOn`.
 
 ## Extension points
 
 Where several add-ons plug into the same upstream spot, the spot gets one fork-owned `core`
 registry and the upstream file hooks it once, marked `Fork add-on(core)`. Adding or dropping an
 add-on there edits the registry, not the upstream file. The contracts barrel, the WebSocket RPC
-group, server capabilities and settings, RPC handlers and scopes, the server's background workers,
-the orchestration services, the web root's hosts, the composer banners, the thread menu, and the
-desktop IPC, preload, layers, menu and window each have one. `extensionPoints` in
-[`fork/addons.json`](../../fork/addons.json) lists them with the upstream file that hooks each and
-the add-ons registered there.
+group, server capabilities and settings, RPC handlers, scopes and span labels, the server's
+background workers, the orchestration services, the web root's hosts, the composer banners, the
+thread menu, the archived page, the fork migrations, the desktop artifact build, and the desktop
+IPC, preload, layers, menu and window each have one. `extensionPoints` in
+[`fork/addons.json`](../../fork/addons.json) lists them with the file that hooks each and the
+add-ons registered there.
 
 - Each registry entry carries its add-on's id, `// Fork add-on(<id>)` as in upstream files. The
   manifest reads the ids from those markers and from the registry's imports.
-- A registry imports its add-ons' modules. Other `core` files that still import features show up
-  in `core`'s `dependsOn` and should move behind a registry. A registry that needs
+- A registry imports its add-ons' modules. A `core` file that imports a feature any other way
+  shows up in `core`'s `dependsOn` and should move behind a registry. A registry that needs
   upstream-private values, such as the layers `runtimeLayer.ts` builds, takes them as
   arguments, as [`forkRuntimeLayers.ts`](../../apps/server/src/orchestration-v2/forkRuntimeLayers.ts)
   does.
 - A spot only one add-on uses keeps that add-on's own marked hook, since a registry would add a
   file without removing a line.
+- When one feature would import another add-on to extend it, the feature gets a registry instead
+  and hooks it from its own file. Session details reads Hermes's own store through
+  `forkInsightsReaders.ts` and asks `forkOwnWorkspaceDrivers.ts` which drivers keep their own
+  workspace. A type the registrants share stays in the feature, and they import it as a type.
+- Every entry in [`ForkMigrations.ts`](../../apps/server/src/persistence/ForkMigrations.ts) stays
+  when its add-on is left out. The migrator skips ids below the highest one a database has run,
+  so a migration left out of one build would never run once a later build adds its add-on back.
 - A new add-on that plugs into an existing spot adds a registry entry. One that needs a new shared
   spot adds a registry and its `extensionPoints` entry in the same change.
 

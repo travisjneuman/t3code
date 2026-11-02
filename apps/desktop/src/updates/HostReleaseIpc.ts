@@ -1,5 +1,5 @@
 // Fork add-on: IPC for the host release the Mac app starts for its installed
-// build. ForkDesktopUpdates.layer provides HostReleasePublisher.
+// build. fork/layers.ts provides HostReleasePublisher.
 import { DesktopHostReleaseStatusSchema } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";

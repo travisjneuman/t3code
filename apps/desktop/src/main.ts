@@ -67,7 +67,7 @@ import * as DesktopLegacyLocalStorage from "./app/DesktopLegacyLocalStorage.ts";
 import * as DesktopTelemetryPublisher from "./telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopRendererHistory from "./telemetry/DesktopRendererHistory.ts";
 import * as DesktopUpdatePolicy from "./updates/DesktopUpdatePolicy.ts";
-import * as ForkDesktopUpdates from "./updates/ForkDesktopUpdates.ts"; // Fork add-on(upstream-sync): replaces DesktopUpdates.
+import * as ForkLayers from "./fork/layers.ts"; // Fork add-on(core): its updates layer replaces DesktopUpdates.
 import * as ForkFileSafeStorage from "./fork/fileSafeStorage.ts"; // Fork add-on(keychain-free-secrets): replaces ElectronSafeStorage.
 import * as BrowserImport from "./preview/BrowserImport/BrowserImport.ts";
 import * as LinuxBrowserSecret from "./preview/BrowserImport/LinuxBrowserSecret.ts";
@@ -79,7 +79,6 @@ import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
-import * as ForkLayers from "./fork/layers.ts"; // Fork add-on(web-apps)
 
 if (process.argv.includes("--version")) {
   try {
@@ -217,7 +216,7 @@ const layerDesktopApplication = Layer.mergeAll(
 ).pipe(
   Layer.provideMerge(layerDesktopSnapShot),
   Layer.provideMerge(
-    ForkDesktopUpdates.layer.pipe( // Fork add-on(upstream-sync): replaces DesktopUpdates.layer.
+    ForkLayers.updates.pipe( // Fork add-on(core): replaces DesktopUpdates.layer.
       Layer.provide(DesktopUpdatePolicy.layer),
       // The same layer as the foundation's, so the policy is still read once.
       Layer.provide(DesktopManagedPolicy.layer),

@@ -2,7 +2,6 @@ import * as NodeOS from "node:os";
 
 import {
   type OrchestrationV2ProviderThread,
-  ProviderDriverKind,
   type ProviderThreadId,
   SessionInsightsError,
   type SessionInsights as SessionInsightsResult,
@@ -10,15 +9,13 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { HermesInsights } from "@t3tools/provider-hermes/server";
-import { HermesSettings } from "@t3tools/provider-hermes/settings";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 
+import { FORK_INSIGHTS_READERS } from "../forkInsightsReaders.ts";
 import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionManager.ts";
 import * as SessionInsightsReports from "../persistence/SessionInsightsReports.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -30,8 +27,8 @@ import * as ServerSettings from "../serverSettings.ts";
  * it answers with the last report read while it ran. Every live report is
  * stored (SessionInsightsReports), so that survives a server restart; the
  * memory map is a read-through cache in front of the table.
- * Hermes keeps its own session store, so a Hermes thread is read from Hermes
- * over HTTP instead, running or not (provider-hermes insights.ts).
+ * A driver that keeps its own session store, such as Hermes, is read through
+ * its reader in forkInsightsReaders.ts instead, running or not.
  */
 export class SessionInsights extends Context.Service<
   SessionInsights,
@@ -42,25 +39,25 @@ export class SessionInsights extends Context.Service<
   }
 >()("t3/sessionInsights/SessionInsights") {}
 
+/** A provider thread whose driver keeps its own session store, with its instance's config. */
+export interface DriverInsightsInput {
+  readonly providerThread: OrchestrationV2ProviderThread;
+  readonly config: unknown;
+}
+
+/** That driver's report, or undefined when its store answers nothing. */
+export type DriverInsightsReader = (
+  input: DriverInsightsInput,
+) => Effect.Effect<SessionInsightsResult | undefined>;
+
 /** Last reports cached in memory; the oldest is dropped past this, and stays stored. */
 const MAX_REMEMBERED_REPORTS = 200;
 /** A provider that does not answer leaves that part empty rather than the panel loading. */
 const PART_TIMEOUT = "10 seconds";
-const HERMES_DRIVER = ProviderDriverKind.make("hermes");
-/** Hermes pages a long session's messages, so it gets longer than one live read. */
-const HERMES_TIMEOUT = "30 seconds";
-const decodeHermesSettings = Schema.decodeUnknownOption(HermesSettings);
 // The server's machine: every report names it for the card's Environment rows.
 const HOST = NodeOS.hostname() || undefined;
 const withHost = (report: SessionInsightsResult): SessionInsightsResult =>
   HOST === undefined || report.host !== undefined ? report : { ...report, host: HOST };
-const hostOfUrl = (url: string): string | undefined => {
-  try {
-    return new URL(url).hostname || undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const make = Effect.gen(function* () {
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
@@ -161,53 +158,16 @@ const make = Effect.gen(function* () {
           ),
         );
 
-  /**
-   * A Hermes thread's report from Hermes itself, or undefined when the
-   * instance is gone, its settings do not decode, or Hermes answered nothing.
-   */
-  const readHermes = Effect.fn("SessionInsights.readHermes")(function* (
+  /** A self-storing driver's report from its reader; undefined falls back to the live session. */
+  const readOwnStore = Effect.fn("SessionInsights.readOwnStore")(function* (
     providerThread: OrchestrationV2ProviderThread,
   ) {
-    const sessionId = providerThread.nativeThreadRef?.nativeId ?? null;
-    if (sessionId === null) return undefined;
+    const reader = FORK_INSIGHTS_READERS.get(providerThread.driver);
+    if (reader === undefined) return undefined;
     const settings = yield* serverSettings.getSettings.pipe(Effect.orElseSucceed(() => undefined));
     const instance = settings?.providerInstances[providerThread.providerInstanceId];
-    if (instance === undefined || instance.driver !== HERMES_DRIVER) return undefined;
-    const hermesSettings = Option.getOrUndefined(decodeHermesSettings(instance.config ?? {}));
-    if (hermesSettings === undefined) return undefined;
-    const read = yield* HermesInsights.read({ settings: hermesSettings, sessionId }).pipe(
-      Effect.timeout(HERMES_TIMEOUT),
-      Effect.catch(() =>
-        Effect.logWarning("session-insights.hermes-timeout", {
-          providerThreadId: providerThread.id,
-        }).pipe(Effect.as(undefined)),
-      ),
-    );
-    if (
-      read === undefined ||
-      (read.session === null &&
-        read.context === null &&
-        read.mcpServers === null &&
-        read.outputs === null)
-    ) {
-      return undefined;
-    }
-    // The agent runs where Hermes runs, not on this server.
-    const host = hostOfUrl(hermesSettings.apiUrl);
-    const report: SessionInsightsResult = {
-      providerThreadId: providerThread.id,
-      instanceId: providerThread.providerInstanceId,
-      driver: providerThread.driver,
-      // Hermes answered for the session itself, whether or not T3 runs it now.
-      live: true,
-      capturedAt: DateTime.formatIso(yield* DateTime.now),
-      context: read.context,
-      mcpServers: read.mcpServers,
-      ...(host === undefined ? {} : { host }),
-      ...(read.session === null ? {} : { session: read.session }),
-      outputs: read.outputs,
-    };
-    return report;
+    if (instance === undefined || instance.driver !== providerThread.driver) return undefined;
+    return yield* reader({ providerThread, config: instance.config });
   });
 
   const get = Effect.fn("SessionInsights.get")(function* (input: SessionInsightsInput) {
@@ -223,12 +183,10 @@ const make = Effect.gen(function* () {
       return yield* fail(input.threadId, "no-provider-thread");
     }
 
-    if (providerThread.driver === HERMES_DRIVER) {
-      const hermes = yield* readHermes(providerThread);
-      if (hermes !== undefined) {
-        yield* remember(input.threadId, hermes);
-        return hermes;
-      }
+    const ownStore = yield* readOwnStore(providerThread);
+    if (ownStore !== undefined) {
+      yield* remember(input.threadId, ownStore);
+      return ownStore;
     }
 
     const runtime =

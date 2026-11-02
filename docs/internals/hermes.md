@@ -93,8 +93,9 @@ its HTTP API. User guide: [Hermes Agent](../user/hermes.md).
   The report is dropped when the session's last assistant message already says the same. Stamps
   are the Hermes host's local time, so only their difference is used, added to the session's
   start. Any failure here only skips the report.
-- **Session details come from Hermes, not the run stream.** `SessionInsights.get` calls
-  [`insights.ts`](../../packages/provider-hermes/src/server/insights.ts), which reads
+- **Session details come from Hermes, not the run stream.** `SessionInsights.get` calls the
+  reader Hermes registers in `forkInsightsReaders.ts`, which runs
+  [`insights.ts`](../../packages/provider-hermes/src/server/insights.ts). It reads
   `/api/sessions/{id}`, the paged messages, and the dashboard's `/api/model/info` and
   `/api/mcp/servers` in parallel. Each part can fail alone, and the whole read times out after
   30 s. Hermes sends no token usage for the context window, so the breakdown is a labelled

@@ -342,4 +342,5 @@ const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(HostReleasePublisher, make);
+/** Starts with the app; `start` does nothing unless this is a local source build with hosts. */
+export const layer = Layer.effect(HostReleasePublisher, Effect.tap(make, (publisher) => publisher.start));

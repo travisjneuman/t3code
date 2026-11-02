@@ -30,6 +30,9 @@ Shared mapping helpers, including the totals-only breakdown, are in
 Hermes keeps its own session store, so `get` reads a Hermes thread from Hermes over HTTP before it
 looks for a live provider session
 ([`provider-hermes/src/server/insights.ts`](../../packages/provider-hermes/src/server/insights.ts)).
+The reader is registered by driver in
+[`forkInsightsReaders.ts`](../../apps/server/src/forkInsightsReaders.ts), so this service never
+imports Hermes.
 `hermesSessions.insights` makes the same read for a session T3 has not opened, so the sidebar's
 Details item never imports it. The instance's settings are decoded on the server, as the Hermes
 adapter does; credentials never reach the reply or the logs. Five read-only GETs run together, each

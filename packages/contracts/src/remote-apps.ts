@@ -418,4 +418,11 @@ export interface DesktopRemoteAppBridge {
   onOpenInPanel: (listener: (site: RemoteAppSite) => void) => () => void;
 }
 
+declare module "./ipc.ts" {
+  interface DesktopBridge {
+    /** Desktop-only isolated ChatGPT surface. */
+    remoteApps?: DesktopRemoteAppBridge;
+  }
+}
+
 export * from "./remoteAppIcons.ts";
