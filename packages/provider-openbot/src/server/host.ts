@@ -189,7 +189,8 @@ const sshOptions = () => [
         "-o",
         "ControlMaster=auto",
         "-o",
-        `ControlPath=${NodePath.join(NodeOs.tmpdir(), "t3-openbot-%r@%h:%p")}`,
+        // macOS caps socket paths at 104 bytes; its $TMPDIR and a tailnet host name overrun that.
+        "ControlPath=/tmp/t3-openbot-%C",
         "-o",
         "ControlPersist=60",
       ]),
