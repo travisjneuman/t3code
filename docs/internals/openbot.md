@@ -67,7 +67,11 @@ binds the conversation's own import (`openbot:<instance>:<conversation>`).
 
 OpenBot's Team API (`agent-tasks-v1`: `/v1/agent-tasks/start` and friends, on a loopback port that
 changes with every start, found through `/v1/compatibility`) can start side threads, but it takes a
-team member's session, not the Local scripts token, so T3 would need its own team seat.
+team member's session, not the Local scripts token. T3 doesn't use it, because no member session can
+be had locally in a packaged OpenBot (0.58.0): account members sign in at api.openbot.run, the host
+redeems their tickets there, and members connect over WebRTC signalled through it. Password members
+need local invites, which only a development host makes. Revisit if OpenBot's Local scripts gain
+task routes.
 
 ## Known gaps
 

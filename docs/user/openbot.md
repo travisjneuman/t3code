@@ -58,9 +58,10 @@ place, and agents still message each other inside OpenBot, as they always do.
 
 - A new thread can use OpenBot too. Its agent picker starts on the Chief of Staff, and sending
   opens the agent's main conversation with your message in it.
-- T3 can't start side threads, because OpenBot's Local scripts API only posts to an agent's main
-  conversation. Start those in OpenBot, or ask an agent in its main conversation to bring another
-  agent in. OpenBot isn't offered for Compare agents or a scheduled task, which each start a new
+- T3 can't start or message side threads, because OpenBot's Local scripts API only posts to an
+  agent's main conversation, and OpenBot's team access signs members in through openbot.run, so it
+  can't stay on your own network. Start side threads in OpenBot, or ask an agent in its main
+  conversation to bring another agent in. OpenBot isn't offered for Compare agents or a scheduled task, which each start a new
   thread.
 - Messages are text only. Attachments are refused.
 - The model picker lists the provider and model pairs OpenBot already uses for an agent or a
