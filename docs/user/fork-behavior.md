@@ -302,6 +302,10 @@ progress is blue, and a check that could not run says **Check failed** in red, w
 the dot. **Settings → Archive** leaves out "No archived threads" when archived Other Agents or
 Hermes sessions are listed below it.
 
+In **Usage → Limits**, a bar drawn in a provider's accent color stays visible when that color is
+close to the background. A black accent shows as grey in a dark theme, and a white or pale accent
+shows a shade darker in a light theme. The accent you picked in **Settings → Providers** is unchanged.
+
 ## Usage shows one row per model
 
 In **Usage → Breakdown → Model**, a model counts once however it ran. When it ran through more

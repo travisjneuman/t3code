@@ -55,6 +55,15 @@ export function barColor(driver: ServerProvider["driver"]): string {
   return presentation?.color ?? "var(--foreground)";
 }
 
+// Fork add-on(limit-bar-contrast): the bars paint at low opacity, so an accent near the canvas
+// lightness (black on dark, white on light) vanishes; clamp it into the theme's visible band.
+export function limitBarColor(accentColor: string | undefined, fallback: string): string {
+  const accent = normalizeProviderAccentColor(accentColor);
+  return accent
+    ? `oklch(from ${accent} clamp(var(--limit-bar-min-lightness), l, var(--limit-bar-max-lightness)) c h)`
+    : fallback;
+}
+
 export function PaceIcon({ pace }: { readonly pace: LimitPace }) {
   const Icon = PACE[pace].icon;
   return (
@@ -198,7 +207,7 @@ export function LimitWindows({
   readonly now: number;
   readonly compact?: boolean;
 }) {
-  const color = normalizeProviderAccentColor(accentColor) ?? barColor(driver);
+  const color = limitBarColor(accentColor, barColor(driver)); // Fork add-on(limit-bar-contrast)
   return (
     <div
       className={

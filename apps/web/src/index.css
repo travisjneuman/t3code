@@ -1114,6 +1114,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 :root {
   color-scheme: light;
   --radius: 0.5rem;
+  /* Fork add-on(limit-bar-contrast): lightness bounds that keep accent-colored limit bars visible. */
+  --limit-bar-min-lightness: 0;
+  --limit-bar-max-lightness: 0.75;
   --background: var(--color-zinc-25);
   --app-chrome-background: var(--background);
   --toolbar-background: var(--app-chrome-background);
@@ -1187,6 +1190,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
   @variant dark {
     color-scheme: dark;
+    --limit-bar-min-lightness: 0.55; /* Fork add-on(limit-bar-contrast) */
+    --limit-bar-max-lightness: 1; /* Fork add-on(limit-bar-contrast) */
     /* The canvas is true black, matching the sidebar. Raised surfaces keep the tone they had
        over neutral-950, so cards, popovers, and the composer still lift. Borders and hover
        states provide separation without milky gray fills. */

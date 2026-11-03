@@ -1782,6 +1782,25 @@
       ]
     },
     {
+      "id": "limit-bar-contrast",
+      "tier": "fix",
+      "title": "Limit bar contrast",
+      "summary": "Usage limit bars keep a provider accent visible when it is close to the theme background.",
+      "docs": [
+        "docs/user/fork-behavior.md"
+      ],
+      "dependsOn": [],
+      "surfaces": [
+        "web"
+      ],
+      "files": [],
+      "hooks": [
+        "apps/web/src/components/usage/UsageLimits.tsx",
+        "apps/web/src/components/usage/UsageLimitsPooled.tsx",
+        "apps/web/src/index.css"
+      ]
+    },
+    {
       "id": "update-wrappers",
       "tier": "fix",
       "title": "Update through wrapper scripts",
