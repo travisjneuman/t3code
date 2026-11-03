@@ -130,8 +130,6 @@ export function SidebarSectionHeader(props: {
       className={cn("relative mx-0.5 h-5", props.className) /* Fork add-on(compact-cards) */}
     >
       <CollapsibleSectionHeader
-        role="treeitem"
-        tabIndex={-1}
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
         expanded={props.toggle.expanded}
