@@ -42,7 +42,7 @@ import {
   type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -393,7 +393,7 @@ const isUnder = (path: Path.Path, child: string, root: string) => {
 export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
   const hostEnvironment = yield* HostProcess.Environment;
   const homeDirectory = yield* HostProcess.HomeDirectory;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -469,7 +469,7 @@ export const make = Effect.gen(function* () {
 
   const resolveProject = (target: ContinueTarget) =>
     Effect.gen(function* () {
-      const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed));
+      const id = yield* crypto.uuidV4().pipe(Effect.mapError(failed));
       const title = path.basename(target.cwd) || target.cwd;
       const bootstrapped = yield* projects
         .bootstrap({
@@ -581,7 +581,7 @@ export const make = Effect.gen(function* () {
       }
       // Moved back to Other Agents (an archive); continuing takes it up again.
       if (existing.value.thread.archivedAt !== null) {
-        const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed));
+        const id = yield* crypto.uuidV4().pipe(Effect.mapError(failed));
         yield* orchestrator
           .dispatch({
             type: "thread.unarchive",

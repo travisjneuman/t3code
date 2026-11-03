@@ -28,7 +28,7 @@ import { OpenBotApi, OpenBotDb } from "@t3tools/provider-openbot/server";
 import { OpenBotSettings } from "@t3tools/provider-openbot/settings";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -119,11 +119,11 @@ const make = Effect.gen(function* () {
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
   const positions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
 
   const commandId = (kind: string) =>
-    crypto.randomUUIDv4().pipe(
+    crypto.uuidV4().pipe(
       Effect.map((id) => CommandId.make(`openbot-session-${kind}:${id}`)),
       Effect.mapError(failed("Could not update the thread.")),
     );
@@ -279,7 +279,7 @@ const make = Effect.gen(function* () {
   ) {
     if (entries.length === 0) return;
     const batch = yield* crypto
-      .randomUUIDv4()
+      .uuidV4()
       .pipe(Effect.mapError(failed("Could not sync this conversation.")));
     const now = yield* DateTime.now;
     const events: OrchestrationV2DomainEvent[] = [];

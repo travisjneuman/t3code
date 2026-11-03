@@ -20,7 +20,7 @@ import {
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -104,7 +104,7 @@ const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const settingsService = yield* ServerSettings.ServerSettingsService;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
 
   // Keep the pass at about 10% duty, like event-store compaction.
   let sliceStarted = yield* Clock.monotonicTimeNanos;
@@ -250,7 +250,7 @@ const make = Effect.gen(function* () {
 
   const dispatch = Effect.fn("ThreadRetention.dispatch")(
     function* (source: CommandSource, action: FamilyAction, threadId: ThreadId) {
-      const uuid = yield* crypto.randomUUIDv4();
+      const uuid = yield* crypto.uuidV4();
       const commandId = CommandId.make(`server:${source}:${action}:${threadId}:${uuid}`);
       yield* orchestrator.dispatch(familyCommand(action, commandId, threadId));
       return true;

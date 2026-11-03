@@ -15,7 +15,7 @@ import { ProviderDriverKind, ProviderInstanceId, ThreadId } from "@t3tools/contr
 import { HermesSettings } from "@t3tools/provider-hermes/settings";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -75,12 +75,12 @@ const decodeHermesSettings = Schema.decodeUnknownOption(HermesSettings);
 const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const digester = yield* Digest.Digest;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const environmentId = yield* environment.getEnvironmentId;
 
   const digest = (text: string) =>
-    crypto.digest("SHA-256", new TextEncoder().encode(text)).pipe(Effect.orDie);
+    digester.digest(Digest.sha256, new TextEncoder().encode(text));
 
   /** The instance whose switched-on key matches, with its agent name. */
   const instanceFor = Effect.fn("HermesMcpBridge.instanceFor")(function* (token: string) {

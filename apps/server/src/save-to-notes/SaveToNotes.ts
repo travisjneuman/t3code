@@ -22,7 +22,7 @@ import {
   threadExchanges,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -189,7 +189,7 @@ const make = Effect.gen(function* () {
   const settings = yield* ServerSettingsService;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
 
   /** The setting as an existing absolute folder, or an error naming where to set it. */
   const folderSetting = (key: "notesDirectory" | "savedThreadsDirectory", label: string) =>
@@ -257,7 +257,7 @@ const make = Effect.gen(function* () {
     const folder = yield* folderSetting("notesDirectory", "notes folder");
     const projection = yield* readThread(input.threadId);
     const id = yield* crypto
-      .randomUUIDv4()
+      .uuidV4()
       .pipe(Effect.mapError(failed("Could not ask for a summary.")));
     const active = projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status));
     const text = [

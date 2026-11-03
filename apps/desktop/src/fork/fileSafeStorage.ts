@@ -6,7 +6,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -49,13 +49,13 @@ const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
   const directory = path.join(environment.stateDir, "desktop-secrets");
   const keyPath = path.join(directory, "safe-storage-key.bin");
 
   const createKey = Effect.gen(function* () {
     const key = NodeCrypto.randomBytes(KEY_BYTES);
-    const tempPath = `${keyPath}.${yield* crypto.randomUUIDv4()}.tmp`;
+    const tempPath = `${keyPath}.${yield* crypto.uuidV4()}.tmp`;
     yield* Effect.gen(function* () {
       yield* fileSystem.writeFile(tempPath, key, { mode: 0o600 });
       yield* fileSystem.rename(tempPath, keyPath);

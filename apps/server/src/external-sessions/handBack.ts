@@ -22,7 +22,7 @@ import {
   type OrchestrationV2ThreadProjection,
   type ThreadId,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
@@ -44,7 +44,7 @@ const failed = (message: string) => (cause: unknown) =>
 export const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const eventStore = yield* EventStore.EventStoreV2;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
 
   /**
    * What the thread was continued with: its `thread.created` event. Falls back
@@ -89,7 +89,7 @@ export const make = Effect.gen(function* () {
       (thread) => thread.providerInstanceId === origin,
     )?.driver;
     const name = driver === undefined ? origin : (PROVIDER_DISPLAY_NAMES[driver] ?? origin);
-    const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("Could not hand back.")));
+    const id = yield* crypto.uuidV4().pipe(Effect.mapError(failed("Could not hand back.")));
     const active = projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status));
     yield* orchestrator
       .dispatch({
@@ -124,7 +124,7 @@ export const make = Effect.gen(function* () {
     }
     if (projection.thread.archivedAt !== null) return {};
     const id = yield* crypto
-      .randomUUIDv4()
+      .uuidV4()
       .pipe(Effect.mapError(failed("Could not move it back.")));
     yield* orchestrator
       .dispatch({
