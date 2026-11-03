@@ -63,9 +63,14 @@ export function releaseAssetUrl(baseUrl: string, ...segments: ReadonlyArray<stri
 export function cliReleaseAssetUrl(
   version: string,
   fileName: string,
-  baseUrl: string | undefined = CLI_RELEASE_DEFAULT_BASE_URL,
+  baseUrl: string | undefined = undefined, // Fork add-on(host-releases)
+  repository: string = CLI_RELEASE_REPOSITORY, // Fork add-on(host-releases)
 ): string {
-  return releaseAssetUrl(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL, `v${version}`, fileName);
+  return releaseAssetUrl(
+    baseUrl?.trim() || ReleaseGuards.cliReleaseDefaultBaseUrl(repository), // Fork add-on(host-releases)
+    `v${version}`,
+    fileName,
+  );
 }
 
 export function parseChecksums(text: string): ReadonlyMap<string, string> {

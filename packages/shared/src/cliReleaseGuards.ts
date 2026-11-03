@@ -46,7 +46,7 @@ export function cliReleaseRepositoryOf(
   return repository?.trim() || githubReleaseRepositoryOf(baseUrl) || CLI_RELEASE_REPOSITORY;
 }
 
-const cliReleaseDefaultBaseUrl = (repository: string) =>
+export const cliReleaseDefaultBaseUrl = (repository: string) =>
   `https://github.com/${repository}/releases/download`;
 
 export function cliReleaseSourceOf(
