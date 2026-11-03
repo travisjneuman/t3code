@@ -78,10 +78,10 @@ export function ThreadDetailsCard({
     const measure = () => {
       const frame = element.closest<HTMLElement>("[data-thread-details-card]");
       const next = element.offsetHeight + (frame ? frame.offsetHeight - frame.clientHeight : 0);
-      // PR lists, lineage, side chats and automations scroll as they grow. Counting them toward
-      // density would hide the section and workspace controls when the user asks to see more rows.
+      // PR lists, servers, lineage, side chats and automations scroll as they grow. Counting them
+      // toward density would hide the section and workspace controls when the user asks to see more.
       const lists = element.querySelectorAll<HTMLElement>(
-        "[data-thread-relationships-panel], [data-thread-side-chats-panel], [data-thread-details-pr-list], [data-thread-automations-panel]",
+        "[data-thread-relationships-panel], [data-thread-side-chats-panel], [data-thread-details-pr-list], [data-thread-automations-panel], [data-thread-details-server-overflow]",
       );
       // Fork add-on(session-details): They are long and render only at full density, so
       // counting them would hide themselves.

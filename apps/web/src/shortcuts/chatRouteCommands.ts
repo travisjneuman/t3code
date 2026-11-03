@@ -137,12 +137,9 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
             return; // Fork add-on(no-project-start)
           } // Fork add-on(no-project-start)
         } // Fork add-on(no-project-start)
-        // The boring sidebar's folders already show the context, so it starts in
-        // the current project like the legacy sidebar did.
-        const { boringSidebarEnabled, legacySidebarEnabled } = getClientSettings();
+        const { legacySidebarEnabled } = getClientSettings();
         const groups = readProjectGroups();
         if (
-          !boringSidebarEnabled &&
           !legacySidebarEnabled &&
           !shouldCreateNewThreadInCurrentProject(
             false,
