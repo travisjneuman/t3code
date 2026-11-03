@@ -38,9 +38,11 @@ to show them all. Collapsed, the section still shows the conversations that are 
 - Click a conversation to open it in T3 with its history, tool calls and reasoning included. It
   opens in the Scratch project, since OpenBot works in its own folders. Clicking it again later
   brings in whatever OpenBot added since.
-- An agent is listed once it has a conversation or a side thread in OpenBot. To message one that
-  has neither, right-click the section header and pick it under **Message an agent**. Its main
-  conversation opens empty, and your first message starts it in OpenBot.
+- An agent is listed once it has a conversation or a side thread in OpenBot. A conversation with
+  no messages isn't listed, even after you open it, until you or OpenBot write in it.
+- Click **+** beside the section title to message your Chief of Staff (Buster - CoS, or the first
+  agent with Local scripts on if no agent has that role). The agent picker left of the model picker
+  switches to another agent's main conversation and takes what you typed along.
 - Right-click for **Open**, **Copy conversation ID**, and, once opened, **Archive thread** and
   **Delete thread**. These act on the T3 thread only; the conversation stays in OpenBot. Opening
   it again brings back an archived thread.
@@ -51,11 +53,15 @@ to show them all. Collapsed, the section still shows the conversations that are 
 
 T3 sends only to an agent's **main conversation**, and only when that agent has Local scripts on.
 Side threads and agents without Local scripts show an eye icon: you can read them in T3 but not
-message them. T3 can't start new chats or side threads: OpenBot's Local scripts API only posts to
-an agent's main conversation, so start those in OpenBot, or ask an agent in its main conversation to
-bring another agent in. OpenBot isn't offered for a new thread, Compare agents or a scheduled task. The agent shown left of the model picker
-stays with the chat; agents still message each other inside OpenBot, as they always do.
+message them. T3 never starts a second chat with an agent, so its history and context stay in one
+place, and agents still message each other inside OpenBot, as they always do.
 
+- A new thread can use OpenBot too. Its agent picker starts on the Chief of Staff, and sending
+  opens the agent's main conversation with your message in it.
+- T3 can't start side threads, because OpenBot's Local scripts API only posts to an agent's main
+  conversation. Start those in OpenBot, or ask an agent in its main conversation to bring another
+  agent in. OpenBot isn't offered for Compare agents or a scheduled task, which each start a new
+  thread.
 - Messages are text only. Attachments are refused.
 - The model picker lists the provider and model pairs OpenBot already uses for an agent or a
   running session. Picking one moves the agent there from your next message, in OpenBot too and for

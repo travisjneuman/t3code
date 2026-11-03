@@ -1,5 +1,5 @@
 /**
- * Client calls for the OpenBot section, plus the helpers that tell an OpenBot
+ * Client calls for the OpenBot section and composer, plus the helpers that tell an OpenBot
  * thread from the rest. `runOpenBot` resolves to null on failure. Fork add-on: OpenBot provider.
  *
  * @module openbot/openbotSessions
@@ -11,17 +11,22 @@ import {
   runAtomCommand,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   type EnvironmentId,
+  type OpenBotAgentSummary,
   OPENBOT_SESSIONS_WS_METHODS,
   ProviderDriverKind,
   type ProviderInstanceId,
+  type ScopedThreadRef,
   type ServerConfig,
+  type ThreadId,
 } from "@t3tools/contracts";
 
 import { toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { waitForThreadShell } from "../state/entities";
 
 export const OPENBOT_DRIVER = ProviderDriverKind.make("openbot");
 
@@ -47,8 +52,8 @@ export function openbotInstanceIds(
 const withoutOpenBotCache = new WeakMap<ReadonlyArray<unknown>, ReadonlyArray<unknown>>();
 
 /**
- * The providers a picker may start work on. OpenBot only continues conversations it holds, opened
- * from its sidebar section, so it is left out. Stable per input array.
+ * The providers Compare agents and scheduled tasks may start work on. Each run there is a thread
+ * of its own, and OpenBot keeps one conversation per agent, so it is left out. Stable per input.
  */
 export function withoutOpenBot<P extends { readonly driver: ProviderDriverKind }>(
   providers: ReadonlyArray<P>,
@@ -59,6 +64,69 @@ export function withoutOpenBot<P extends { readonly driver: ProviderDriverKind }
   const kept = providers.filter((provider) => provider.driver !== OPENBOT_DRIVER);
   withoutOpenBotCache.set(providers, kept);
   return kept;
+}
+
+/** The agent an OpenBot composer starts on: the Chief of Staff, else the first T3 can message. */
+export function defaultOpenBotAgent(
+  agents: ReadonlyArray<OpenBotAgentSummary>,
+): OpenBotAgentSummary | undefined {
+  const sendable = agents.filter((agent) => agent.sendable && agent.conversationId !== undefined);
+  return (
+    sendable.find((agent) => agent.title?.trim().toLowerCase() === "chief of staff") ?? sendable[0]
+  );
+}
+
+/** Opens an agent's main conversation as a T3 thread; its ref, or null after a toast. */
+export async function openOpenBotAgentThread(
+  environmentId: EnvironmentId,
+  instanceId: ProviderInstanceId,
+  conversationId: string,
+): Promise<ScopedThreadRef | null> {
+  const result = await runOpenBot(
+    openbotSessionsOpen,
+    environmentId,
+    { instanceId, conversationId },
+    "Could not open this OpenBot agent",
+  );
+  if (result === null) return null;
+  const threadRef = scopeThreadRef(environmentId, result.threadId);
+  if (await waitForThreadShell(threadRef)) return threadRef;
+  toastManager.add({
+    type: "info",
+    title: "Thread created",
+    description: "It has not reached this client yet. Open it from the sidebar.",
+  });
+  return null;
+}
+
+/**
+ * Sends a new thread's message to the default agent's main conversation, since T3 never starts a
+ * second conversation with an OpenBot agent. `start` sends it on the thread it resolves.
+ */
+export async function sendOpenBotDraft(
+  environmentId: EnvironmentId,
+  instanceId: ProviderInstanceId,
+  start: (threadId: ThreadId) => Promise<boolean>,
+): Promise<ScopedThreadRef | null> {
+  const listing = await runOpenBot(
+    openbotSessionsList,
+    environmentId,
+    { instanceId },
+    "Could not reach OpenBot",
+  );
+  if (listing === null) return null;
+  const agent = defaultOpenBotAgent(listing.agents ?? []);
+  if (agent?.conversationId === undefined) {
+    toastManager.add({
+      type: "error",
+      title: "No OpenBot agent to message",
+      description: "Turn on Local scripts for an agent in OpenBot.",
+    });
+    return null;
+  }
+  const threadRef = await openOpenBotAgentThread(environmentId, instanceId, agent.conversationId);
+  if (threadRef === null || !(await start(threadRef.threadId))) return null;
+  return threadRef;
 }
 
 /** True when the thread runs on an OpenBot instance of its environment. */

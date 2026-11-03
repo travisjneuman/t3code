@@ -23,7 +23,7 @@ import {
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
-import { ChevronRightIcon, CircleDashedIcon, EyeIcon } from "lucide-react";
+import { ChevronRightIcon, CircleDashedIcon, EyeIcon, PlusIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -60,10 +60,12 @@ import { environmentThreadShells } from "../state/threads";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import {
+  defaultOpenBotAgent,
   OPENBOT_DRIVER,
   openbotInstanceIds,
   openbotSessionsList,
   openbotSessionsOpen,
+  openOpenBotAgentThread,
   runOpenBot,
 } from "./openbotSessions";
 
@@ -76,8 +78,7 @@ const NO_KEYS: ReadonlyArray<string> = [];
 const WATCH_ONLY = "Watch-only: T3 sends only to an agent's main conversation, with Local scripts on";
 
 type MenuAction = "open" | "archive" | "delete" | "copy-id";
-/** The header's pick of an agent to message, by its main conversation. */
-type HeaderAction = "refresh" | `agent:${string}`;
+type HeaderAction = "refresh";
 type MenuPosition = { readonly x: number; readonly y: number };
 
 interface OpenBotTarget {
@@ -384,12 +385,7 @@ export function OpenBotSidebarSection() {
       key,
       target,
       label: listing?.label ?? providerName ?? "OpenBot",
-      // Agents OpenBot holds nothing for yet; their main conversation starts with a first message.
-      unlistedAgents: (listing?.agents ?? []).filter(
-        (agent) =>
-          agent.conversationId !== undefined &&
-          !listing?.conversations.some((conversation) => conversation.agentId === agent.id),
-      ),
+      defaultAgent: defaultOpenBotAgent(listing?.agents ?? []),
       rows,
       groups: groupRows(rows),
     };
@@ -547,53 +543,38 @@ export function OpenBotSidebarSection() {
     }
   });
 
-  /** Opens an agent's main conversation, empty until the first message T3 sends starts it. */
-  const openAgent = async (target: OpenBotTarget, conversationId: string) => {
-    const result = await runOpenBot(
-      openbotSessionsOpen,
+  /** The + opens the default agent's main conversation; the composer's agent picker moves on. */
+  const openDefaultAgent = async (
+    target: OpenBotTarget,
+    agent: OpenBotAgentSummary | undefined,
+  ) => {
+    if (agent?.conversationId === undefined) {
+      toastManager.add({
+        type: "info",
+        title: "No OpenBot agent to message",
+        description: "Turn on Local scripts for an agent in OpenBot.",
+      });
+      return;
+    }
+    const threadRef = await openOpenBotAgentThread(
       target.environmentId,
-      { instanceId: target.instanceId, conversationId },
-      "Could not open this OpenBot agent",
+      target.instanceId,
+      agent.conversationId,
     );
-    if (result !== null) await openThread(target.environmentId, result.threadId);
+    if (threadRef === null) return;
+    closeMobileSidebar();
+    await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(threadRef) });
   };
 
-  const handleHeaderContextMenu = async (
-    target: OpenBotTarget,
-    unlistedAgents: ReadonlyArray<OpenBotAgentSummary>,
-    event: MouseEvent,
-  ) => {
+  const handleHeaderContextMenu = async (event: MouseEvent) => {
     const api = readLocalApi();
     if (api === undefined) return;
     event.preventDefault();
-    const items: Array<ContextMenuItem<HeaderAction>> = [
-      { id: "refresh", label: "Refresh", icon: "refresh-cw" },
-    ];
-    const mayOpenAgents = appAtomRegistry.get(
-      openbotSessionsOpen.permissionAtom(target.environmentId),
+    const clicked = await api.contextMenu.show<HeaderAction>(
+      [{ id: "refresh", label: "Refresh", icon: "refresh-cw" }],
+      { x: event.clientX, y: event.clientY },
     );
-    if (unlistedAgents.length > 0 && mayOpenAgents) {
-      items.push({
-        id: "agent:",
-        label: "Message an agent",
-        icon: "message-square-plus",
-        children: unlistedAgents.map((agent) => ({
-          id: `agent:${agent.conversationId ?? ""}`,
-          label: agent.sendable
-            ? openBotAgentLabel(agent.name, agent.title)
-            : `${openBotAgentLabel(agent.name, agent.title)} (Local scripts off)`,
-          disabled: !agent.sendable,
-        })),
-      });
-    }
-    const clicked = await api.contextMenu.show<HeaderAction>(items, {
-      x: event.clientX,
-      y: event.clientY,
-    });
     if (clicked === "refresh") refresh();
-    else if (clicked?.startsWith("agent:") && clicked.length > "agent:".length) {
-      await openAgent(target, clicked.slice("agent:".length));
-    }
   };
 
   if (targets.length === 0) return null;
@@ -627,9 +608,7 @@ export function OpenBotSidebarSection() {
           <section key={section.key} aria-label={section.label} className="mt-1">
             <div
               className="mx-0.5 flex h-5 items-center gap-0.5"
-              onContextMenu={(event) =>
-                void handleHeaderContextMenu(section.target, section.unlistedAgents, event)
-              }
+              onContextMenu={(event) => void handleHeaderContextMenu(event)}
             >
               <div className="min-w-0 flex-1">
                 <CollapsibleSectionHeader
@@ -647,6 +626,20 @@ export function OpenBotSidebarSection() {
                   {section.label}
                 </CollapsibleSectionHeader>
               </div>
+              <button
+                type="button"
+                aria-label={`Message ${section.label}`}
+                title={
+                  section.defaultAgent
+                    ? `Message ${openBotAgentLabel(section.defaultAgent.name, section.defaultAgent.title)}`
+                    : `Message ${section.label}`
+                }
+                onMouseDown={preventMouseFocus}
+                onClick={() => void openDefaultAgent(section.target, section.defaultAgent)}
+                className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              >
+                <PlusIcon aria-hidden className="size-3.5" />
+              </button>
             </div>
             {groups.length > 0 ? (
               <ul className="flex flex-col">

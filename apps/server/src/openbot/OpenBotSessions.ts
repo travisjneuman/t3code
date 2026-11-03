@@ -154,9 +154,10 @@ const make = Effect.gen(function* () {
 
   /**
    * This instance's threads by OpenBot conversation, the newest unarchived one winning. Any but
-   * the conversation's own import came from the retired New chat; one that never ran is abandoned.
+   * the conversation's own import came from the retired New chat; one that never ran is empty, so
+   * it binds nothing and the section leaves it out.
    */
-  const threadsOf = (instanceId: ProviderInstanceId) =>
+  const boundThreads = (instanceId: ProviderInstanceId) =>
     sql<{
       readonly thread_id: string;
       readonly native_id: string | null;
@@ -178,32 +179,18 @@ const make = Effect.gen(function* () {
     `.pipe(
       Effect.map((rows) => {
         const bound = new Map<string, { threadId: ThreadId; archived: boolean }>();
-        const abandoned: Array<ThreadId> = [];
         for (const row of rows) {
           if (typeof row.native_id !== "string") continue;
-          const archived = row.archived_at !== null;
-          if (row.thread_id !== importedThreadId(instanceId, row.native_id) && !row.first_run_at) {
-            if (!archived) abandoned.push(ThreadId.make(row.thread_id));
+          if (row.thread_id !== importedThreadId(instanceId, row.native_id) && !row.first_run_at)
             continue;
-          }
+          const archived = row.archived_at !== null;
           if (archived && bound.get(row.native_id)?.archived === false) continue;
           bound.set(row.native_id, { threadId: ThreadId.make(row.thread_id), archived });
         }
-        return { bound, abandoned };
+        return bound;
       }),
       Effect.mapError(failed("Could not read T3's OpenBot threads.")),
     );
-  const boundThreads = (instanceId: ProviderInstanceId) =>
-    threadsOf(instanceId).pipe(Effect.map(({ bound }) => bound));
-
-  const archiveThread = (threadId: ThreadId) =>
-    Effect.gen(function* () {
-      yield* orchestrator.dispatch({
-        type: "thread.archive",
-        commandId: yield* commandId("archive"),
-        threadId,
-      });
-    }).pipe(Effect.ignore({ log: true }));
 
   const list: OpenBotSessions["Service"]["list"] = Effect.fn("OpenBotSessions.list")(
     function* (input) {
@@ -211,8 +198,7 @@ const make = Effect.gen(function* () {
       const { agents, threads } = yield* OpenBotDb.readDirectory(location).pipe(
         Effect.mapError(fromOpenBot),
       );
-      const { bound, abandoned } = yield* threadsOf(input.instanceId);
-      yield* Effect.forEach(abandoned, archiveThread, { discard: true });
+      const bound = yield* boundThreads(input.instanceId);
       const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
       const withSides = new Set(
         threads.filter((thread) => thread.side).map((thread) => thread.agentId),

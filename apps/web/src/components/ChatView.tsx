@@ -1224,8 +1224,8 @@ export default function ChatView(props: ChatViewProps) {
     (providerEnvironmentId === undefined
       ? undefined
       : providersByEnvironment.get(providerEnvironmentId)) ?? EMPTY_PROVIDERS;
-  const providerStatuses = // Fork add-on(openbot): only threads already on OpenBot keep it.
-    isServerThread &&
+  const providerStatuses = // Fork add-on(openbot): a new thread or an OpenBot thread offers it.
+    !isServerThread ||
     environmentProviders.find(
       (provider) => provider.instanceId === activeThread?.modelSelection.instanceId,
     )?.driver === OPENBOT_DRIVER

@@ -64,6 +64,7 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { buildThreadRouteParams } from "../../threadRoutes";
+import { OPENBOT_DRIVER, sendOpenBotDraft } from "../../openbot/openbotSessions"; // Fork add-on(openbot)
 import {
   beginBackgroundDraftSubmissionByRef,
   clearBackgroundDraftSubmissionByRef,
@@ -402,6 +403,60 @@ export function useComposerSend(input: ComposerSendInput) {
     respondingRequestIdsRef.current = respondingRequestIds;
   }, [pendingApprovals, respondingRequestIds]);
 
+  // Fork add-on(openbot): a new thread's message goes to the agent's main conversation.
+  const sendOpenBotDraftMessage = async (
+    prompt: string,
+    attachmentCount: number,
+    selectedModelSelection: ModelSelection,
+    interactionMode: ProviderInteractionMode,
+  ) => {
+    const text = prompt.trim();
+    if (!text) return;
+    if (attachmentCount > 0) {
+      toastManager.add(
+        stackedThreadToast({ type: "warning", title: "OpenBot takes text messages only" }),
+      );
+      return;
+    }
+    sendInFlightRef.current = true;
+    try {
+      const threadRef = await sendOpenBotDraft(
+        environmentId,
+        selectedModelSelection.instanceId,
+        async (threadId) => {
+          const result = await startThreadTurn({
+            environmentId,
+            input: {
+              threadId,
+              message: { messageId: newMessageId(), role: "user", text, attachments: [] },
+              modelSelection: selectedModelSelection,
+              runtimeMode,
+              interactionMode,
+              dispatchMode: "queue",
+            },
+          });
+          if (result._tag === "Success") return true;
+          const failure = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not send to OpenBot",
+              description: failure instanceof Error ? failure.message : undefined,
+            }),
+          );
+          return false;
+        },
+      );
+      if (threadRef === null) return;
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(threadRef) });
+    } finally {
+      sendInFlightRef.current = false;
+    }
+  };
+
   const onSend = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -644,6 +699,15 @@ export function useComposerSend(input: ComposerSendInput) {
       );
       return;
     }
+    if (isLocalDraftThread && ctxSelectedProvider === OPENBOT_DRIVER) { // Fork add-on(openbot)
+      await sendOpenBotDraftMessage( // Fork add-on(openbot)
+        promptForSend, // Fork add-on(openbot)
+        composerImages.length + composerFiles.length, // Fork add-on(openbot)
+        ctxSelectedModelSelection, // Fork add-on(openbot)
+        sendInteractionMode, // Fork add-on(openbot)
+      ); // Fork add-on(openbot)
+      return; // Fork add-on(openbot)
+    } // Fork add-on(openbot)
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,

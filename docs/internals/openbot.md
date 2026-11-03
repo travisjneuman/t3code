@@ -55,12 +55,19 @@ threads OpenBot no longer lists skips T3 threads with no items.
 
 T3 starts neither new chats nor side threads. Local scripts posts only to the main conversation and
 has no route that starts a side thread, and a new chat would have to clear the agent's context
-(`context/clear`) in the conversation OpenBot keeps running. An agent OpenBot holds nothing for is
-reached through its main conversation, which the first message starts; the section header's menu
-opens it. Pickers that start work leave OpenBot out (`withoutOpenBot`), and the chat view keeps it
-only for a server thread already on an OpenBot instance. An earlier New chat left T3 threads
-beside a conversation's own import (`openbot:<instance>:<conversation>`); the next list archives
-any of those that never ran, so the section binds the import again.
+(`context/clear`) in the conversation OpenBot keeps running. So every way in lands on an agent's
+main conversation: the section's + opens the Chief of Staff's (`defaultOpenBotAgent`), the composer's
+agent picker opens the picked agent's, and a new thread on OpenBot sends its first message there
+(`sendOpenBotDraft`) instead of creating a thread of its own. Compare agents and scheduled tasks
+create a thread per run, so they leave OpenBot out (`withoutOpenBot`).
+
+An empty thread is treated as no conversation, never archived: the list leaves empty conversations
+out, and a leftover thread from the retired New chat that never ran binds nothing, so the section
+binds the conversation's own import (`openbot:<instance>:<conversation>`).
+
+OpenBot's Team API (`agent-tasks-v1`: `/v1/agent-tasks/start` and friends, on a loopback port that
+changes with every start, found through `/v1/compatibility`) can start side threads, but it takes a
+team member's session, not the Local scripts token, so T3 would need its own team seat.
 
 ## Known gaps
 
