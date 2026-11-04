@@ -1,10 +1,6 @@
 /**
- * Which real model a usage row belongs to, whatever harness or gateway route
- * carried it. Usage → Breakdown → Model groups rows by `key`, and server price
- * overrides fall back to `modelId`, so one model reads and prices as one row.
- * Fork add-on: one usage row per model.
- *
- * @module usageModelIdentity
+ * Which real model a usage row belongs to, whatever harness or gateway route carried it,
+ * so one model reads and prices as one row. Fork add-on: one usage row per model.
  */
 import type { UsageProviderKind } from "@t3tools/contracts";
 
@@ -94,7 +90,10 @@ export function usageModelIdentity(
   const trimmed = rawModel.trim();
   const unattributed = unattributedUsage(provider, trimmed);
   const slash = trimmed.lastIndexOf("/");
-  const routeSlug = unattributed === null && slash > 0 ? trimmed.slice(0, slash) : null;
+  const reportedSlug = unattributed === null && slash > 0 ? trimmed.slice(0, slash) : null;
+  // Pi's ChatGPT sign-in replaced `openai-codex` and now reports as `openai`; both are one Codex route.
+  const routeSlug =
+    provider === "pi" && reportedSlug?.toLowerCase() === "openai" ? "openai-codex" : reportedSlug;
   const route = routeSlug === null ? null : brandProviderName(routeSlug);
   const { modelId, vendor, tier } = parseModel(trimmed);
   if (unattributed !== null || vendor === null) {

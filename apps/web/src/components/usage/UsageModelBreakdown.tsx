@@ -12,7 +12,6 @@ import { Fragment } from "react";
 
 import { cn } from "../../lib/utils";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cacheHitRate, costPerMillionTokens, modelShare } from "./usageBreakdown";
 import {
   usageModelRow,
@@ -20,7 +19,6 @@ import {
   usageModelTitle,
   usageRouteColors,
   usageRouteLabel,
-  usageRouteNote,
 } from "./usageModelRows";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
 
@@ -54,21 +52,7 @@ function RouteLabel({
   readonly route: UsageModelRoute;
   readonly className?: string;
 }) {
-  const label = usageRouteLabel(route);
-  const note = usageRouteNote(route);
-  if (note === null) return <span className={className}>{label}</span>;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span className={cn("underline decoration-dotted underline-offset-2", className)} />
-        }
-      >
-        {label}
-      </TooltipTrigger>
-      <TooltipPopup>{note}</TooltipPopup>
-    </Tooltip>
-  );
+  return <span className={className}>{usageRouteLabel(route)}</span>;
 }
 
 function UsageModelRows({

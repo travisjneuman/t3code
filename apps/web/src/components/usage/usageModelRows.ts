@@ -43,13 +43,6 @@ export function usageRouteLabel(route: UsageModelRoute): string {
   return route.tier === null ? label : `${label} · ${route.tier}`;
 }
 
-/** Pi's `openai` provider takes an API key or a ChatGPT sign-in, and transcripts don't say which. */
-export function usageRouteNote(route: UsageModelRoute): string | null {
-  return route.routeSlug?.toLowerCase() === "openai"
-    ? "Through an OpenAI API key or a ChatGPT sign-in."
-    : null;
-}
-
 /** A sole route through the vendor's own harness needs no label; any other route does. */
 export function usageModelSoleRouteNeedsLabel(row: UsageModelRow): boolean {
   const [route] = row.grouping.routes;
