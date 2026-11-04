@@ -317,8 +317,8 @@ export interface FileRoutesByFullPath {
   '/settings/storage': typeof ChatSettingsStorageRoute
   '/settings/threads': typeof ChatSettingsThreadsRoute
   '/settings/worktrees': typeof ChatSettingsWorktreesRoute
-  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
   '/threads/$environmentId/$threadId': typeof ThreadsEnvironmentIdThreadIdRoute
+  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
@@ -361,8 +361,8 @@ export interface FileRoutesByTo {
   '/settings/storage': typeof ChatSettingsStorageRoute
   '/settings/threads': typeof ChatSettingsThreadsRoute
   '/settings/worktrees': typeof ChatSettingsWorktreesRoute
-  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
   '/threads/$environmentId/$threadId': typeof ThreadsEnvironmentIdThreadIdRoute
+  '/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -407,8 +407,8 @@ export interface FileRoutesById {
   '/_chat/settings/storage': typeof ChatSettingsStorageRoute
   '/_chat/settings/threads': typeof ChatSettingsThreadsRoute
   '/_chat/settings/worktrees': typeof ChatSettingsWorktreesRoute
-  '/_chat/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
   '/threads/$environmentId/$threadId': typeof ThreadsEnvironmentIdThreadIdRoute
+  '/_chat/external/$environmentId/$sessionKey': typeof ChatExternalEnvironmentIdSessionKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -453,8 +453,8 @@ export interface FileRouteTypes {
     | '/settings/storage'
     | '/settings/threads'
     | '/settings/worktrees'
-    | '/external/$environmentId/$sessionKey'
     | '/threads/$environmentId/$threadId'
+    | '/external/$environmentId/$sessionKey'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
@@ -497,8 +497,8 @@ export interface FileRouteTypes {
     | '/settings/storage'
     | '/settings/threads'
     | '/settings/worktrees'
-    | '/external/$environmentId/$sessionKey'
     | '/threads/$environmentId/$threadId'
+    | '/external/$environmentId/$sessionKey'
   id:
     | '__root__'
     | '/_chat'
@@ -542,8 +542,8 @@ export interface FileRouteTypes {
     | '/_chat/settings/storage'
     | '/_chat/settings/threads'
     | '/_chat/settings/worktrees'
-    | '/_chat/external/$environmentId/$sessionKey'
     | '/threads/$environmentId/$threadId'
+    | '/_chat/external/$environmentId/$sessionKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
