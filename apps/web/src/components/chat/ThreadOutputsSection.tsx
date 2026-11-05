@@ -6,6 +6,7 @@ import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { cn } from "../../lib/utils";
 import { useThreadOutputs } from "../../state/sessionInsights";
 import { StartTruncatedPath } from "../StartTruncatedPath";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { type OutputFile, sumOutputChanges } from "./sessionInsights.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -17,7 +18,7 @@ const OUTPUTS_INITIAL_COUNT = 8;
 // Same dense line as the lineage subagent rows; a row with nothing to open
 // keeps the size without the pointer and hover.
 const OUTPUT_STATIC_ROW_CLASS =
-  "flex h-5 w-full min-w-0 items-center gap-1.5 rounded-md px-2.5 text-left text-[10px] text-foreground/80";
+  "flex h-5 w-full min-w-0 items-center gap-1.5 rounded-md px-2.5 text-left text-3xs text-foreground/80";
 
 /** Files the thread's turns changed, newest first; each opens its diff. Fork add-on. */
 export const ThreadOutputsSection = memo(function ThreadOutputsSection(props: {
@@ -66,7 +67,7 @@ export const SessionOutputsList = memo(function SessionOutputsList(props: {
  * changes in its header. Rows with a run open that run's diff; the rest open
  * the file when `onOpenFile` is given.
  */
-export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
+const ThreadOutputsList = memo(function ThreadOutputsList(props: {
   readonly outputs: ReadonlyArray<OutputsListFile>;
   readonly workspaceRoot: string | undefined;
   readonly onOpenTurnDiff: ((runId: RunId, filePath?: string) => void) | undefined;
@@ -87,13 +88,18 @@ export const ThreadOutputsList = memo(function ThreadOutputsList(props: {
       title={`Outputs · ${outputs.length}`}
       actions={
         changes === null ? undefined : (
-          <span className="text-2xs" title="Changes">
-            <DiffStatLabel
-              additions={changes.additions}
-              deletions={changes.deletions}
-              layout="inline"
-            />
-          </span>
+          <Tooltip>
+            <TooltipTrigger render={<span />}>
+              <span className="text-2xs">
+                <DiffStatLabel
+                  additions={changes.additions}
+                  deletions={changes.deletions}
+                  layout="inline"
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipPopup>Changes</TooltipPopup>
+          </Tooltip>
         )
       }
       data-thread-outputs-panel

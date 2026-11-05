@@ -27,7 +27,7 @@ export const ExistingCheckoutFindResult = Schema.Struct({
 });
 export type ExistingCheckoutFindResult = typeof ExistingCheckoutFindResult.Type;
 
-export const ExistingCheckoutFindRpc = Rpc.make(EXISTING_CHECKOUT_WS_METHODS.find, {
+const ExistingCheckoutFindRpc = Rpc.make(EXISTING_CHECKOUT_WS_METHODS.find, {
   payload: ExistingCheckoutFindInput,
   success: ExistingCheckoutFindResult,
   error: EnvironmentAuthorizationError,

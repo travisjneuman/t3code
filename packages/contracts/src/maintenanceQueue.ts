@@ -1,8 +1,5 @@
-/**
- * Maintenance queue: updates wait until whatever they would restart has no
- * active sessions. `status` reports whether the environment's Hermes Agents
- * are mid-run, since Hermes's T3 tools call this server; `releaseProviderSessions`
- * closes a provider's idle sessions so an update can replace its executables.
+/** Updates wait for no active sessions on the restart target. `status` includes mid-run
+ * Hermes Agents using this server; `releaseProviderSessions` closes idle sessions for replacement.
  * Fork add-on; see docs/user/fork-updating.md.
  */
 import * as Schema from "effect/Schema";
@@ -94,13 +91,13 @@ const MaintenanceQueueRpcError = Schema.Union([
   EnvironmentAuthorizationError,
 ]);
 
-export const MaintenanceQueueStatusRpc = Rpc.make(MAINTENANCE_QUEUE_WS_METHODS.status, {
+const MaintenanceQueueStatusRpc = Rpc.make(MAINTENANCE_QUEUE_WS_METHODS.status, {
   payload: Schema.Struct({}),
   success: MaintenanceQueueStatusResult,
   error: MaintenanceQueueRpcError,
 });
 
-export const MaintenanceReleaseProviderSessionsRpc = Rpc.make(
+const MaintenanceReleaseProviderSessionsRpc = Rpc.make(
   MAINTENANCE_QUEUE_WS_METHODS.releaseProviderSessions,
   {
     payload: MaintenanceReleaseProviderSessionsInput,

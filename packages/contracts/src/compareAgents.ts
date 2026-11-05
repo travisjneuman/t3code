@@ -1,12 +1,6 @@
-/**
- * Compare agents: one prompt sent to two agents as two new threads in the
- * same project (or "No project", where each side gets a folder of its own),
- * shown side by side. "Review swap" then sends each agent the
- * other's latest final answer, saying which provider, model and options
- * produced it for the same prompts. "Follow up" sends one message to both and
- * "Stop" interrupts both. The pair needs no stored record: both
- * thread ids derive from the pair id. Fork add-on; see
- * docs/user/compare-agents.md.
+/** Fork add-on; see docs/user/compare-agents.md. Paired threads share a prompt/project;
+ * "No project" gives each a folder. Review swap shares latest answers with provider/model/options;
+ * follow-up/stop affect both. Thread ids derive from the pair id, requiring no stored pair record.
  */
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
@@ -107,25 +101,25 @@ export class CompareAgentsError extends Schema.TaggedError<CompareAgentsError>()
 
 const CompareAgentsRpcError = Schema.Union([CompareAgentsError, EnvironmentAuthorizationError]);
 
-export const CompareAgentsStartRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.start, {
+const CompareAgentsStartRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.start, {
   payload: CompareAgentsStartInput,
   success: CompareAgentsStartResult,
   error: CompareAgentsRpcError,
 });
 
-export const CompareAgentsReviewSwapRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.reviewSwap, {
+const CompareAgentsReviewSwapRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.reviewSwap, {
   payload: CompareAgentsReviewSwapInput,
   success: CompareAgentsEmptyResult,
   error: CompareAgentsRpcError,
 });
 
-export const CompareAgentsFollowUpRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.followUp, {
+const CompareAgentsFollowUpRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.followUp, {
   payload: CompareAgentsFollowUpInput,
   success: CompareAgentsEmptyResult,
   error: CompareAgentsRpcError,
 });
 
-export const CompareAgentsStopRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.stop, {
+const CompareAgentsStopRpc = Rpc.make(COMPARE_AGENTS_WS_METHODS.stop, {
   payload: CompareAgentsStopInput,
   success: CompareAgentsEmptyResult,
   error: CompareAgentsRpcError,

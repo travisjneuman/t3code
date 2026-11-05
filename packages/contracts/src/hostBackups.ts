@@ -39,7 +39,7 @@ export class HostBackupsError extends Schema.TaggedError<HostBackupsError>()("Ho
   message: Schema.String,
 }) {}
 
-export const HostBackupsListRpc = Rpc.make(HOST_BACKUPS_WS_METHODS.list, {
+const HostBackupsListRpc = Rpc.make(HOST_BACKUPS_WS_METHODS.list, {
   payload: Schema.Struct({}),
   success: HostBackupsListResult,
   error: Schema.Union([HostBackupsError, EnvironmentAuthorizationError]),

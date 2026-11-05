@@ -15,7 +15,7 @@ function publish(ref: ScopedThreadRef | null): void {
   for (const listener of listeners) listener();
 }
 
-export function subscribeActiveRemoteAppPanelThread(listener: () => void): () => void {
+function subscribeActiveRemoteAppPanelThread(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -24,6 +24,7 @@ export const getActiveRemoteAppPanelThread = (): ScopedThreadRef | null => activ
 
 /** Called by the chat view with the thread it shows. */
 export function useRemoteAppPanelThread(ref: ScopedThreadRef | null): void {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the mounted chat view's thread for panel/menu consumers and clears only its own entry on cleanup
   useEffect(() => {
     if (ref === null) return;
     publish(ref);

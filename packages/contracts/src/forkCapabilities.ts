@@ -21,7 +21,10 @@ export const ForkCapabilityFields = {
   forkAddOns: Schema.optionalKey(Schema.Array(Schema.String)), // Fork add-on(core)
 };
 
-/** Written by scripts/fork-addons.ts from fork/addons.config.json. */
+/**
+ * Written by scripts/fork-addons.ts from fork/addons.config.json.
+ * @public
+ */
 export const FORK_ADDONS = [
   "core",
   "web-apps",

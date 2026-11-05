@@ -1,10 +1,7 @@
 /**
- * Hooks for the upstream update entry points. A provider or server update
- * whose target has active sessions is queued instead of run, and the caller
- * gets an interrupted result, which every entry point already treats as
- * skipped. The desktop app's own restart is held in the main process instead;
- * see ./desktopGate. Fork add-on: maintenance queue.
- *
+ * Busy provider/server updates are queued and return interruption so callers skip them.
+ * Desktop restarts are held in the main process; see ./desktopGate.
+ * Fork add-on: maintenance queue.
  * @module maintenance-queue/useQueuedUpdate
  */
 import {
@@ -47,17 +44,9 @@ interface ServerUpdateRequest {
   readonly input: ServerSelfUpdateInput;
 }
 
-const queuedResults = new WeakSet<object>();
-
 function queuedResult<A, E>(): AtomCommandResult<A, E> {
   const result = AsyncResult.failure<A, E>(Cause.interrupt());
-  queuedResults.add(result);
   return result;
-}
-
-/** True for the result an entry point gets when its update was queued. */
-export function isQueuedUpdateResult(result: AtomCommandResult<unknown, unknown>): boolean {
-  return queuedResults.has(result);
 }
 
 /**

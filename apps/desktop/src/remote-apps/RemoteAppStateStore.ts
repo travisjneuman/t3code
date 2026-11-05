@@ -161,33 +161,33 @@ const readState = Effect.fnUntraced(function* (input: {
   readonly fileSystem: FileSystem.FileSystem;
   readonly statePath: string;
 }): Effect.fn.Return<RemoteAppState> {
-  const raw = yield* input.fileSystem
-    .readFileString(input.statePath)
-    .pipe(
-      Effect.catchTag("PlatformError", (cause) =>
+  const raw = yield* input.fileSystem.readFileString(input.statePath).pipe(
+    Effect.catchTags({
+      PlatformError: (cause) =>
         cause.reason._tag === "NotFound"
           ? Effect.succeed(null)
           : Effect.logWarning("Could not read remote app state.", cause).pipe(Effect.as(null)),
-      ),
-    );
+    }),
+  );
   if (raw === null) return DEFAULT_REMOTE_APP_STATE;
 
   return yield* decodeState(raw).pipe(
     // Unread badges describe live views, which do not survive a restart.
     Effect.map((state) => ({ ...normalizeRemoteAppState(state), unreadSites: [] })),
-    Effect.catchTag("SchemaError", (cause) =>
-      input.fileSystem.rename(input.statePath, `${input.statePath}.corrupt-${process.pid}`).pipe(
-        Effect.catch(() => Effect.void),
-        Effect.andThen(
-          Effect.logWarning("Could not decode remote app state; using defaults.", cause),
+    Effect.catchTags({
+      SchemaError: (cause) =>
+        input.fileSystem.rename(input.statePath, `${input.statePath}.corrupt-${process.pid}`).pipe(
+          Effect.catch(() => Effect.void),
+          Effect.andThen(
+            Effect.logWarning("Could not decode remote app state; using defaults.", cause),
+          ),
+          Effect.as(DEFAULT_REMOTE_APP_STATE),
         ),
-        Effect.as(DEFAULT_REMOTE_APP_STATE),
-      ),
-    ),
+    }),
   );
 });
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const writeLock = yield* Semaphore.make(1);

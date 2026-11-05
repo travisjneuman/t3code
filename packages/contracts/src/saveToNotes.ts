@@ -46,13 +46,13 @@ export class SaveToNotesError extends Schema.TaggedError<SaveToNotesError>()("Sa
 
 const SaveToNotesRpcError = Schema.Union([SaveToNotesError, EnvironmentAuthorizationError]);
 
-export const SaveToNotesSaveCopyRpc = Rpc.make(SAVE_TO_NOTES_WS_METHODS.saveCopy, {
+const SaveToNotesSaveCopyRpc = Rpc.make(SAVE_TO_NOTES_WS_METHODS.saveCopy, {
   payload: SaveToNotesInput,
   success: SaveToNotesCopyResult,
   error: SaveToNotesRpcError,
 });
 
-export const SaveToNotesRequestSummaryRpc = Rpc.make(SAVE_TO_NOTES_WS_METHODS.requestSummary, {
+const SaveToNotesRequestSummaryRpc = Rpc.make(SAVE_TO_NOTES_WS_METHODS.requestSummary, {
   payload: SaveToNotesInput,
   success: SaveToNotesSummaryResult,
   error: SaveToNotesRpcError,

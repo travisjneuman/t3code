@@ -8,7 +8,7 @@ import { cliReleaseBaseUrlProblem } from "@t3tools/shared/cliRelease";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
-export const BOOT_SERVICE_LOG_MAX_BYTES = 5 * 1024 * 1024;
+const BOOT_SERVICE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * The service manager appends to the log for the life of the host, so past the cap it moves to a

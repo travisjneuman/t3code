@@ -213,7 +213,7 @@ export function labelSessionRecordSettings(record: SessionRecord): SessionRecord
   });
 }
 
-export const MCP_SERVER_STATUS_PRESENTATION: Record<
+const MCP_SERVER_STATUS_PRESENTATION: Record<
   SessionMcpServerStatus,
   { readonly label: string; readonly dotClassName: string }
 > = {

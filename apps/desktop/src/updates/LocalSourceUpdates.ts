@@ -35,7 +35,6 @@ const LOCKFILE_PATH = "pnpm-lock.yaml";
 const BUILD_FIX_SUBJECT = "fix(desktop): build upstream nightly ";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
-// eslint-disable-next-line no-control-regex
 const ANSI_PATTERN = /\u001b\[[0-9;]*m/gu;
 // Overrides the checkout path the build recorded in the packaged package.json.
 const SOURCE_REPOSITORY_PATH_ENV = "T3CODE_SOURCE_REPOSITORY_PATH";
@@ -50,7 +49,7 @@ const UPSTREAM_REMOTE_URL = "https://github.com/pingdotgg/t3code.git";
 const GITHUB_REMOTE_PREFIX =
   /^(?:(?:https?|ssh|git|git\+ssh):\/\/)?(?:[^@/]+@)?(?:www\.)?github\.com(?::\d+)?[/:]/iu;
 /** Every line the fork adds or changes in an upstream file carries this text. */
-export const FORK_MARKER = "Fork add-on";
+const FORK_MARKER = "Fork add-on";
 const MERGE_AGENT_RULES = [
   `${UPSTREAM_SYNC_PROMPT_PREFIX} (${UPSTREAM_REPOSITORY}) into this fork.`,
   "Keep upstream's text and code everywhere; never revert or reword an upstream change.",
@@ -272,7 +271,7 @@ export function selectNewestNightlyTag(output: string): string | null {
   return tags.at(-1) ?? null;
 }
 
-export const nightlyVersionFromTag = (tag: string): string => tag.replace(/^v/u, "");
+const nightlyVersionFromTag = (tag: string): string => tag.replace(/^v/u, "");
 
 /**
  * Parses `git grep -c -z` output (`<name>\0<count>` per line). `prefix` strips
@@ -481,7 +480,7 @@ export function resolveMacApplicationBundlePath(
   return resolvePath(dirname(executablePath), "..", "..");
 }
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -554,8 +553,8 @@ export const make = Effect.gen(function* () {
 
   // The in-process lock does not see a build started from a terminal or by
   // other tooling; merging, installing or building under one breaks both.
-  const requireIdleCheckout = (operation: LocalSourceUpdateOperation) =>
-    Effect.gen(function* () {
+  const requireIdleCheckout = Effect.fn("desktop.localSourceUpdates.requireIdleCheckout")(
+    function* (operation: LocalSourceUpdateOperation) {
       const repo = yield* requireRepositoryPath;
       const holder = yield* Effect.sync(() => findCheckoutBuild(repo));
       if (holder !== undefined) {
@@ -566,7 +565,8 @@ export const make = Effect.gen(function* () {
           repo,
         );
       }
-    });
+    },
+  );
 
   const runCommand = Effect.fn("desktop.localSourceUpdates.runCommand")(function* (input: {
     readonly operation: LocalSourceUpdateOperation;
@@ -786,11 +786,9 @@ export const make = Effect.gen(function* () {
         repo,
       );
     }
-    // Only main and the version tags. Upstream force-moves rolling tags such as
-    // android-nightly and desktop-preview, and fetching every tag fails the
-    // whole fetch on them ("would clobber existing tag"). Version tags never
-    // move, so one that would is still refused rather than clobbered. No
-    // --prune: with a tag refspec it would delete fork-local v* tags.
+    // Fetch main and version tags only; upstream force-moves rolling tags.
+    // Refuse moved version tags instead of clobbering them. Omit --prune:
+    // with a tag refspec it would delete fork-local v* tags.
     yield* reportProgress({ phase: "fetching" });
     yield* gitChecked("fetch", [
       "fetch",
@@ -907,12 +905,9 @@ export const make = Effect.gen(function* () {
       Effect.map((result) => result.stdout.split("\0").filter((path) => path.length > 0)),
     );
 
-  // Conflicts (and a merge that no longer builds) go to a headless Claude Code
-  // run limited to file tools: it can edit the checkout but cannot run git or
-  // shells or reach the network. It loads only the repo's settings: user-level
-  // hooks (such as one that commits at session end) would commit its edits and
-  // the build's version stamp before the build passes. The build remains the
-  // gate, and nothing is committed before it passes.
+  // Conflict/build repair uses file tools only: no git, shell, or network.
+  // Load repo settings only; user hooks could commit repairs and the version
+  // stamp before the build passes. A successful build gates those commits.
   const runMergeAgent = Effect.fn("desktop.localSourceUpdates.runMergeAgent")(function* (
     repo: string,
     phase: "resolving" | "repairing" | "build-repair",
@@ -1030,12 +1025,9 @@ export const make = Effect.gen(function* () {
     return conflicted.length > 0 && agent ? yield* resolveWithAgent(repo, conflicted) : conflicted;
   });
 
-  // The lockfile is never merged as text. Upstream rewrites peer suffixes on
-  // dependency bumps, and a conflict-free text merge leaves the fork's own
-  // importers pointing at snapshots upstream dropped, which `vp i` rejects.
-  // Fork hosts install the pushed merge commit from a clean checkout, so it must
-  // be consistent when committed: start from upstream's lockfile and let pnpm
-  // add only what the fork's manifests need.
+  // Text merges can leave fork importers pointing at removed peer snapshots.
+  // Start from upstream's lockfile and let pnpm add the fork's manifest needs,
+  // so the committed lockfile installs cleanly on other fork hosts.
   const rebuildLockfile = Effect.fn("desktop.localSourceUpdates.rebuildLockfile")(function* (
     repo: string,
     target: string,
@@ -1200,8 +1192,8 @@ export const make = Effect.gen(function* () {
     return accepted;
   });
 
-  const abortMerge = (repo: string) =>
-    Effect.gen(function* () {
+  const abortMerge = Effect.fn("desktop.localSourceUpdates.abortMerge")(
+    function* (repo: string) {
       const head = yield* runCommand({
         operation: "merge",
         command: "git",
@@ -1216,17 +1208,20 @@ export const make = Effect.gen(function* () {
       if (head.exitCode === 0) yield* gitMerge(repo, ["merge", "--abort"]);
       const status = yield* gitMerge(repo, ["status", "--porcelain=v1", "--untracked-files=all"]);
       return status.stdout.trim();
-    }).pipe(
-      Effect.mapError((error) =>
-        makeError(
-          "merge",
-          `cleanup failed; the checkout was left mid-merge or its merge state could not be confirmed. Finish or abort it by hand. ${error.detail}`,
-          error,
-          repo,
+    },
+    (effect, repo) =>
+      effect.pipe(
+        Effect.mapError((error) =>
+          makeError(
+            "merge",
+            `cleanup failed; the checkout was left mid-merge or its merge state could not be confirmed. Finish or abort it by hand. ${error.detail}`,
+            error,
+            repo,
+          ),
         ),
+        Effect.uninterruptible,
       ),
-      Effect.uninterruptible,
-    );
+  );
 
   const failAfterCleanup = (cause: Cause.Cause<LocalSourceUpdateError>, leftovers: string) => {
     if (!leftovers) return Effect.failCause(cause);
@@ -1347,14 +1342,15 @@ export const make = Effect.gen(function* () {
         ? { operation: "push", command: "python3", args: [runner, "push-safe"], cwd: repo }
         : { operation: "push", command: "git", args: ["push", "origin", "HEAD:main"], cwd: repo },
     ).pipe(
-      Effect.catchTag("LocalSourceUpdateError", (error) =>
-        Effect.succeed<CommandResult>({
-          stdout: "",
-          stdoutTruncated: false,
-          stderr: error.message,
-          exitCode: -1,
-        }),
-      ),
+      Effect.catchTags({
+        LocalSourceUpdateError: (error) =>
+          Effect.succeed<CommandResult>({
+            stdout: "",
+            stdoutTruncated: false,
+            stderr: error.message,
+            exitCode: -1,
+          }),
+      }),
     );
     // The runner exits 0 when it refuses too; its last line says what it did.
     const runnerOutcome = runner ? (result.stdout.trim().split("\n").at(-1)?.trim() ?? "") : "";
@@ -1399,8 +1395,8 @@ export const make = Effect.gen(function* () {
   const repositoryLock = yield* Semaphore.make(1);
 
   // Fails with the merge still open, like mergeUpstream; callers abort it.
-  const commitUpstreamMerge = (repo: string, target: string, label: string, agent: boolean) =>
-    Effect.gen(function* () {
+  const commitUpstreamMerge = Effect.fn("desktop.localSourceUpdates.commitUpstreamMerge")(
+    function* (repo: string, target: string, label: string, agent: boolean) {
       const message = `chore(sync): merge ${label}`;
       const dispositions = yield* mergeUpstream(repo, target, label, message, agent);
       yield* reportProgress({ phase: "committing" });
@@ -1416,7 +1412,8 @@ export const make = Effect.gen(function* () {
         ],
         cwd: repo,
       });
-    });
+    },
+  );
 
   const syncAndBuild = Effect.gen(function* () {
     yield* requireIdleCheckout("build");
@@ -1652,7 +1649,9 @@ export const make = Effect.gen(function* () {
   // newest nightly, so the fork moves when upstream releases and the update
   // button then builds that release.
   const syncUpstream = (agent: boolean) =>
-    Effect.gen(function* () {
+    Effect.fn(
+      agent ? "desktop.localSourceUpdates.syncSource" : "desktop.localSourceUpdates.autoSyncSource",
+    )(function* () {
       yield* requireIdleCheckout("merge");
       yield* loadLoginShellEnvironment();
       const inspection = yield* inspect;
@@ -1689,14 +1688,7 @@ export const make = Effect.gen(function* () {
         upstreamTag: inspection.upstreamTag,
         push: yield* pushFork(repo, false),
       } satisfies LocalSourceSyncResult;
-    }).pipe(
-      repositoryLock.withPermits(1),
-      Effect.withSpan(
-        agent
-          ? "desktop.localSourceUpdates.syncSource"
-          : "desktop.localSourceUpdates.autoSyncSource",
-      ),
-    );
+    }, repositoryLock.withPermits(1))();
 
   const install = Effect.gen(function* () {
     const builtUpdate = yield* Ref.get(builtUpdateRef);

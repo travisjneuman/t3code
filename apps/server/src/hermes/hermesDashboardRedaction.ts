@@ -1,18 +1,9 @@
-/**
- * What the Hermes dashboard proxy hides before a response reaches a client,
- * and how a save puts the hidden values back. A field is secret by what its
- * name means (`api_key`, `bearerToken`, `X-Auth-Token`, `client_secret`,
- * `Authorization`, `cookie`), not by a substring, so `max_tokens`,
- * `token_limit`, `api_key_env` and `has_api_key` stay as they are. Header maps
- * hide every value, a `{name, value}` pair hides the value of a secret name,
- * and credentials inside an otherwise plain string (a URL's password or
- * secret query parameter, a `Bearer` value, a well-known key shape) are
- * hidden in place. Fork add-on: Hermes provider.
- *
+/** Fork add-on: Hermes provider. Redact semantic secret names, headers and embedded credentials.
+ * Preserve nonsecret limits/metadata; `{name, value}` uses name meaning. Saves restore hidden values.
  * @module hermes/hermesDashboardRedaction
  */
 
-export const REDACTED = "••••••";
+const REDACTED = "••••••";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -96,7 +87,7 @@ const namesSecret = (words: ReadonlyArray<string>): boolean => {
   return SECRET_SUFFIXES.some((suffix) => last.length > suffix.length && last.endsWith(suffix));
 };
 
-export const isSecretKey = (key: string): boolean => namesSecret(wordsOf(key));
+const isSecretKey = (key: string): boolean => namesSecret(wordsOf(key));
 
 /** Header names carry no reliable convention (`X-Goog-Api-Key`, `X-Plex-Token`, `Foo`). */
 const isHeaderMap = (key: string): boolean => wordsOf(key).at(-1) === "headers";
@@ -199,12 +190,9 @@ const redactNode = (value: unknown, secret: boolean): unknown => {
 
 export const redactSecrets = (value: unknown): unknown => redactNode(value, false);
 
-/**
- * `incoming` with each placeholder a client sent back unchanged replaced by
- * the stored value at the same place, so saving a form never writes the
- * placeholder over a secret. `unresolved` gets the path of any text whose
- * placeholder no longer matches what is stored there (its other text was
- * edited around it), which the caller refuses rather than guess.
+/** Restore unchanged placeholders from the same stored path so saves never overwrite secrets.
+ * Add paths to `unresolved` when surrounding text was edited and no longer matches storage;
+ * the caller refuses these rather than guessing.
  */
 export const restoreSecrets = (
   incoming: unknown,

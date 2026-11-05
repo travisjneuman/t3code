@@ -1,12 +1,6 @@
-/**
- * Hermes Agent sessions: the sidebar's Hermes Agent section lists the
- * sessions a Hermes server holds (Discord, cron, the CLI and T3's own),
- * continues one in T3 as a thread in the Scratch project, and pins,
- * archives or deletes them in Hermes itself. `dashboard` reaches the
- * Hermes dashboard's config, key and custom-endpoint routes for
- * Settings › Providers; it never reveals a key's value. `t3Tools` gives
- * Hermes's API server T3's thread tools, or takes them away. Fork add-on;
- * see docs/user/hermes.md.
+/** Fork add-on; see docs/user/hermes.md. List Hermes sessions from all sources, continue in
+ * Scratch, or pin/archive/delete in Hermes. Settings › Providers uses `dashboard` for config,
+ * keys and custom endpoints without exposing key values. `t3Tools` grants/revokes thread tools.
  */
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
@@ -159,7 +153,7 @@ export type HermesSessionsUnarchiveInput = typeof HermesSessionsUnarchiveInput.T
  * The dashboard routes Settings may call. `/api/env/reveal` is not one:
  * keys are write-only from T3.
  */
-export const HERMES_DASHBOARD_PATH_PATTERN =
+const HERMES_DASHBOARD_PATH_PATTERN =
   /^\/api\/(?:config|config\/schema|config\/defaults|env|providers\/validate|providers\/custom-endpoints(?:\/validate|\/[A-Za-z0-9_.:-]+(?:\/activate)?)?)$/;
 
 export const HermesDashboardInput = Schema.Struct({
@@ -202,55 +196,55 @@ export class HermesSessionsError extends Schema.TaggedError<HermesSessionsError>
 
 const HermesSessionsRpcError = Schema.Union([HermesSessionsError, EnvironmentAuthorizationError]);
 
-export const HermesSessionsListRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.list, {
+const HermesSessionsListRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.list, {
   payload: HermesSessionsListInput,
   success: HermesSessionsListResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsProvidersRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.providers, {
+const HermesSessionsProvidersRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.providers, {
   payload: HermesSessionsInstanceInput,
   success: HermesSessionsProvidersResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsContinueRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.continue, {
+const HermesSessionsContinueRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.continue, {
   payload: HermesSessionsContinueInput,
   success: HermesSessionsContinueResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsUpdateRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.update, {
+const HermesSessionsUpdateRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.update, {
   payload: HermesSessionsUpdateInput,
   success: HermesSessionsBatchResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsDeleteRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.delete, {
+const HermesSessionsDeleteRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.delete, {
   payload: HermesSessionsDeleteInput,
   success: HermesSessionsBatchResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsListArchivedRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.listArchived, {
+const HermesSessionsListArchivedRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.listArchived, {
   payload: Schema.Struct({}),
   success: HermesSessionsListArchivedResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsUnarchiveRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.unarchive, {
+const HermesSessionsUnarchiveRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.unarchive, {
   payload: HermesSessionsUnarchiveInput,
   success: HermesSessionsEmptyResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsDashboardRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.dashboard, {
+const HermesSessionsDashboardRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.dashboard, {
   payload: HermesDashboardInput,
   success: HermesDashboardResult,
   error: HermesSessionsRpcError,
 });
 
-export const HermesSessionsT3ToolsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.t3Tools, {
+const HermesSessionsT3ToolsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.t3Tools, {
   payload: HermesT3ToolsInput,
   success: HermesT3ToolsResult,
   error: HermesSessionsRpcError,
@@ -267,7 +261,7 @@ export const HermesSessionsInsightsInput = Schema.Struct({
 });
 export type HermesSessionsInsightsInput = typeof HermesSessionsInsightsInput.Type;
 
-export const HermesSessionsInsightsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.insights, {
+const HermesSessionsInsightsRpc = Rpc.make(HERMES_SESSIONS_WS_METHODS.insights, {
   payload: HermesSessionsInsightsInput,
   success: SessionInsights,
   error: HermesSessionsRpcError,

@@ -13,9 +13,7 @@
     {
       "name": "contracts exports",
       "registry": "packages/contracts/src/forkExports.ts",
-      "hookedFrom": [
-        "packages/contracts/src/index.ts"
-      ],
+      "hookedFrom": ["packages/contracts/src/index.ts"],
       "addons": [
         "web-apps",
         "other-agents",
@@ -38,9 +36,7 @@
     {
       "name": "WebSocket RPC definitions",
       "registry": "packages/contracts/src/forkRpcs.ts",
-      "hookedFrom": [
-        "packages/contracts/src/rpc.ts"
-      ],
+      "hookedFrom": ["packages/contracts/src/rpc.ts"],
       "addons": [
         "other-agents",
         "hermes",
@@ -58,33 +54,19 @@
     {
       "name": "server capability flags",
       "registry": "packages/contracts/src/forkCapabilities.ts",
-      "hookedFrom": [
-        "packages/contracts/src/environment.ts"
-      ],
-      "addons": [
-        "existing-checkout",
-        "thread-retention",
-        "host-backups"
-      ]
+      "hookedFrom": ["packages/contracts/src/environment.ts"],
+      "addons": ["existing-checkout", "thread-retention", "host-backups"]
     },
     {
       "name": "server settings",
       "registry": "packages/contracts/src/forkServerSettings.ts",
-      "hookedFrom": [
-        "packages/contracts/src/settings.ts"
-      ],
-      "addons": [
-        "agent-instructions",
-        "save-to-notes",
-        "thread-retention"
-      ]
+      "hookedFrom": ["packages/contracts/src/settings.ts"],
+      "addons": ["agent-instructions", "save-to-notes", "thread-retention"]
     },
     {
       "name": "client RPC guards",
       "registry": "packages/contracts/src/forkClientRpcScopes.ts",
-      "hookedFrom": [
-        "packages/contracts/src/clientRpcPermissions.ts"
-      ],
+      "hookedFrom": ["packages/contracts/src/clientRpcPermissions.ts"],
       "addons": [
         "other-agents",
         "hermes",
@@ -97,9 +79,7 @@
     {
       "name": "WebSocket RPC handlers",
       "registry": "apps/server/src/forkRpcHandlers.ts",
-      "hookedFrom": [
-        "apps/server/src/ws.ts"
-      ],
+      "hookedFrom": ["apps/server/src/ws.ts"],
       "addons": [
         "other-agents",
         "hermes",
@@ -117,9 +97,7 @@
     {
       "name": "server RPC scopes",
       "registry": "apps/server/src/auth/forkRpcScopes.ts",
-      "hookedFrom": [
-        "apps/server/src/auth/RpcAuthorization.ts"
-      ],
+      "hookedFrom": ["apps/server/src/auth/RpcAuthorization.ts"],
       "addons": [
         "other-agents",
         "hermes",
@@ -137,38 +115,20 @@
     {
       "name": "server background workers",
       "registry": "apps/server/src/forkServerLayers.ts",
-      "hookedFrom": [
-        "apps/server/src/server.ts"
-      ],
-      "addons": [
-        "agent-instructions",
-        "thread-retention",
-        "retired-models"
-      ]
+      "hookedFrom": ["apps/server/src/server.ts"],
+      "addons": ["agent-instructions", "thread-retention", "retired-models"]
     },
     {
       "name": "orchestration services",
       "registry": "apps/server/src/orchestration-v2/forkRuntimeLayers.ts",
-      "hookedFrom": [
-        "apps/server/src/orchestration-v2/runtimeLayer.ts"
-      ],
-      "addons": [
-        "other-agents",
-        "hermes",
-        "openbot"
-      ]
+      "hookedFrom": ["apps/server/src/orchestration-v2/runtimeLayer.ts"],
+      "addons": ["other-agents", "hermes", "openbot"]
     },
     {
       "name": "web root hosts",
       "registry": "apps/web/src/forkRootHosts.tsx",
-      "hookedFrom": [
-        "apps/web/src/routes/__root.tsx"
-      ],
-      "addons": [
-        "maintenance-queue",
-        "existing-checkout",
-        "host-releases"
-      ]
+      "hookedFrom": ["apps/web/src/routes/__root.tsx"],
+      "addons": ["maintenance-queue", "existing-checkout", "host-releases"]
     },
     {
       "name": "UI fallback slots",
@@ -177,21 +137,13 @@
         "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
         "apps/web/src/components/usage/UsagePage.tsx"
       ],
-      "addons": [
-        "compact-cards",
-        "usage-by-model"
-      ]
+      "addons": ["compact-cards", "usage-by-model"]
     },
     {
       "name": "composer banners",
       "registry": "apps/web/src/forkComposerBanners.ts",
-      "hookedFrom": [
-        "apps/web/src/components/ChatView.tsx"
-      ],
-      "addons": [
-        "other-agents",
-        "compare-agents"
-      ]
+      "hookedFrom": ["apps/web/src/components/ChatView.tsx"],
+      "addons": ["other-agents", "compare-agents"]
     },
     {
       "name": "thread menu",
@@ -201,120 +153,66 @@
         "apps/web/src/components/Sidebar.tsx",
         "apps/web/src/hooks/useThreadActionMenu.ts"
       ],
-      "addons": [
-        "other-agents",
-        "save-to-notes",
-        "thread-export"
-      ]
+      "addons": ["other-agents", "save-to-notes", "thread-export"]
     },
     {
       "name": "context menu icons",
       "registry": "apps/web/src/forkContextMenuIcons.ts",
-      "hookedFrom": [
-        "apps/web/src/contextMenuFallback.ts"
-      ],
-      "addons": [
-        "other-agents",
-        "thread-export"
-      ]
+      "hookedFrom": ["apps/web/src/contextMenuFallback.ts"],
+      "addons": ["other-agents", "thread-export"]
     },
     {
       "name": "desktop IPC handlers",
       "registry": "apps/desktop/src/fork/ipcHandlers.ts",
-      "hookedFrom": [
-        "apps/desktop/src/ipc/DesktopIpcHandlers.ts"
-      ],
-      "addons": [
-        "web-apps",
-        "maintenance-queue",
-        "upstream-sync",
-        "host-releases"
-      ]
+      "hookedFrom": ["apps/desktop/src/ipc/DesktopIpcHandlers.ts"],
+      "addons": ["web-apps", "maintenance-queue", "upstream-sync", "host-releases"]
     },
     {
       "name": "desktop preload bridge",
       "registry": "apps/desktop/src/fork/preloadBridge.ts",
-      "hookedFrom": [
-        "apps/desktop/src/preload.ts"
-      ],
-      "addons": [
-        "web-apps",
-        "maintenance-queue",
-        "upstream-sync",
-        "host-releases"
-      ]
+      "hookedFrom": ["apps/desktop/src/preload.ts"],
+      "addons": ["web-apps", "maintenance-queue", "upstream-sync", "host-releases"]
     },
     {
       "name": "desktop layers",
       "registry": "apps/desktop/src/fork/layers.ts",
-      "hookedFrom": [
-        "apps/desktop/src/main.ts"
-      ],
-      "addons": [
-        "web-apps",
-        "upstream-sync",
-        "host-releases"
-      ]
+      "hookedFrom": ["apps/desktop/src/main.ts"],
+      "addons": ["web-apps", "upstream-sync", "host-releases"]
     },
     {
       "name": "desktop menu",
       "registry": "apps/desktop/src/fork/menu.ts",
-      "hookedFrom": [
-        "apps/desktop/src/window/DesktopApplicationMenu.ts"
-      ],
-      "addons": [
-        "web-apps"
-      ]
+      "hookedFrom": ["apps/desktop/src/window/DesktopApplicationMenu.ts"],
+      "addons": ["web-apps"]
     },
     {
       "name": "desktop window",
       "registry": "apps/desktop/src/fork/window.ts",
-      "hookedFrom": [
-        "apps/desktop/src/window/DesktopWindow.ts"
-      ],
-      "addons": [
-        "web-apps"
-      ]
+      "hookedFrom": ["apps/desktop/src/window/DesktopWindow.ts"],
+      "addons": ["web-apps"]
     },
     {
       "name": "archived page sections",
       "registry": "apps/web/src/forkArchivedPanel.tsx",
-      "hookedFrom": [
-        "apps/web/src/routes/_chat.settings.archived.tsx"
-      ],
-      "addons": [
-        "other-agents",
-        "hermes",
-        "thread-retention"
-      ]
+      "hookedFrom": ["apps/web/src/routes/_chat.settings.archived.tsx"],
+      "addons": ["other-agents", "hermes", "thread-retention"]
     },
     {
       "name": "own-workspace drivers",
       "registry": "apps/web/src/forkOwnWorkspaceDrivers.ts",
-      "hookedFrom": [
-        "apps/web/src/components/chat/ThreadSessionInsightsSection.tsx"
-      ],
-      "addons": [
-        "hermes",
-        "openbot"
-      ]
+      "hookedFrom": ["apps/web/src/components/chat/ThreadSessionInsightsSection.tsx"],
+      "addons": ["hermes", "openbot"]
     },
     {
       "name": "session insights readers",
       "registry": "apps/server/src/forkInsightsReaders.ts",
-      "hookedFrom": [
-        "apps/server/src/sessionInsights/SessionInsights.ts"
-      ],
-      "addons": [
-        "hermes"
-      ]
+      "hookedFrom": ["apps/server/src/sessionInsights/SessionInsights.ts"],
+      "addons": ["hermes"]
     },
     {
       "name": "RPC span labels",
       "registry": "apps/server/src/observability/forkRpcAggregates.ts",
-      "hookedFrom": [
-        "apps/server/src/observability/RpcInstrumentation.ts"
-      ],
+      "hookedFrom": ["apps/server/src/observability/RpcInstrumentation.ts"],
       "addons": [
         "other-agents",
         "hermes",
@@ -331,21 +229,13 @@
         "apps/server/src/persistence/ProjectLinks.ts",
         "apps/server/src/persistence/SessionInsightsReports.ts"
       ],
-      "addons": [
-        "session-details",
-        "project-links"
-      ]
+      "addons": ["session-details", "project-links"]
     },
     {
       "name": "desktop artifact build",
       "registry": "scripts/lib/fork-desktop-artifact.ts",
-      "hookedFrom": [
-        "scripts/build-desktop-artifact.ts"
-      ],
-      "addons": [
-        "identity",
-        "upstream-sync"
-      ]
+      "hookedFrom": ["scripts/build-desktop-artifact.ts"],
+      "addons": ["identity", "upstream-sync"]
     }
   ],
   "addons": [
@@ -354,19 +244,9 @@
       "tier": "core",
       "title": "Fork core",
       "summary": "Shared plumbing the add-ons plug into: one registry per extension point (see extensionPoints), the fork migration ledger, and the fork's docs front doors. It depends on no add-on.",
-      "docs": [
-        "docs/internals/fork-add-ons.md",
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/internals/fork-add-ons.md", "docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "build",
-        "ci",
-        "contracts",
-        "desktop",
-        "server",
-        "web"
-      ],
+      "surfaces": ["build", "ci", "contracts", "desktop", "server", "web"],
       "files": [
         ".github/README.md",
         "apps/desktop/src/fork/channels.ts",
@@ -409,9 +289,7 @@
         "scripts/lib/fork-addons.ts",
         "scripts/lib/fork-desktop-artifact.ts"
       ],
-      "tests": [
-        "apps/desktop/src/fork/confirm.test.ts"
-      ],
+      "tests": ["apps/desktop/src/fork/confirm.test.ts"],
       "hooks": [
         "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
         "apps/desktop/src/main.ts",
@@ -448,19 +326,9 @@
       "tier": "feature",
       "title": "Web apps",
       "summary": "ChatGPT, Claude, Grok, Gemini and Perplexity as tabs in the desktop app.",
-      "docs": [
-        "docs/user/desktop-remote-apps.md",
-        "docs/internals/remote-apps.md"
-      ],
-      "dependsOn": [
-        "core",
-        "identity"
-      ],
-      "surfaces": [
-        "contracts",
-        "desktop",
-        "web"
-      ],
+      "docs": ["docs/user/desktop-remote-apps.md", "docs/internals/remote-apps.md"],
+      "dependsOn": ["core", "identity"],
+      "surfaces": ["contracts", "desktop", "web"],
       "files": [
         "apps/desktop/src/remote-apps/RemoteAppChatImport.ts",
         "apps/desktop/src/remote-apps/RemoteAppDownloads.ts",
@@ -545,20 +413,9 @@
       "tier": "feature",
       "title": "Other Agents",
       "summary": "Follow, continue and hand back sessions started in other agent apps.",
-      "docs": [
-        "docs/user/other-agents.md",
-        "docs/internals/external-sessions.md"
-      ],
-      "dependsOn": [
-        "core",
-        "session-details",
-        "web-apps"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/other-agents.md", "docs/internals/external-sessions.md"],
+      "dependsOn": ["core", "session-details", "web-apps"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/external-sessions/ExternalSessionSource.ts",
         "apps/server/src/external-sessions/ExternalSessions.ts",
@@ -617,21 +474,9 @@
       "tier": "feature",
       "title": "Hermes Agent",
       "summary": "A Hermes Agent provider, local or remote, with its own sidebar section.",
-      "docs": [
-        "docs/user/hermes.md",
-        "docs/internals/hermes.md"
-      ],
-      "dependsOn": [
-        "core",
-        "model-brand-names",
-        "other-agents",
-        "session-details"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/hermes.md", "docs/internals/hermes.md"],
+      "dependsOn": ["core", "model-brand-names", "other-agents", "session-details"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/hermes/HermesMcpBridge.ts",
         "apps/server/src/hermes/HermesSessions.ts",
@@ -702,12 +547,8 @@
         "pnpm-lock.yaml": "generated; rebuilt from upstream's copy plus fork manifests"
       },
       "data": {
-        "settings": [
-          "hermes provider instance settings (provider-hermes/settings)"
-        ],
-        "wire": [
-          "hermes driver kind and default model"
-        ]
+        "settings": ["hermes provider instance settings (provider-hermes/settings)"],
+        "wire": ["hermes driver kind and default model"]
       }
     },
     {
@@ -715,19 +556,9 @@
       "tier": "feature",
       "title": "OpenBot",
       "summary": "An OpenBot provider whose agents' conversations get their own sidebar section; an agent's main conversation takes messages.",
-      "docs": [
-        "docs/user/openbot.md",
-        "docs/internals/openbot.md"
-      ],
-      "dependsOn": [
-        "core",
-        "other-agents"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/openbot.md", "docs/internals/openbot.md"],
+      "dependsOn": ["core", "other-agents"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/openbot/OpenBotSessions.ts",
         "apps/server/src/openbot/OpenBotSessionsRpc.ts",
@@ -773,12 +604,8 @@
         "pnpm-lock.yaml": "generated; rebuilt from upstream's copy plus fork manifests"
       },
       "data": {
-        "settings": [
-          "openbot provider instance settings (provider-openbot/settings)"
-        ],
-        "wire": [
-          "openbot driver kind"
-        ]
+        "settings": ["openbot provider instance settings (provider-openbot/settings)"],
+        "wire": ["openbot driver kind"]
       }
     },
     {
@@ -786,20 +613,9 @@
       "tier": "feature",
       "title": "Compare agents",
       "summary": "One prompt to two models, side by side, with review swap.",
-      "docs": [
-        "docs/user/compare-agents.md"
-      ],
-      "dependsOn": [
-        "core",
-        "existing-checkout",
-        "save-to-notes",
-        "web-apps"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/compare-agents.md"],
+      "dependsOn": ["core", "existing-checkout", "save-to-notes", "web-apps"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/compare-agents/CompareAgents.ts",
         "apps/server/src/compare-agents/CompareAgentsRpc.ts",
@@ -833,16 +649,9 @@
       "tier": "feature",
       "title": "Agent instructions",
       "summary": "Delegation, worker models and agent rules as settings, globally or per project.",
-      "docs": [
-        "docs/user/agent-instructions.md"
-      ],
+      "docs": ["docs/user/agent-instructions.md"],
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server",
-        "shared",
-        "web"
-      ],
+      "surfaces": ["contracts", "server", "shared", "web"],
       "files": [
         "apps/server/src/agent-instructions/AgentInstructionsSync.ts",
         "apps/server/src/agent-instructions/DelegationPolicy.ts",
@@ -907,17 +716,9 @@
       "tier": "feature",
       "title": "Save to notes",
       "summary": "Files a thread into a notes folder as a summary or a full copy.",
-      "docs": [
-        "docs/user/save-and-export-threads.md"
-      ],
-      "dependsOn": [
-        "thread-export"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/save-and-export-threads.md"],
+      "dependsOn": ["thread-export"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/save-to-notes/SaveToNotes.ts",
         "apps/server/src/save-to-notes/SaveToNotesRpc.ts",
@@ -933,10 +734,7 @@
         "apps/web/src/components/settings/settingsSearch.ts"
       ],
       "data": {
-        "settings": [
-          "notesDirectory",
-          "savedThreadsDirectory"
-        ]
+        "settings": ["notesDirectory", "savedThreadsDirectory"]
       }
     },
     {
@@ -944,15 +742,9 @@
       "tier": "feature",
       "title": "Export a thread",
       "summary": "Saves a thread's full server record as Markdown or JSON.",
-      "docs": [
-        "docs/user/save-and-export-threads.md"
-      ],
+      "docs": ["docs/user/save-and-export-threads.md"],
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/thread-export/ThreadExport.ts",
         "apps/server/src/thread-export/ThreadExportRpc.ts",
@@ -970,18 +762,9 @@
       "tier": "feature",
       "title": "Session details",
       "summary": "Session, context, connectors and outputs of any session in the thread details card.",
-      "docs": [
-        "docs/user/session-details.md",
-        "docs/internals/session-insights.md"
-      ],
-      "dependsOn": [
-        "core"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/session-details.md", "docs/internals/session-insights.md"],
+      "dependsOn": ["core"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/orchestration-v2/Adapters/claudeInsightsHooks.ts",
         "apps/server/src/orchestration-v2/Adapters/claudeSessionInsights.ts",
@@ -1035,9 +818,7 @@
           "001_SessionInsightsReports: table session_insights_reports",
           "002_SessionInsightsOutputs: outputs on session_insights_reports"
         ],
-        "rpc": [
-          "sessionInsights.get"
-        ]
+        "rpc": ["sessionInsights.get"]
       }
     },
     {
@@ -1045,16 +826,9 @@
       "tier": "feature",
       "title": "Compact cards",
       "summary": "Outlined, smaller sidebar thread cards that always name their machine.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "other-agents",
-        "subagent-tree"
-      ],
-      "surfaces": [
-        "web"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": ["other-agents", "subagent-tree"],
+      "surfaces": ["web"],
       "files": [
         "apps/web/src/fork-sidebar/ThreadCardMeta.tsx",
         "apps/web/src/sidebar-compact/footerButtons.css",
@@ -1078,18 +852,9 @@
       "tier": "feature",
       "title": "Subagent tree",
       "summary": "Subagents nest under their thread in the sidebar and the Lineage panel.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "core",
-        "other-agents"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": ["core", "other-agents"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/orchestration-v2/forkOmittedSubagents.ts",
         "apps/web/src/subagents/SidebarSubagentRows.tsx",
@@ -1113,9 +878,7 @@
         "packages/contracts/src/orchestrationV2.ts"
       ],
       "data": {
-        "wire": [
-          "omittedSubagents on the orchestration v2 shell snapshot"
-        ]
+        "wire": ["omittedSubagents on the orchestration v2 shell snapshot"]
       }
     },
     {
@@ -1123,17 +886,9 @@
       "tier": "feature",
       "title": "Session search",
       "summary": "Command palette search across T3 threads and other agents' sessions.",
-      "docs": [
-        "docs/internals/session-search.md"
-      ],
-      "dependsOn": [
-        "other-agents"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/internals/session-search.md"],
+      "dependsOn": ["other-agents"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/session-search/SessionSearch.ts",
         "apps/server/src/session-search/SessionSearchRpc.ts",
@@ -1147,29 +902,16 @@
         "docs/internals/session-search.md",
         "packages/contracts/src/sessionSearch.ts"
       ],
-      "hooks": [
-        "apps/web/src/components/CommandPalette.tsx",
-        "apps/web/src/components/Sidebar.tsx"
-      ]
+      "hooks": ["apps/web/src/components/CommandPalette.tsx", "apps/web/src/components/Sidebar.tsx"]
     },
     {
       "id": "maintenance-queue",
       "tier": "feature",
       "title": "Maintenance queue",
       "summary": "Server and provider updates wait in one queue that closes idle sessions first and counts this app.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "core",
-        "hermes"
-      ],
-      "surfaces": [
-        "contracts",
-        "desktop",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": ["core", "hermes"],
+      "surfaces": ["contracts", "desktop", "server", "web"],
       "files": [
         "apps/desktop/src/updates/DesktopUpdateGate.ts",
         "apps/desktop/src/updates/UpdateGateIpc.ts",
@@ -1200,15 +942,9 @@
       "tier": "feature",
       "title": "Existing checkouts",
       "summary": "Add a machine's existing checkout instead of cloning, and find checkouts on other machines.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/existing-checkout/ExistingCheckout.ts",
         "apps/server/src/existing-checkout/ExistingCheckoutRpc.ts",
@@ -1221,9 +957,7 @@
         "apps/web/src/lib/addProjectToMachine.ts"
       ],
       "data": {
-        "wire": [
-          "capabilities existingCheckout, existingCheckoutFolder"
-        ]
+        "wire": ["capabilities existingCheckout, existingCheckoutFolder"]
       }
     },
     {
@@ -1231,17 +965,9 @@
       "tier": "feature",
       "title": "Project links",
       "summary": "Link folder projects across machines into one project.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "core"
-      ],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": ["core"],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/persistence/ForkMigrations/003_ProjectLinks.ts",
         "apps/server/src/persistence/ProjectLinks.ts",
@@ -1260,12 +986,8 @@
         "packages/contracts/src/project.ts"
       ],
       "data": {
-        "migrations": [
-          "003_ProjectLinks: table fork_project_links"
-        ],
-        "wire": [
-          "linkKey on project, orchestration project and application events"
-        ]
+        "migrations": ["003_ProjectLinks: table fork_project_links"],
+        "wire": ["linkKey on project, orchestration project and application events"]
       }
     },
     {
@@ -1273,15 +995,9 @@
       "tier": "feature",
       "title": "Thread retention",
       "summary": "Settled and archived threads clean themselves up.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/thread-retention/ThreadRetention.ts",
         "apps/server/src/thread-retention/ThreadRetentionRpc.ts",
@@ -1296,12 +1012,8 @@
         "apps/web/src/components/settings/settingsSearch.ts"
       ],
       "data": {
-        "settings": [
-          "thread retention fields (threadRetention.ts)"
-        ],
-        "wire": [
-          "capability threadRetention"
-        ]
+        "settings": ["thread retention fields (threadRetention.ts)"],
+        "wire": ["capability threadRetention"]
       }
     },
     {
@@ -1310,24 +1022,16 @@
       "title": "Host backups",
       "summary": "Lists the backups the host tooling keeps on a machine and the version each would restore.",
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server",
-        "web"
-      ],
+      "surfaces": ["contracts", "server", "web"],
       "files": [
         "apps/server/src/host-backups/HostBackups.ts",
         "apps/server/src/host-backups/HostBackupsRpc.ts",
         "apps/web/src/host-release/HostBackupsDialog.tsx",
         "packages/contracts/src/hostBackups.ts"
       ],
-      "hooks": [
-        "apps/web/src/components/settings/SavedEnvironmentRows.tsx"
-      ],
+      "hooks": ["apps/web/src/components/settings/SavedEnvironmentRows.tsx"],
       "data": {
-        "wire": [
-          "capability hostBackups"
-        ]
+        "wire": ["capability hostBackups"]
       }
     },
     {
@@ -1335,13 +1039,9 @@
       "tier": "feature",
       "title": "Remote pairing",
       "summary": "Pair a phone with any connected machine.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [
         "apps/web/src/remote-pairing/RemotePairingDialog.tsx",
         "packages/client-runtime/src/state/remotePairing.ts"
@@ -1359,17 +1059,9 @@
       "tier": "feature",
       "title": "Usage by model",
       "summary": "Usage shows one row per model across harnesses.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "model-brand-names"
-      ],
-      "surfaces": [
-        "server",
-        "shared",
-        "web"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": ["model-brand-names"],
+      "surfaces": ["server", "shared", "web"],
       "files": [
         "apps/web/src/components/usage/UsageModelBreakdown.tsx",
         "apps/web/src/components/usage/usageModelRows.ts",
@@ -1394,32 +1086,19 @@
       "title": "Usage pace",
       "summary": "Pace for weekly and monthly usage windows.",
       "dependsOn": [],
-      "surfaces": [
-        "shared"
-      ],
-      "files": [
-        "packages/shared/src/forkUsagePeriods.ts"
-      ],
-      "hooks": [
-        "packages/shared/src/usageLimits.ts"
-      ]
+      "surfaces": ["shared"],
+      "files": ["packages/shared/src/forkUsagePeriods.ts"],
+      "hooks": ["packages/shared/src/usageLimits.ts"]
     },
     {
       "id": "codex-hidden-models",
       "tier": "feature",
       "title": "Codex hidden models",
       "summary": "A switch that lists the models Codex keeps out of its picker.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server"
-      ],
-      "files": [
-        "packages/contracts/src/forkCodexSettings.ts"
-      ],
+      "surfaces": ["contracts", "server"],
+      "files": ["packages/contracts/src/forkCodexSettings.ts"],
       "hooks": [
         "apps/server/src/provider/CodexChatGptModels.ts",
         "apps/server/src/provider/CodexProvider.ts",
@@ -1427,9 +1106,7 @@
         "packages/contracts/src/settings.ts"
       ],
       "data": {
-        "settings": [
-          "Codex provider: show hidden models"
-        ]
+        "settings": ["Codex provider: show hidden models"]
       }
     },
     {
@@ -1437,19 +1114,10 @@
       "tier": "feature",
       "title": "Retired models",
       "summary": "Threads on a retired model move to its successor.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "contracts",
-        "server",
-        "shared",
-        "web"
-      ],
-      "files": [
-        "apps/server/src/provider/ModelReferenceRepair.ts"
-      ],
+      "surfaces": ["contracts", "server", "shared", "web"],
+      "files": ["apps/server/src/provider/ModelReferenceRepair.ts"],
       "hooks": [
         "apps/web/src/components/chat/ModelPickerContent.tsx",
         "apps/web/src/components/chat/providerIconUtils.ts",
@@ -1464,79 +1132,43 @@
       "tier": "feature",
       "title": "MCP hub",
       "summary": "`t3 mcp token` and `t3 mcp stdio` for agents without OAuth.",
-      "docs": [
-        "docs/user/mcp-hub.md"
-      ],
+      "docs": ["docs/user/mcp-hub.md"],
       "dependsOn": [],
-      "surfaces": [
-        "server"
-      ],
-      "files": [
-        "apps/server/src/cli/forkMcp.ts",
-        "docs/user/mcp-hub.md"
-      ],
-      "hooks": [
-        "apps/server/src/binCli.ts"
-      ]
+      "surfaces": ["server"],
+      "files": ["apps/server/src/cli/forkMcp.ts", "docs/user/mcp-hub.md"],
+      "hooks": ["apps/server/src/binCli.ts"]
     },
     {
       "id": "multi-select-menu",
       "tier": "feature",
       "title": "Multi-select menu",
       "summary": "Selected threads get the whole thread menu.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "compare-agents",
-        "other-agents",
-        "save-to-notes",
-        "thread-export"
-      ],
-      "surfaces": [
-        "web"
-      ],
-      "files": [
-        "apps/web/src/fork-sidebar/useBulkThreadMenu.ts"
-      ],
-      "hooks": [
-        "apps/web/src/components/Sidebar.tsx"
-      ]
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": ["compare-agents", "other-agents", "save-to-notes", "thread-export"],
+      "surfaces": ["web"],
+      "files": ["apps/web/src/fork-sidebar/useBulkThreadMenu.ts"],
+      "hooks": ["apps/web/src/components/Sidebar.tsx"]
     },
     {
       "id": "collapsible-details",
       "tier": "feature",
       "title": "Collapsible details",
       "summary": "Thread details sections collapse and remember it.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
-      "files": [
-        "apps/web/src/components/chat/ThreadDetailsSectionToggle.tsx"
-      ],
-      "hooks": [
-        "apps/web/src/components/chat/ThreadDetailsSection.tsx"
-      ]
+      "surfaces": ["web"],
+      "files": ["apps/web/src/components/chat/ThreadDetailsSectionToggle.tsx"],
+      "hooks": ["apps/web/src/components/chat/ThreadDetailsSection.tsx"]
     },
     {
       "id": "no-project-start",
       "tier": "feature",
       "title": "No-project start",
       "summary": "New threads start without a project; one No project per machine.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
-      "files": [
-        "apps/web/src/fork-sidebar/useScratchThreadClick.ts"
-      ],
+      "surfaces": ["web"],
+      "files": ["apps/web/src/fork-sidebar/useScratchThreadClick.ts"],
       "hooks": [
         "apps/web/src/components/CommandPaletteLookups.ts",
         "apps/web/src/components/Sidebar.tsx",
@@ -1550,13 +1182,9 @@
       "tier": "feature",
       "title": "Status colors",
       "summary": "Status colors mean the same thing everywhere.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
       "hooks": [
         "apps/web/src/components/Sidebar.logic.test.ts",
@@ -1572,18 +1200,10 @@
       "tier": "feature",
       "title": "Model brand names",
       "summary": "Providers and models carry their vendors' names.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "server",
-        "shared",
-        "web"
-      ],
-      "files": [
-        "packages/shared/src/modelBrandNames.ts"
-      ],
+      "surfaces": ["server", "shared", "web"],
+      "files": ["packages/shared/src/modelBrandNames.ts"],
       "hooks": [
         "apps/server/src/provider/ProviderRegistry.ts",
         "apps/web/src/components/chat/providerIconUtils.ts",
@@ -1600,13 +1220,9 @@
       "tier": "feature",
       "title": "Renamed hosts",
       "summary": "Machines renamed after pairing keep their new name.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [
         "apps/web/src/connection/forkHostLabels.tsx",
         "packages/client-runtime/src/connection/forkRelabel.ts"
@@ -1621,14 +1237,9 @@
       "tier": "feature",
       "title": "Tailscale HTTPS",
       "summary": "Connections says when the tailnet has HTTPS certificates turned off.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "desktop",
-        "web"
-      ],
+      "surfaces": ["desktop", "web"],
       "files": [],
       "hooks": [
         "apps/desktop/src/backend/DesktopServerExposure.ts",
@@ -1641,52 +1252,32 @@
       "tier": "feature",
       "title": "Claude release channel",
       "summary": "Claude updates follow Claude's own release channel.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "server"
-      ],
-      "files": [
-        "apps/server/src/provider/Drivers/claudeNativeLatestVersion.ts"
-      ],
-      "hooks": [
-        "apps/server/src/provider/Drivers/ClaudeDriver.ts"
-      ]
+      "surfaces": ["server"],
+      "files": [],
+      "hooks": ["apps/server/src/provider/Drivers/ClaudeDriver.ts"]
     },
     {
       "id": "removable-providers",
       "tier": "feature",
       "title": "Removable providers",
       "summary": "Built-in providers other than Codex and Claude can be deleted from Settings > Providers.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
-      "hooks": [
-        "apps/web/src/components/settings/ProviderSettingsPanel.tsx"
-      ]
+      "hooks": ["apps/web/src/components/settings/ProviderSettingsPanel.tsx"]
     },
     {
       "id": "vpn-lan",
       "tier": "fix",
       "title": "VPN addresses",
       "summary": "Full-tunnel VPN addresses are not offered as LAN addresses.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "server"
-      ],
-      "files": [
-        "apps/server/src/environment/vpnTunnelInterfaces.ts"
-      ],
+      "surfaces": ["server"],
+      "files": ["apps/server/src/environment/vpnTunnelInterfaces.ts"],
       "hooks": [
         "apps/server/src/environment/DirectEndpoints.ts",
         "apps/server/src/startupAccess.ts"
@@ -1698,15 +1289,9 @@
       "title": "Windows taskkill",
       "summary": "A Windows taskkill that exits non-zero after every named process is gone counts as success.",
       "dependsOn": [],
-      "surfaces": [
-        "server"
-      ],
-      "files": [
-        "packages/provider-acp/src/server/windowsTaskkillExit.ts"
-      ],
-      "hooks": [
-        "packages/provider-acp/src/server/AcpSessionRuntime.ts"
-      ]
+      "surfaces": ["server"],
+      "files": ["packages/provider-acp/src/server/windowsTaskkillExit.ts"],
+      "hooks": ["packages/provider-acp/src/server/AcpSessionRuntime.ts"]
     },
     {
       "id": "stdio-eio",
@@ -1714,13 +1299,9 @@
       "title": "stdio EIO",
       "summary": "An EIO on a closed stdout pipe does not crash the desktop app on macOS.",
       "dependsOn": [],
-      "surfaces": [
-        "desktop"
-      ],
+      "surfaces": ["desktop"],
       "files": [],
-      "hooks": [
-        "apps/desktop/src/main.ts"
-      ]
+      "hooks": ["apps/desktop/src/main.ts"]
     },
     {
       "id": "bootstrap-retry",
@@ -1728,16 +1309,10 @@
       "title": "Auth bootstrap retry",
       "summary": "Retries a settling desktop backend's 500 during auth bootstrap.",
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
-      "tests": [
-        "apps/web/src/forkAuthBootstrap.test.ts"
-      ],
-      "hooks": [
-        "apps/web/src/environments/primary/auth.ts"
-      ]
+      "tests": ["apps/web/src/forkAuthBootstrap.test.ts"],
+      "hooks": ["apps/web/src/environments/primary/auth.ts"]
     },
     {
       "id": "clipboard-focus",
@@ -1745,13 +1320,9 @@
       "title": "Clipboard focus",
       "summary": "Copying works when the window is unfocused.",
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
-      "hooks": [
-        "apps/web/src/hooks/useCopyToClipboard.ts"
-      ]
+      "hooks": ["apps/web/src/hooks/useCopyToClipboard.ts"]
     },
     {
       "id": "route-crash-escape",
@@ -1759,13 +1330,9 @@
       "title": "Route crash escape",
       "summary": "Leave a crashing route instead of being stuck on it.",
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
-      "hooks": [
-        "apps/web/src/routes/__root.tsx"
-      ]
+      "hooks": ["apps/web/src/routes/__root.tsx"]
     },
     {
       "id": "grok-zero-usage",
@@ -1773,26 +1340,18 @@
       "title": "Grok zero usage",
       "summary": "An omitted Grok percentage still shows as 0% used.",
       "dependsOn": [],
-      "surfaces": [
-        "server"
-      ],
+      "surfaces": ["server"],
       "files": [],
-      "hooks": [
-        "packages/provider-grok/src/server/usageLimits.ts"
-      ]
+      "hooks": ["packages/provider-grok/src/server/usageLimits.ts"]
     },
     {
       "id": "limit-bar-contrast",
       "tier": "fix",
       "title": "Limit bar contrast",
       "summary": "Usage limit bars keep a provider accent visible when it is close to the theme background.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
       "hooks": [
         "apps/web/src/components/usage/UsageLimits.tsx",
@@ -1805,19 +1364,11 @@
       "tier": "fix",
       "title": "Update through wrapper scripts",
       "summary": "A launcher script that wraps a package-manager install names it with a `t3-update-target:` line, so provider updates reach the install instead of going manual-only.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "server"
-      ],
-      "files": [
-        "packages/provider-core/src/server/updateTarget.ts"
-      ],
-      "hooks": [
-        "packages/provider-core/src/server/maintenanceResolver.ts"
-      ]
+      "surfaces": ["server"],
+      "files": ["packages/provider-core/src/server/updateTarget.ts"],
+      "hooks": ["packages/provider-core/src/server/maintenanceResolver.ts"]
     },
     {
       "id": "telemetry-check-failure",
@@ -1825,13 +1376,9 @@
       "title": "Telemetry check failure",
       "summary": "A failed telemetry endpoint check shows Check failed instead of Not checked.",
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
-      "hooks": [
-        "apps/web/src/components/settings/TelemetryExportSettings.tsx"
-      ]
+      "hooks": ["apps/web/src/components/settings/TelemetryExportSettings.tsx"]
     },
     {
       "id": "scheduled-tasks-error",
@@ -1839,38 +1386,24 @@
       "title": "Scheduled tasks error",
       "summary": "A failed delivery list shows its error without a stuck loading line.",
       "dependsOn": [],
-      "surfaces": [
-        "web"
-      ],
+      "surfaces": ["web"],
       "files": [],
-      "hooks": [
-        "apps/web/src/components/settings/ScheduledTasksSettings.tsx"
-      ]
+      "hooks": ["apps/web/src/components/settings/ScheduledTasksSettings.tsx"]
     },
     {
       "id": "identity",
       "tier": "distribution",
       "title": "Identity",
       "summary": "App id, profile, link scheme and app name, so the fork installs beside official T3 Code.",
-      "docs": [
-        "docs/internals/fork-add-ons.md#identity"
-      ],
-      "dependsOn": [
-        "core"
-      ],
-      "surfaces": [
-        "build",
-        "desktop",
-        "shared"
-      ],
+      "docs": ["docs/internals/fork-add-ons.md#identity"],
+      "dependsOn": ["core"],
+      "surfaces": ["build", "desktop", "shared"],
       "files": [
         "apps/desktop/src/remote-apps/RemoteAppDistribution.ts",
         "packages/shared/src/branding.ts",
         "scripts/sign-macos-ad-hoc.cjs"
       ],
-      "tests": [
-        "scripts/build-desktop-artifact.fork.test.ts"
-      ],
+      "tests": ["scripts/build-desktop-artifact.fork.test.ts"],
       "hooks": [
         "apps/desktop/resources/dmg/dmg-background-latest.svg",
         "apps/desktop/resources/dmg/dmg-background-nightly.svg",
@@ -1891,15 +1424,9 @@
       "tier": "distribution",
       "title": "ndev artwork",
       "summary": "The fork's app and web icons.",
-      "docs": [
-        "assets/ndev/README.md"
-      ],
+      "docs": ["assets/ndev/README.md"],
       "dependsOn": [],
-      "surfaces": [
-        "build",
-        "desktop",
-        "web"
-      ],
+      "surfaces": ["build", "desktop", "web"],
       "files": [
         "apps/web/public/icon-192.png",
         "apps/web/public/icon-512.png",
@@ -1968,16 +1495,10 @@
       "tier": "distribution",
       "title": "Keychain-free secrets",
       "summary": "On macOS, saved connections use a file key, so updates stop asking for the keychain password.",
-      "docs": [
-        "docs/user/fork-behavior.md"
-      ],
+      "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
-      "surfaces": [
-        "desktop"
-      ],
-      "files": [
-        "apps/desktop/src/fork/fileSafeStorage.ts"
-      ],
+      "surfaces": ["desktop"],
+      "files": ["apps/desktop/src/fork/fileSafeStorage.ts"],
       "hooks": [
         "apps/desktop/src/app/DesktopConnectionCatalogStore.ts",
         "apps/desktop/src/electron/ElectronSafeStorage.ts",
@@ -1989,23 +1510,9 @@
       "tier": "distribution",
       "title": "Upstream sync",
       "summary": "Merges new upstream nightlies and rebuilds the app from its source checkout.",
-      "docs": [
-        "docs/user/fork-updating.md",
-        "docs/internals/local-source-updates.md"
-      ],
-      "dependsOn": [
-        "core",
-        "identity",
-        "maintenance-queue",
-        "other-agents"
-      ],
-      "surfaces": [
-        "build",
-        "ci",
-        "contracts",
-        "desktop",
-        "web"
-      ],
+      "docs": ["docs/user/fork-updating.md", "docs/internals/local-source-updates.md"],
+      "dependsOn": ["core", "identity", "maintenance-queue", "other-agents"],
+      "surfaces": ["build", "ci", "contracts", "desktop", "web"],
       "files": [
         ".github/workflows/tjn-upstream-sync.yml",
         "apps/desktop/src/updates/CheckoutBuildLock.ts",
@@ -2035,9 +1542,7 @@
         "scripts/build-desktop-artifact.ts"
       ],
       "data": {
-        "wire": [
-          "desktop update state sourceUpdate"
-        ]
+        "wire": ["desktop update state sourceUpdate"]
       }
     },
     {
@@ -2045,22 +1550,9 @@
       "tier": "distribution",
       "title": "Host releases",
       "summary": "Connected hosts run fork builds: release source, HTTPS mirrors, version facts and runtime retention.",
-      "docs": [
-        "docs/operations/fork-host-releases.md",
-        "docs/user/fork-behavior.md"
-      ],
-      "dependsOn": [
-        "core",
-        "upstream-sync"
-      ],
-      "surfaces": [
-        "ci",
-        "contracts",
-        "desktop",
-        "server",
-        "shared",
-        "web"
-      ],
+      "docs": ["docs/operations/fork-host-releases.md", "docs/user/fork-behavior.md"],
+      "dependsOn": ["core", "upstream-sync"],
+      "surfaces": ["ci", "contracts", "desktop", "server", "shared", "web"],
       "files": [
         ".github/workflows/tjn-macos-nightly-release.yml",
         "apps/desktop/src/updates/HostReleaseIpc.ts",
@@ -2150,9 +1642,7 @@
         }
       ],
       "data": {
-        "wire": [
-          "server facts releaseSource, startedAt, forkBuild"
-        ]
+        "wire": ["server facts releaseSource, startedAt, forkBuild"]
       }
     },
     {
@@ -2160,15 +1650,8 @@
       "tier": "personal",
       "title": "TJN fleet",
       "summary": "Owner's fleet host tooling and workflows; not useful to other people.",
-      "dependsOn": [
-        "host-releases"
-      ],
-      "surfaces": [
-        "build",
-        "desktop",
-        "server",
-        "web"
-      ],
+      "dependsOn": ["host-releases"],
+      "surfaces": ["build", "desktop", "server", "web"],
       "files": [
         "scripts/lib/tjn-hosts/remote.ts",
         "scripts/lib/tjn-hosts/runs.ts",
@@ -2191,9 +1674,7 @@
       "dependsOn": [],
       "surfaces": [],
       "files": [],
-      "hooks": [
-        "AGENTS.md"
-      ]
+      "hooks": ["AGENTS.md"]
     }
   ]
 }

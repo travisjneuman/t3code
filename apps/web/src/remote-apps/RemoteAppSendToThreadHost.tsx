@@ -7,7 +7,7 @@ import {
   type RemoteAppSendToThread,
 } from "@t3tools/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useInsertionEffect, useRef } from "react";
 
 import { toastManager } from "~/components/ui/toast";
 import { type ComposerThreadTarget, useComposerDraftStore } from "~/composerDraftStore";
@@ -24,7 +24,7 @@ import {
 const DOWNLOAD_TOAST_VISIBLE_MS = 30_000;
 
 /** The selection as a Markdown quote under the site's name. */
-export const formatRemoteAppQuote = ({ site, text }: RemoteAppSendToThread): string => {
+const formatRemoteAppQuote = ({ site, text }: RemoteAppSendToThread): string => {
   const quoted = text
     .replace(/\r\n?/g, "\n")
     .split("\n")
@@ -34,10 +34,7 @@ export const formatRemoteAppQuote = ({ site, text }: RemoteAppSendToThread): str
 };
 
 /** A downloaded text file as a fenced block under its site and filename. */
-export const formatRemoteAppDownload = (
-  capture: RemoteAppDownloadCapture,
-  fileText: string,
-): string => {
+const formatRemoteAppDownload = (capture: RemoteAppDownloadCapture, fileText: string): string => {
   const text = fileText.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
   const fence = remoteAppMarkdownFence(text);
   const filename = capture.filename.replaceAll("`", "'");
@@ -58,12 +55,9 @@ const downloadToastDescription = (capture: RemoteAppDownloadCapture): string => 
 };
 
 /**
- * Receives what the user sent from a web app (selected text, or a downloaded
- * file they chose to add), appends it to the composer draft of the T3 thread
- * they were last on, and opens that thread. With no thread visited yet it
- * starts a draft in the first project. Downloads the user hasn't decided on
- * yet arrive as a toast offering the same. Renders nothing; it sits inside the
- * router so it can follow the thread routes.
+ * Sends web-app selections/chosen downloads to the last thread's draft and opens it;
+ * with no visited thread, starts a draft in the first project. Other downloads get a toast.
+ * Renders nothing; mounted inside the router to follow thread routes.
  */
 export function RemoteAppSendToThreadHost({ bridge }: { readonly bridge: DesktopRemoteAppBridge }) {
   const navigate = useNavigate();
@@ -73,11 +67,15 @@ export function RemoteAppSendToThreadHost({ bridge }: { readonly bridge: Desktop
   });
   // The last thread route stays the target while Settings or another page is open.
   const lastTargetRef = useRef<ThreadRouteTarget | null>(null);
-  if (routeTarget !== null) lastTargetRef.current = routeTarget;
   const { handleNewThread, defaultProjectRef } = useHandleNewThread();
   const newThreadRef = useRef({ handleNewThread, defaultProjectRef });
-  newThreadRef.current = { handleNewThread, defaultProjectRef };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- updates desktop bridge callback inputs on commit before layout effects, retaining the last thread across non-thread routes
+  useInsertionEffect(() => {
+    if (routeTarget !== null) lastTargetRef.current = routeTarget;
+    newThreadRef.current = { handleNewThread, defaultProjectRef };
+  });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to desktop send/download events while mounted and releases both bridge listeners on cleanup
   useEffect(() => {
     const deliver = async (block: string, what: string) => {
       const target = lastTargetRef.current;

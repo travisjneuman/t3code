@@ -30,22 +30,24 @@ export const authorized = <E, R>(
   method: DesktopIpc.DesktopIpcMethod<E, R>,
 ): DesktopIpc.DesktopIpcMethod<E, R | RemoteAppManager.RemoteAppManager> => ({
   channel: method.channel,
-  handler: (raw, event) =>
-    Effect.gen(function* () {
-      const manager = yield* RemoteAppManager.RemoteAppManager;
-      const sender: RemoteAppManager.RemoteAppIpcSender | undefined = event?.sender;
-      if (!(yield* manager.authorizeSender(sender))) {
-        return yield* Effect.die(
-          new Error(`Rejected unauthorized desktop IPC invocation for ${method.channel}.`),
-        );
-      }
-      return yield* method.handler(raw, event);
-    }),
+  handler: Effect.fn("desktop.ipc.remoteApp.authorized")(function* (
+    raw: unknown,
+    event?: DesktopIpc.DesktopIpcInvokeEvent,
+  ) {
+    const manager = yield* RemoteAppManager.RemoteAppManager;
+    const sender: RemoteAppManager.RemoteAppIpcSender | undefined = event?.sender;
+    if (!(yield* manager.authorizeSender(sender))) {
+      return yield* Effect.die(
+        new Error(`Rejected unauthorized desktop IPC invocation for ${method.channel}.`),
+      );
+    }
+    return yield* method.handler(raw, event);
+  }),
 });
 
 const voidInput = Schema.Void;
 
-export const setTheme = authorized(
+const setTheme = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_SET_THEME_CHANNEL,
     payload: RemoteAppThemeSchema,
@@ -57,7 +59,7 @@ export const setTheme = authorized(
   }),
 );
 
-export const getState = authorized(
+const getState = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_GET_STATE_CHANNEL,
     payload: voidInput,
@@ -69,7 +71,7 @@ export const getState = authorized(
   }),
 );
 
-export const openSurfaceMenu = authorized(
+const openSurfaceMenu = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_OPEN_SURFACE_MENU_CHANNEL,
     payload: RemoteAppSurfaceMenuAnchorSchema,
@@ -81,7 +83,7 @@ export const openSurfaceMenu = authorized(
   }),
 );
 
-export const setAvailableSites = authorized(
+const setAvailableSites = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_SET_AVAILABLE_SITES_CHANNEL,
     payload: RemoteAppAvailabilitySchema,
@@ -93,7 +95,7 @@ export const setAvailableSites = authorized(
   }),
 );
 
-export const setActiveSurface = authorized(
+const setActiveSurface = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_SET_ACTIVE_SURFACE_CHANNEL,
     payload: DesktopSurfaceSchema,
@@ -105,7 +107,7 @@ export const setActiveSurface = authorized(
   }),
 );
 
-export const fillSitePrompt = authorized(
+const fillSitePrompt = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_FILL_SITE_PROMPT_CHANNEL,
     payload: RemoteAppFillPromptRequestSchema,
@@ -117,7 +119,7 @@ export const fillSitePrompt = authorized(
   }),
 );
 
-export const showDownloadInFolder = authorized(
+const showDownloadInFolder = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_SHOW_DOWNLOAD_CHANNEL,
     payload: RemoteAppDownloadIdSchema,
@@ -129,7 +131,7 @@ export const showDownloadInFolder = authorized(
   }),
 );
 
-export const importChatExport = authorized(
+const importChatExport = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_IMPORT_CHAT_EXPORT_CHANNEL,
     payload: voidInput,
@@ -143,7 +145,7 @@ export const importChatExport = authorized(
 
 // Side panel: the preload sends each call's arguments as one object.
 
-export const attachPanel = authorized(
+const attachPanel = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_ATTACH_PANEL_CHANNEL,
     payload: Schema.Struct({ site: RemoteAppSiteSchema, webContentsId: PositiveInt }),
@@ -155,7 +157,7 @@ export const attachPanel = authorized(
   }),
 );
 
-export const setPanelVisible = authorized(
+const setPanelVisible = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_SET_PANEL_VISIBLE_CHANNEL,
     payload: Schema.Struct({ site: RemoteAppSiteSchema, visible: Schema.Boolean }),
@@ -167,7 +169,7 @@ export const setPanelVisible = authorized(
   }),
 );
 
-export const navigatePanel = authorized(
+const navigatePanel = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_NAVIGATE_PANEL_CHANNEL,
     // Same shape the shell reports through onPanelNavigated.
@@ -199,22 +201,22 @@ const makeAction = <const Name extends string>(
     }),
   );
 
-export const goBack = makeAction(
+const goBack = makeAction(
   "goBack",
   IpcChannels.REMOTE_APP_GO_BACK_CHANNEL,
   (manager) => manager.goBack,
 );
-export const goForward = makeAction(
+const goForward = makeAction(
   "goForward",
   IpcChannels.REMOTE_APP_GO_FORWARD_CHANNEL,
   (manager) => manager.goForward,
 );
-export const reload = makeAction(
+const reload = makeAction(
   "reload",
   IpcChannels.REMOTE_APP_RELOAD_CHANNEL,
   (manager) => manager.reload,
 );
-export const setSiteTextSize = authorized(
+const setSiteTextSize = authorized(
   DesktopIpc.makeIpcMethod({
     channel: IpcChannels.REMOTE_APP_SET_SITE_TEXT_SIZE_CHANNEL,
     payload: Schema.Struct({
@@ -228,12 +230,8 @@ export const setSiteTextSize = authorized(
     }),
   }),
 );
-export const retry = makeAction(
-  "retry",
-  IpcChannels.REMOTE_APP_RETRY_CHANNEL,
-  (manager) => manager.retry,
-);
-export const clearData = makeAction(
+const retry = makeAction("retry", IpcChannels.REMOTE_APP_RETRY_CHANNEL, (manager) => manager.retry);
+const clearData = makeAction(
   "clearData",
   IpcChannels.REMOTE_APP_CLEAR_DATA_CHANNEL,
   (manager) => manager.clearData,

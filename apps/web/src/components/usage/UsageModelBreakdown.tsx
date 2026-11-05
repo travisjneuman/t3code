@@ -88,7 +88,7 @@ function UsageModelRows({
           !showSubLines && "border-b border-border/50",
         )}
       >
-        <td className="py-2.5 pr-3 text-left text-xs">{rank ?? ""}</td>
+        <td className="py-2.5 pr-3 pl-2 text-left text-xs">{rank ?? ""}</td>
         <td className="py-2.5 text-left whitespace-normal">
           <button
             type="button"
@@ -139,7 +139,7 @@ function UsageModelRows({
         <td className={cn("hidden py-2.5 pl-6 sm:table-cell", rowFigures)}>
           {share === null ? "" : formatPercent(share)}
         </td>
-        <td className={cn("py-2.5 pl-6", rowFigures)}>{formatTokens(row.totalTokens)}</td>
+        <td className={cn("py-2.5 pr-2 pl-6", rowFigures)}>{formatTokens(row.totalTokens)}</td>
       </tr>
       {showSubLines
         ? routes.map(({ route, color }, index) => {
@@ -167,7 +167,7 @@ function UsageModelRows({
                   {isModelCostUnknown(route) ? "Unpriced" : formatUsd(route.costUsd)}
                 </td>
                 <td className="hidden sm:table-cell" />
-                <td className={cn("pt-0.5 pl-6", last && "pb-2.5", rowFigures)}>
+                <td className={cn("pt-0.5 pr-2 pl-6", last && "pb-2.5", rowFigures)}>
                   {formatTokens(route.totalTokens)}
                 </td>
               </tr>
@@ -214,7 +214,7 @@ export function UsageModelBreakdownBody({
       {unattributed.length === 0 ? null : (
         <Fragment>
           <tr>
-            <td colSpan={5} className="pt-5 pb-1 text-left text-xs text-muted-foreground">
+            <td colSpan={5} className="pt-5 pb-1 pl-2 text-left text-xs text-muted-foreground">
               Not tied to a model
             </td>
           </tr>

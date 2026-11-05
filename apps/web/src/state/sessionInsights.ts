@@ -43,7 +43,7 @@ const refreshKeyAtomFamily = Atom.family((key: string) =>
   ).pipe(Atom.setIdleTTL(0), Atom.withLabel(`web-session-insights-refresh:${key}`)),
 );
 
-export const sessionInsightsQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+const sessionInsightsQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:session-insights:get",
   tag: WS_METHODS.sessionInsightsGet,
   refreshTrigger: ({ environmentId, input }) =>

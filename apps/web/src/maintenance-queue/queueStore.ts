@@ -1,9 +1,6 @@
 /**
- * Updates waiting for their target to go idle, kept per client in
- * localStorage so a reload or relaunch keeps them. Storage can be missing or
- * blocked; the queue then lives for this session only. Fork add-on:
- * maintenance queue.
- *
+ * Queued updates survive reload/relaunch in client localStorage; missing or
+ * blocked storage keeps them only for this session. Fork add-on: maintenance queue.
  * @module maintenance-queue/queueStore
  */
 import {
@@ -100,7 +97,7 @@ export function getQueuedUpdates(): ReadonlyArray<QueuedUpdate> {
   return jobs;
 }
 
-export function subscribeQueuedUpdates(listener: () => void): () => void {
+function subscribeQueuedUpdates(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);

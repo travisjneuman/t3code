@@ -203,13 +203,9 @@ export const ExternalSessionContinueResult = Schema.Struct({
 });
 export type ExternalSessionContinueResult = typeof ExternalSessionContinueResult.Type;
 
-/**
- * Why a session cannot be continued in T3. `provider`: its runtime cannot
- * resume a session from disk here. `separate-store`: T3 runs this agent with
- * its own private session store, which cannot see the session. `no-folder`:
- * the session has no working folder. `folder-missing`: that folder no longer
- * exists. `no-instance`: no enabled provider instance reads this session
- * store. `empty`: nothing to continue yet.
+/** Cannot continue: `provider` cannot resume from disk; `separate-store` cannot see the session;
+ * `no-folder` has no working folder; `folder-missing` no longer exists;
+ * `no-instance` has no enabled reader for the store; `empty` has nothing to continue.
  */
 export const ExternalSessionUnsupportedReason = Schema.Literals([
   "provider",
@@ -286,17 +282,14 @@ const ExternalSessionContinueRpcError = Schema.Union([
   EnvironmentAuthorizationError,
 ]);
 
-export const ExternalSessionsSubscribeListRpc = Rpc.make(
-  EXTERNAL_SESSIONS_WS_METHODS.subscribeList,
-  {
-    payload: ExternalSessionListInput,
-    success: ExternalSessionListResult,
-    error: ExternalSessionRpcError,
-    stream: true,
-  },
-);
+const ExternalSessionsSubscribeListRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.subscribeList, {
+  payload: ExternalSessionListInput,
+  success: ExternalSessionListResult,
+  error: ExternalSessionRpcError,
+  stream: true,
+});
 
-export const ExternalSessionsSubscribeSessionRpc = Rpc.make(
+const ExternalSessionsSubscribeSessionRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeSession,
   {
     payload: ExternalSessionSubscribeInput,
@@ -306,7 +299,7 @@ export const ExternalSessionsSubscribeSessionRpc = Rpc.make(
   },
 );
 
-export const ExternalSessionsContinueRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.continue, {
+const ExternalSessionsContinueRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.continue, {
   payload: ExternalSessionContinueInput,
   success: ExternalSessionContinueResult,
   error: ExternalSessionContinueRpcError,
@@ -323,7 +316,7 @@ export const ExternalSessionRunningElsewhereResult = Schema.Struct({
 export type ExternalSessionRunningElsewhereResult =
   typeof ExternalSessionRunningElsewhereResult.Type;
 
-export const ExternalSessionsSubscribeRunningElsewhereRpc = Rpc.make(
+const ExternalSessionsSubscribeRunningElsewhereRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeRunningElsewhere,
   {
     payload: ExternalSessionRunningElsewhereInput,
@@ -333,13 +326,9 @@ export const ExternalSessionsSubscribeRunningElsewhereRpc = Rpc.make(
   },
 );
 
-/**
- * A session archived in T3, or in Claude desktop (see `archivedIn`). Archive
- * is T3's own state, so every client of the environment agrees, and the
- * session stays where it is in the agent's own app. An archived session leaves
- * the list until unarchived, or until it runs again. The title and folder are
- * kept from archive time, since older Codex archives also archived in Codex,
- * which moves the session out of the store the list reads.
+/** T3 archive state is shared by all environment clients without moving the native session;
+ * `archivedIn` also covers Claude desktop. Hidden until unarchived or run again.
+ * Retain title/folder because older Codex archives moved sessions out of the listed store.
  */
 export const ExternalSessionArchivedSession = Schema.Struct({
   key: TrimmedNonEmptyString,
@@ -390,7 +379,7 @@ export const ExternalSessionArchivedResult = Schema.Struct({
 });
 export type ExternalSessionArchivedResult = typeof ExternalSessionArchivedResult.Type;
 
-export const ExternalSessionsArchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.archive, {
+const ExternalSessionsArchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.archive, {
   payload: ExternalSessionArchiveInput,
   success: ExternalSessionArchiveResult,
   error: Schema.Union([
@@ -400,7 +389,7 @@ export const ExternalSessionsArchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.
   ]),
 });
 
-export const ExternalSessionsUnarchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.unarchive, {
+const ExternalSessionsUnarchiveRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.unarchive, {
   payload: ExternalSessionUnarchiveInput,
   success: ExternalSessionArchiveResult,
   error: ExternalSessionRpcError,
@@ -419,7 +408,7 @@ export type ExternalSessionDeleteInput = typeof ExternalSessionDeleteInput.Type;
 export const ExternalSessionDeleteResult = Schema.Struct({});
 export type ExternalSessionDeleteResult = typeof ExternalSessionDeleteResult.Type;
 
-export const ExternalSessionsDeleteRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.delete, {
+const ExternalSessionsDeleteRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.delete, {
   payload: ExternalSessionDeleteInput,
   success: ExternalSessionDeleteResult,
   error: Schema.Union([
@@ -449,7 +438,7 @@ export type ExternalSessionHandBackInput = typeof ExternalSessionHandBackInput.T
 export const ExternalSessionHandBackResult = Schema.Struct({});
 export type ExternalSessionHandBackResult = typeof ExternalSessionHandBackResult.Type;
 
-export const ExternalSessionsHandBackRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.handBack, {
+const ExternalSessionsHandBackRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.handBack, {
   payload: ExternalSessionHandBackInput,
   success: ExternalSessionHandBackResult,
   error: ExternalSessionRpcError,
@@ -467,7 +456,7 @@ export type ExternalSessionReleaseInput = typeof ExternalSessionReleaseInput.Typ
 export const ExternalSessionReleaseResult = Schema.Struct({});
 export type ExternalSessionReleaseResult = typeof ExternalSessionReleaseResult.Type;
 
-export const ExternalSessionsReleaseRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.release, {
+const ExternalSessionsReleaseRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.release, {
   payload: ExternalSessionReleaseInput,
   success: ExternalSessionReleaseResult,
   error: ExternalSessionRpcError,
@@ -499,7 +488,7 @@ export type ExternalSessionOpenInOriginInput = typeof ExternalSessionOpenInOrigi
 export const ExternalSessionOpenInOriginResult = Schema.Struct({});
 export type ExternalSessionOpenInOriginResult = typeof ExternalSessionOpenInOriginResult.Type;
 
-export const ExternalSessionsOpenInOriginRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.openInOrigin, {
+const ExternalSessionsOpenInOriginRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.openInOrigin, {
   payload: ExternalSessionOpenInOriginInput,
   success: ExternalSessionOpenInOriginResult,
   error: ExternalSessionRpcError,
@@ -536,19 +525,19 @@ export const ExternalSessionInsightsResult = Schema.Struct({
 });
 export type ExternalSessionInsightsResult = typeof ExternalSessionInsightsResult.Type;
 
-export const ExternalSessionsInsightsRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.insights, {
+const ExternalSessionsInsightsRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.insights, {
   payload: ExternalSessionInsightsInput,
   success: ExternalSessionInsightsResult,
   error: ExternalSessionRpcError,
 });
 
-export const ExternalSessionsListOlderRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.listOlder, {
+const ExternalSessionsListOlderRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.listOlder, {
   payload: ExternalSessionListOlderInput,
   success: ExternalSessionListOlderResult,
   error: ExternalSessionRpcError,
 });
 
-export const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
+const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
   {
     payload: ExternalSessionArchivedInput,

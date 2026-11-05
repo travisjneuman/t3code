@@ -1,10 +1,7 @@
 /**
- * Which update targets are in use. Busy means a thread is running, queued, or
- * waiting on an approval or user input, or a Hermes Agent is mid-run; paused
- * and stopped threads are idle. Each environment keeps when each provider
- * instance was last seen busy, so a target counts as idle only after
- * MAINTENANCE_QUEUE_IDLE_MS without activity. Fork add-on: maintenance queue.
- *
+ * Running, queued, approval/input waits and Hermes runs are busy; paused/stopped are idle.
+ * Targets need MAINTENANCE_QUEUE_IDLE_MS since last busy, tracked per environment/instance.
+ * Fork add-on: maintenance queue.
  * @module maintenance-queue/activity
  */
 import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
@@ -48,7 +45,7 @@ export function withRpcTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> 
   });
 }
 
-export const maintenanceQueueStatus = createEnvironmentRpcCommand(connectionAtomRuntime, {
+const maintenanceQueueStatus = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:maintenance-queue:status",
   tag: MAINTENANCE_QUEUE_WS_METHODS.status,
 });
@@ -91,17 +88,12 @@ const EMPTY_ACTIVITY: EnvironmentActivity = {
 
 const activity = new Map<EnvironmentId, EnvironmentActivity>();
 const activityListeners = new Set<() => void>();
-let activityVersion = 0;
 
 export function subscribeActivity(listener: () => void): () => void {
   activityListeners.add(listener);
   return () => {
     activityListeners.delete(listener);
   };
-}
-
-export function getActivityVersion(): number {
-  return activityVersion;
 }
 
 function busyCounts(entry: EnvironmentActivity): ReadonlyMap<string, number> {
@@ -127,7 +119,6 @@ function update(environmentId: EnvironmentId, patch: Partial<EnvironmentActivity
     lastBusyAt.set(ANY_INSTANCE, now);
   }
   activity.set(environmentId, { ...next, lastBusyAt });
-  activityVersion += 1;
   for (const listener of activityListeners) listener();
 }
 

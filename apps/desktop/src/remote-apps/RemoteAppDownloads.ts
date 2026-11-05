@@ -98,7 +98,7 @@ export interface RemoteAppDownloadKind {
 }
 
 /** Whether T3 offers this saved download, and how; null for any other file. */
-export const classifyRemoteAppDownload = (filename: string): RemoteAppDownloadKind | null => {
+const classifyRemoteAppDownload = (filename: string): RemoteAppDownloadKind | null => {
   const dot = filename.lastIndexOf(".");
   if (dot <= 0) return null;
   const extension = filename.slice(dot + 1).toLowerCase();
@@ -112,12 +112,12 @@ export const classifyRemoteAppDownload = (filename: string): RemoteAppDownloadKi
  * it fits the cap. Null when the file is not one T3 offers, is blank, is gone,
  * or turns out to be binary.
  */
-export const readRemoteAppDownloadCapture = (input: {
-  readonly id: string;
-  readonly site: RemoteAppSite;
-  readonly filePath: string;
-}) =>
-  Effect.gen(function* () {
+export const readRemoteAppDownloadCapture = Effect.fn("desktop.remoteAppDownloads.readCapture")(
+  function* (input: {
+    readonly id: string;
+    readonly site: RemoteAppSite;
+    readonly filePath: string;
+  }) {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const filename = path.basename(input.filePath);
@@ -140,4 +140,6 @@ export const readRemoteAppDownloadCapture = (input: {
       text,
       addNow: false,
     } satisfies RemoteAppDownloadCapture;
-  }).pipe(Effect.catch(() => Effect.succeed(null)));
+  },
+  Effect.catch(() => Effect.succeed(null)),
+);

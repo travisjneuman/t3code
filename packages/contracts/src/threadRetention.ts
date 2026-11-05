@@ -69,7 +69,7 @@ export class ThreadRetentionError extends Schema.TaggedError<ThreadRetentionErro
   { message: Schema.String },
 ) {}
 
-export const ThreadRetentionStorageRpc = Rpc.make(THREAD_RETENTION_WS_METHODS.storage, {
+const ThreadRetentionStorageRpc = Rpc.make(THREAD_RETENTION_WS_METHODS.storage, {
   payload: Schema.Struct({}),
   success: ThreadRetentionStorageResult,
   error: Schema.Union([ThreadRetentionError, EnvironmentAuthorizationError]),

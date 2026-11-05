@@ -18,6 +18,7 @@ import {
   type RemoteAppSurfaceMenuAnchor,
   type RemoteAppTheme,
 } from "@t3tools/contracts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as Fiber from "effect/Fiber";
@@ -108,7 +109,7 @@ const REMOTE_APP_MAX_CAPTURED_DOWNLOADS = 50;
 // Keep the live remote document above the host footer's exact 48px strip so
 // the native Settings, Pull Requests, Usage, and update controls remain both
 // visible and interactive on a remote surface.
-export const REMOTE_APP_HOST_FOOTER_HEIGHT = 48;
+const REMOTE_APP_HOST_FOOTER_HEIGHT = 48;
 export const REMOTE_APP_THEME_DOCUMENT_EVENTS = ["did-finish-load"] as const;
 export const REMOTE_APP_THEME_NAVIGATION_EVENTS = ["did-navigate-in-page"] as const;
 
@@ -161,7 +162,7 @@ export const parseRemoteAppSurfaceMenuUrl = (url: string): DesktopSurface | unde
 };
 
 /** The site whose "Open in Side Panel" button the surface menu navigated to. */
-export const parseRemoteAppPanelMenuUrl = (url: string): RemoteAppSite | undefined => {
+const parseRemoteAppPanelMenuUrl = (url: string): RemoteAppSite | undefined => {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "t3code-surface:" || parsed.hostname !== "panel") return undefined;
@@ -177,7 +178,7 @@ export const parseRemoteAppPanelMenuUrl = (url: string): RemoteAppSite | undefin
  * available sites. The active surface is never listed; there is nothing to
  * switch to there.
  */
-export const resolveRemoteAppMenuSurfaces = (
+const resolveRemoteAppMenuSurfaces = (
   availableSites: ReadonlyArray<RemoteAppSite>,
   activeSurface: DesktopSurface,
 ): ReadonlyArray<DesktopSurface> =>
@@ -187,10 +188,7 @@ export const resolveRemoteAppMenuSurfaces = (
   );
 
 /** The URL to open for a site: its last persisted page when it belongs to that site. */
-export const resolveRemoteAppSiteUrl = (
-  site: RemoteAppSite,
-  persistedUrl: string | null,
-): string =>
+const resolveRemoteAppSiteUrl = (site: RemoteAppSite, persistedUrl: string | null): string =>
   persistedUrl !== null && resolveRemoteAppSiteForUrl(persistedUrl) === site
     ? persistedUrl
     : REMOTE_APP_SITE_DEFINITIONS[site].entryUrl;
@@ -284,7 +282,7 @@ const clearUnread = (state: RemoteAppState, site: RemoteAppSite): RemoteAppState
     ? { ...state, unreadSites: state.unreadSites.filter((unread) => unread !== site) }
     : state;
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const shell = yield* ElectronShell.ElectronShell;
   const sessionService = yield* RemoteAppSession.RemoteAppSession;
@@ -441,14 +439,13 @@ export const make = Effect.gen(function* () {
    * The persisted state describes the active site. Events from hidden views
    * are ignored here and reconciled when that site is activated again.
    */
-  const updateSiteState = (
+  const updateSiteState = Effect.fn("remote-app.updateSiteState")(function* (
     site: RemoteAppSite,
     update: (state: RemoteAppState) => RemoteAppState,
-  ): Effect.Effect<void, RemoteAppManagerError> =>
-    Effect.gen(function* () {
-      if (activeSiteOf(yield* stateStore.get) !== site) return;
-      yield* updateState((state) => (activeSiteOf(state) === site ? update(state) : state));
-    });
+  ): Effect.fn.Return<void, RemoteAppManagerError> {
+    if (activeSiteOf(yield* stateStore.get) !== site) return;
+    yield* updateState((state) => (activeSiteOf(state) === site ? update(state) : state));
+  });
 
   const updateNavigationState = (view: Electron.WebContentsView, state: RemoteAppState) => {
     const rawUrl = view.webContents.getURL();
@@ -482,17 +479,16 @@ export const make = Effect.gen(function* () {
    * Badges a site that finished a reply while another surface was on screen
    * and its side panel was not.
    */
-  const markUnread = (site: RemoteAppSite) =>
-    Effect.gen(function* () {
-      const isRead = (state: RemoteAppState) =>
-        state.activeSurface === site ||
-        isPanelVisible(site) ||
-        (state.unreadSites ?? []).includes(site);
-      if (isRead(yield* stateStore.get)) return;
-      yield* updateState((state) =>
-        isRead(state) ? state : { ...state, unreadSites: [...(state.unreadSites ?? []), site] },
-      );
-    });
+  const markUnread = Effect.fn("remote-app.markUnread")(function* (site: RemoteAppSite) {
+    const isRead = (state: RemoteAppState) =>
+      state.activeSurface === site ||
+      isPanelVisible(site) ||
+      (state.unreadSites ?? []).includes(site);
+    if (isRead(yield* stateStore.get)) return;
+    yield* updateState((state) =>
+      isRead(state) ? state : { ...state, unreadSites: [...(state.unreadSites ?? []), site] },
+    );
+  });
 
   /**
    * Watches the page for its next finished reply and re-arms after each one.
@@ -526,66 +522,66 @@ export const make = Effect.gen(function* () {
    * The site's page zoom at T3's window zoom `mainZoom`: its reply text lands
    * on T3's chat text size, times the user's text size for the site.
    */
-  const sitePageZoom = (site: RemoteAppSite, mainZoom: number) =>
-    Effect.gen(function* () {
-      const theme = yield* Ref.get(remoteThemeRef);
-      const state = yield* stateStore.get;
-      return resolveRemoteAppPageZoom({
-        site,
-        mainZoom,
-        interfaceFontSize: theme.interfaceFontSize,
-        textSize: state.textSizes?.[site],
-      });
+  const sitePageZoom = Effect.fn("remote-app.sitePageZoom")(function* (
+    site: RemoteAppSite,
+    mainZoom: number,
+  ) {
+    const theme = yield* Ref.get(remoteThemeRef);
+    const state = yield* stateStore.get;
+    return resolveRemoteAppPageZoom({
+      site,
+      mainZoom,
+      interfaceFontSize: theme.interfaceFontSize,
+      textSize: state.textSizes?.[site],
     });
+  });
 
-  const positionView = (
+  const positionView = Effect.fn("remote-app.positionView")(function* (
     site: RemoteAppSite,
     window: Electron.BrowserWindow,
     view: Electron.WebContentsView,
-  ) =>
-    Effect.gen(function* () {
-      const theme = yield* Ref.get(remoteThemeRef);
-      const mainZoom = yield* Effect.try({
-        try: () => resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()),
-        catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
-      });
-      const pageZoom = yield* sitePageZoom(site, mainZoom);
-      yield* Effect.try({
-        try: () => {
-          // The native shell owns application zoom. The page follows it, scaled
-          // so the site's text matches T3's chat text at every zoom level.
-          view.webContents.setZoomFactor(pageZoom);
-          // Bounds are T3's own layout, so they stay on T3's scale. The host
-          // footer lives in the sidebar; a collapsed sidebar reports no width.
-          view.setBounds(
-            resolveRemoteAppViewBounds(
-              window.getContentBounds(),
-              mainZoom,
-              theme.sidebarWidth !== null,
-            ),
-          );
-        },
-        catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
-      });
+  ) {
+    const theme = yield* Ref.get(remoteThemeRef);
+    const mainZoom = yield* Effect.try({
+      try: () => resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()),
+      catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
     });
+    const pageZoom = yield* sitePageZoom(site, mainZoom);
+    yield* Effect.try({
+      try: () => {
+        // The native shell owns application zoom. The page follows it, scaled
+        // so the site's text matches T3's chat text at every zoom level.
+        view.webContents.setZoomFactor(pageZoom);
+        // Bounds are T3's own layout, so they stay on T3's scale. The host
+        // footer lives in the sidebar; a collapsed sidebar reports no width.
+        view.setBounds(
+          resolveRemoteAppViewBounds(
+            window.getContentBounds(),
+            mainZoom,
+            theme.sidebarWidth !== null,
+          ),
+        );
+      },
+      catch: (cause) => new RemoteAppManagerError({ operation: "layout", cause }),
+    });
+  });
 
   /**
    * Gives a side-panel page the same zoom positionView gives the site's full
    * view. Chromium keys zoom by host within a partition, so the two must agree.
    */
-  const matchPanelZoom = (
+  const matchPanelZoom = Effect.fn("remote-app.matchPanelZoom")(function* (
     site: RemoteAppSite,
     window: Electron.BrowserWindow,
     contents: Electron.WebContents,
-  ) =>
-    Effect.gen(function* () {
-      if (window.isDestroyed() || contents.isDestroyed()) return;
-      const pageZoom = yield* sitePageZoom(
-        site,
-        resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()),
-      );
-      if (!contents.isDestroyed()) contents.setZoomFactor(pageZoom);
-    });
+  ) {
+    if (window.isDestroyed() || contents.isDestroyed()) return;
+    const pageZoom = yield* sitePageZoom(
+      site,
+      resolveRemoteAppViewZoomFactor(window.webContents.getZoomFactor()),
+    );
+    if (!contents.isDestroyed()) contents.setZoomFactor(pageZoom);
+  });
 
   const openExternal = (url: string) => runSafely(shell.openExternal(url));
 
@@ -595,33 +591,34 @@ export const make = Effect.gen(function* () {
    * page's CSS pixels are scaled by its text match against T3's, so the width
    * is divided by that scale to land on T3's sidebar edge.
    */
-  const applySidebarWidth = (site: RemoteAppSite, contents: Electron.WebContents) =>
-    Effect.gen(function* () {
-      const theme = yield* Ref.get(remoteThemeRef);
-      const scale = yield* sitePageZoom(site, 1);
-      const width = theme.sidebarWidth === null ? null : theme.sidebarWidth / scale;
-      yield* Effect.tryPromise({
-        try: () => contents.executeJavaScript(buildRemoteAppSidebarWidthScript(width)),
-        catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
-      }).pipe(Effect.catch(() => Effect.void));
-    });
+  const applySidebarWidth = Effect.fn("remote-app.applySidebarWidth")(function* (
+    site: RemoteAppSite,
+    contents: Electron.WebContents,
+  ) {
+    const theme = yield* Ref.get(remoteThemeRef);
+    const scale = yield* sitePageZoom(site, 1);
+    const width = theme.sidebarWidth === null ? null : theme.sidebarWidth / scale;
+    yield* Effect.tryPromise({
+      try: () => contents.executeJavaScript(buildRemoteAppSidebarWidthScript(width)),
+      catch: (cause) => new RemoteAppManagerError({ operation: "theme", cause }),
+    }).pipe(Effect.catch(() => Effect.void));
+  });
 
   /** Re-applies a site's page zoom and sidebar pin to its full view and side panel. */
-  const applySiteZoom = (site: RemoteAppSite) =>
-    Effect.gen(function* () {
-      const window = yield* getLiveWindow;
-      if (Option.isNone(window)) return;
-      const view = yield* getLiveView(site);
-      if (Option.isSome(view)) {
-        yield* positionView(site, window.value, view.value);
-        const contents = view.value.webContents;
-        if (isThemeableRemoteAppSite(site) && isThemeableSiteUrl(site, contents.getURL())) {
-          yield* applySidebarWidth(site, contents);
-        }
+  const applySiteZoom = Effect.fn("remote-app.applySiteZoom")(function* (site: RemoteAppSite) {
+    const window = yield* getLiveWindow;
+    if (Option.isNone(window)) return;
+    const view = yield* getLiveView(site);
+    if (Option.isSome(view)) {
+      yield* positionView(site, window.value, view.value);
+      const contents = view.value.webContents;
+      if (isThemeableRemoteAppSite(site) && isThemeableSiteUrl(site, contents.getURL())) {
+        yield* applySidebarWidth(site, contents);
       }
-      const panel = getLivePanel(site);
-      if (panel !== undefined) yield* matchPanelZoom(site, window.value, panel);
-    });
+    }
+    const panel = getLivePanel(site);
+    if (panel !== undefined) yield* matchPanelZoom(site, window.value, panel);
+  });
 
   const isThemeableSiteUrl = (site: RemoteAppSite, url: string): boolean => {
     if (site === "chatgpt") return isChatGptRemoteAppUrl(url);
@@ -633,12 +630,10 @@ export const make = Effect.gen(function* () {
   };
 
   /**
-   * Every themeable site gets the active T3 palette as a user stylesheet that
-   * repaints its own design tokens, and its sidebar pinned to T3's width; a
-   * site with no theme gets only the no-drag rule. Auth pages on other hosts
-   * are left alone. ChatGPT also gets the interaction script that tidies its
-   * chrome, and Claude the Duet sidebar's way back to chat. A side-panel page (no `view`) is too narrow for the sidebar pin and
-   * sits on the renderer's own background.
+   * Themeable sites get T3's palette and sidebar width; others get only no-drag.
+   * Auth pages on other hosts are untouched. ChatGPT gets chrome interactions;
+   * Claude gets Duet's return to chat. Side panels use the renderer background
+   * and skip the sidebar pin because they are too narrow.
    */
   const applyRemoteTheme = Effect.fn("remote-app.applyTheme")(function* (
     site: RemoteAppSite,
@@ -1134,34 +1129,33 @@ export const make = Effect.gen(function* () {
    * stays detached and throttled; it is themed and pinned on load like any
    * other. Returns whether a load was started.
    */
-  const preloadSite = (site: RemoteAppSite) =>
-    Effect.gen(function* () {
-      const window = yield* requireLiveWindow("attach");
-      yield* attachMainWindow(window);
-      return yield* viewCreationLock.withPermit(
-        Effect.gen(function* () {
-          const state = yield* stateStore.get;
-          const available = yield* Ref.get(availableSitesRef);
-          const background = yield* Ref.get(backgroundSitesRef);
-          if (activeSiteOf(state) === site) return false;
-          if (!available.includes(site) || !background.includes(site)) return false;
-          if (idleUnloadedSites.has(site)) return false;
-          if (Option.isSome(yield* getLiveView(site))) return false;
-          const view = yield* createView(site, window);
-          unseenViews.add(view);
-          // Resolves on did-finish-load; a failed load is left to brokenSites,
-          // so activating the site reloads it.
-          const done: Promise<unknown> = view.webContents
-            .loadURL(resolveRemoteAppSiteUrl(site, state.currentUrl))
-            .catch(() => undefined)
-            .finally(() => {
-              if (preloadLoad?.done === done) preloadLoad = undefined;
-            });
-          preloadLoad = { site, done };
-          return true;
-        }),
-      );
-    });
+  const preloadSite = Effect.fn("remote-app.preloadSite")(function* (site: RemoteAppSite) {
+    const window = yield* requireLiveWindow("attach");
+    yield* attachMainWindow(window);
+    return yield* viewCreationLock.withPermit(
+      Effect.gen(function* () {
+        const state = yield* stateStore.get;
+        const available = yield* Ref.get(availableSitesRef);
+        const background = yield* Ref.get(backgroundSitesRef);
+        if (activeSiteOf(state) === site) return false;
+        if (!available.includes(site) || !background.includes(site)) return false;
+        if (idleUnloadedSites.has(site)) return false;
+        if (Option.isSome(yield* getLiveView(site))) return false;
+        const view = yield* createView(site, window);
+        unseenViews.add(view);
+        // Resolves on did-finish-load; a failed load is left to brokenSites,
+        // so activating the site reloads it.
+        const done: Promise<unknown> = view.webContents
+          .loadURL(resolveRemoteAppSiteUrl(site, state.currentUrl))
+          .catch(() => undefined)
+          .finally(() => {
+            if (preloadLoad?.done === done) preloadLoad = undefined;
+          });
+        preloadLoad = { site, done };
+        return true;
+      }),
+    );
+  });
 
   const awaitPreloadLoad = Effect.suspend(() => {
     const load = preloadLoad;
@@ -1173,19 +1167,18 @@ export const make = Effect.gen(function* () {
         );
   });
 
-  const runPreload = (delayMs: number) =>
-    Effect.gen(function* () {
-      yield* Effect.sleep(delayMs);
-      // Each site is rechecked at its turn; a later availability or
-      // background-list change reschedules the whole run.
-      for (const site of yield* Ref.get(backgroundSitesRef)) {
-        yield* awaitPreloadLoad;
-        const started = yield* preloadSite(site).pipe(Effect.catch(() => Effect.succeed(false)));
-        if (!started) continue;
-        yield* awaitPreloadLoad;
-        yield* Effect.sleep(REMOTE_APP_PRELOAD_SETTLE_DELAY);
-      }
-    });
+  const runPreload = Effect.fn("remote-app.runPreload")(function* (delayMs: number) {
+    yield* Effect.sleep(delayMs);
+    // Each site is rechecked at its turn; a later availability or
+    // background-list change reschedules the whole run.
+    for (const site of yield* Ref.get(backgroundSitesRef)) {
+      yield* awaitPreloadLoad;
+      const started = yield* preloadSite(site).pipe(Effect.catch(() => Effect.succeed(false)));
+      if (!started) continue;
+      yield* awaitPreloadLoad;
+      yield* Effect.sleep(REMOTE_APP_PRELOAD_SETTLE_DELAY);
+    }
+  });
 
   const cancelPreload = () => {
     preloadFiber?.interruptUnsafe();
@@ -1213,7 +1206,7 @@ export const make = Effect.gen(function* () {
     const cutoff = Date.now() - idleUnloadMinutes * 60_000;
     const activeSite = activeSiteOf(yield* stateStore.get);
     const window = yield* getLiveWindow;
-    for (const [site, since] of [...hiddenSince]) {
+    for (const [site, since] of hiddenSince) {
       if (site === activeSite || site === activatingSite || since > cutoff) continue;
       if (!views.has(site)) continue;
       closeView(site, window);
@@ -1237,41 +1230,40 @@ export const make = Effect.gen(function* () {
     );
   };
 
-  const showSurface = (surface: DesktopSurface) =>
-    Effect.gen(function* () {
-      closeSurfaceMenu();
-      const window = yield* getLiveWindow;
-      if (Option.isNone(window)) return;
-      // Detach every other view so the host renderer owns the surface and the
-      // next activation reinserts a clean layer beneath it.
-      const now = Date.now();
-      for (const [site, view] of views) {
-        if (site === surface || view.webContents.isDestroyed()) continue;
-        if (!hiddenSince.has(site)) hiddenSince.set(site, now);
-        view.setVisible(false);
-        window.value.contentView.removeChildView(view);
-      }
-      const view = canUseRemoteAppControl(surface)
-        ? yield* getLiveView(surface)
-        : Option.none<Electron.WebContentsView>();
-      if (Option.isNone(view) || !canUseRemoteAppControl(surface)) {
-        window.value.webContents.focus();
-        return;
-      }
-      hiddenSince.delete(surface);
-      // Reattach before making it visible while preserving the host shell
-      // above the remote page.
-      window.value.contentView.removeChildView(view.value);
-      addRemoteAppViewBelowHostRenderer(window.value, view.value);
-      yield* positionView(surface, window.value, view.value);
-      view.value.setVisible(true);
-      if (unseenViews.delete(view.value)) view.value.webContents.invalidate();
-      // Surface switches can happen while the renderer is still reconciling
-      // its theme snapshot. Reapply the manager's current validated palette at
-      // the activation boundary so a reused view cannot show the old theme.
-      yield* applyRemoteTheme(surface, view.value.webContents, view.value);
-      view.value.webContents.focus();
-    });
+  const showSurface = Effect.fn("remote-app.showSurface")(function* (surface: DesktopSurface) {
+    closeSurfaceMenu();
+    const window = yield* getLiveWindow;
+    if (Option.isNone(window)) return;
+    // Detach every other view so the host renderer owns the surface and the
+    // next activation reinserts a clean layer beneath it.
+    const now = Date.now();
+    for (const [site, view] of views) {
+      if (site === surface || view.webContents.isDestroyed()) continue;
+      if (!hiddenSince.has(site)) hiddenSince.set(site, now);
+      view.setVisible(false);
+      window.value.contentView.removeChildView(view);
+    }
+    const view = canUseRemoteAppControl(surface)
+      ? yield* getLiveView(surface)
+      : Option.none<Electron.WebContentsView>();
+    if (Option.isNone(view) || !canUseRemoteAppControl(surface)) {
+      window.value.webContents.focus();
+      return;
+    }
+    hiddenSince.delete(surface);
+    // Reattach before making it visible while preserving the host shell
+    // above the remote page.
+    window.value.contentView.removeChildView(view.value);
+    addRemoteAppViewBelowHostRenderer(window.value, view.value);
+    yield* positionView(surface, window.value, view.value);
+    view.value.setVisible(true);
+    if (unseenViews.delete(view.value)) view.value.webContents.invalidate();
+    // Surface switches can happen while the renderer is still reconciling
+    // its theme snapshot. Reapply the manager's current validated palette at
+    // the activation boundary so a reused view cannot show the old theme.
+    yield* applyRemoteTheme(surface, view.value.webContents, view.value);
+    view.value.webContents.focus();
+  });
 
   const syncLayout = Effect.gen(function* () {
     // Side panels follow the app zoom too; the renderer owns their bounds.
@@ -1327,7 +1319,7 @@ export const make = Effect.gen(function* () {
       }
       popupWindows.clear();
       visiblePanels.clear();
-      for (const site of [...views.keys()]) closeView(site, Option.none());
+      for (const site of views.keys()) closeView(site, Option.none());
       runSafely(
         Ref.update(mainWindowRef, (current) =>
           Option.isSome(current) && current.value === window ? Option.none() : current,
@@ -1337,8 +1329,8 @@ export const make = Effect.gen(function* () {
   });
 
   const getState = stateStore.get;
-  const setTheme = (theme: RemoteAppTheme) =>
-    Effect.gen(function* () {
+  const setTheme = Effect.fn("remote-app.setTheme")(
+    function* (theme: RemoteAppTheme) {
       const previous = yield* Ref.getAndSet(remoteThemeRef, theme);
       // Dragging T3's sidebar sends a stream of width-only updates; those just
       // move every site's pin. The menu colors are read when the menu opens.
@@ -1376,50 +1368,47 @@ export const make = Effect.gen(function* () {
           yield* positionView(site, window.value, view.value);
         }
       }
-    }).pipe(
-      Effect.mapError((cause) =>
-        isRemoteAppManagerError(cause)
-          ? cause
-          : new RemoteAppManagerError({ operation: "theme", cause }),
-      ),
-    );
+    },
+    Effect.mapError((cause) =>
+      isRemoteAppManagerError(cause)
+        ? cause
+        : new RemoteAppManagerError({ operation: "theme", cause }),
+    ),
+  );
 
-  const setAvailableSites = ({
+  const setAvailableSites = Effect.fn("remote-app.setAvailableSites")(function* ({
     sites,
     backgroundSites,
     idleUnloadMinutes: idleMinutes,
-  }: RemoteAppAvailability) =>
-    Effect.gen(function* () {
-      scheduleIdleSweep(idleMinutes);
-      const background = backgroundSites.filter((site) => sites.includes(site));
-      yield* Ref.set(availableSitesRef, sites);
-      const previousBackground = yield* Ref.getAndSet(backgroundSitesRef, background);
-      const backgroundChanged = previousBackground.join(",") !== background.join(",");
-      // Release the memory of hidden sites that are no longer available or no
-      // longer kept in the background, including one still preloading. A site
-      // opened by hand outside the background list keeps its view after the
-      // user leaves it, until the background list next changes. The renderer
-      // moves off an active site that became unavailable.
-      const activeSite = activeSiteOf(yield* stateStore.get);
-      const window = yield* getLiveWindow;
-      for (const site of [...views.keys()]) {
-        if (site === activeSite) continue;
-        if (!sites.includes(site) || (backgroundChanged && !background.includes(site))) {
-          closeView(site, window);
-        }
+  }: RemoteAppAvailability) {
+    scheduleIdleSweep(idleMinutes);
+    const background = backgroundSites.filter((site) => sites.includes(site));
+    yield* Ref.set(availableSitesRef, sites);
+    const previousBackground = yield* Ref.getAndSet(backgroundSitesRef, background);
+    const backgroundChanged = previousBackground.join(",") !== background.join(",");
+    // Release hidden unavailable sites, including preloads; a background-list
+    // change also releases sites no longer kept there. Manually opened sites
+    // otherwise stay loaded after leaving. The renderer moves off unavailable
+    // active sites.
+    const activeSite = activeSiteOf(yield* stateStore.get);
+    const window = yield* getLiveWindow;
+    for (const site of views.keys()) {
+      if (site === activeSite) continue;
+      if (!sites.includes(site) || (backgroundChanged && !background.includes(site))) {
+        closeView(site, window);
       }
-      schedulePreload(background);
-    });
+    }
+    schedulePreload(background);
+  });
 
   /**
    * The surface menu's "Open in Side Panel": back to T3 if a site is on
    * screen, then the renderer opens that site's panel beside its thread.
    */
-  const openInPanel = (site: RemoteAppSite) =>
-    Effect.gen(function* () {
-      if ((yield* stateStore.get).activeSurface !== "t3code") yield* setActiveSurface("t3code");
-      yield* sendToRenderer(REMOTE_APP_OPEN_IN_PANEL_CHANNEL, site);
-    });
+  const openInPanel = Effect.fn("remote-app.openInPanel")(function* (site: RemoteAppSite) {
+    if ((yield* stateStore.get).activeSurface !== "t3code") yield* setActiveSurface("t3code");
+    yield* sendToRenderer(REMOTE_APP_OPEN_IN_PANEL_CHANNEL, site);
+  });
 
   const openSurfaceMenu = Effect.fn("remote-app.openSurfaceMenu")(function* (
     anchor: RemoteAppSurfaceMenuAnchor,
@@ -1435,13 +1424,11 @@ export const make = Effect.gen(function* () {
     // The switcher offers no menu when there is nothing to switch to.
     if (surfaces.length === 0) return;
 
-    // A transparent window gets neither native rounded corners nor a native
-    // shadow, so the menu is an opaque frameless window the platform rounds
-    // and shadows. On macOS its background is native vibrancy, tinted by the
-    // page like T3's dropdown-glass; elsewhere the page paints the opaque
-    // popover color.
+    // An opaque frameless window keeps native rounded corners and shadows.
+    // On macOS the page tints native vibrancy like T3's dropdown-glass;
+    // elsewhere it paints the opaque popover color.
     const material: RemoteAppSurfaceMenuMaterial =
-      process.platform === "darwin" ? "vibrancy" : "opaque";
+      (yield* HostProcess.Platform) === "darwin" ? "vibrancy" : "opaque";
     const materialOptions: Electron.BrowserWindowConstructorOptions =
       material === "vibrancy"
         ? { vibrancy: "menu", visualEffectState: "active", backgroundColor: "#00000000" }
@@ -1536,8 +1523,8 @@ export const make = Effect.gen(function* () {
       catch: (cause) => new RemoteAppManagerError({ operation: "load", cause }),
     });
 
-  const activateSite = (site: RemoteAppSite) =>
-    Effect.gen(function* () {
+  const activateSite = Effect.fn("remote-app.activateSite")(
+    function* (site: RemoteAppSite) {
       activatingSite = site;
       // Opening a site the idle sweep released brings it back into the preload.
       idleUnloadedSites.delete(site);
@@ -1593,36 +1580,39 @@ export const make = Effect.gen(function* () {
           site,
         );
       });
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          if (activatingSite === site) activatingSite = undefined;
-        }),
+    },
+    (effect, site) =>
+      effect.pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (activatingSite === site) activatingSite = undefined;
+          }),
+        ),
       ),
-    );
+  );
 
-  const setActiveSurface = (surface: DesktopSurface) =>
-    Effect.gen(function* () {
-      if (canUseRemoteAppControl(surface)) {
-        yield* activateSite(surface);
-      } else {
-        yield* showSurface(surface);
-        yield* updateState((state) => ({ ...state, activeSurface: surface }));
-      }
-      return yield* stateStore.get;
-    });
+  const setActiveSurface = Effect.fn("remote-app.setActiveSurface")(function* (
+    surface: DesktopSurface,
+  ) {
+    if (canUseRemoteAppControl(surface)) {
+      yield* activateSite(surface);
+    } else {
+      yield* showSurface(surface);
+      yield* updateState((state) => ({ ...state, activeSurface: surface }));
+    }
+    return yield* stateStore.get;
+  });
 
-  const withActiveView = (
+  const withActiveView = Effect.fn("remote-app.withActiveView")(function* (
     operation: (site: RemoteAppSite, view: Electron.WebContentsView) => void,
-  ) =>
-    Effect.gen(function* () {
-      const site = activeSiteOf(yield* stateStore.get);
-      if (site !== undefined) {
-        const view = yield* getLiveView(site);
-        if (Option.isSome(view)) operation(site, view.value);
-      }
-      return yield* stateStore.get;
-    });
+  ) {
+    const site = activeSiteOf(yield* stateStore.get);
+    if (site !== undefined) {
+      const view = yield* getLiveView(site);
+      if (Option.isSome(view)) operation(site, view.value);
+    }
+    return yield* stateStore.get;
+  });
 
   const reload = withActiveView((_site, view) => view.webContents.reload());
   const retry = Effect.gen(function* () {
@@ -1641,28 +1631,32 @@ export const make = Effect.gen(function* () {
     return yield* stateStore.get;
   });
 
-  const setSiteTextSize = (site: RemoteAppSite, size: number | null) =>
-    Effect.gen(function* () {
-      const next = size === null ? null : normalizeRemoteAppTextSize(size);
-      const state = yield* updateState((current) => {
-        const textSizes: Partial<Record<RemoteAppSite, number>> = {};
-        for (const other of REMOTE_APP_SITES) {
-          const size = other === site ? next : current.textSizes?.[other];
-          if (size !== null && size !== undefined) textSizes[other] = size;
-        }
-        return { ...current, textSizes };
-      });
-      yield* applySiteZoom(site);
-      return state;
+  const setSiteTextSize = Effect.fn("remote-app.setSiteTextSize")(function* (
+    site: RemoteAppSite,
+    size: number | null,
+  ) {
+    const next = size === null ? null : normalizeRemoteAppTextSize(size);
+    const state = yield* updateState((current) => {
+      const textSizes: Partial<Record<RemoteAppSite, number>> = {};
+      for (const other of REMOTE_APP_SITES) {
+        const size = other === site ? next : current.textSizes?.[other];
+        if (size !== null && size !== undefined) textSizes[other] = size;
+      }
+      return { ...current, textSizes };
     });
+    yield* applySiteZoom(site);
+    return state;
+  });
 
-  const stepSiteTextSize = (site: RemoteAppSite, step: RemoteAppTextSizeStep) =>
-    Effect.gen(function* () {
-      if (step === "reset") return yield* setSiteTextSize(site, null);
-      const current = (yield* stateStore.get).textSizes?.[site] ?? 1;
-      const delta = step === "larger" ? REMOTE_APP_TEXT_SIZE_STEP : -REMOTE_APP_TEXT_SIZE_STEP;
-      return yield* setSiteTextSize(site, current + delta);
-    });
+  const stepSiteTextSize = Effect.fn("remote-app.stepSiteTextSize")(function* (
+    site: RemoteAppSite,
+    step: RemoteAppTextSizeStep,
+  ) {
+    if (step === "reset") return yield* setSiteTextSize(site, null);
+    const current = (yield* stateStore.get).textSizes?.[site] ?? 1;
+    const delta = step === "larger" ? REMOTE_APP_TEXT_SIZE_STEP : -REMOTE_APP_TEXT_SIZE_STEP;
+    return yield* setSiteTextSize(site, current + delta);
+  });
 
   /** The site whose page has focus, else the site on screen, else the only visible side panel. */
   const resolveTextSizeTarget = Effect.gen(function* () {
@@ -1676,11 +1670,12 @@ export const make = Effect.gen(function* () {
     return visible.length === 1 ? visible[0] : undefined;
   });
 
-  const stepTextSize = (step: RemoteAppTextSizeStep) =>
-    Effect.gen(function* () {
-      const site = yield* resolveTextSizeTarget;
-      if (site !== undefined) yield* stepSiteTextSize(site, step);
-    });
+  const stepTextSize = Effect.fn("remote-app.stepTextSize")(function* (
+    step: RemoteAppTextSizeStep,
+  ) {
+    const site = yield* resolveTextSizeTarget;
+    if (site !== undefined) yield* stepSiteTextSize(site, step);
+  });
 
   /** Signs the active site out by wiping only its own partition. */
   const clearData = Effect.gen(function* () {
@@ -1835,31 +1830,32 @@ export const make = Effect.gen(function* () {
    * the visible side panel that saved it, else the site's full view while it
    * is on screen. Undefined when neither is on one of the site's own pages.
    */
-  const downloadNoticePage = (site: RemoteAppSite, fromPanel: boolean) =>
-    Effect.gen(function* () {
-      const panel =
-        fromPanel && isPanelVisible(site) ? trustedPage(site, panels.get(site)) : undefined;
-      if (panel !== undefined) return panel;
-      if (activeSiteOf(yield* stateStore.get) !== site) return undefined;
-      const view = yield* getLiveView(site);
-      return Option.isSome(view) ? trustedPage(site, view.value.webContents) : undefined;
-    });
+  const downloadNoticePage = Effect.fn("remote-app.downloadNoticePage")(function* (
+    site: RemoteAppSite,
+    fromPanel: boolean,
+  ) {
+    const panel =
+      fromPanel && isPanelVisible(site) ? trustedPage(site, panels.get(site)) : undefined;
+    if (panel !== undefined) return panel;
+    if (activeSiteOf(yield* stateStore.get) !== site) return undefined;
+    const view = yield* getLiveView(site);
+    return Option.isSome(view) ? trustedPage(site, view.value.webContents) : undefined;
+  });
 
   /** "ignored" when the user lets the notice go or the page can't show it. */
-  const askAboutDownloadOnPage = (
+  const askAboutDownloadOnPage = Effect.fn("remote-app.askAboutDownloadOnPage")(function* (
     capture: RemoteAppDownloadCapture,
     contents: Electron.WebContents,
-  ) =>
-    Effect.gen(function* () {
-      const { message, action } = downloadNotice(capture);
-      const outcome = yield* runPageScript(
-        contents,
-        buildRemoteAppActionNoticeScript(message, action),
-      ).pipe(Effect.timeoutOption(REMOTE_APP_ACTION_NOTICE_TIMEOUT_MS));
-      return Option.isSome(outcome) && outcome.value === "action"
-        ? ("action" as const)
-        : ("ignored" as const);
-    });
+  ) {
+    const { message, action } = downloadNotice(capture);
+    const outcome = yield* runPageScript(
+      contents,
+      buildRemoteAppActionNoticeScript(message, action),
+    ).pipe(Effect.timeoutOption(REMOTE_APP_ACTION_NOTICE_TIMEOUT_MS));
+    return Option.isSome(outcome) && outcome.value === "action"
+      ? ("action" as const)
+      : ("ignored" as const);
+  });
 
   /**
    * Offers a saved text file or archive to T3 (see RemoteAppDownloads.ts for
@@ -1924,63 +1920,62 @@ export const make = Effect.gen(function* () {
    * be filled, the text goes on the clipboard and the user is told on the
    * page; "input-not-found" when the page can't show that either.
    */
-  const fillPromptOn = (
+  const fillPromptOn = Effect.fn("remote-app.fillPromptOn")(function* (
     site: RemoteAppSite,
     page: Electron.WebContents | undefined,
     text: string,
-  ) =>
-    Effect.gen(function* () {
-      const hooks = REMOTE_APP_SITE_DEFINITIONS[site].page;
-      if (page !== undefined && hooks !== undefined) {
-        const outcome = yield* runPageScript(
-          page,
-          buildRemoteAppPromptFillScript(hooks.promptInput, text),
-        );
-        if (outcome === "filled") return "filled" satisfies RemoteAppFillPromptResult;
-      }
-      yield* shell.copyText(text);
-      if (page !== undefined && !page.isDestroyed()) {
-        const shown = yield* runPageScript(
-          page,
-          buildRemoteAppNoticeScript(
-            `Couldn't find ${REMOTE_APP_SITE_INFO[site].label}'s prompt box. The text is on your clipboard; paste it there.`,
-          ),
-        );
-        if (shown === true) return "copied" satisfies RemoteAppFillPromptResult;
-      }
-      return "input-not-found" satisfies RemoteAppFillPromptResult;
-    });
+  ) {
+    const hooks = REMOTE_APP_SITE_DEFINITIONS[site].page;
+    if (page !== undefined && hooks !== undefined) {
+      const outcome = yield* runPageScript(
+        page,
+        buildRemoteAppPromptFillScript(hooks.promptInput, text),
+      );
+      if (outcome === "filled") return "filled" satisfies RemoteAppFillPromptResult;
+    }
+    yield* shell.copyText(text);
+    if (page !== undefined && !page.isDestroyed()) {
+      const shown = yield* runPageScript(
+        page,
+        buildRemoteAppNoticeScript(
+          `Couldn't find ${REMOTE_APP_SITE_INFO[site].label}'s prompt box. The text is on your clipboard; paste it there.`,
+        ),
+      );
+      if (shown === true) return "copied" satisfies RemoteAppFillPromptResult;
+    }
+    return "input-not-found" satisfies RemoteAppFillPromptResult;
+  });
 
   /**
-   * Types T3 text into a site's prompt box: in place when its side panel is
-   * visible, otherwise after switching to the site, because T3 toasts sit
-   * beneath its view. If the page can't take the text or show a notice (a
-   * sign-in page, a failed load), the shell returns to T3 so the renderer's
-   * toast is visible.
+   * Fill a visible side panel in place; otherwise switch to the site's view.
+   * If a sign-in or failed page cannot take text or show a notice, return to
+   * T3 so the renderer's toast is visible above the remote view.
    */
-  const fillSitePrompt = ({ site, text }: RemoteAppFillPromptRequest) =>
-    Effect.gen(function* () {
-      const panel = isPanelVisible(site) ? getLivePanel(site) : undefined;
-      if (panel !== undefined) {
-        yield* awaitPageLoaded(panel);
-        return yield* fillPromptOn(site, trustedPage(site, panel), text);
-      }
-      if (!(yield* Ref.get(availableSitesRef)).includes(site)) {
-        return "unavailable" satisfies RemoteAppFillPromptResult;
-      }
-      yield* setActiveSurface(site);
-      const view = yield* getLiveView(site);
-      const contents = Option.isSome(view) ? view.value.webContents : undefined;
-      if (contents !== undefined && !contents.isDestroyed()) yield* awaitPageLoaded(contents);
-      // Never touch a sign-in page, or a site the user already left.
-      const stillActive = activeSiteOf(yield* stateStore.get) === site;
-      const page = stillActive ? trustedPage(site, contents) : undefined;
-      const result = yield* fillPromptOn(site, page, text);
-      if (result === "input-not-found" && activeSiteOf(yield* stateStore.get) === site) {
-        yield* setActiveSurface("t3code");
-      }
-      return result;
-    });
+  const fillSitePrompt = Effect.fn("remote-app.fillSitePrompt")(function* ({
+    site,
+    text,
+  }: RemoteAppFillPromptRequest) {
+    const panel = isPanelVisible(site) ? getLivePanel(site) : undefined;
+    if (panel !== undefined) {
+      yield* awaitPageLoaded(panel);
+      return yield* fillPromptOn(site, trustedPage(site, panel), text);
+    }
+    if (!(yield* Ref.get(availableSitesRef)).includes(site)) {
+      return "unavailable" satisfies RemoteAppFillPromptResult;
+    }
+    yield* setActiveSurface(site);
+    const view = yield* getLiveView(site);
+    const contents = Option.isSome(view) ? view.value.webContents : undefined;
+    if (contents !== undefined && !contents.isDestroyed()) yield* awaitPageLoaded(contents);
+    // Never touch a sign-in page, or a site the user already left.
+    const stillActive = activeSiteOf(yield* stateStore.get) === site;
+    const page = stillActive ? trustedPage(site, contents) : undefined;
+    const result = yield* fillPromptOn(site, page, text);
+    if (result === "input-not-found" && activeSiteOf(yield* stateStore.get) === site) {
+      yield* setActiveSurface("t3code");
+    }
+    return result;
+  });
 
   /**
    * Adopts the `<webview>` page the renderer placed in its side panel for a
@@ -2024,17 +2019,19 @@ export const make = Effect.gen(function* () {
   });
 
   /** A visible side panel shows the site's replies, so its badge goes and stays off. */
-  const setPanelVisible = (site: RemoteAppSite, visible: boolean) =>
-    Effect.gen(function* () {
-      if (!visible) {
-        visiblePanels.delete(site);
-        return;
-      }
-      visiblePanels.add(site);
-      if ((yield* stateStore.get).unreadSites?.includes(site)) {
-        yield* updateState((state) => clearUnread(state, site));
-      }
-    });
+  const setPanelVisible = Effect.fn("remote-app.setPanelVisible")(function* (
+    site: RemoteAppSite,
+    visible: boolean,
+  ) {
+    if (!visible) {
+      visiblePanels.delete(site);
+      return;
+    }
+    visiblePanels.add(site);
+    if ((yield* stateStore.get).unreadSites?.includes(site)) {
+      yield* updateState((state) => clearUnread(state, site));
+    }
+  });
 
   /**
    * Loads a side panel's page: the renderer's remembered URL when it is a

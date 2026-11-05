@@ -6,7 +6,8 @@ export type CliReleaseSource = "fork" | "upstream" | "custom";
 export const CLI_RELEASE_REPOSITORY_ENV = "T3CODE_RELEASE_REPOSITORY";
 const CLI_RELEASE_REPOSITORY = "travisjneuman/t3code";
 
-const GITHUB_REPOSITORY = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/([A-Za-z0-9._-]{1,100})$/;
+const GITHUB_REPOSITORY =
+  /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/([A-Za-z0-9._-]{1,100})$/;
 
 const isGithubRepository = (value: string) => {
   const name = GITHUB_REPOSITORY.exec(value)?.[2];
@@ -86,7 +87,7 @@ const normalizeBaseUrl = (baseUrl: string): string =>
 /**
  * `effectiveBaseUrl` is the override when one is set, otherwise the build's default base URL.
  */
-export function classifyCliReleaseBaseUrl(effectiveBaseUrl: string): CliReleaseSource {
+function classifyCliReleaseBaseUrl(effectiveBaseUrl: string): CliReleaseSource {
   const normalized = normalizeBaseUrl(effectiveBaseUrl);
   if (normalized === normalizeBaseUrl(FORK_RELEASE_BASE_URL)) return "fork";
   if (normalized === normalizeBaseUrl(UPSTREAM_RELEASE_BASE_URL)) return "upstream";
@@ -116,7 +117,7 @@ export function cliReleaseBaseUrlProblem(baseUrl: string | undefined): string | 
  * Release archives are a few hundred MB at most and are buffered in memory before the checksum
  * check, so a hostile or broken mirror must not be able to stream unbounded data.
  */
-export const CLI_RELEASE_ASSET_MAX_BYTES = 768 * 1024 * 1024;
+const CLI_RELEASE_ASSET_MAX_BYTES = 768 * 1024 * 1024;
 
 /** Phrased to follow a download step, e.g. "downloading the t3 release archive (…)". */
 export function cliReleaseAssetSizeProblem(bytes: number): string | undefined {

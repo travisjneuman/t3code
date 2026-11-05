@@ -66,14 +66,6 @@ export function useHostUpdateTarget(): string | null {
     : null;
 }
 
-/** The locally staged version, including one newer than this app, for the host update queue. */
-export function useNewestHostRelease(): string | null {
-  const result = useAtomValue(hostReleaseAtom);
-  return AsyncResult.isSuccess(result) && result.value._tag === "found"
-    ? result.value.targetVersion
-    : null;
-}
-
 /** Re-reads the local desktop bridge status on app events and on demand. */
 export function useRefreshHostUpdateTarget(): () => void {
   return useAtomRefresh(hostReleaseAtom);
@@ -88,7 +80,7 @@ export type HostReleaseCheck =
 
 const CHECKING: HostReleaseCheck = { status: "checking" };
 
-export function resolveHostReleaseCheck(
+function resolveHostReleaseCheck(
   result: AsyncResult.AsyncResult<HostBuildLookup, unknown>,
 ): HostReleaseCheck {
   // A refresh keeps the previous value while it runs, so wait for it to settle.

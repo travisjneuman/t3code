@@ -121,8 +121,8 @@ export const RemoteAppRecentLocationSchema = Schema.Struct({
 });
 export type RemoteAppRecentLocation = typeof RemoteAppRecentLocationSchema.Type;
 
-export const REMOTE_APP_TEXT_SIZE_MIN = 0.8;
-export const REMOTE_APP_TEXT_SIZE_MAX = 1.2;
+const REMOTE_APP_TEXT_SIZE_MIN = 0.8;
+const REMOTE_APP_TEXT_SIZE_MAX = 1.2;
 export const REMOTE_APP_TEXT_SIZE_STEP = 0.1;
 
 /** A site's text size as a multiple of T3's chat text size; 1 matches T3. */
@@ -222,12 +222,9 @@ export const RemoteAppDownloadIdSchema = Schema.String.check(
   Schema.isMaxLength(64),
 );
 
-/**
- * A text file or archive the user downloaded from a web app and saved where
- * they chose. `text` is a text file's contents when it fits
- * REMOTE_APP_DOWNLOAD_TEXT_MAX_BYTES, otherwise null and T3 offers only to show
- * the file. `addNow` is set when the user already chose "Add to T3 Thread" on
- * the site's own notice.
+/** User-saved web-app download. `text` holds text-file contents up to
+ * REMOTE_APP_DOWNLOAD_TEXT_MAX_BYTES, otherwise null (show-file only).
+ * `addNow` records an existing "Add to T3 Thread" choice on the site's notice.
  */
 export const RemoteAppDownloadCaptureSchema = Schema.Struct({
   id: RemoteAppDownloadIdSchema,
@@ -399,13 +396,9 @@ export interface DesktopRemoteAppBridge {
   // Asks for an official chat export and a destination, then writes Markdown.
   importChatExport: () => Promise<RemoteAppChatImportResult>;
 
-  // Side panel: a site shown in a `<webview>` in the right panel next to a
-  // thread, on the site's own partition (REMOTE_APP_PARTITIONS). The renderer
-  // owns the element and its placement; the shell adopts its page.
-  // Hands the panel page to the shell once the `<webview>` attaches. The shell
-  // checks it is a guest of the main window on that site's partition, then
-  // applies the same navigation guards, theme, and context menu as the
-  // full-window view.
+  // The renderer owns the side-panel `<webview>` and placement; the shell adopts its page
+  // after attachment. The shell verifies a main-window guest on REMOTE_APP_PARTITIONS[site]
+  // and applies the full-window navigation guards, theme and context menu.
   attachPanel: (site: RemoteAppSite, webContentsId: number) => Promise<void>;
   // Whether the panel page is on screen. A visible panel never gets the
   // finished-reply badge, and "Send to <site>" fills it in place.

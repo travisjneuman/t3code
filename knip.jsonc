@@ -24,17 +24,23 @@
       // agent-device's CLI by path, and mobile-behavior.ts spawns its runner by path.
       // release-desktop.yml runs the desktop launch check through xvfb-run, which knip
       // does not trace.
+      // Fork add-on and host CLIs use documented node commands; host builds also spawn the archive CLI.
       "entry": [
         // These fixture scripts are injected into a browser page by path.
         "fixtures/*/*.js",
+        "fork-addons-export.ts",
+        "fork-addons.ts",
         "knip-schemas.ts",
         "linux-after-pack.ts",
         "mobile-behavior/run.ts",
         "mobile-native-client.ts",
         "setup-worktree.ts",
+        "sign-macos-ad-hoc.cjs",
         "sign-macos.ts",
         "prepare-server-compile-cache.cjs",
         "smoke-desktop-app.ts",
+        "tjn-build-host-archive.ts",
+        "tjn-hosts.ts",
         "verify-windows-desktop-artifact.ts",
       ],
       "ignoreDependencies": ["agent-device", "esbuild"],

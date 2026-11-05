@@ -72,7 +72,7 @@ export type AgentPushPolicy = typeof AgentPushPolicy.Type;
 export const AgentWorkerWorkspace = Schema.Literals(["shared", "worktree"]);
 export type AgentWorkerWorkspace = typeof AgentWorkerWorkspace.Type;
 
-export const MAX_AGENT_WORKER_TIME_LIMIT_MINUTES = 480;
+const MAX_AGENT_WORKER_TIME_LIMIT_MINUTES = 480;
 /** Minutes a worker may run before T3 stops it. */
 export const AgentWorkerTimeLimitMinutes = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: MAX_AGENT_WORKER_TIME_LIMIT_MINUTES }),
@@ -185,14 +185,11 @@ export type AgentPreset = typeof AgentPreset.Type;
 /** A thread's stored choice of the project's settings, so the default preset doesn't apply. */
 export const AGENT_PROJECT_PRESET_ID = "project";
 
-/**
- * Environment-only Agents settings: saved presets, the preset each thread
- * runs under keyed by thread id, and the preset a thread without a choice runs
- * under. A thread entry of `AGENT_PROJECT_PRESET_ID` means the project's
- * settings. A patch clears a thread's choice with an empty string, and the
- * entry is dropped. An empty default means the project's settings.
+/** Presets, per-thread choices and the default are environment-only. `AGENT_PROJECT_PRESET_ID`
+ * selects project settings; an empty patch choice removes the thread entry. Threads without
+ * a choice use the default; an empty default selects project settings.
  */
-export const AgentEnvironmentSettingsFields = {
+const AgentEnvironmentSettingsFields = {
   agentPresets: Schema.Array(AgentPreset).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   agentThreadPresets: Schema.Record(Schema.String, Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
@@ -249,7 +246,7 @@ export const AgentSettings = Schema.Struct(AgentSettingsFields);
 export type AgentSettings = typeof AgentSettings.Type;
 
 /** Every Agents value at its default. */
-export const AGENT_SETTING_DEFAULTS: AgentSettings = Schema.decodeSync(AgentSettings)({});
+const AGENT_SETTING_DEFAULTS: AgentSettings = Schema.decodeSync(AgentSettings)({});
 
 export const AGENT_MODEL_SELECTION_KEYS = [
   "agentWorkerModelSelection",
@@ -317,7 +314,7 @@ export function agentSettingsDifferences(
  * workers. The policy rows (verification, git, autonomy, reports, instructions)
  * change only when the preset stores them.
  */
-export const AGENT_PRESET_PROFILE_KEYS = [
+const AGENT_PRESET_PROFILE_KEYS = [
   "agentDelegationMode",
   "agentWorkerModelSelection",
   "agentWorkerModelSelectionFixed",
@@ -573,7 +570,7 @@ function policyLines(settings: AgentSettings): ReadonlyArray<string | null> {
 }
 
 /** The extra text for one provider driver kind, or empty. */
-export function agentProviderInstructionsFor(
+function agentProviderInstructionsFor(
   settings: Pick<AgentSettings, "agentProviderInstructions">,
   provider: string | undefined,
 ): string {

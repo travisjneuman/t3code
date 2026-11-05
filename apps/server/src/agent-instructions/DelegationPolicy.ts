@@ -1,11 +1,5 @@
-/**
- * What the Agents settings enforce on `delegate_task`, beyond the instructions
- * agents read: the worker target for the task's role when the agent leaves it
- * out, the read-only line for review and research workers, the parallel worker
- * limit across every level, the delegation depth, upstream's worktree isolation
- * as the default for workers, and the worker time limit. When the parent's
- * Delegation setting (after project overrides and the thread's preset) is Off,
- * every new delegation is refused, to another environment too.
+/** Enforce role targets, read-only workers, global parallel/depth limits, workspace and time limits.
+ * Effective Delegation Off (project overrides/thread preset included) refuses local/remote workers.
  * Fork add-on: agent instructions; see docs/user/agent-instructions.md.
  */
 import {
@@ -122,7 +116,7 @@ const WORKTREE_WORKER_LINE =
   "You work in your own git worktree and branch, made from the orchestrator's current commit. Commit your work to this branch; do not push or switch branches.";
 
 /** The line T3 puts at the top of a worker's task about delegating further. */
-export function workerDepthLine(settings: AgentSettings, workerDepth: number): string {
+function workerDepthLine(settings: AgentSettings, workerDepth: number): string {
   const remaining = settings.agentMaxDelegationDepth - workerDepth;
   return remaining <= 0
     ? "Do not delegate: you are at the deepest worker level allowed. Do this task yourself."
@@ -134,7 +128,7 @@ export function workerDepthLine(settings: AgentSettings, workerDepth: number): s
  * accepted delegation (`isRetry`) skips the limits: its dispatch only replays
  * the recorded result.
  */
-export function applyDelegationPolicy(input: {
+function applyDelegationPolicy(input: {
   readonly settings: AgentSettings;
   readonly providers?: ReadonlyArray<ServerProvider>;
   readonly parent: Pick<OrchestrationV2ThreadProjection, "thread" | "subagents">;
@@ -254,37 +248,37 @@ export const make = Effect.gen(function* () {
    * agent (the first thread that is not a subagent), which comes last. Stops
    * past the deepest allowed level, which is enough to refuse.
    */
-  const subagentChain = (parent: DelegationParent) =>
-    Effect.gen(function* () {
-      const chain: Array<DelegationParent> = [parent];
-      let current = parent;
-      while (
-        current.thread.lineage.relationshipToParent === "subagent" &&
-        current.thread.lineage.parentThreadId !== null &&
-        chain.length <= MAX_AGENT_DELEGATION_DEPTH + 1
-      ) {
-        current = yield* readThread(current.thread.lineage.parentThreadId);
-        chain.push(current);
-      }
-      return chain;
-    });
+  const subagentChain = Effect.fn("DelegationPolicy.subagentChain")(function* (
+    parent: DelegationParent,
+  ) {
+    const chain: Array<DelegationParent> = [parent];
+    let current = parent;
+    while (
+      current.thread.lineage.relationshipToParent === "subagent" &&
+      current.thread.lineage.parentThreadId !== null &&
+      chain.length <= MAX_AGENT_DELEGATION_DEPTH + 1
+    ) {
+      current = yield* readThread(current.thread.lineage.parentThreadId);
+      chain.push(current);
+    }
+    return chain;
+  });
 
   /** Running workers under `top`, at every level. Finished workers' threads are walked too. */
   const activeWorkersUnder = (top: DelegationParent) => {
-    const count = (
+    const count = Effect.fn("DelegationPolicy.countActiveWorkers")(function* (
       subagents: DelegationSubagents,
       level: number,
-    ): Effect.Effect<number, OrchestratorMcpFailure> =>
-      Effect.gen(function* () {
-        let total = activeWorkerCount(subagents);
-        if (level >= MAX_AGENT_DELEGATION_DEPTH) return total;
-        for (const task of subagents) {
-          if (task.origin !== "app_owned" || task.childThreadId === null) continue;
-          const child = yield* readThread(task.childThreadId);
-          total += yield* count(child.subagents, level + 1);
-        }
-        return total;
-      });
+    ): Effect.fn.Return<number, OrchestratorMcpFailure> {
+      let total = activeWorkerCount(subagents);
+      if (level >= MAX_AGENT_DELEGATION_DEPTH) return total;
+      for (const task of subagents) {
+        if (task.origin !== "app_owned" || task.childThreadId === null) continue;
+        const child = yield* readThread(task.childThreadId);
+        total += yield* count(child.subagents, level + 1);
+      }
+      return total;
+    });
     return count(top.subagents, 1);
   };
 
@@ -321,32 +315,29 @@ export const make = Effect.gen(function* () {
   });
 
   /** Runs before the target is resolved; refuses what the settings forbid. */
-  const prepare = (input: {
+  const prepare = Effect.fn("DelegationPolicy.prepare")(function* (input: {
     readonly parent: Pick<OrchestrationV2ThreadProjection, "thread">;
     readonly request: OrchestratorMcpDelegateTaskInput;
     readonly providers: ReadonlyArray<ServerProvider>;
     readonly isRetry: boolean;
-  }): Effect.Effect<PreparedDelegation, OrchestratorMcpFailure> =>
-    Effect.gen(function* () {
-      // The caller's projection omits subagents (upstream loads them per task), so read them here.
-      const parent: DelegationParent = {
-        thread: input.parent.thread,
-        subagents: (yield* readThread(input.parent.thread.id)).subagents,
-      };
-      const { chain, top, settings } = yield* resolveParent(parent);
-      const activeWorkers =
-        input.isRetry || settings.agentDelegationMode === "off"
-          ? 0
-          : yield* activeWorkersUnder(top);
-      const policy = yield* applyDelegationPolicy({
-        ...input,
-        parent,
-        providers: input.providers,
-        settings,
-        level: { depth: chain.length - 1, activeWorkers },
-      });
-      return { ...policy, settings, isRetry: input.isRetry };
+  }): Effect.fn.Return<PreparedDelegation, OrchestratorMcpFailure> {
+    // The caller's projection omits subagents (upstream loads them per task), so read them here.
+    const parent: DelegationParent = {
+      thread: input.parent.thread,
+      subagents: (yield* readThread(input.parent.thread.id)).subagents,
+    };
+    const { chain, top, settings } = yield* resolveParent(parent);
+    const activeWorkers =
+      input.isRetry || settings.agentDelegationMode === "off" ? 0 : yield* activeWorkersUnder(top);
+    const policy = yield* applyDelegationPolicy({
+      ...input,
+      parent,
+      providers: input.providers,
+      settings,
+      level: { depth: chain.length - 1, activeWorkers },
     });
+    return { ...policy, settings, isRetry: input.isRetry };
+  });
 
   /**
    * With a Worker time limit, stops the worker's thread once it has run that

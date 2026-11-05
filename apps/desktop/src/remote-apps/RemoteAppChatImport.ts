@@ -1,11 +1,7 @@
 /**
- * Turns an official chat export into a folder of Markdown files, one per
- * conversation plus an index.
- *
- * Terms-of-service basis: only account data exports the user requested from
- * the provider themselves (ChatGPT and Claude "Export data", Open WebUI's chat
- * export) and picked from disk. Parsing is local; nothing touches the network
- * or a site's pages.
+ * Terms-of-service basis: import only account exports the user requested from
+ * ChatGPT, Claude, or Open WebUI and picked from disk. Parse locally into Markdown
+ * conversations and an index; never access the network or a site's pages.
  */
 import type { RemoteAppChatImportResult } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -212,7 +208,7 @@ const FORMATS: ReadonlyArray<{
  * Recognizes an export by its shape, not its filename. Null when no item
  * matches a supported format; conversations without any text are dropped.
  */
-export const parseChatExport = (value: unknown): ChatExport | null => {
+const parseChatExport = (value: unknown): ChatExport | null => {
   const items = (Array.isArray(value) ? value : [value]).filter(isRecord);
   const first = items.find((item) => FORMATS.some((format) => format.matches(item)));
   const format = first && FORMATS.find((candidate) => candidate.matches(first));
@@ -276,88 +272,90 @@ class ChatImportFailure {
 const fail = (message: string) => Effect.fail(new ChatImportFailure(message));
 
 /** The export file the user picked, or `conversations.json` inside a picked folder. */
-const resolveExportFile = (picked: string) =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const pickedInfo = yield* fileSystem.stat(picked);
-    const file = pickedInfo.type === "Directory" ? path.join(picked, EXPORT_FILENAME) : picked;
-    if (file !== picked && !(yield* fileSystem.exists(file))) {
-      return yield* fail(`That folder has no ${EXPORT_FILENAME}. ${UNRECOGNIZED_MESSAGE}`);
-    }
-    const info = file === picked ? pickedInfo : yield* fileSystem.stat(file);
-    if (info.type !== "File") return yield* fail(UNRECOGNIZED_MESSAGE);
-    if (Number(info.size) > MAX_EXPORT_BYTES) {
-      return yield* fail("That export is larger than 500 MB, which is more than T3 imports.");
-    }
-    return file;
-  });
+const resolveExportFile = Effect.fn("desktop.remoteAppChatImport.resolveExportFile")(function* (
+  picked: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const pickedInfo = yield* fileSystem.stat(picked);
+  const file = pickedInfo.type === "Directory" ? path.join(picked, EXPORT_FILENAME) : picked;
+  if (file !== picked && !(yield* fileSystem.exists(file))) {
+    return yield* fail(`That folder has no ${EXPORT_FILENAME}. ${UNRECOGNIZED_MESSAGE}`);
+  }
+  const info = file === picked ? pickedInfo : yield* fileSystem.stat(file);
+  if (info.type !== "File") return yield* fail(UNRECOGNIZED_MESSAGE);
+  if (Number(info.size) > MAX_EXPORT_BYTES) {
+    return yield* fail("That export is larger than 500 MB, which is more than T3 imports.");
+  }
+  return file;
+});
 
-const readExport = (file: string) =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const raw = yield* fileSystem.readFileString(file, "utf8");
-    const json = yield* Effect.try({
-      try: (): unknown => JSON.parse(raw),
-      catch: () => new ChatImportFailure(`${path.basename(file)} is not valid JSON.`),
-    });
-    const parsed = parseChatExport(json);
-    if (parsed === null) return yield* fail(UNRECOGNIZED_MESSAGE);
-    if (parsed.conversations.length === 0) {
-      return yield* fail(`That ${parsed.source} export has no conversations with text.`);
-    }
-    return parsed;
+const readExport = Effect.fn("desktop.remoteAppChatImport.readExport")(function* (file: string) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const raw = yield* fileSystem.readFileString(file, "utf8");
+  const json = yield* Effect.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => new ChatImportFailure(`${path.basename(file)} is not valid JSON.`),
   });
+  const parsed = parseChatExport(json);
+  if (parsed === null) return yield* fail(UNRECOGNIZED_MESSAGE);
+  if (parsed.conversations.length === 0) {
+    return yield* fail(`That ${parsed.source} export has no conversations with text.`);
+  }
+  return parsed;
+});
 
 /** A new folder inside `parent`, numbered when the name is taken. */
-const makeOutputFolder = (parent: string, name: string) =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    for (let index = 1; index <= 100; index += 1) {
-      const folder = path.join(parent, index === 1 ? name : `${name} (${index})`);
-      if (yield* fileSystem.exists(folder)) continue;
-      yield* fileSystem.makeDirectory(folder);
-      return folder;
-    }
-    return yield* fail(`Couldn't create a new folder in ${parent}.`);
-  });
+const makeOutputFolder = Effect.fn("desktop.remoteAppChatImport.makeOutputFolder")(function* (
+  parent: string,
+  name: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  for (let index = 1; index <= 100; index += 1) {
+    const folder = path.join(parent, index === 1 ? name : `${name} (${index})`);
+    if (yield* fileSystem.exists(folder)) continue;
+    yield* fileSystem.makeDirectory(folder);
+    return folder;
+  }
+  return yield* fail(`Couldn't create a new folder in ${parent}.`);
+});
 
-const writeExport = (folder: string, parsed: ChatExport, today: string) =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const taken = new Set(["index.md"]);
-    const written: WrittenConversation[] = [];
-    for (const conversation of parsed.conversations.toSorted(byNewest)) {
-      const date = conversation.createdAt === null ? "" : `${isoDay(conversation.createdAt)} `;
-      const stem = safeFilename(`${date}${conversation.title}`.slice(0, 120), "Untitled");
-      const filename = claimUniqueFilename(stem, ".md", taken);
-      yield* fileSystem.writeFileString(
-        path.join(folder, filename),
-        renderConversation(conversation, parsed.source),
-        { flag: "wx" },
-      );
-      written.push({ conversation, filename });
-    }
-    const index = path.join(folder, "index.md");
-    yield* fileSystem.writeFileString(index, renderIndex(parsed.source, written, today), {
-      flag: "wx",
-    });
-    return index;
+const writeExport = Effect.fn("desktop.remoteAppChatImport.writeExport")(function* (
+  folder: string,
+  parsed: ChatExport,
+  today: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const taken = new Set(["index.md"]);
+  const written: WrittenConversation[] = [];
+  for (const conversation of parsed.conversations.toSorted(byNewest)) {
+    const date = conversation.createdAt === null ? "" : `${isoDay(conversation.createdAt)} `;
+    const stem = safeFilename(`${date}${conversation.title}`.slice(0, 120), "Untitled");
+    const filename = claimUniqueFilename(stem, ".md", taken);
+    yield* fileSystem.writeFileString(
+      path.join(folder, filename),
+      renderConversation(conversation, parsed.source),
+      { flag: "wx" },
+    );
+    written.push({ conversation, filename });
+  }
+  const index = path.join(folder, "index.md");
+  yield* fileSystem.writeFileString(index, renderIndex(parsed.source, written, today), {
+    flag: "wx",
   });
+  return index;
+});
 
 /**
  * Asks for an export file (or, on macOS, an extracted export folder), parses it
  * in this process, asks where to put the Markdown, writes it into a new folder
  * there, and reveals the index. Never touches the network.
  */
-export const importRemoteAppChatExport = (
-  owner: Electron.BrowserWindow | undefined,
-  platform: NodeJS.Platform,
-) =>
-  Effect.gen(function* () {
+export const importRemoteAppChatExport = Effect.fn("desktop.remoteAppChatImport.importChatExport")(
+  function* (owner: Electron.BrowserWindow | undefined, platform: NodeJS.Platform) {
     const picked = yield* showOpenDialog(owner, {
       title: "Import Chat Export",
       buttonLabel: "Import",
@@ -388,14 +386,14 @@ export const importRemoteAppChatExport = (
       conversations: parsed.conversations.length,
       folder,
     } satisfies RemoteAppChatImportResult;
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({
-        status: "failed",
-        message:
-          error instanceof ChatImportFailure
-            ? error.message.slice(0, 1_000)
-            : "Couldn't import that export. Check that the file is readable and the folder is writable.",
-      } satisfies RemoteAppChatImportResult),
-    ),
-  );
+  },
+  Effect.catch((error) =>
+    Effect.succeed({
+      status: "failed",
+      message:
+        error instanceof ChatImportFailure
+          ? error.message.slice(0, 1_000)
+          : "Couldn't import that export. Check that the file is readable and the folder is writable.",
+    } satisfies RemoteAppChatImportResult),
+  ),
+);

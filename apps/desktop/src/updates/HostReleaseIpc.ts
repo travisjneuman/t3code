@@ -8,7 +8,7 @@ import * as IpcChannels from "../fork/channels.ts";
 import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as HostReleasePublisher from "./HostReleasePublisher.ts";
 
-export const getStatus = DesktopIpc.makeIpcMethod({
+const getStatus = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.HOST_RELEASE_GET_STATUS_CHANNEL,
   payload: Schema.Void,
   result: Schema.NullOr(DesktopHostReleaseStatusSchema),
@@ -17,7 +17,7 @@ export const getStatus = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const retry = DesktopIpc.makeIpcMethod({
+const retry = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.HOST_RELEASE_RETRY_CHANNEL,
   payload: Schema.Void,
   result: Schema.NullOr(DesktopHostReleaseStatusSchema),

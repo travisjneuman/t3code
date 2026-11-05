@@ -1,10 +1,6 @@
 /**
- * The model picker's Hermes list: "Default" (and any model without a
- * provider) on top, then one collapsible group per Hermes provider, named by
- * the models' `subProvider`. Group headers are list items of their own, so the
- * virtualized list and keyboard navigation treat them like rows.
- * Fork add-on: Hermes provider.
- *
+ * Defaults first, then collapsible providers named by `subProvider`; headers
+ * are rows for virtualization and keyboard navigation. Fork add-on: Hermes provider.
  * @module hermes/hermesModelGroups
  */
 import {
@@ -19,7 +15,7 @@ import { HERMES_DRIVER, hermesModelProvider } from "./hermesSessions";
 const GROUP_KEY_PREFIX = "hermes-group:";
 
 /** The list key of a provider group's header. */
-export function hermesModelGroupKey(instanceId: ProviderInstanceId, provider: string): string {
+function hermesModelGroupKey(instanceId: ProviderInstanceId, provider: string): string {
   return `${GROUP_KEY_PREFIX}${instanceId.length}:${instanceId}${provider}`;
 }
 

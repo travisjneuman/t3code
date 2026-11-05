@@ -11,7 +11,7 @@ import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as DesktopUpdateGate from "./DesktopUpdateGate.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 
-export const reportBusySessions = DesktopIpc.makeIpcMethod({
+const reportBusySessions = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_GATE_REPORT_BUSY_CHANNEL,
   payload: Schema.Number,
   result: Schema.Void,
@@ -20,7 +20,7 @@ export const reportBusySessions = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const getState = DesktopIpc.makeIpcMethod({
+const getState = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_GATE_GET_STATE_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateGateStateSchema,
@@ -29,7 +29,7 @@ export const getState = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const holdIfBusy = DesktopIpc.makeIpcMethod({
+const holdIfBusy = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_GATE_HOLD_IF_BUSY_CHANNEL,
   payload: Schema.Void,
   result: Schema.Boolean,
@@ -41,7 +41,7 @@ export const holdIfBusy = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const installNow = DesktopIpc.makeIpcMethod({
+const installNow = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_GATE_INSTALL_NOW_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateActionResultSchema,
@@ -56,7 +56,7 @@ export const installNow = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const cancel = DesktopIpc.makeIpcMethod({
+const cancel = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_GATE_CANCEL_CHANNEL,
   payload: Schema.Void,
   result: Schema.Void,

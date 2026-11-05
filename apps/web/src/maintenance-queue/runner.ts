@@ -36,7 +36,7 @@ import { holdUpdateIfBusy } from "./useQueuedUpdate";
 /** One notification for a job still waiting after this long. */
 export const LONG_WAIT_MS = 4 * 60 * 60 * 1000;
 
-export function hostLabel(job: QueuedUpdate): string {
+function hostLabel(job: QueuedUpdate): string {
   return (
     appAtomRegistry.get(environmentPresentations.presentationAtom(job.environmentId))?.entry.target
       .label ?? "a disconnected host"
@@ -66,7 +66,7 @@ function runUpdate(job: QueuedUpdate) {
 }
 
 /** Runs an update at once and reports how it ended. */
-export async function runAndReport(job: QueuedUpdate): Promise<void> {
+async function runAndReport(job: QueuedUpdate): Promise<void> {
   const title = queuedUpdateTitle(job);
   const host = hostLabel(job);
   const result = await runUpdate(job);

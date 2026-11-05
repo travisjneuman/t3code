@@ -38,7 +38,7 @@ const SELECTION_KEYS = [
  * as ready with just its `default` model, so a missing slug alone proves
  * nothing; the successor itself must be listed, and the retired slug not.
  */
-export function collectModelRenames(providers: ReadonlyArray<ServerProvider>): ModelRenames {
+function collectModelRenames(providers: ReadonlyArray<ServerProvider>): ModelRenames {
   const renames = new Map<ProviderInstanceId, Map<string, string>>();
   for (const provider of providers) {
     if (!provider.enabled || provider.auth.status !== "authenticated") continue;
@@ -87,13 +87,16 @@ function repairSelectionFields<T extends SelectionFields>(
   for (const key of keys) {
     if (!(key in fields)) continue;
     const repaired = repairSelection(fields[key], renames);
-    if (repaired !== fields[key]) next = { ...next, [key]: repaired };
+    if (repaired !== fields[key]) {
+      if (next === fields) next = { ...fields };
+      Object.assign(next, { [key]: repaired });
+    }
   }
   return next;
 }
 
 /** The patch that moves every saved reference to a retired slug onto its successor. */
-export function buildModelReferenceRepairPatch(
+function buildModelReferenceRepairPatch(
   settings: ServerSettings,
   renames: ModelRenames,
 ): ServerSettingsPatch | null {
@@ -163,8 +166,8 @@ export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const providers = yield* ProviderRegistry.ProviderRegistry;
     const serverSettings = yield* Settings.ServerSettingsService;
-    const repair = (snapshot: ReadonlyArray<ServerProvider>) =>
-      Effect.gen(function* () {
+    const repair = Effect.fn("ModelReferenceRepair.repair")(
+      function* (snapshot: ReadonlyArray<ServerProvider>) {
         const renames = collectModelRenames(snapshot);
         if (renames.size === 0) return;
         const patch = buildModelReferenceRepairPatch(yield* serverSettings.getSettings, renames);
@@ -176,11 +179,11 @@ export const layer = Layer.effectDiscard(
           ),
           keys: Object.keys(patch),
         });
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("Failed to repair saved model references.", cause),
-        ),
-      );
+      },
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Failed to repair saved model references.", cause),
+      ),
+    );
     yield* Effect.gen(function* () {
       yield* repair(yield* providers.getProviders);
       yield* providers.streamChanges.pipe(Stream.runForEach(repair));

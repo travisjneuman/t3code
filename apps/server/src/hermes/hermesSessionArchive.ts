@@ -1,9 +1,5 @@
-/**
- * Hermes sessions archived from T3, kept in `<state dir>/hermes-sessions-archive.json`
- * so Settings › Archived can list them and unarchive them in Hermes. Hermes
- * itself hides archived sessions from its list, so this file is what
- * remembers their titles. Fork add-on: Hermes provider.
- *
+/** Fork add-on: Hermes provider. `<state dir>/hermes-sessions-archive.json` retains titles
+ * Hermes hides when archived, so Settings › Archived can list and unarchive sessions.
  * @module hermes/hermesSessionArchive
  */
 import * as NodePath from "node:path";
@@ -27,8 +23,7 @@ const ArchiveState = Schema.Struct({
 });
 const decodeArchiveState = Schema.decodeUnknownOption(Schema.fromJsonString(ArchiveState));
 
-export const archiveKey = (instanceId: string, sessionId: string) =>
-  `${instanceId}\u0000${sessionId}`;
+const archiveKey = (instanceId: string, sessionId: string) => `${instanceId}\u0000${sessionId}`;
 
 export interface HermesSessionArchive {
   /** Newest first. */

@@ -110,13 +110,13 @@ export class OpenBotSessionsError extends Schema.TaggedError<OpenBotSessionsErro
 
 const OpenBotSessionsRpcError = Schema.Union([OpenBotSessionsError, EnvironmentAuthorizationError]);
 
-export const OpenBotSessionsListRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.list, {
+const OpenBotSessionsListRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.list, {
   payload: OpenBotSessionsListInput,
   success: OpenBotSessionsListResult,
   error: OpenBotSessionsRpcError,
 });
 
-export const OpenBotSessionsOpenRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.open, {
+const OpenBotSessionsOpenRpc = Rpc.make(OPENBOT_SESSIONS_WS_METHODS.open, {
   payload: OpenBotSessionsOpenInput,
   success: OpenBotSessionsOpenResult,
   error: OpenBotSessionsRpcError,
