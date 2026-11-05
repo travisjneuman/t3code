@@ -1,12 +1,11 @@
 /**
  * Fork add-on: session details. What ClaudeAdapterV2 hooks in for the details
- * card: the two SDK control requests the query runner exposes and the live
+ * card: the context usage request the query runner exposes and the live
  * session's insights. The SDK responses are converted in claudeSessionInsights.ts.
  *
  * @module orchestration-v2/Adapters/claudeInsightsHooks
  */
 import type {
-  McpServerStatus,
   Query as ClaudeQuery,
   SDKControlGetContextUsageResponse,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -30,41 +29,22 @@ export type ContextUsageRequest = Effect.Effect<
   ClaudeAgentSdkQueryRunnerError
 >;
 
-/**
- * The live session's MCP servers. Optional on the query session so test fakes
- * can omit it.
- */
-export type McpServerStatusRequest = Effect.Effect<
-  ReadonlyArray<McpServerStatus>,
-  ClaudeAgentSdkQueryRunnerError
->;
-
-export type ProtocolLogEvent =
-  | {
-      readonly direction: "outgoing";
-      readonly stage: "decoded";
-      readonly payload: {
-        readonly type: "query.get_context_usage";
-        readonly detail: "summary";
-      };
-    }
-  | {
-      readonly direction: "outgoing";
-      readonly stage: "decoded";
-      readonly payload: {
-        readonly type: "query.mcp_server_status";
-        readonly count: number;
-      };
-    };
+export type ProtocolLogEvent = {
+  readonly direction: "outgoing";
+  readonly stage: "decoded";
+  readonly payload: {
+    readonly type: "query.get_context_usage";
+    readonly detail: "summary";
+  };
+};
 
 /** The query runner's insight requests against one SDK query. */
 export const queryRequests = (
-  queryRuntime: Pick<ClaudeQuery, "getContextUsage" | "mcpServerStatus">,
+  queryRuntime: Pick<ClaudeQuery, "getContextUsage">,
   queryRunnerError: (cause: unknown, method: string) => ClaudeAgentSdkQueryRunnerError,
   logProtocolEvent: (event: ProtocolLogEvent) => Effect.Effect<void>,
 ): {
   readonly getContextUsage: ContextUsageRequest;
-  readonly mcpServerStatus: McpServerStatusRequest;
 } => ({
   getContextUsage: Effect.tryPromise({
     try: () => queryRuntime.getContextUsage({ detail: "summary" }),
@@ -75,20 +55,6 @@ export const queryRequests = (
         direction: "outgoing",
         stage: "decoded",
         payload: { type: "query.get_context_usage", detail: "summary" },
-      }),
-    ),
-  ),
-  // The status rows carry each server's config, headers included, so only the
-  // count is logged.
-  mcpServerStatus: Effect.tryPromise({
-    try: () => queryRuntime.mcpServerStatus(),
-    catch: (cause) => queryRunnerError(cause, "mcpServerStatus"),
-  }).pipe(
-    Effect.tap((servers) =>
-      logProtocolEvent({
-        direction: "outgoing",
-        stage: "decoded",
-        payload: { type: "query.mcp_server_status", count: servers.length },
       }),
     ),
   ),
@@ -143,12 +109,6 @@ export const makeSessionInsights = <Q extends LiveQuery>(
         const liveQuery = yield* liveInsightsQuery(providerThread);
         if (liveQuery === null) {
           return null;
-        }
-        if (liveQuery.mcpServerStatus === undefined) {
-          return yield* new ProviderAdapter.ProviderAdapterProtocolError({
-            driver,
-            detail: "Claude query does not report MCP server status",
-          });
         }
         const servers = yield* liveQuery.mcpServerStatus.pipe(
           Effect.mapError(insightsRequestError("MCP server status request failed")),

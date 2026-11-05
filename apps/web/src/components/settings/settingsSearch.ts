@@ -660,6 +660,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   ...SAVE_TO_NOTES_SETTINGS_SEARCH_ITEMS, // Fork add-on(save-to-notes)
   {
+    id: "ghq-clone-layout",
+    title: "Clone into host folders",
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: ["ghq clone destination host owner repository root layout"],
+  },
+  {
     id: "unpin-confirmation",
     title: "Unpin confirmation",
     to: "/settings/general",
