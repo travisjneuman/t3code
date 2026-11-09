@@ -124,23 +124,19 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       },
       "chat.new": (event) => {
         // Fork add-on(no-project-start): like the sidebar's New thread button, start in No project.
-        if (!getClientSettings().legacySidebarEnabled) { // Fork add-on(no-project-start)
-          const { activeThread, activeDraftThread } = readThreadContext(); // Fork add-on(no-project-start)
-          const scratchTarget = scratch.scratchEnvironmentId( // Fork add-on(no-project-start)
-            activeThread?.environmentId ?? // Fork add-on(no-project-start)
-              activeDraftThread?.environmentId ?? // Fork add-on(no-project-start)
-              appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on(no-project-start)
-          ); // Fork add-on(no-project-start)
-          if (scratchTarget !== null) { // Fork add-on(no-project-start)
-            claim(event); // Fork add-on(no-project-start)
-            void scratch.startScratchThread(scratchTarget); // Fork add-on(no-project-start)
-            return; // Fork add-on(no-project-start)
-          } // Fork add-on(no-project-start)
+        const { activeThread, activeDraftThread } = readThreadContext(); // Fork add-on(no-project-start)
+        const scratchTarget = scratch.scratchEnvironmentId( // Fork add-on(no-project-start)
+          activeThread?.environmentId ?? // Fork add-on(no-project-start)
+            activeDraftThread?.environmentId ?? // Fork add-on(no-project-start)
+            appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on(no-project-start)
+        ); // Fork add-on(no-project-start)
+        if (scratchTarget !== null) { // Fork add-on(no-project-start)
+          claim(event); // Fork add-on(no-project-start)
+          void scratch.startScratchThread(scratchTarget); // Fork add-on(no-project-start)
+          return; // Fork add-on(no-project-start)
         } // Fork add-on(no-project-start)
-        const { legacySidebarEnabled } = getClientSettings();
         const groups = readProjectGroups();
         if (
-          !legacySidebarEnabled &&
           !shouldCreateNewThreadInCurrentProject(
             false,
             groups.filter((group) => !group.archived).length,
