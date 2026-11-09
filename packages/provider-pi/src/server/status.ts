@@ -41,10 +41,7 @@ import {
   enrichProviderSnapshotWithVersionAdvisory,
   type ProviderMaintenanceCapabilities,
 } from "@t3tools/provider-core/server/maintenanceResolver";
-import {
-  EMPTY_PI_MODEL_CAPABILITIES,
-  thinkingCapabilitiesForPiModel,
-} from "./thinkingCapabilities.ts";
+import { EMPTY_PI_MODEL_CAPABILITIES, piModelCapabilities } from "./modelCapabilities.ts";
 import {
   parsePiDiscoveredCommands,
   withPiBuiltinSlashCommands,
@@ -129,7 +126,7 @@ function parseDiscoveredModels(
       subProvider: brandProviderName(provider), // Fork add-on(model-brand-names)
       ...(provider === "openai" ? { supersedes: [`openai-codex/${id}`] } : {}), // Fork add-on(retired-models): Pi's ChatGPT login replaced openai-codex.
       isCustom: false,
-      capabilities: thinkingCapabilitiesForPiModel(
+      capabilities: piModelCapabilities(
         model,
         provider === activeProvider && id === activeModelId
           ? recordString(state, "thinkingLevel")
