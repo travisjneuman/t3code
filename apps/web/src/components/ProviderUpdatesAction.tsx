@@ -9,6 +9,7 @@ import { useRef, useState } from "react";
 import { useEnvironmentProviders, useEnvironments } from "~/state/environments";
 import { serverEnvironment } from "~/state/server";
 import { useEnvironmentsWithScope } from "~/state/session";
+import { useAtomCommand } from "~/state/use-atom-command";
 import { useQueuedProviderUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
 import {
   canOneClickUpdateProviderCandidate,
