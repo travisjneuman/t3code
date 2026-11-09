@@ -1,4 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { resolveSubagentMetadata } from "@t3tools/client-runtime/state/subagent-display";
 import { formatModelSelectionEffort } from "@t3tools/client-runtime/state/thread-execution";
 import {
@@ -13,13 +14,11 @@ import { getModelSelectionBooleanOptionValue } from "@t3tools/shared/model";
 import { memo } from "react";
 
 import { FORK_OWN_WORKSPACE_DRIVERS } from "../../forkOwnWorkspaceDrivers";
-import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import { OPENBOT_DRIVER } from "../../openbot/openbotSessions"; // Fork add-on(openbot)
 import { getProviderInstanceEntry } from "../../providerInstances";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import { useEnvironmentProviders } from "../../state/environments";
 import { useSessionInsights, useThreadSessionSummary } from "../../state/sessionInsights";
-import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { runtimeModeConfig } from "./runtimeModeConfig";
 import {
@@ -30,6 +29,7 @@ import {
   sessionRecordFrom,
 } from "./sessionInsights.logic";
 import {
+  formatContextWindowCost,
   SessionEnvironmentSection,
   SessionSummarySection,
   type SessionSummaryView,

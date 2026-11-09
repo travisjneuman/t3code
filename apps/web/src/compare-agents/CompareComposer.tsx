@@ -1,7 +1,7 @@
 /**
  * The compare page's message box: one prompt for both agents, in the regular
  * composer's surface. Below it, each side's model and options, as in a thread.
- * Build/Plan and access apply to both; attachments go to both (each side
+ * Access applies to both; attachments go to both (each side
  * uploads its own copy, since an upload belongs to one thread). Review swap
  * sits beside send, which turns into stop while either agent works.
  * Fork add-on: compare agents; see docs/user/compare-agents.md.
@@ -18,7 +18,6 @@ import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-  type ProviderInteractionMode,
   type ProviderInstanceId,
   type RuntimeMode,
 } from "@t3tools/contracts";
@@ -26,10 +25,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { ArrowLeftRightIcon, FileIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { type ClipboardEvent, type DragEvent, useRef, useState } from "react";
 
-import {
-  getStartedThreadModelChangeBlockReason,
-  resolveComposerInteractionMode,
-} from "../components/ChatView.logic";
+import { getStartedThreadModelChangeBlockReason } from "../components/ChatView.logic";
 import { ComposerFooterModeControls } from "../components/chat/ComposerFooterControls";
 import { ComposerControl, ComposerControlIcon } from "../components/chat/ComposerControl";
 import { ComposerSurface } from "../components/chat/ComposerSurface";
@@ -141,7 +137,6 @@ export function CompareComposer(props: {
   const [attachments, setAttachments] = useState<ReadonlyArray<CompareAttachment>>([]);
   const [leftChoice, setLeftChoice] = useState<ModelSelection | null>(null);
   const [rightChoice, setRightChoice] = useState<ModelSelection | null>(null);
-  const [interactionChoice, setInteractionChoice] = useState<ProviderInteractionMode | null>(null);
   const [runtimeChoice, setRuntimeChoice] = useState<RuntimeMode | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const mayFollowUp = useAtomValue(compareFollowUpPermissionAtom(environmentId));
@@ -155,19 +150,7 @@ export function CompareComposer(props: {
   const leftSnapshot = snapshotOf(leftModel);
   const rightSnapshot = snapshotOf(rightModel);
 
-  // Plan mode only when both sides offer it; access modes both sides support.
-  const leftPlan = resolveComposerInteractionMode({
-    planModeEnabled: settings.planModeEnabled,
-    provider: leftSnapshot,
-    interactionMode:
-      interactionChoice ?? left?.thread.interactionMode ?? DEFAULT_PROVIDER_INTERACTION_MODE,
-  });
-  const rightPlan = resolveComposerInteractionMode({
-    planModeEnabled: settings.planModeEnabled,
-    provider: rightSnapshot,
-    interactionMode: leftPlan.interactionMode,
-  });
-  const interactionMode = rightPlan.interactionMode;
+  // Access modes both sides support.
   const runtimeModes = runtimeModeOptions
     .filter((mode) =>
       [leftSnapshot, rightSnapshot].every(
@@ -252,7 +235,7 @@ export function CompareComposer(props: {
       const ok = await sendFollowUp(environmentId, {
         pairId,
         text: text.trim(),
-        interactionMode,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode,
         left: { modelSelection: leftModel, attachments: leftAttachments },
         right: { modelSelection: rightModel, attachments: rightAttachments },
@@ -348,13 +331,8 @@ export function CompareComposer(props: {
                       <TooltipPopup side="top">Attach files for both agents</TooltipPopup>
                     </Tooltip>
                     <ComposerFooterModeControls
-                      showInteractionModeToggle={leftPlan.enabled && rightPlan.enabled}
-                      interactionMode={interactionMode}
                       runtimeMode={runtimeMode}
                       runtimeModeOptions={runtimeModes}
-                      onToggleInteractionMode={() =>
-                        setInteractionChoice(interactionMode === "plan" ? "default" : "plan")
-                      }
                       onRuntimeModeChange={setRuntimeChoice}
                     />
                   </div>
@@ -611,7 +589,6 @@ function SideModel(props: {
         onPromptChange={() => {}}
         modelOptions={selection.options ?? []}
         allowPromptInjectedEffort={false}
-        planModeEnabled={settings.planModeEnabled}
         isComposerOwned
         size="xs"
         onModelOptionsChange={(options) =>

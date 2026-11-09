@@ -1,8 +1,9 @@
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import type { SessionContextBreakdown } from "@t3tools/contracts";
 import { Minimize2Icon } from "lucide-react";
 import { memo, useState } from "react";
 
-import { type ContextWindowSnapshot, formatContextWindowTokens } from "../../lib/contextWindow";
+import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { Button } from "../ui/button";

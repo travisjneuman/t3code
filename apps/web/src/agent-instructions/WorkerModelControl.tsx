@@ -19,7 +19,7 @@ import {
 } from "../components/settings/useScopedSettings";
 import { Switch } from "../components/ui/switch";
 import { toastManager } from "../components/ui/toast";
-import { getCustomModelOptionsByInstance } from "../modelSelection";
+import { getCustomModelOptionsByInstance, selectsPlanAgent } from "../modelSelection";
 import {
   type ProviderInstanceEntry,
   resolveDefaultProviderModelSelection,
@@ -129,7 +129,7 @@ export function WorkerModelControl({
               onPromptChange={() => {}}
               modelOptions={selection.options ?? []}
               allowPromptInjectedEffort={false}
-              planModeEnabled={settings.planModeEnabled}
+              includePlanAgent={selectsPlanAgent(selection.options)}
               triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
               onModelOptionsChange={(options) =>
                 save(createModelSelection(selection.instanceId, selection.model, options))

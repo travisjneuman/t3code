@@ -1,3 +1,4 @@
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import type { EnvironmentId, ExternalSessionSummary, SessionRecord } from "@t3tools/contracts";
 import { memo, type RefObject } from "react";
 
@@ -17,7 +18,6 @@ import { ThreadConnectorsSection } from "../components/chat/ThreadConnectorsSect
 import { ThreadContextBreakdown } from "../components/chat/ThreadContextBreakdown";
 import { ThreadDetailsCard } from "../components/chat/ThreadDetailsCard";
 import { SessionOutputsList } from "../components/chat/ThreadOutputsSection";
-import type { ContextWindowSnapshot } from "../lib/contextWindow";
 import {
   externalSessionOriginLabel,
   LIVENESS_LABEL,

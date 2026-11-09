@@ -61,7 +61,7 @@ import { useStableCallback } from "../hooks/useStableCallback";
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { cn } from "../lib/utils";
 import { readLocalApi } from "../localApi";
-import { getCustomModelOptionsByInstance } from "../modelSelection";
+import { getCustomModelOptionsByInstance, selectsPlanAgent } from "../modelSelection";
 import type { ProviderInstanceEntry } from "../providerInstances";
 import {
   useProjects,
@@ -728,7 +728,7 @@ function ModelField(props: {
         onPromptChange={() => {}}
         modelOptions={selection.options ?? []}
         allowPromptInjectedEffort={false}
-        planModeEnabled={settings.planModeEnabled}
+        includePlanAgent={selectsPlanAgent(selection.options)}
         triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
         onModelOptionsChange={(options) =>
           onChange(createModelSelection(selection.instanceId, selection.model, options))

@@ -7,7 +7,6 @@ import { useNowMinute } from "../../hooks/useNowMinute";
 import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import { StartTruncatedPath } from "../StartTruncatedPath";
-import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadDetailsStatRow, ThreadDetailsStatusDot } from "./ThreadDetailsStatRow";
 
@@ -16,6 +15,14 @@ import { ThreadDetailsStatRow, ThreadDetailsStatusDot } from "./ThreadDetailsSta
  * Other Agents sessions, and unopened Hermes sessions each build a view and
  * render the same rows. Fork add-on.
  */
+
+export function formatContextWindowCost(cost: {
+  readonly amount: number;
+  readonly currency: string;
+}): string {
+  const fractionDigits = Math.abs(cost.amount) > 0 && Math.abs(cost.amount) < 0.01 ? 4 : 2;
+  return `${cost.currency} ${cost.amount.toFixed(fractionDigits)}`;
+}
 
 export interface SessionSummaryView {
   readonly icon: ReactNode;

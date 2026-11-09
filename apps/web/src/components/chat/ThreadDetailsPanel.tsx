@@ -10,7 +10,7 @@ import type {
 
 import type { DraftId } from "../../composerDraftStore";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
-import type { ContextWindowSnapshot } from "../../lib/contextWindow"; // Fork add-on(session-details)
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window"; // Fork add-on(session-details)
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
 import BaseGitActionsControl from "../GitActionsControl";
