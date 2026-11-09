@@ -142,6 +142,8 @@ export interface LocalSourceUpdateBuild {
   readonly version: string;
   readonly applicationBundlePath: string;
   readonly push: ForkPushResult;
+  /** HEAD the bundle was built from; a pending build is reused only while HEAD is unchanged. */
+  readonly commit?: string;
 }
 
 export interface LocalSourceSyncResult {
@@ -1453,7 +1455,7 @@ const make = Effect.gen(function* () {
     const merging = inspection.behind > 0;
     if (!merging) {
       const pendingBuild = yield* Ref.get(builtUpdateRef);
-      if (pendingBuild) {
+      if (pendingBuild && pendingBuild.commit === inspection.currentCommit) {
         return {
           ...pendingBuild,
           push: yield* pushFork(repo, true),
@@ -1680,10 +1682,17 @@ const make = Effect.gen(function* () {
     );
     // The fix commit is released too, after the release of the merge already running.
     const push = built.fixed ? yield* pushFork(repo, true) : earlyPush;
+    const builtHead = yield* runChecked({
+      operation: "build",
+      command: "git",
+      args: ["rev-parse", "HEAD"],
+      cwd: repo,
+    });
     const build = {
       version: inspection.upstreamVersion,
       applicationBundlePath: built.applicationBundlePath,
       push,
+      commit: builtHead.stdout.trim(),
     } satisfies LocalSourceUpdateBuild;
     yield* Ref.set(builtUpdateRef, build);
     return build;
