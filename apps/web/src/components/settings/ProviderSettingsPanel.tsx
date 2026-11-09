@@ -97,6 +97,7 @@ import { ExpandableText } from "./ExpandableText";
 import { IntervalSecondsField } from "./IntervalSecondsField";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { useSecretSources } from "./SecretSourceInput";
+import { TextGeneratorsSettings } from "./TextGeneratorsSettings";
 import { UsageProviderSettings } from "./UsageProviderSettings";
 // Fork add-on(web-apps): desktop web-app (remote app) visibility settings.
 import { RemoteAppSitesSettings } from "../../remote-apps/RemoteAppSitesSettings"; // Fork add-on(web-apps)
@@ -1099,6 +1100,18 @@ export function EnvironmentProviderSettings({
       />
       {/* Fork add-on(web-apps): choose which provider web apps the desktop app switcher lists. */}
       <RemoteAppSitesSettings environmentId={environmentId} /> {/* Fork add-on(web-apps) */}
+
+      {/* The server drops text generators under a provider allow-list. */}
+      {managedPolicy?.limits?.providers?.allowedDrivers === undefined ? (
+        <TextGeneratorsSettings
+          key={`text-generators:${environmentId}`}
+          environmentId={environmentId}
+          environmentLabel={environmentLabel}
+          providers={serverProviders}
+          readOnly={readOnly}
+        />
+      ) : null}
+
       <SettingsSection title="Advanced">
         <SettingsRow
           id={searchableSetting("provider-health-check-interval").id}
