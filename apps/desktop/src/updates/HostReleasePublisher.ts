@@ -4,6 +4,8 @@
 // detached run survives quitting the app; its record, log and exit code live in
 // stateDir. See
 // docs/operations/fork-host-releases.md.
+import * as NodeOS from "node:os";
+
 import type { DesktopHostReleaseStatus } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -63,7 +65,11 @@ const BuiltCommit = Schema.fromJsonString(
 
 const { logInfo, logWarning } = DesktopObservability.makeComponentLogger("host-fleet-build");
 
-const isAlive = (pid: number) => {
+// A run recorded before the last restart is gone, even once the OS hands its pid out again.
+const startedThisBoot = (startedAt: number) => startedAt >= Date.now() - NodeOS.uptime() * 1000;
+
+const isAlive = (pid: number, startedAt: number) => {
+  if (!startedThisBoot(startedAt)) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -166,7 +172,11 @@ const make = Effect.gen(function* () {
       });
       if (record.operation !== "build-local") {
         const now = yield* Clock.currentTimeMillis;
-        if (record.pid !== null && isAlive(record.pid) && now - record.startedAt < BUILD_MAX_MS) {
+        if (
+          record.pid !== null &&
+          isAlive(record.pid, record.startedAt) &&
+          now - record.startedAt < BUILD_MAX_MS
+        ) {
           return status("running");
         }
         return status(
@@ -205,11 +215,16 @@ const make = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       if (
         now - record.startedAt < BUILD_MAX_MS &&
-        (record.pid === null || isAlive(record.pid))
+        (record.pid === null
+          ? startedThisBoot(record.startedAt)
+          : isAlive(record.pid, record.startedAt))
       ) {
         return status("running");
       }
-      return status("failed", "The host build stopped before it finished.");
+      return status(
+        "failed",
+        "The host build stopped before it finished, usually because the Mac shut down or logged out. Retry repeats it.",
+      );
     });
 
   // `quietEnd` leaves a finished run unannounced, for when a newer commit may replace it.

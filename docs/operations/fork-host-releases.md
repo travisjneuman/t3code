@@ -85,8 +85,16 @@ only long enough for the same host to install it into its local runtime director
 
 ## Status, cleanup, and rollback
 
-`status` reports host runtimes and service state, active host-run journals, and any legacy fork release
-metadata. Hosts activate staged builds through the existing idle-aware update queue. After a successful
+`status` reports host runtimes and service state, host-run locks and journals, and any legacy fork
+release metadata. Each run holds a per-host lock and a phase journal under
+`~/Library/Application Support/t3code-fork/host-runs`. A run stopped by a shutdown, logout or kill
+keeps its locks and records the signal. The next `build-local` (or **Retry**) reclaims them by
+itself: each host re-checks its own state, and a host-side lock keeps a rerun from deleting the cache
+of a build that an orphaned run left going. A lock counts as live only while its PID still runs
+since the current boot, so a restart never leaves a reused PID holding it. An interrupted `prune` or
+`rollback` still refuses until its journal has been read, because a service may be stopped.
+
+Hosts activate staged builds through the existing idle-aware update queue. After a successful
 commit, the runtime manager removes older runtime versions according to its commit/retention rules.
 After rollback, the failed candidate runtime is removed separately from successful-commit pruning.
 During a pending update, the active runtime and the temporary T3 database recovery copy remain

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import * as fs from "node:fs/promises";
+import * as NodeOS from "node:os";
 import * as path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -1407,7 +1408,63 @@ async function buildArchive(request: Request) {
   );
   return result;
 }
+// A build normally takes minutes; a holder this old has a reused PID or is hung.
+const HOST_BUILD_MAX_MS = 6 * 60 * 60 * 1000;
+// A coordinator that dies (shutdown, kill) leaves its build running here, and the rerun that
+// follows must not delete that build's cache or share its checkout. The Mac's per-host lock
+// already serializes live coordinators, so this only has to outlast a dead one.
+async function lockHostBuild(host: Host): Promise<() => Promise<void>> {
+  await cacheRoot(host);
+  const file = path.join(host.cacheDir, "build-and-stage.lock");
+  const mine = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await fs.writeFile(file, mine, { flag: "wx", mode: 0o600 });
+      return async () => {
+        if ((await fs.readFile(file, "utf8").catch(() => "")) === mine) {
+          await fs.rm(file, { force: true });
+        }
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+    }
+    const holder = await json(file).catch(() => undefined);
+    const pid = record(holder) ? Number(holder.pid) : Number.NaN;
+    const startedAt = record(holder) ? Date.parse(String(holder.startedAt)) : Number.NaN;
+    let alive = false;
+    if (
+      Number.isSafeInteger(pid) &&
+      pid > 0 &&
+      startedAt > Date.now() - NodeOS.uptime() * 1000 &&
+      Date.now() - startedAt < HOST_BUILD_MAX_MS
+    ) {
+      try {
+        process.kill(pid, 0);
+        alive = true;
+      } catch (error) {
+        alive = (error as NodeJS.ErrnoException).code === "EPERM";
+      }
+    }
+    if (alive) {
+      throw new Refusal(
+        `A build from an earlier run (pid ${pid}, started ${new Date(startedAt).toISOString()}) is still running on this host; retry once it finishes. Nothing was changed.`,
+      );
+    }
+    await fs.rm(file, { force: true });
+  }
+  throw new Refusal("Another build claimed this host first; nothing was changed.");
+}
 async function buildAndStage(request: Request) {
+  const unlock = await lockHostBuild(request.host);
+  try {
+    return await stageBuild(request);
+  } finally {
+    await unlock();
+  }
+}
+async function stageBuild(request: Request) {
   const { host } = request;
   const target = version(request.version);
   requireState(

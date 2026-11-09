@@ -3,13 +3,13 @@
 import { randomBytes } from "node:crypto";
 import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
-import { homedir, hostname } from "node:os";
+import * as NodeOS from "node:os";
 import * as path from "node:path";
 import { record, Refusal } from "./remote.ts";
 
 // Run state, not cache: clearing caches must not forget an interrupted run.
 const RUN_STATE = path.join(
-  homedir(),
+  NodeOS.homedir(),
   "Library",
   "Application Support",
   "t3code-fork",
@@ -17,9 +17,10 @@ const RUN_STATE = path.join(
 );
 const LOCKS = path.join(RUN_STATE, "locks");
 const JOURNALS = path.join(RUN_STATE, "journal");
-// Past this age a live PID is more likely hung or reused than a real run, and a lock written
-// under another machine name (macOS renames itself across networks) is presumed abandoned.
+// Past this age a live PID is more likely hung or reused than a real run.
 const LOCK_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+// Every PID recorded before this restart is gone, even once the OS hands that number out again.
+const BOOTED_AT = Date.now() - NodeOS.uptime() * 1000;
 const KEEP_JOURNALS = 20;
 
 export interface Step {
@@ -119,9 +120,11 @@ function isJournal(value: unknown): value is JournalData {
     )
   );
 }
-function running(machine: string, pid: number) {
+// Run state lives in this Mac's Library, so the recorded machine name (which macOS changes across
+// networks) says nothing about liveness; the boot time and PID do.
+function running(pid: number, startedAt: string) {
   // Our own PID in an older record was reused from a run that is gone.
-  if (machine !== hostname() || pid === process.pid) {
+  if (pid === process.pid || Date.parse(startedAt) < BOOTED_AT) {
     return false;
   }
   try {
@@ -133,9 +136,19 @@ function running(machine: string, pid: number) {
 }
 // A journal whose owner died without recording an outcome was interrupted, whatever it says.
 const effectiveStatus = (data: JournalData) =>
-  data.status === "running" && !running(data.machine, data.pid) ? "interrupted" : data.status;
+  data.status === "running" && !running(data.pid, data.startedAt) ? "interrupted" : data.status;
 const touched = (data: JournalData) =>
   data.phases.some((phase) => phase.mutates && phase.status !== "pending");
+// Each step of such a run re-checks its own state, so stopping anywhere before the final step
+// leaves nothing a plain rerun cannot finish.
+function repeatable(data: JournalData) {
+  const final = data.phases.find((phase) => phase.final);
+  return (
+    data.rerun === "whole" &&
+    (final === undefined || final.status === "pending") &&
+    !data.phases.some((phase) => phase.status !== "pending" && phase.leaves)
+  );
+}
 
 function advice(data: JournalData): string[] {
   const started = (phase: Phase) => phase.status !== "pending";
@@ -161,15 +174,16 @@ function advice(data: JournalData): string[] {
       }),
     ];
   }
+  if (repeatable(data)) {
+    return [`Nothing was published; rerunning ${data.command} is safe and clears this run's locks.`];
+  }
   const final = data.phases.find((phase) => phase.final);
   if (final === undefined || final.status === "pending") {
     const leftovers = data.phases.flatMap((phase) =>
       started(phase) && phase.leaves ? [phase.leaves] : [],
     );
     return [
-      leftovers.length > 0
-        ? `Nothing was published. Before rerunning ${data.command}, inspect and deliberately remove whichever of these exist: ${leftovers.join("; ")}.`
-        : `Nothing was published; rerunning ${data.command} is safe.`,
+      `Nothing was published. Before rerunning ${data.command}, inspect and deliberately remove whichever of these exist: ${leftovers.join("; ")}.`,
     ];
   }
   if (final.status !== "done") {
@@ -253,6 +267,11 @@ export class Journal {
     this.data.error = message(error).slice(0, 4096);
     this.save();
   }
+  interrupt(signal: NodeJS.Signals) {
+    this.data.status = "interrupted";
+    this.data.error = `Stopped by ${signal}.`;
+    this.save();
+  }
   report() {
     return report(this.data, this.file);
   }
@@ -333,17 +352,11 @@ async function clearStale(file: string, host: string) {
   }
   const age = Date.now() - Date.parse(holder.startedAt);
   const who = describe(holder);
-  const sameMachine = holder.machine === hostname();
-  if (running(holder.machine, holder.pid)) {
+  if (running(holder.pid, holder.startedAt)) {
     throw new Refusal(
       age < LOCK_MAX_AGE_MS
         ? `${host} is locked by ${who}. Wait for that run to finish; nothing was changed.`
         : `${host} is locked by ${who}; its PID still runs after 12 hours, so the run is hung or the PID was reused. Check with \`ps -p ${holder.pid}\`, then remove ${file} deliberately. Nothing was changed.`,
-    );
-  }
-  if (!sameMachine && age < LOCK_MAX_AGE_MS) {
-    throw new Refusal(
-      `${host} is locked by ${who}; that PID cannot be checked under this machine name. If no run is active, remove ${file} deliberately. Nothing was changed.`,
     );
   }
   const journal = await readJson(holder.journal);
@@ -353,7 +366,8 @@ async function clearStale(file: string, host: string) {
     );
   }
   const data = journal.value;
-  if (data.phases.some((phase) => phase.mutates && phase.status === "started")) {
+  const stopped = data.phases.filter((phase) => phase.mutates && phase.status === "started");
+  if (stopped.length > 0 && !repeatable(data)) {
     throw new Refusal(
       `${host} is locked by ${who}, which exited during a changing step; a service may still be stopped or a remote step may still be running.\n${report(data, holder.journal)}\nRead \`status\`, then remove ${file} deliberately. Nothing was changed.`,
     );
@@ -364,7 +378,11 @@ async function clearStale(file: string, host: string) {
     data.updatedAt = new Date().toISOString();
     writeJson(holder.journal, data);
   }
-  console.error(`${host}: cleared a stale lock from ${who}; no changing step was in progress.`);
+  console.error(
+    stopped.length > 0
+      ? `${host}: cleared a lock from ${who}, which stopped during ${stopped.map((phase) => `${phase.host ?? "Mac"} ${phase.phase}`).join(", ")}; that run published nothing, so this run repeats it.`
+      : `${host}: cleared a stale lock from ${who}; no changing step was in progress.`,
+  );
 }
 
 async function acquire(owner: Owner): Promise<string> {
@@ -432,13 +450,7 @@ export async function beginRun(
   const startedAt = new Date().toISOString();
   const file = path.join(JOURNALS, `${startedAt.replace(/[-:.]/g, "")}-${process.pid}.json`);
   const token = randomBytes(16).toString("hex");
-  const held: string[] = [];
-  const release = () => {
-    for (const lock of held.splice(0)) {
-      releaseLock(lock, token);
-    }
-  };
-  const machine = hostname();
+  const machine = NodeOS.hostname();
   const journal = new Journal(file, {
     schemaVersion: 1,
     command,
@@ -452,6 +464,23 @@ export async function beginRun(
     status: "running",
     phases: [],
   });
+  const held: string[] = [];
+  const signals = ["SIGTERM", "SIGINT", "SIGHUP"] as const;
+  // Locks stay held: the next run reclaims them itself when this run is safe to repeat, and a
+  // maintenance run stopped mid-step still needs inspecting first.
+  const onSignal = (signal: NodeJS.Signals) => {
+    journal.interrupt(signal);
+    console.error(`Stopped by ${signal} (shutdown, logout, or a kill).\n${journal.report()}`);
+    process.exit(128 + NodeOS.constants.signals[signal]);
+  };
+  const release = () => {
+    for (const signal of signals) {
+      process.off(signal, onSignal);
+    }
+    for (const lock of held.splice(0)) {
+      releaseLock(lock, token);
+    }
+  };
   // Written before any lock, so a lock never names a journal that does not exist.
   journal.save();
   try {
@@ -475,6 +504,9 @@ export async function beginRun(
     fsSync.rmSync(file, { force: true });
     throw error;
   }
+  for (const signal of signals) {
+    process.on(signal, onSignal);
+  }
   return { journal, release };
 }
 
@@ -487,7 +519,7 @@ export async function heldLocks(hosts?: string[]) {
       pid: owner.pid,
       machine: owner.machine,
       startedAt: owner.startedAt,
-      holderRunning: owner.machine === hostname() ? running(owner.machine, owner.pid) : null,
+      holderRunning: running(owner.pid, owner.startedAt),
       lock: file,
       journal: owner.journal,
     }));
@@ -517,7 +549,8 @@ export async function runSummary() {
       }
     }
   }
-  const unfinished = [...new Set(latest.values())]
+  // One entry per journal, however many of its hosts it is the latest run for.
+  const unfinished = [...new Map([...latest.values()].map((entry) => [entry.file, entry])).values()]
     .filter(({ data }) => data.status !== "succeeded")
     .map(({ file, data }) => ({
       journal: file,
