@@ -144,9 +144,13 @@ Conflicts outside the lockfile, and a merge that no longer builds (upstream
 reshaped something the fork imports), go to a headless `claude -p` run in the
 checkout. It is limited to file tools (no Bash, git, or network), told to keep
 both upstream changes and fork additions, and capped at 20 minutes. A path that
-still has conflict markers afterwards aborts the update; a build fix gets one agent
-pass and one rebuild. A non-zero agent exit or timeout stops the operation immediately,
-without another repair pass. Agent spans record the phase, elapsed milliseconds,
+still has conflict markers afterwards aborts the update. A build that still fails
+after an agent pass gets another one, up to three, because the build reports only
+its first error and fixing that one often exposes the next. Repair stops early when
+a pass leaves the failure output unchanged. Later passes receive HEAD's marked lines
+for the files edited so far, so their dispositions still cite HEAD line numbers;
+a later report for the same line replaces an earlier one. A non-zero agent exit or
+timeout stops the operation immediately, without another repair pass. Agent spans record the phase, elapsed milliseconds,
 and exit code (null when no exit code was obtained), not prompts or subprocess output.
 
 Files that lost `Fork add-on` lines in the merge also get one agent pass
