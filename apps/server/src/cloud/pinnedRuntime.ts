@@ -73,6 +73,8 @@ export class PinnedRuntimeInstallError extends Schema.TaggedError<PinnedRuntimeI
     exitCode: Schema.optional(Schema.Number),
     stdoutLength: Schema.optional(Schema.Number),
     stderrLength: Schema.optional(Schema.Number),
+    httpStatus: Schema.optional(Schema.Number),
+    downloadHost: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -169,6 +171,13 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
       (cause) =>
         new PinnedRuntimeInstallError({
           step: cause._tag === "TimeoutError" ? `${step} (timed out)` : errorStep(cause), // Fork add-on(host-releases): download size cap.
+          httpStatus:
+            HttpClientError.isHttpClientError(cause) && cause.reason._tag === "StatusCodeError"
+              ? cause.reason.response.status
+              : undefined,
+          downloadHost: URL.parse(
+            HttpClientError.isHttpClientError(cause) ? cause.request.url : url,
+          )?.host,
           cause,
         }),
     ),
