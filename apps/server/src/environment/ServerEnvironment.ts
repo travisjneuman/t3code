@@ -293,6 +293,7 @@ export const make = Effect.gen(function* () {
       mcpModeLimitHeader: true,
       linkFence: true,
       mcpApprovalCodes: true,
+      mcpHostedApproval: true,
       ...FORK_SERVER_CAPABILITIES, // Fork add-on(core)
     },
   };
