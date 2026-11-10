@@ -1035,28 +1035,46 @@
       }
     },
     {
-      "id": "shared-model-visibility",
+      "id": "all-environments-providers",
       "tier": "feature",
-      "title": "Shared model visibility",
-      "summary": "Hiding or showing a model applies on every connected environment that runs the same provider instance.",
+      "title": "All environments in provider settings",
+      "summary": "Settings → Providers on All environments applies each provider change on every connected environment with the same provider, and shows where they differ.",
       "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": [],
       "surfaces": ["web"],
-      "files": ["apps/web/src/sharedModelVisibility.ts"],
+      "files": ["apps/web/src/components/settings/AllEnvironmentsProviders.tsx"],
       "hooks": [
+        "apps/web/src/routes/_chat.settings.tsx",
+        "apps/web/src/routes/_chat.settings.providers.tsx",
+        "apps/web/src/components/settings/ProviderSettingsPanel.tsx",
         "apps/web/src/components/settings/ProviderInstanceCard.tsx",
-        "apps/web/src/hooks/useSettings.ts"
+        "apps/web/src/components/settings/ProviderSetupSection.tsx"
       ],
       "upstreamDeletions": [
         {
           "file": "apps/web/src/components/settings/ProviderInstanceCard.tsx",
           "line": "Model preferences and custom models are saved on the selected environment and shared",
-          "why": "replaced by MODEL_PREFERENCES_SCOPE_NOTE"
+          "why": "replaced by modelPreferencesScopeNote"
         },
         {
           "file": "apps/web/src/components/settings/ProviderInstanceCard.tsx",
           "line": "across connected devices.",
-          "why": "replaced by MODEL_PREFERENCES_SCOPE_NOTE"
+          "why": "replaced by modelPreferencesScopeNote"
+        },
+        {
+          "file": "apps/web/src/routes/_chat.settings.tsx",
+          "line": "singleEnvironment={pathname === \"/settings/providers\" || pathname === \"/settings/secrets\"}",
+          "why": "Providers offers All environments"
+        },
+        {
+          "file": "apps/web/src/routes/_chat.settings.providers.tsx",
+          "line": "const { environment, scope } = useSettingsScope();",
+          "why": "also reads connectedEnvironments"
+        },
+        {
+          "file": "apps/web/src/routes/_chat.settings.providers.tsx",
+          "line": ".filter((member) => member.environmentId === environment.environmentId)",
+          "why": "project ids are resolved per environment by projectIdsOn"
         }
       ]
     },

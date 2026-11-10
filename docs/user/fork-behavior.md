@@ -258,13 +258,23 @@ update button updates that install:
 In a Windows `.cmd` script, start the line with `rem`. The path must be absolute, and the script
 must be under 16 KB.
 
-## Hidden models apply on every connected machine
+## All environments in Settings → Providers
 
-Hiding or showing a model under **Settings → Providers** applies on every connected machine that
-runs the same provider, not only the machine selected at the top of that page. A machine that is
-offline when you change it keeps its own list; change it there once it reconnects. Model order,
-favorites and custom models are still saved per machine. The mobile app's model settings change
-only the machine they are opened on.
+Choose **All environments** at the top of **Settings → Providers** to change a provider on every
+connected machine that has it. The page shows the first connected machine's values, and each change
+you make there is applied on the others too: turning a provider on or off, its settings, hiding,
+showing, reordering and favoriting models, custom models, project overrides, the health check
+interval, refreshing, provider updates, and installing or updating the Antigravity runtime. Paths,
+launch arguments, API keys, environment variables and sign-in stay per machine.
+
+Each provider's page lists every machine that has it, with its version, whether it is on, and
+whether an update is waiting. **Match everywhere** copies the shown machine's on/off state and model
+preferences to machines that differ, and **Update everywhere** starts every waiting update.
+
+A machine that is offline when you make a change keeps its old setting; change it again once it
+reconnects. Adding a provider, usage limits, web apps and text generators are saved only on the
+shown machine, and removing a registry provider uninstalls its runtime only there. The mobile app
+changes one machine at a time. Pick a single machine at the top of the page to change only that one.
 
 ## Codex can show hidden models
 

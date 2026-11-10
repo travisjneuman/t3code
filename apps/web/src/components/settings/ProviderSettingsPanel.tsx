@@ -96,6 +96,7 @@ import { useManagedPolicy } from "~/state/managedPolicy";
 import { ExpandableText } from "./ExpandableText";
 import { IntervalSecondsField } from "./IntervalSecondsField";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
+import { AllEnvironmentsProviderSummary, useProviderMirror } from "./AllEnvironmentsProviders"; // Fork add-on(all-environments-providers)
 import { useSecretSources } from "./SecretSourceInput";
 import { TextGeneratorsSettings } from "./TextGeneratorsSettings";
 import { UsageProviderSettings } from "./UsageProviderSettings";
@@ -150,6 +151,11 @@ async function confirmProviderInstanceRemoval(
     ensureLocalApi().dialogs.confirm(message, { variant: "destructive" }),
   );
   return confirmed._tag === "Success" && confirmed.value;
+}
+
+// Fork add-on(all-environments-providers): names the other environments a confirmed removal also changes.
+function alsoOn(labels: readonly string[] | undefined, verb: string): string {
+  return labels && labels.length > 0 ? ` It will also be ${verb} ${labels.join(", ")}.` : "";
 }
 
 function modelListChanges(current: ReadonlyArray<string>, next: ReadonlyArray<string>) {
@@ -566,6 +572,7 @@ export function EnvironmentProviderSettings({
   const updateModelPreferences = useUpdateEnvironmentModelPreferences(environmentId);
   const toggleModelFavorite = useToggleEnvironmentModelFavorite(environmentId);
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
+  const mirror = useProviderMirror(environmentId); // Fork add-on(all-environments-providers)
   const serverProviders = useAtomValue(providersIgnoringCheckedAtAtom(environmentId));
   // Hide overrides on older servers that silently ignore providerInstances patches.
   const supportsProjectProviderOverrides = useAtomValue(
@@ -641,6 +648,7 @@ export function EnvironmentProviderSettings({
   const refreshProviders = () => {
     if (refreshingRef.current || !readEnvironmentScope(environmentId, AuthOrchestrationReadScope))
       return;
+    mirror?.refresh(); // Fork add-on(all-environments-providers)
     refreshingRef.current = true;
     setIsRefreshingProviders(true);
     void (async () => {
@@ -665,6 +673,7 @@ export function EnvironmentProviderSettings({
       candidate: Pick<ProviderSettingsUpdateCandidate, "driver" | "instanceId">,
       targetVersion?: string,
     ) => {
+      if (!targetVersion) mirror?.providerUpdate(candidate.instanceId, candidate.driver); // Fork add-on(all-environments-providers)
       if (!readEnvironmentScope(environmentId, AuthProvidersManageScope)) return;
       // Guard re-entry with a ref; deferred state updates cannot gate dispatch.
       if (updatingInstanceIdsRef.current.has(candidate.instanceId)) {
@@ -827,6 +836,7 @@ export function EnvironmentProviderSettings({
         isDisabling &&
         resolveAppModelSelectionState(settings, serverProviders).instanceId === instanceId &&
         readEnvironmentScope(environmentId, AuthSettingsWriteScope);
+      mirror?.instance(instanceId, previous, next); // Fork add-on(all-environments-providers)
       void persistInstance(
         instanceId,
         next,
@@ -836,14 +846,21 @@ export function EnvironmentProviderSettings({
   );
 
   const enableInstance = useStableCallback(
-    (instanceId: ProviderInstanceId, next: ProviderInstanceConfig) =>
-      persistInstance(instanceId, next),
+    (instanceId: ProviderInstanceId, next: ProviderInstanceConfig) => {
+      mirror?.instance(
+        instanceId,
+        settings.providerInstances?.[instanceId] ?? { driver: next.driver },
+        next,
+      ); // Fork add-on(all-environments-providers)
+      return persistInstance(instanceId, next);
+    },
   );
 
   const deleteInstance = useStableCallback(
     async (instanceId: ProviderInstanceId, instance: ProviderInstanceConfig) => {
       const confirmed = await confirmProviderInstanceRemoval(
         `Remove the ${providerInstanceName(instance)} provider instance?`,
+        alsoOn(mirror?.labelsWith(instanceId, instance.driver), "removed from"), // Fork add-on(all-environments-providers)
       );
       if (!confirmed) return;
       const updateResult = await persistProviderInstance({
@@ -859,6 +876,7 @@ export function EnvironmentProviderSettings({
         });
         return;
       }
+      mirror?.remove(instanceId, instance.driver); // Fork add-on(all-environments-providers)
 
       if (instance.driver !== ProviderDriverKind.make("acpRegistry")) return;
       if (providerConfigString(instance.config, "source") === "local") return;
@@ -889,9 +907,11 @@ export function EnvironmentProviderSettings({
       !resolveProviderInstanceEnabled({ driver: driverKind });
     const confirmed = await confirmProviderInstanceRemoval(
       `Reset the ${providerInstanceName(instance)} provider to its defaults?`,
-      turnsOff ? " It will also be turned off." : "",
+      (turnsOff ? " It will also be turned off." : "") +
+        alsoOn(mirror?.labelsWith(instanceId, driverKind), "reset on"), // Fork add-on(all-environments-providers)
     );
     if (!confirmed) return;
+    mirror?.remove(instanceId, driverKind); // Fork add-on(all-environments-providers)
     const result = await persistProviderInstance({ operation: "remove", instanceId });
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
@@ -905,6 +925,10 @@ export function EnvironmentProviderSettings({
 
   const writeProjectOverride = useStableCallback(
     (instanceId: ProviderInstanceId, next: boolean | undefined) => {
+      const driver = // Fork add-on(all-environments-providers)
+        settings.providerInstances?.[instanceId]?.driver ?? // Fork add-on(all-environments-providers)
+        serverProviders.find((provider) => provider.instanceId === instanceId)?.driver; // Fork add-on(all-environments-providers)
+      if (driver) mirror?.projectOverride(instanceId, driver, next); // Fork add-on(all-environments-providers)
       updateSettings({
         projectSettingsOverrides: buildProviderInstanceOverridePatch(
           settings,
@@ -916,8 +940,28 @@ export function EnvironmentProviderSettings({
     },
   );
 
-  const stableUpdateModelPreferences = useStableCallback(updateModelPreferences);
-  const stableToggleModelFavorite = useStableCallback(toggleModelFavorite);
+  const stableUpdateModelPreferences = useStableCallback(
+    (patch: Parameters<typeof updateModelPreferences>[0]) => {
+      mirror?.modelPreferences(patch); // Fork add-on(all-environments-providers)
+      return updateModelPreferences(patch);
+    },
+  );
+  const stableToggleModelFavorite = useStableCallback(
+    (provider: ProviderInstanceId, model: string) => {
+      const favorite = !settings.favorites.some(
+        (entry) => entry.provider === provider && entry.model === model,
+      ); // Fork add-on(all-environments-providers)
+      mirror?.modelPreferences({ setModelFavorites: [{ provider, model, favorite }] }); // Fork add-on(all-environments-providers)
+      return toggleModelFavorite(provider, model);
+    },
+  );
+  // Fork add-on(all-environments-providers): the lead's own update, which also mirrors to the others.
+  const leadUpdateFor = (instanceId: ProviderInstanceId) => {
+    const live = serverProviders.find((provider) => provider.instanceId === instanceId);
+    return live && isProviderSettingsUpdateCandidate(live) && !isProviderUpdateActive(live)
+      ? () => void runProviderUpdate(live)
+      : undefined;
+  };
   const actions: ProviderInstanceRowActions = {
     acceptUrlAuthentication,
     runProviderUpdate,
@@ -1077,6 +1121,15 @@ export function EnvironmentProviderSettings({
               <ScrollArea scrollFade chainVerticalScroll className="@min-[48rem]/providers:h-full">
                 {/* Flat sections run dividers edge to edge and inset text like the list beside them. */}
                 <div className="space-y-6 py-4">
+                  {mirror ? ( // Fork add-on(all-environments-providers)
+                    <AllEnvironmentsProviderSummary
+                      mirror={mirror}
+                      instanceId={selectedRow.instanceId}
+                      driver={selectedRow.driver}
+                      readOnly={readOnly}
+                      onUpdateLead={leadUpdateFor(selectedRow.instanceId)}
+                    />
+                  ) : null}
                   {renderProviderInstance(selectedRow, "editor")}
                 </div>
               </ScrollArea>
@@ -1090,7 +1143,6 @@ export function EnvironmentProviderSettings({
           </div>
         </SettingsGroup>
       </SettingsSection>
-
       <UsageProviderSettings
         key={environmentId}
         environmentId={environmentId}
@@ -1100,7 +1152,6 @@ export function EnvironmentProviderSettings({
       />
       {/* Fork add-on(web-apps): choose which provider web apps the desktop app switcher lists. */}
       <RemoteAppSitesSettings environmentId={environmentId} /> {/* Fork add-on(web-apps) */}
-
       {/* The server drops text generators under a provider allow-list. */}
       {managedPolicy?.limits?.providers?.allowedDrivers === undefined ? (
         <TextGeneratorsSettings
@@ -1111,7 +1162,6 @@ export function EnvironmentProviderSettings({
           readOnly={readOnly}
         />
       ) : null}
-
       <SettingsSection title="Advanced">
         <SettingsRow
           id={searchableSetting("provider-health-check-interval").id}
@@ -1134,15 +1184,16 @@ export function EnvironmentProviderSettings({
               >
                 <SettingResetButton
                   label="provider health check interval"
-                  onClick={() =>
+                  onClick={() => {
+                    mirror?.healthInterval(undefined); // Fork add-on(all-environments-providers)
                     updateSettings(
                       backgroundActivityOverrideSettings(
                         settings.backgroundActivity,
                         resolvedBackgroundActivity,
                         { providerHealthRefreshInterval: undefined },
                       ),
-                    )
-                  }
+                    );
+                  }}
                 />
               </span>
             ) : null
@@ -1161,7 +1212,8 @@ export function EnvironmentProviderSettings({
                 value={providerHealthRefreshIntervalSeconds}
                 min={0}
                 step={PROVIDER_HEALTH_INTERVAL_STEP_SECONDS}
-                onCommit={(seconds, options) =>
+                onCommit={(seconds, options) => {
+                  mirror?.healthInterval(Duration.seconds(seconds)); // Fork add-on(all-environments-providers)
                   updateSettings(
                     backgroundActivityOverrideSettings(
                       settings.backgroundActivity,
@@ -1169,8 +1221,8 @@ export function EnvironmentProviderSettings({
                       { providerHealthRefreshInterval: Duration.seconds(seconds) },
                     ),
                     options,
-                  )
-                }
+                  );
+                }}
               />
               <span className="text-xs text-muted-foreground">seconds</span>
             </div>
@@ -1178,7 +1230,6 @@ export function EnvironmentProviderSettings({
         />
         <CompactIdleThreadsRow />
       </SettingsSection>
-
       {isAddInstanceDialogOpen && !readOnly ? (
         <AddProviderInstanceDialog
           open

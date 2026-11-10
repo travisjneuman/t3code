@@ -22,6 +22,7 @@ import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SettingsRow } from "./settingsLayout";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
+import { useProviderMirror } from "./AllEnvironmentsProviders"; // Fork add-on(all-environments-providers)
 
 interface ProviderSetupSectionProps {
   readonly environmentId: EnvironmentId;
@@ -112,6 +113,7 @@ function ProviderSetupActions({
   const installation = installQuery.data;
   const commandOptions = { reportFailure: false, reportDefect: false };
   const startInstall = useAtomCommand(serverEnvironment.startProviderInstall, commandOptions);
+  const mirror = useProviderMirror(environmentId); // Fork add-on(all-environments-providers)
   const cancelInstall = useAtomCommand(serverEnvironment.cancelProviderInstall, commandOptions);
   const removeInstall = useAtomCommand(
     serverEnvironment.removeProviderInstallation,
@@ -261,7 +263,9 @@ function ProviderSetupActions({
                     variant="outline"
                     disabled={actionsDisabled || authActive}
                     onClick={() =>
-                      void runCommand("Starting installation", () => startInstall(target))
+                      void runCommand("Starting installation", () => startInstall(target)).then(
+                        (started) => started && mirror?.runtimeInstall(instanceId, provider.driver), // Fork add-on(all-environments-providers)
+                      )
                     }
                   >
                     {installation?.installedVersion

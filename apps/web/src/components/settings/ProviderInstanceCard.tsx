@@ -63,7 +63,7 @@ import {
   seedRowsDraft,
 } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
-import { MODEL_PREFERENCES_SCOPE_NOTE } from "~/sharedModelVisibility"; // Fork add-on(shared-model-visibility)
+import { modelPreferencesScopeNote, useProviderMirror } from "./AllEnvironmentsProviders"; // Fork add-on(all-environments-providers)
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
@@ -786,6 +786,7 @@ export function ProviderInstanceCard({
     instance.displayName?.trim() || driverOption?.label || String(instance.driver);
   const accentColor = normalizeProviderAccentColor(instance.accentColor);
   const managedPolicy = useManagedPolicy(environmentId);
+  const mirrored = useProviderMirror(environmentId) !== null; // Fork add-on(all-environments-providers)
   const instanceLocks = managedInstanceLocks(managedPolicy, instance.driver);
   const managedDriverReason = isManagedDriverAllowed(managedPolicy, instance.driver)
     ? undefined
@@ -1314,7 +1315,6 @@ export function ProviderInstanceCard({
           }
         />
       </SettingsSection>
-
       {setup || environmentFields.length > 0 ? (
         <SettingsSection title="Setup">
           {setup}
@@ -1346,7 +1346,6 @@ export function ProviderInstanceCard({
           ) : null}
         </SettingsSection>
       ) : null}
-
       {instance.driver === "codex" && readCodexSetupMode(instance.config) === "managed" ? (
         <div
           inert={readOnly}
@@ -1372,7 +1371,6 @@ export function ProviderInstanceCard({
           {runtimeFields}
         </SettingsSection>
       ) : null}
-
       <SettingsSection
         title="Environment"
         inert={readOnly || instanceLocks?.wholeEnvironment}
@@ -1425,7 +1423,7 @@ export function ProviderInstanceCard({
         <SettingsSection title="Models">
           <div className="px-3 py-3 sm:px-4">
             <p className="mb-3 text-xs text-muted-foreground">
-              {MODEL_PREFERENCES_SCOPE_NOTE /* Fork add-on(shared-model-visibility) */}
+              {modelPreferencesScopeNote(mirrored) /* Fork add-on(all-environments-providers) */}
             </p>
             <ProviderModelsSection
               canManageCustomModels={!readOnly}

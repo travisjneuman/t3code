@@ -150,7 +150,9 @@ function SettingsRouteLayout() {
   return (
     <SettingsScopeProvider
       search={rawSearch}
-      singleEnvironment={pathname === "/settings/providers" || pathname === "/settings/secrets"}
+      singleEnvironment={
+        pathname === "/settings/secrets" /* Fork add-on(all-environments-providers) */
+      }
       onChange={(next) => {
         // Send every axis so retain middleware recognizes "all" as an explicit target.
         void navigate({
