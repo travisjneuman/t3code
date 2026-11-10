@@ -1328,6 +1328,16 @@
       ]
     },
     {
+      "id": "antigravity-helper-warnings",
+      "tier": "fix",
+      "title": "Antigravity helper warnings",
+      "summary": "The Antigravity browser helper runs with --no-warnings, so Node's proxy warning no longer fails the install preflight.",
+      "dependsOn": [],
+      "surfaces": ["server"],
+      "files": [],
+      "hooks": ["apps/server/src/provider/antigravityAuthSupport.ts"]
+    },
+    {
       "id": "windows-taskkill",
       "tier": "fix",
       "title": "Windows taskkill",

@@ -56,6 +56,8 @@ const browserHelperSource =
   `process.stderr.on("error",()=>process.exit(0)).write(` +
   `"${ANTIGRAVITY_AUTH_BROWSER_MARKER}"+JSON.stringify(process.argv[1])+"\\n",` +
   `()=>process.exit(0))`;
+// Fork add-on(antigravity-helper-warnings): proxy env makes Node warn on stderr, which breaks the exact preflight match.
+const browserHelperArguments = ["--no-warnings", "-e", browserHelperSource, "--"];
 const browserPreflightUrl = "https://example.invalid/t3-antigravity-browser-preflight";
 
 const removedEnvironmentKeys = new Set([
@@ -335,7 +337,7 @@ export const prepareAntigravityProfile = Effect.fn("prepareAntigravityProfile")(
     ));
   const helperExecutable =
     platform === "win32" ? runtimeExecutablePath.replaceAll("\\", "/") : runtimeExecutablePath;
-  const browserArguments = [helperExecutable, "-e", browserHelperSource, "--", "%s"];
+  const browserArguments = [helperExecutable, ...browserHelperArguments, "%s"]; // Fork add-on(antigravity-helper-warnings)
   const browserCommand = browserArguments.map(quoteBrowserArgument).join(" ");
   if (
     browserCommand.includes(platform === "win32" ? ";" : ":") ||
@@ -385,7 +387,8 @@ export const prepareAntigravityProfile = Effect.fn("prepareAntigravityProfile")(
   const environment = antigravityEnvironment(profile, input.baseEnv ?? process.env, auth);
   yield* Effect.gen(function* () {
     const child = yield* spawner.spawn(
-      ChildProcess.make(helperExecutable, ["-e", browserHelperSource, "--", browserPreflightUrl], {
+      // Fork add-on(antigravity-helper-warnings)
+      ChildProcess.make(helperExecutable, [...browserHelperArguments, browserPreflightUrl], {
         env: environment,
         extendEnv: false,
         shell: false,
