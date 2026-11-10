@@ -1035,6 +1035,32 @@
       }
     },
     {
+      "id": "shared-model-visibility",
+      "tier": "feature",
+      "title": "Shared model visibility",
+      "summary": "Hiding or showing a model applies on every connected environment that runs the same provider instance.",
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": [],
+      "surfaces": ["web"],
+      "files": ["apps/web/src/sharedModelVisibility.ts"],
+      "hooks": [
+        "apps/web/src/components/settings/ProviderInstanceCard.tsx",
+        "apps/web/src/hooks/useSettings.ts"
+      ],
+      "upstreamDeletions": [
+        {
+          "file": "apps/web/src/components/settings/ProviderInstanceCard.tsx",
+          "line": "Model preferences and custom models are saved on the selected environment and shared",
+          "why": "replaced by MODEL_PREFERENCES_SCOPE_NOTE"
+        },
+        {
+          "file": "apps/web/src/components/settings/ProviderInstanceCard.tsx",
+          "line": "across connected devices.",
+          "why": "replaced by MODEL_PREFERENCES_SCOPE_NOTE"
+        }
+      ]
+    },
+    {
       "id": "remote-pairing",
       "tier": "feature",
       "title": "Remote pairing",

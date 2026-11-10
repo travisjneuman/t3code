@@ -258,6 +258,14 @@ update button updates that install:
 In a Windows `.cmd` script, start the line with `rem`. The path must be absolute, and the script
 must be under 16 KB.
 
+## Hidden models apply on every connected machine
+
+Hiding or showing a model under **Settings → Providers** applies on every connected machine that
+runs the same provider, not only the machine selected at the top of that page. A machine that is
+offline when you change it keeps its own list; change it there once it reconnects. Model order,
+favorites and custom models are still saved per machine. The mobile app's model settings change
+only the machine they are opened on.
+
 ## Codex can show hidden models
 
 OpenAI keeps some models out of the Codex picker, such as older or long-context versions. To list

@@ -61,6 +61,7 @@ import {
 } from "~/state/session";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { useShareModelVisibility } from "~/sharedModelVisibility"; // Fork add-on(shared-model-visibility)
 
 const CLIENT_SETTINGS_PERSISTENCE_ERROR_SCOPE = "[CLIENT_SETTINGS]";
 
@@ -430,6 +431,7 @@ export function useUpdateEnvironmentModelPreferences(environmentId: EnvironmentI
     environmentId ? serverEnvironment.settingsValueAtom(environmentId) : noEnvironmentSettingsAtom,
   );
   const save = useAtomCommand(serverEnvironment.updateSettings, "model preferences update");
+  const shareModelVisibility = useShareModelVisibility(environmentId, prepareModelPreferencesPatch); // Fork add-on(shared-model-visibility)
   return async (patch: ServerSettingsPatch) => {
     if (!environmentId || !settings) return;
     let prepared: ServerSettingsPatch;
@@ -443,6 +445,7 @@ export function useUpdateEnvironmentModelPreferences(environmentId: EnvironmentI
       });
       return;
     }
+    shareModelVisibility(patch); // Fork add-on(shared-model-visibility)
     return save({ environmentId, input: { patch: prepared } });
   };
 }

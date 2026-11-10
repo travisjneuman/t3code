@@ -63,6 +63,7 @@ import {
   seedRowsDraft,
 } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
+import { MODEL_PREFERENCES_SCOPE_NOTE } from "~/sharedModelVisibility"; // Fork add-on(shared-model-visibility)
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
@@ -1424,8 +1425,7 @@ export function ProviderInstanceCard({
         <SettingsSection title="Models">
           <div className="px-3 py-3 sm:px-4">
             <p className="mb-3 text-xs text-muted-foreground">
-              Model preferences and custom models are saved on the selected environment and shared
-              across connected devices.
+              {MODEL_PREFERENCES_SCOPE_NOTE /* Fork add-on(shared-model-visibility) */}
             </p>
             <ProviderModelsSection
               canManageCustomModels={!readOnly}
