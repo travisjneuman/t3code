@@ -242,38 +242,38 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     }
     setSubmitting(true);
     setError(null);
-    const projectId = newProjectId();
     try {
+      let projectId = newProjectId(); // Fork add-on(existing-checkout): an added checkout keeps the id it is created with.
       if (addExisting) { // Fork add-on(existing-checkout)
-        const workspaceRoot =
-          canCheckFolder && repositoryKey !== null
-            ? await checkedWorkspaceRoot({
-                environmentId: target.environmentId,
-                repositoryKey,
-                folder: folderPath.trim(),
-                subdirectory,
-                repositoryName: project.repositoryIdentity?.displayName ?? project.title,
-                machine: target.label,
-              })
-            : folderPath.trim();
-        await addExistingCheckout({
-          environmentId: target.environmentId,
-          projectId,
-          title: project.title,
-          workspaceRoot,
-        });
-      } else {
-        await addProjectToMachine({
+        const workspaceRoot = // Fork add-on(existing-checkout)
+          canCheckFolder && repositoryKey !== null // Fork add-on(existing-checkout)
+            ? await checkedWorkspaceRoot({ // Fork add-on(existing-checkout)
+                environmentId: target.environmentId, // Fork add-on(existing-checkout)
+                repositoryKey, // Fork add-on(existing-checkout)
+                folder: folderPath.trim(), // Fork add-on(existing-checkout)
+                subdirectory, // Fork add-on(existing-checkout)
+                repositoryName: project.repositoryIdentity?.displayName ?? project.title, // Fork add-on(existing-checkout)
+                machine: target.label, // Fork add-on(existing-checkout)
+              }) // Fork add-on(existing-checkout)
+            : folderPath.trim(); // Fork add-on(existing-checkout)
+        await addExistingCheckout({ // Fork add-on(existing-checkout)
+          environmentId: target.environmentId, // Fork add-on(existing-checkout)
+          projectId, // Fork add-on(existing-checkout)
+          title: project.title, // Fork add-on(existing-checkout)
+          workspaceRoot, // Fork add-on(existing-checkout)
+        }); // Fork add-on(existing-checkout)
+      } else { // Fork add-on(existing-checkout)
+        projectId = await addProjectToMachine({ // Fork add-on(existing-checkout): assigns the outer id.
           source: { environmentId: project.environmentId, cwd: project.workspaceRoot },
           subdirectory, // Fork add-on(existing-checkout)
           target: { environmentId: target.environmentId, label: target.label },
-          projectId,
+          projectId: newProjectId(),
           title: project.title,
           remoteUrl,
           destinationPath: folderPath.trim(), // Fork add-on(existing-checkout)
           files: files.filter((file) => selectedFiles.has(file.path)).map((file) => file.path),
         });
-      }
+      } // Fork add-on(existing-checkout)
       close();
       openClonedProject(scopeProjectRef(target.environmentId, projectId));
     } catch (cause) {
