@@ -36,7 +36,7 @@ export interface HostConfig {
   buildHosts?: Record<"win32-x64" | "linux-x64", string[]>;
 }
 export interface State {
-  protocol: 3;
+  protocol: 3 | 4;
   activeVersion: string;
   update?: {
     id: string;
@@ -325,7 +325,10 @@ async function json(file: string): Promise<unknown> {
   return JSON.parse(await fs.readFile(file, "utf8"));
 }
 function decodeState(value: unknown): State {
-  requireState(record(value) && value.protocol === 3, "Unsupported service-state protocol.");
+  requireState(
+    record(value) && (value.protocol === 3 || value.protocol === 4),
+    "Unsupported service-state protocol.",
+  );
   const activeVersion = version(value.activeVersion);
   if (value.update !== undefined) {
     const u = value.update;
@@ -1206,6 +1209,7 @@ async function maintain(request: Request) {
     await fs.rename(nextService, host.service.file);
     if (!pruning) {
       // A terminal update record is tied to its old activeVersion; archive it in the backup, not in the new state.
+      // Protocol-3 launchers read only 3; protocol-4 launchers also accept 3.
       const next = { protocol: 3, activeVersion: target };
       const temporary = path.join(host.t3Home, "runtime", ".service-state.host-maintenance");
       await fs.writeFile(temporary, JSON.stringify(next) + "\n", {
