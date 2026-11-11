@@ -35,6 +35,7 @@ export const EXTERNAL_SESSIONS_WS_METHODS = {
   openInOrigin: "externalSessions.openInOrigin",
   insights: "externalSessions.insights",
   listOlder: "externalSessions.listOlder",
+  readEarlier: "externalSessions.readEarlier",
 } as const;
 
 /** The streaming methods, for the client's subscription tag union. */
@@ -154,6 +155,33 @@ export const ExternalSessionMessage = Schema.Struct({
   createdAt: Schema.String,
 });
 export type ExternalSessionMessage = typeof ExternalSessionMessage.Type;
+
+/** How many messages one "Load more" in a session's view adds above the ones shown. */
+export const EXTERNAL_SESSION_EARLIER_MESSAGES = 200;
+
+/**
+ * One page of a session's messages older than `before`, the oldest message already shown.
+ * Some stores number messages from where a read starts, so `before` is found by its id and,
+ * failing that, by its time, role and the start of its text.
+ */
+export const ExternalSessionReadEarlierInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+  before: Schema.Struct({
+    id: Schema.String,
+    createdAt: Schema.String,
+    role: ExternalSessionMessageRole,
+    textStart: Schema.String,
+  }),
+});
+export type ExternalSessionReadEarlierInput = typeof ExternalSessionReadEarlierInput.Type;
+
+export const ExternalSessionReadEarlierResult = Schema.Struct({
+  /** Oldest first, ending just before `before`. */
+  messages: Schema.Array(ExternalSessionMessage),
+  /** Still older messages can be read with another call. */
+  more: Schema.Boolean,
+});
+export type ExternalSessionReadEarlierResult = typeof ExternalSessionReadEarlierResult.Type;
 
 export const ExternalSessionSubscribeInput = Schema.Struct({
   key: TrimmedNonEmptyString,
@@ -537,6 +565,12 @@ const ExternalSessionsListOlderRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.listO
   error: ExternalSessionRpcError,
 });
 
+const ExternalSessionsReadEarlierRpc = Rpc.make(EXTERNAL_SESSIONS_WS_METHODS.readEarlier, {
+  payload: ExternalSessionReadEarlierInput,
+  success: ExternalSessionReadEarlierResult,
+  error: ExternalSessionRpcError,
+});
+
 const ExternalSessionsSubscribeArchivedRpc = Rpc.make(
   EXTERNAL_SESSIONS_WS_METHODS.subscribeArchived,
   {
@@ -562,6 +596,7 @@ export const ExternalSessionsRpcs = [
   ExternalSessionsOpenInOriginRpc,
   ExternalSessionsInsightsRpc,
   ExternalSessionsListOlderRpc,
+  ExternalSessionsReadEarlierRpc,
 ] as const;
 
 /** The scope each RPC needs, spread into the server's `RPC_REQUIRED_SCOPES`. */
@@ -579,4 +614,5 @@ export const EXTERNAL_SESSIONS_RPC_SCOPES = {
   [EXTERNAL_SESSIONS_WS_METHODS.openInOrigin]: AuthOrchestrationOperateScope,
   [EXTERNAL_SESSIONS_WS_METHODS.insights]: AuthOrchestrationReadScope,
   [EXTERNAL_SESSIONS_WS_METHODS.listOlder]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSIONS_WS_METHODS.readEarlier]: AuthOrchestrationReadScope,
 } as const;

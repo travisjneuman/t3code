@@ -1,21 +1,6 @@
 /**
- * Live view of agent sessions running outside T3: Claude Code, Codex, Grok,
- * Pi, and Antigravity, from CLIs, desktop apps, and IDE extensions. Each
- * provider's own session store is watched while anyone subscribes and is
- * written only by Delete. Continuing an idle Claude, Codex, Grok, or Pi session
- * binds a T3 thread to that same session (continueExternalSession.ts), after
- * which it is listed as that thread instead. Handing one to a different agent
- * makes a separate thread from its history and leaves the session listed.
- * Archiving one hides it from the list (externalSessionArchive.ts) and leaves
- * it where it is in the agent's own app; it comes back when it runs again.
- * Older Codex archives also archived in Codex, so unarchiving those restores
- * them there (codexNativeArchive.ts). Deleting one removes it from the agent's
- * own store: Codex deletes its own, the other stores lose the files the
- * source names (`sessionFiles`), and Claude desktop its records. Claude sessions
- * archived in Claude desktop are hidden and listed as archived too, read-only
- * (claudeDesktopArchive.ts). Fork add-on; see docs/internals/external-sessions.md.
- *
- * @module external-sessions/ExternalSessions
+ * Live view of agent sessions running outside T3. Each agent's own store is watched while anyone
+ * subscribes and is written only by Delete. Fork add-on; see docs/internals/external-sessions.md.
  */
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -38,9 +23,12 @@ import {
   ExternalSessionNotFoundError,
   ExternalSessionUnsupportedError,
   externalSessionUnsupportedReason,
+  EXTERNAL_SESSION_EARLIER_MESSAGES,
   type ExternalSessionEvent,
   type ExternalSessionListOlderInput,
   type ExternalSessionListOlderResult,
+  type ExternalSessionReadEarlierInput,
+  type ExternalSessionReadEarlierResult,
   type ExternalSessionListResult,
   type ExternalSessionMessage,
   type ExternalSessionSummary,
@@ -108,6 +96,9 @@ const SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const SNAPSHOT_MESSAGES = 200;
 // Wire bounds per event, so a burst or a long transcript never sends one giant frame.
 const SNAPSHOT_FRAME_BYTES = 4 * 1024 * 1024;
+// Load more reads back from the end in growing windows; past this much it stops offering more.
+const EARLIER_MAX_BYTES = 128 * 1024 * 1024;
+const EARLIER_TEXT_START = 80;
 const APPEND_FRAME_BYTES = 1024 * 1024;
 const APPEND_FRAME_MESSAGES = 100;
 const FOLLOW_BYTES = 8 * 1024 * 1024;
@@ -126,6 +117,10 @@ export class ExternalSessions extends Context.Service<
     readonly listOlder: (
       before: ExternalSessionListOlderInput["before"],
     ) => Effect.Effect<ExternalSessionListOlderResult>;
+    /** One page of a session's messages older than the oldest one its view shows. */
+    readonly readEarlier: (
+      input: ExternalSessionReadEarlierInput,
+    ) => Effect.Effect<ExternalSessionReadEarlierResult>;
     /** One session: a snapshot of its newest messages, then appends as it grows. */
     readonly subscribeSession: (
       key: string,
@@ -202,12 +197,8 @@ export class ExternalSessions extends Context.Service<
       key: string,
     ) => Effect.Effect<ExternalSessionOpenInOriginResult, ExternalSessionError>;
     /**
-     * The session details card: the machine, the files changed over the whole
-     * session (sessionOutputs.ts), and what the source's `readInsights`
-     * reports (record, context, MCP servers). Each read is bounded by a
-     * timeout and keeps its progress, and a store without a cost is priced
-     * from the usage page's cached rate table (`costEstimated`). Reads only;
-     * it never starts or resumes a session.
+     * The session details card: the machine, changed files and the source's `readInsights`.
+     * Reads only, each bounded by a timeout; it never starts or resumes a session.
      */
     readonly insights: (
       key: string,
@@ -303,11 +294,12 @@ const framesOf = (
   return frames;
 };
 
+// oxlint-disable-next-line t3code/no-global-process-runtime -- a pure path comparison called outside Effect; the host's own path rules are the ones that apply
+const WINDOWS_PATHS = process.platform === "win32";
+
 const isUnder = (path: string, root: string) => {
-  const comparedPath =
-    process.platform === "win32" ? path.replaceAll("/", "\\").toLowerCase() : path;
-  const comparedRoot =
-    process.platform === "win32" ? root.replaceAll("/", "\\").toLowerCase() : root;
+  const comparedPath = WINDOWS_PATHS ? path.replaceAll("/", "\\").toLowerCase() : path;
+  const comparedRoot = WINDOWS_PATHS ? root.replaceAll("/", "\\").toLowerCase() : root;
   return (
     comparedPath === comparedRoot ||
     comparedPath.startsWith(
@@ -328,11 +320,9 @@ const collectStrings = (value: unknown, into: Set<string>, depth = 0): void => {
 };
 
 /**
- * While the provider's process for a session runs, the session is open:
- * running while its registry says busy (or it was just written), else idle.
- * Otherwise it goes by file writes. A turn whose end was never written (the
- * app quit mid-turn) stops counting as running once the session has been
- * quiet for an hour.
+ * While the provider's process runs, the session is running when its registry says busy or it
+ * was just written, else idle. Otherwise it goes by file writes, and a turn whose end was never
+ * written stops counting as running after a quiet hour.
  */
 const liveness = (info: ExternalSessionInfo, now: number) => {
   const age = now - info.updatedAtMs;
@@ -416,13 +406,9 @@ const make = Effect.gen(function* () {
     return table;
   });
 
-  // Sessions T3 threads own. Runtime rows cover imported Claude and Codex
-  // sessions, including ones whose thread later fell back to a fresh native
-  // session. Threads T3 started itself, and continued Grok and Pi sessions,
-  // have none; their provider threads name the native session (an id, or Pi's
-  // file path). Kept for the server's lifetime, so search shares it. An
-  // archived continued thread owns nothing, so its session is listed again
-  // ("Move back to Other Agents", handBack.ts); continuing it unarchives it.
+  // Sessions T3 threads own: runtime rows for imported Claude and Codex sessions, provider
+  // threads for the rest. Kept for the server's lifetime, so search shares it. An archived
+  // continued thread owns nothing, so its session is listed again (handBack.ts).
   let owned: ReadonlySet<string> = new Set();
   let ownedAt = 0;
   const readReleasedThreadIds = sql<{ readonly thread_id: string }>`
@@ -591,23 +577,25 @@ const make = Effect.gen(function* () {
       }
     });
 
-    const summarizePath = (source: ExternalSessionSource, path: string) =>
-      Effect.gen(function* () {
-        if (hiddenPaths.has(path)) return;
-        const result = yield* provide(source.summarize(path));
-        for (const key of keysByPath.get(path) ?? []) entries.delete(key);
-        if (result === "hidden") {
-          hiddenPaths.add(path);
-          keysByPath.delete(path);
-          return;
-        }
-        const keys = result.map((info) => {
-          const key = sessionKey(source, info.id);
-          entries.set(key, { source, path, info });
-          return key;
-        });
-        keysByPath.set(path, keys);
+    const summarizePath = Effect.fn("ExternalSessions.summarizePath")(function* (
+      source: ExternalSessionSource,
+      path: string,
+    ) {
+      if (hiddenPaths.has(path)) return;
+      const result = yield* provide(source.summarize(path));
+      for (const key of keysByPath.get(path) ?? []) entries.delete(key);
+      if (result === "hidden") {
+        hiddenPaths.add(path);
+        keysByPath.delete(path);
+        return;
+      }
+      const keys = result.map((info) => {
+        const key = sessionKey(source, info.id);
+        entries.set(key, { source, path, info });
+        return key;
       });
+      keysByPath.set(path, keys);
+    });
 
     // Initial discovery, before the first subscriber sees the list.
     yield* refreshOwnedIds;
@@ -746,23 +734,22 @@ const make = Effect.gen(function* () {
           }
           return publish;
         }),
-      resolve: (key) =>
-        Effect.gen(function* () {
-          const listed = entries.get(key);
-          if (listed !== undefined) return listed;
-          const separator = key.indexOf(":");
-          const driver = key.slice(0, separator);
-          const source = sources.find((candidate) => candidate.driver === driver);
-          if (separator <= 0 || source === undefined) return undefined;
-          // Summarizing registers the entry, and the store's watcher (already
-          // running) keeps it current; the list still shows only its window.
-          for (const path of yield* provide(findSessionPaths(source, key.slice(separator + 1)))) {
-            yield* summarizePath(source, path);
-            const found = entries.get(key);
-            if (found !== undefined) return found;
-          }
-          return undefined;
-        }),
+      resolve: Effect.fn("ExternalSessions.resolve")(function* (key: string) {
+        const listed = entries.get(key);
+        if (listed !== undefined) return listed;
+        const separator = key.indexOf(":");
+        const driver = key.slice(0, separator);
+        const source = sources.find((candidate) => candidate.driver === driver);
+        if (separator <= 0 || source === undefined) return undefined;
+        // Summarizing registers the entry, and the store's watcher (already
+        // running) keeps it current; the list still shows only its window.
+        for (const path of yield* provide(findSessionPaths(source, key.slice(separator + 1)))) {
+          yield* summarizePath(source, path);
+          const found = entries.get(key);
+          if (found !== undefined) return found;
+        }
+        return undefined;
+      }),
     };
     return registry;
   });
@@ -786,6 +773,57 @@ const make = Effect.gen(function* () {
           : registry.listOlder(beforeMs, before.key);
       }),
     );
+
+  const NO_EARLIER: ExternalSessionReadEarlierResult = { messages: [], more: false };
+
+  const readEarlier: ExternalSessions["Service"]["readEarlier"] = Effect.fn(
+    "ExternalSessions.readEarlier",
+  )(function* (input: ExternalSessionReadEarlierInput) {
+    const registry = yield* RcRef.get(registryRef);
+    const entry = yield* registry.resolve(input.key);
+    const transcript = entry === undefined ? null : entry.source.transcriptPath(entry.path);
+    if (entry === undefined || transcript === null) return NO_EARLIER;
+    const { before } = input;
+    const textStart = before.textStart.slice(0, EARLIER_TEXT_START);
+    let maxBytes = SNAPSHOT_BYTES;
+    while (true) {
+      const slice = yield* provide(readLines(transcript, { fromEnd: true, maxBytes }));
+      if (slice === null) return NO_EARLIER;
+      const parser = entry.source.createParser();
+      const parsed = new Map<string, ExternalSessionMessage>();
+      for (const line of slice.lines) {
+        for (const message of parser.push(line)) parsed.set(message.id, message);
+      }
+      const messages = [...parsed.values()];
+      // Stores that number messages from where a read starts give the same message another id
+      // in a longer read, so fall back to what the message itself says.
+      const byId = messages.findLastIndex((message) => message.id === before.id);
+      const index =
+        byId !== -1
+          ? byId
+          : messages.findLastIndex(
+              (message) =>
+                message.createdAt === before.createdAt &&
+                message.role === before.role &&
+                message.text.startsWith(textStart),
+            );
+      const wholeFile = slice.start === 0;
+      const atLimit = maxBytes >= EARLIER_MAX_BYTES;
+      if (wholeFile || atLimit || index >= EXTERNAL_SESSION_EARLIER_MESSAGES) {
+        if (index <= 0) return NO_EARLIER;
+        const page = newestWithin(
+          messages.slice(0, index),
+          EXTERNAL_SESSION_EARLIER_MESSAGES,
+          SNAPSHOT_FRAME_BYTES,
+        );
+        return {
+          messages: page.messages,
+          more: page.cut || (!wholeFile && !atLimit),
+        };
+      }
+      maxBytes = Math.min(maxBytes * 4, EARLIER_MAX_BYTES);
+    }
+  }, Effect.scoped);
 
   const subscribeSession: ExternalSessions["Service"]["subscribeSession"] = (key) =>
     Stream.unwrap(
@@ -1184,6 +1222,7 @@ const make = Effect.gen(function* () {
   return ExternalSessions.of({
     subscribeList,
     listOlder,
+    readEarlier,
     subscribeSession,
     continueSession,
     subscribeRunningElsewhere: sync.runningElsewhere,

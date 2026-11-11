@@ -12,6 +12,7 @@ import {
   type ExternalSessionHandBackInput,
   type ExternalSessionInsightsInput,
   type ExternalSessionListOlderInput,
+  type ExternalSessionReadEarlierInput,
   type ExternalSessionReleaseInput,
   type ExternalSessionOpenInOriginInput,
   type ExternalSessionUnarchiveInput,
@@ -50,5 +51,7 @@ export const makeHandlers = Effect.gen(function* () {
       externalSessions.insights(input.key),
     [EXTERNAL_SESSIONS_WS_METHODS.listOlder]: (input: ExternalSessionListOlderInput) =>
       externalSessions.listOlder(input.before),
+    [EXTERNAL_SESSIONS_WS_METHODS.readEarlier]: (input: ExternalSessionReadEarlierInput) =>
+      externalSessions.readEarlier(input),
   };
 });

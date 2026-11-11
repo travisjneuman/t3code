@@ -12,7 +12,9 @@ the sidebar's sync button starts to finish an upstream merge are named by when t
 as **t3 100626 143205** for October 6, 2026 at 14:32:05. Subagents that T3 threads start are not
 listed here; they sit under their thread in the sidebar.
 
-A session's view shows its latest 200 messages, up to about 4 MB. **Continue in T3** brings over the whole history.
+A session's view opens with its latest 200 messages, up to about 4 MB. **Load more** at the top adds
+the 200 before those, as often as you press it, back to the first message. **Continue in T3**
+brings over the whole history.
 In the desktop app, the view has the right panel for [web apps](./desktop-remote-apps.md), one
 panel shared by every session; the browser, terminal, files and diff need a thread, so continue the
 session in T3 for those.

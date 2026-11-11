@@ -19,6 +19,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   BrainIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   CircleDashedIcon,
   CopyIcon,
   ExternalLinkIcon,
@@ -55,6 +56,7 @@ import { useTimelineLiveFollow } from "../forkTimelineLiveFollow";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useStableCallback } from "../hooks/useStableCallback";
+import { observeResize } from "../lib/observeResize";
 import { useTheme } from "../hooks/useTheme";
 import { formatContextWindowTokens } from "../lib/contextWindow";
 import { cn } from "../lib/utils";
@@ -73,6 +75,7 @@ import {
   externalSessionOriginIsLocalAtom,
   externalSessionOriginLabel,
   externalSessionProductName,
+  externalSessionReadEarlier,
   externalSessionTitle,
   externalSessionTranscript,
   LIVENESS_LABEL,
@@ -175,10 +178,8 @@ function useSessionTimelineEntries(
 }
 
 /**
- * An agent session running outside T3, shown the way a T3 thread is: the same
- * layout, header, timeline, details card and composer-shaped block. The block
- * stands in for the composer; an idle session can be continued as a T3 thread
- * from there.
+ * An agent session running outside T3, shown the way a T3 thread is. The composer-shaped block
+ * stands in for the composer and continues an idle session as a T3 thread.
  * Key it by environment and session so switching sessions starts fresh.
  */
 export function ExternalSessionView(props: { environmentId: EnvironmentId; sessionKey: string }) {
@@ -190,7 +191,42 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
   const { timestampFormat } = useEnvironmentSettings(environmentId);
 
   const summary = data?.summary ?? null;
-  const messages = data?.messages ?? EMPTY_MESSAGES;
+  const liveMessages = data?.messages ?? EMPTY_MESSAGES;
+  // Pages read with Load more, oldest first. Their ids get a prefix when shown, since some
+  // stores number messages from where a read starts and a page's ids could repeat a live one.
+  const [earlier, setEarlier] = useState<ReadonlyArray<ExternalSessionMessage>>(EMPTY_MESSAGES);
+  const [earlierMore, setEarlierMore] = useState<boolean | null>(null);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const readEarlier = useAtomCommand(externalSessionReadEarlier, { reportFailure: false });
+  const hasEarlier = earlierMore ?? data?.truncated ?? false;
+  const messages =
+    earlier.length === 0
+      ? liveMessages
+      : [
+          ...earlier.map((message) => ({ ...message, id: `earlier:${message.id}` })),
+          ...liveMessages,
+        ];
+  const loadEarlier = async () => {
+    const oldest = earlier[0] ?? liveMessages[0];
+    if (oldest === undefined || loadingEarlier) return;
+    setLoadingEarlier(true);
+    const result = await readEarlier({
+      environmentId,
+      input: {
+        key: sessionKey,
+        before: {
+          id: oldest.id,
+          createdAt: oldest.createdAt,
+          role: oldest.role,
+          textStart: oldest.text.slice(0, 80),
+        },
+      },
+    });
+    setLoadingEarlier(false);
+    if (result._tag !== "Success") return;
+    setEarlier((held) => [...result.value.messages, ...held]);
+    setEarlierMore(result.value.more);
+  };
   const running = summary?.liveness === "running";
   const timelineEntries = useSessionTimelineEntries(messages, running);
   const activeTurnStartedAt = running
@@ -216,12 +252,12 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
     setOverlayElement(element);
     if (element !== null) setOverlayHeight(Math.round(element.offsetHeight));
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows the docked block's measured height, a DOM size, so the timeline's end stays clear of it
   useLayoutEffect(() => {
     if (overlayElement === null) return;
-    const update = () => setOverlayHeight(Math.round(overlayElement.offsetHeight));
-    const observer = new ResizeObserver(update);
-    observer.observe(overlayElement);
-    return () => observer.disconnect();
+    return observeResize(overlayElement, () =>
+      setOverlayHeight(Math.round(overlayElement.offsetHeight)),
+    );
   }, [overlayElement]);
   const sidePanel = useExternalSessionPanel(environmentId);
   // The details card opens as a popover under the header when the canvas is too narrow.
@@ -281,6 +317,20 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
                   hideEmptyPlaceholder={!hasEntries}
                   topFadeEnabled
                 />
+                {hasEarlier && hasEntries ? (
+                  <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center py-1.5">
+                    <Button
+                      onClick={() => void loadEarlier()}
+                      disabled={loadingEarlier}
+                      className="pointer-events-auto"
+                      size="xs"
+                      variant="glass"
+                    >
+                      <ChevronUpIcon className="size-3.5" />
+                      {loadingEarlier ? "Loading…" : "Load more"}
+                    </Button>
+                  </div>
+                ) : null}
                 {showScrollToEnd ? (
                   <div
                     className="chat-scroll-to-bottom pointer-events-none absolute z-30 flex justify-center py-1.5"
@@ -320,7 +370,7 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
                               sessionKey={sessionKey}
                               summary={summary}
                               hasMessages={hasEntries}
-                              truncated={data?.truncated ?? false}
+                              truncated={hasEarlier}
                               loaded={data !== null}
                               error={error}
                               connected={connected}
@@ -362,23 +412,27 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
  * row): folder / title. The right side holds the details card and side panel
  * toggles where a thread keeps its own; the card is anchored to this header.
  */
-function ExternalSessionHeader(props: {
+function ExternalSessionHeader({
+  headerRef,
+  environmentId,
+  summary,
+  controls,
+}: {
   headerRef: RefObject<HTMLElement | null>;
   environmentId: EnvironmentId;
   summary: ExternalSessionSummary | null;
   controls: ReactNode;
 }) {
-  const { summary } = props;
   const title = summary === null ? "Session" : externalSessionTitle(summary);
   const folder = summary === null ? null : cwdBasename(summary.cwd);
   const project =
     summary?.cwd != null && folder !== null
-      ? { environmentId: props.environmentId, workspaceRoot: summary.cwd, title: folder }
+      ? { environmentId, workspaceRoot: summary.cwd, title: folder }
       : null;
 
   return (
     <header
-      ref={props.headerRef}
+      ref={headerRef}
       data-chat-header
       className={cn(
         "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
@@ -397,13 +451,17 @@ function ExternalSessionHeader(props: {
           {project !== null ? (
             <>
               <WorkspaceBreadcrumbItem className="shrink">
-                <span
-                  className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-muted-foreground"
-                  title={project.workspaceRoot}
-                >
-                  <ProjectFavicon project={project} className="size-3.5" />
-                  <WorkspaceBreadcrumbText className="max-w-40">{folder}</WorkspaceBreadcrumbText>
-                </span>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-muted-foreground" />
+                    }
+                  >
+                    <ProjectFavicon project={project} className="size-3.5" />
+                    <WorkspaceBreadcrumbText className="max-w-40">{folder}</WorkspaceBreadcrumbText>
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">{project.workspaceRoot}</TooltipPopup>
+                </Tooltip>
               </WorkspaceBreadcrumbItem>
               <WorkspaceBreadcrumbSeparator>
                 <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
@@ -420,7 +478,7 @@ function ExternalSessionHeader(props: {
           </WorkspaceBreadcrumbItem>
         </WorkspaceBreadcrumb>
       </div>
-      {props.controls}
+      {controls}
     </header>
   );
 }
@@ -460,7 +518,7 @@ function resolveComposerBlockState(input: {
   let message: string;
   let blockedReason: string | null = null;
   if (summary.liveness === "running") {
-    message = `Running in ${origin} — stop it there to continue here.`;
+    message = `Running in ${origin}. Stop it there to continue here.`;
     blockedReason = `Stop the session in ${origin} first.`;
   } else if (unsupported === "provider") {
     message = `${externalSessionProductName(summary)} sessions can't be continued in T3 yet.`;
@@ -483,11 +541,9 @@ function resolveComposerBlockState(input: {
 }
 
 /**
- * Stands in for the composer and keeps its shape. The prompt area explains the
- * session's state in the placeholder's style, the toolbar row shows the model
- * and status where the composer's pickers sit, and "Continue in T3" sits where
- * the send button does. The classes mirror ChatComposer's expanded layout;
- * each part names its source.
+ * Stands in for the composer and keeps its shape: the session's state where the prompt goes,
+ * model and status where the pickers sit, "Continue in T3" where send is. The classes mirror
+ * ChatComposer's expanded layout; each part names its source.
  */
 function ExternalSessionComposerBlock(props: {
   environmentId: EnvironmentId;
@@ -576,7 +632,7 @@ function ExternalSessionComposerBlock(props: {
                   {message}
                   {props.truncated && props.hasMessages ? (
                     <span className="ms-2 text-xs text-muted-foreground/70">
-                      Showing recent messages only.
+                      Earlier messages: Load more at the top.
                     </span>
                   ) : null}
                 </p>
@@ -849,10 +905,13 @@ function SessionDetails(props: {
   return (
     <div className="flex min-w-0 flex-col gap-1 text-xs leading-4">
       <div className="flex min-w-0 items-center gap-4">
-        <span className="flex min-w-0 gap-1" title={summary.cwd}>
-          <span className="shrink-0 text-muted-foreground">Folder</span>
-          <span className="min-w-0 truncate font-medium text-secondary-label">{summary.cwd}</span>
-        </span>
+        <Tooltip>
+          <TooltipTrigger render={<span className="flex min-w-0 gap-1" />}>
+            <span className="shrink-0 text-muted-foreground">Folder</span>
+            <span className="min-w-0 truncate font-medium text-secondary-label">{summary.cwd}</span>
+          </TooltipTrigger>
+          <TooltipPopup side="top">{summary.cwd}</TooltipPopup>
+        </Tooltip>
         {summary.details !== undefined ? (
           <span className="flex min-w-0 gap-1">
             <span className="shrink-0 text-muted-foreground">Session</span>
@@ -864,10 +923,13 @@ function SessionDetails(props: {
         // One line; items that wrap are clipped whole.
         <dl className="flex h-4 min-w-0 flex-wrap gap-x-4 overflow-hidden">
           {items.map((item) => (
-            <div key={item.label} className="flex shrink-0 gap-1" title={item.title}>
-              <dt className="text-muted-foreground">{item.label}</dt>
-              <dd className="font-medium tabular-nums text-secondary-label">{item.value}</dd>
-            </div>
+            <Tooltip key={item.label}>
+              <TooltipTrigger render={<div className="flex shrink-0 gap-1" />}>
+                <dt className="text-muted-foreground">{item.label}</dt>
+                <dd className="font-medium tabular-nums text-secondary-label">{item.value}</dd>
+              </TooltipTrigger>
+              {item.title == null ? null : <TooltipPopup side="top">{item.title}</TooltipPopup>}
+            </Tooltip>
           ))}
         </dl>
       ) : null}

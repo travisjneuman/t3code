@@ -1,11 +1,6 @@
 /**
- * External sessions: agent sessions running outside T3 (Claude Code, Codex,
- * Grok, Pi, Antigravity CLIs and desktop apps), streamed live from each
- * environment, plus the command that continues an idle one as a T3 thread,
- * which continued threads are running in their own agent right now, archive,
- * and handing a continued thread back to its agent. Fork add-on; the sidebar
- * section, the session route, the thread composer's banner, the thread menus,
- * and Settings › Archived read these atoms.
+ * External sessions: agent sessions running outside T3, streamed live from each environment,
+ * with the commands that continue, archive and hand back one. Fork add-on.
  */
 import {
   EnvironmentId,
@@ -426,6 +421,12 @@ export const externalSessionListCutsAtom = Atom.make((get) => {
 export const externalSessionListOlder = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:external-sessions:list-older",
   tag: EXTERNAL_SESSIONS_WS_METHODS.listOlder,
+});
+
+/** One page of a session's messages above the ones its view shows (Load more). Not live. */
+export const externalSessionReadEarlier = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:external-sessions:read-earlier",
+  tag: EXTERNAL_SESSIONS_WS_METHODS.readEarlier,
 });
 
 /**
