@@ -141,16 +141,22 @@ regenerated file. Without that, every host failed its post-build clean check.
 ## Agent fallback
 
 Conflicts outside the lockfile, and a merge that no longer builds (upstream
-reshaped something the fork imports), go to a headless `claude -p` run in the
-checkout. It is limited to file tools (no Bash, git, or network), told to keep
+reshaped something the fork imports), go to a headless agent run in the checkout: `pi -p` or
+`claude -p`, in the order of the `sourceUpdateRepairAgents` setting
+([`repairAgents.ts`](../../packages/contracts/src/repairAgents.ts)). The desktop reads that
+setting from its own environment's `settings.json` in the state directory at each repair, so
+the main process needs no connection to its server. An agent that cannot start or exits
+non-zero hands over to the next; a timeout stops the repair, since that agent was working.
+Each run is limited to file tools (no Bash, git, or network; Pi also runs without extensions,
+skills, MCP or context files), told to keep
 both upstream changes and fork additions, and capped at 20 minutes. A path that
 still has conflict markers afterwards aborts the update. A build that still fails
 after an agent pass gets another one, up to three, because the build reports only
 its first error and fixing that one often exposes the next. Repair stops early when
 a pass leaves the failure output unchanged. Later passes receive HEAD's marked lines
 for the files edited so far, so their dispositions still cite HEAD line numbers;
-a later report for the same line replaces an earlier one. A non-zero agent exit or
-timeout stops the operation immediately, without another repair pass. Agent spans record the phase, elapsed milliseconds,
+a later report for the same line replaces an earlier one. A timeout, or a non-zero exit from the last agent in the order,
+stops the operation immediately, without another repair pass. Agent spans record the phase, elapsed milliseconds,
 and exit code (null when no exit code was obtained), not prompts or subprocess output.
 
 Files that lost `Fork add-on` lines in the merge also get one agent pass
@@ -179,19 +185,14 @@ prove behavior is preserved.
 
 For a source update with a build, nothing is committed or pushed unless the build
 passes; sidebar sync has no build gate. The merge commit skips hooks so the formatter
-cannot rewrite upstream files. The Claude CLI must be installed and signed in where
+cannot rewrite upstream files. At least one listed agent's CLI must be installed and signed in where
 the desktop app can find it on `PATH`. The desktop's startup shell probe gives up
 after five seconds and is cached, and a launch where it timed out keeps launchd's
 `PATH`, which has neither `claude` nor `vp`. So sync and update re-read `PATH` and
 `TJN_REPO_SYNC_RUNNER` from the login shell (30-second limit) until one read
-succeeds in that app session. Optional environment overrides in that app's
-environment apply to each conflict, marker-repair, and build-repair agent run:
-
-- `T3CODE_MERGE_AGENT_MODEL` passes `--model <model>`.
-- `T3CODE_MERGE_AGENT_EFFORT` passes `--effort <level>`; the CLI help lists `low`,
-  `medium`, `high`, `xhigh`, and `max` (support depends on the installed CLI/model).
-
-Unset or blank values add no flag, preserving the CLI's existing defaults.
+succeeds in that app session. Two environment variables in that app's
+environment predate the setting and still override a Claude Code line's model and effort:
+`T3CODE_MERGE_AGENT_MODEL` and `T3CODE_MERGE_AGENT_EFFORT`. They do not apply to Pi.
 
 ## Guards and installation
 

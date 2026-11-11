@@ -49,8 +49,22 @@ the checkout's `main`, keeps the fork's additions, and builds the app on this Ma
 & Install** replaces the installed app with the new build and removes the old copy and the build
 files.
 
-Conflicts and build breaks that the merge can't settle on its own go to Claude Code, so install it
-and sign in where the app can find it. The merge is committed and a push is attempted before
+Conflicts and build breaks that the merge can't settle on its own go to a repair agent. **Settings
+→ Maintenance → Repair agents** lists the agents to try, in order, one per line: `pi` or `claude`,
+a model, and an effort. The default is Pi on an Anthropic model, then Pi on an OpenAI model, then
+Claude Code:
+
+```text
+pi anthropic/claude-opus-5-5 medium
+pi openai/gpt-6.1-sol medium
+claude claude-opus-5-5 medium
+```
+
+Pi uses the API keys it has stored (`pi auth login <provider> --api-key`), so its runs spend API
+credit; Claude Code uses its own sign-in. An agent that isn't installed, isn't signed in, or has
+run out of credit is skipped for the next line, so keep at least one that is ready where the app
+can find it. Pi's repair sessions are saved like any other Pi session, named `t3 repair` and the
+step, so they show under Other Agents and in Usage. The merge is committed and a push is attempted before
 building, so configured fork hosts can build the same commit alongside this Mac. If the build
 fails, the merge stays in place and the installed app is unchanged; the app attempts to stash
 tracked repair edits as `local source update: unbuilt fixes`. Build fixes are committed only after

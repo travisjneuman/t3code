@@ -62,7 +62,13 @@
       "name": "server settings",
       "registry": "packages/contracts/src/forkServerSettings.ts",
       "hookedFrom": ["packages/contracts/src/settings.ts"],
-      "addons": ["agent-instructions", "save-to-notes", "thread-retention", "session-lifetime"]
+      "addons": [
+        "agent-instructions",
+        "save-to-notes",
+        "thread-retention",
+        "session-lifetime",
+        "upstream-sync"
+      ]
     },
     {
       "name": "client RPC guards",
@@ -1663,6 +1669,7 @@
         "apps/desktop/src/updates/ForkDesktopUpdates.ts",
         "apps/desktop/src/updates/LocalSourceIpc.ts",
         "apps/desktop/src/updates/LocalSourceUpdates.ts",
+        "apps/web/src/source-updates/RepairAgentsSettings.tsx",
         "apps/web/src/source-updates/SidebarSourceSyncButton.tsx",
         "apps/web/src/source-updates/sourceSync.css",
         "apps/web/src/source-updates/sourceUpdateToast.ts",
@@ -1670,6 +1677,7 @@
         "docs/internals/local-source-updates.md",
         "docs/user/fork-updating.md",
         "packages/contracts/src/desktopSourceSync.ts",
+        "packages/contracts/src/repairAgents.ts",
         "scripts/lib/fork-checkout-build-lock.ts"
       ],
       "tests": [

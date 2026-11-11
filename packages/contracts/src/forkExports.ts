@@ -22,6 +22,7 @@ export * from "./hostBackups.ts"; // Fork add-on(host-backups)
 export * from "./existingCheckout.ts"; // Fork add-on(existing-checkout)
 export * from "./threadRetention.ts"; // Fork add-on(thread-retention)
 export * from "./sessionLifetime.ts"; // Fork add-on(session-lifetime)
+export * from "./repairAgents.ts"; // Fork add-on(upstream-sync)
 export * from "./desktopSourceSync.ts"; // Fork add-on(upstream-sync)
 export * from "./desktopHostRelease.ts"; // Fork add-on(host-releases)
 // fork-addons:end

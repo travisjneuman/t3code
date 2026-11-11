@@ -7,6 +7,10 @@
 import { AgentServerSettingsFields, AgentSettingsPatchFields } from "./forkAgentSettings.ts"; // Fork add-on(agent-instructions)
 import { SaveToNotesSettingsFields, SaveToNotesSettingsPatchFields } from "./saveToNotes.ts"; // Fork add-on(save-to-notes)
 import {
+  RepairAgentsSettingsFields, // Fork add-on(upstream-sync)
+  RepairAgentsSettingsPatchFields, // Fork add-on(upstream-sync)
+} from "./repairAgents.ts";
+import {
   SessionLifetimeSettingsFields, // Fork add-on(session-lifetime)
   SessionLifetimeSettingsPatchFields, // Fork add-on(session-lifetime)
 } from "./sessionLifetime.ts";
@@ -20,6 +24,7 @@ export const ForkServerSettingsFields = {
   ...AgentServerSettingsFields, // Fork add-on(agent-instructions)
   ...ThreadRetentionSettingsFields, // Fork add-on(thread-retention)
   ...SessionLifetimeSettingsFields, // Fork add-on(session-lifetime)
+  ...RepairAgentsSettingsFields, // Fork add-on(upstream-sync)
 };
 
 export const ForkServerSettingsPatchFields = {
@@ -27,5 +32,6 @@ export const ForkServerSettingsPatchFields = {
   ...AgentSettingsPatchFields, // Fork add-on(agent-instructions)
   ...ThreadRetentionSettingsPatchFields, // Fork add-on(thread-retention)
   ...SessionLifetimeSettingsPatchFields, // Fork add-on(session-lifetime)
+  ...RepairAgentsSettingsPatchFields, // Fork add-on(upstream-sync)
 };
 // fork-addons:end

@@ -1,4 +1,10 @@
-import { UPSTREAM_SYNC_PROMPT_PREFIX, type DesktopSourceSyncProgress } from "@t3tools/contracts";
+import {
+  type DesktopSourceSyncProgress,
+  type RepairAgent,
+  repairAgentLabel,
+  repairAgentsFromSettings,
+  UPSTREAM_SYNC_PROMPT_PREFIX,
+} from "@t3tools/contracts";
 import {
   buildEnvironmentCaptureCommand,
   listLoginShellCandidates,
@@ -909,26 +915,54 @@ const make = Effect.gen(function* () {
       Effect.map((result) => result.stdout.split("\0").filter((path) => path.length > 0)),
     );
 
+  // The order to try agents in, from the Repair agents setting; read at each repair so a change
+  // applies to the next one. This app's own environment keeps its settings in the state dir.
+  const repairAgents = fileSystem
+    .readFileString(environment.path.join(environment.stateDir, "settings.json"))
+    .pipe(
+      Effect.map(repairAgentsFromSettings),
+      Effect.orElseSucceed(() => repairAgentsFromSettings("")),
+    );
+
   // Conflict/build repair uses file tools only: no git, shell, or network.
   // Load repo settings only; user hooks could commit repairs and the version
   // stamp before the build passes. A successful build gates those commits.
-  const runMergeAgent = Effect.fn("desktop.localSourceUpdates.runMergeAgent")(function* (
-    repo: string,
-    phase: "resolving" | "repairing" | "build-repair",
-    task: string,
-  ) {
-    const startedAt = yield* Clock.currentTimeMillis;
-    yield* Effect.annotateCurrentSpan({ phase, exitCode: null });
-    const model = process.env.T3CODE_MERGE_AGENT_MODEL?.trim();
-    const effort = process.env.T3CODE_MERGE_AGENT_EFFORT?.trim();
-    return yield* runCommand({
-      operation: "merge",
+  const mergeAgentCommand = (agent: RepairAgent, prompt: string, phase: string) => {
+    if (agent.agent === "pi") {
+      return {
+        command: "pi",
+        args: [
+          "-p",
+          prompt,
+          "--model",
+          agent.model,
+          "--thinking",
+          agent.effort,
+          "--tools",
+          "read,edit,write,grep,find,ls",
+          "--no-mcp",
+          "--no-extensions",
+          "--no-skills",
+          "--no-prompt-templates",
+          "--no-context-files",
+          "--no-approve",
+          "--name",
+          `t3 repair ${phase}`,
+        ],
+      };
+    }
+    // The environment overrides predate the setting and still win for Claude Code.
+    const model = process.env.T3CODE_MERGE_AGENT_MODEL?.trim() || agent.model;
+    const effort = process.env.T3CODE_MERGE_AGENT_EFFORT?.trim() || agent.effort;
+    return {
       command: "claude",
       args: [
         "-p",
-        `${MERGE_AGENT_RULES}\n\n${task}`,
-        ...(model ? ["--model", model] : []),
-        ...(effort ? ["--effort", effort] : []),
+        prompt,
+        "--model",
+        model,
+        "--effort",
+        effort,
         "--setting-sources",
         "project,local",
         "--permission-mode",
@@ -944,35 +978,66 @@ const make = Effect.gen(function* () {
         "Grep",
         "Glob",
       ],
-      cwd: repo,
-      outputLimit: phase === "resolving" ? COMMAND_OUTPUT_LIMIT : MARKER_REPORT_OUTPUT_LIMIT,
-    }).pipe(
-      Effect.timeoutOrElse({
-        duration: MERGE_AGENT_TIMEOUT,
-        orElse: () =>
-          Effect.annotateCurrentSpan({ timedOut: true }).pipe(
-            Effect.andThen(
-              makeError(
-                "merge",
-                `the Claude merge agent timed out after ${MERGE_AGENT_TIMEOUT} during ${phase}; no further agent pass will run`,
+    };
+  };
+
+  // An agent that cannot start or exits non-zero (no credits, not signed in, not installed)
+  // hands over to the next one. A timeout stops the repair: that agent was working.
+  const runMergeAgent = Effect.fn("desktop.localSourceUpdates.runMergeAgent")(function* (
+    repo: string,
+    phase: "resolving" | "repairing" | "build-repair",
+    task: string,
+  ) {
+    const startedAt = yield* Clock.currentTimeMillis;
+    yield* Effect.annotateCurrentSpan({ phase, exitCode: null });
+    const agents = yield* repairAgents;
+    const prompt = `${MERGE_AGENT_RULES}\n\n${task}`;
+    return yield* Effect.gen(function* () {
+      const failures: Array<string> = [];
+      for (const agent of agents) {
+        const label = repairAgentLabel(agent);
+        const result = yield* runCommand({
+          operation: "merge",
+          ...mergeAgentCommand(agent, prompt, phase),
+          cwd: repo,
+          outputLimit: phase === "resolving" ? COMMAND_OUTPUT_LIMIT : MARKER_REPORT_OUTPUT_LIMIT,
+        }).pipe(
+          Effect.option,
+          Effect.timeoutOrElse({
+            duration: MERGE_AGENT_TIMEOUT,
+            orElse: () =>
+              Effect.annotateCurrentSpan({ timedOut: true, agent: label }).pipe(
+                Effect.andThen(
+                  makeError(
+                    "merge",
+                    `the merge agent (${label}) timed out after ${MERGE_AGENT_TIMEOUT} during ${phase}; no further agent pass will run`,
+                  ),
+                ),
               ),
-            ),
-          ),
-      }),
-      Effect.flatMap((result) =>
-        Effect.annotateCurrentSpan({ exitCode: result.exitCode }).pipe(
-          Effect.andThen(
-            result.exitCode !== 0
-              ? makeError(
-                  "merge",
-                  `the Claude merge agent exited with code ${result.exitCode} during ${phase}; no further agent pass will run`,
-                )
-              : phase !== "resolving" && result.stdoutTruncated
-                ? makeError("merge", "the merge agent's disposition report was too large to read")
-                : Effect.succeed(result.stdout),
-          ),
-        ),
-      ),
+          }),
+        );
+        if (result._tag === "None") {
+          failures.push(`${label} could not be started`);
+          continue;
+        }
+        yield* Effect.annotateCurrentSpan({ exitCode: result.value.exitCode, agent: label });
+        if (result.value.exitCode !== 0) {
+          failures.push(`${label} exited with code ${result.value.exitCode}`);
+          continue;
+        }
+        if (phase !== "resolving" && result.value.stdoutTruncated) {
+          return yield* makeError(
+            "merge",
+            "the merge agent's disposition report was too large to read",
+          );
+        }
+        return result.value.stdout;
+      }
+      return yield* makeError(
+        "merge",
+        `no merge agent finished during ${phase} (${failures.join("; ")}); no further agent pass will run`,
+      );
+    }).pipe(
       Effect.ensuring(
         Clock.currentTimeMillis.pipe(
           Effect.flatMap((finishedAt) =>
