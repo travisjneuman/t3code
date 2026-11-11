@@ -42,7 +42,9 @@ add-on. Tiers:
 
 `node scripts/fork-addons.ts` writes the add-on table in [`.github/README.md`](../../.github/README.md)
 from the manifest, between its `fork-addons:table` comments, so edit a title or summary in the
-manifest and never in the table. A title links to the page's `###` section of the same name.
+manifest and never in the table. Each add-on's `upstream` says what upstream has for the same need
+today and fills the table's last column: re-read it for the add-ons whose hooked files an upstream
+merge touched, and retire an add-on once upstream covers it. A title links to the page's `###` section of the same name.
 
 A new add-on gets an entry and an id before its first marker. Keep the entry in the same change as
 the code: a new fork-owned file goes into one add-on's `files`, and a new hooked upstream file

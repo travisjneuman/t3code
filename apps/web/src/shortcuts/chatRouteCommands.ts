@@ -14,6 +14,7 @@ import {
   resolveDefaultProjectRef,
 } from "../hooks/useHandleNewThread";
 import { createScratchProjectActions } from "../hooks/useScratchProject";
+import { startInDefaultProject } from "../default-project/defaultProject"; // Fork add-on(default-project)
 import { getClientSettings } from "../hooks/useSettings";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
@@ -133,12 +134,21 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       "chat.new": (event) => {
         // Fork add-on(no-project-start): like the sidebar's New thread button, start in No project.
         const { activeThread, activeDraftThread } = readThreadContext(); // Fork add-on(no-project-start)
-        const scratchTarget = scratch.scratchEnvironmentId( // Fork add-on(no-project-start)
+        // Fork add-on(default-project): the shortcut starts in the chosen default project.
+        const startedInDefaultProject = startInDefaultProject(
+          readProjectGroups(), // Fork add-on(default-project)
+          { activeThread, activeDraftThread, handleNewThread }, // Fork add-on(default-project)
+          appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on(default-project)
+        ); // Fork add-on(default-project)
+        if (startedInDefaultProject) return claim(event); // Fork add-on(default-project)
+        const scratchTarget = scratch.scratchEnvironmentId(
+          // Fork add-on(no-project-start)
           activeThread?.environmentId ?? // Fork add-on(no-project-start)
             activeDraftThread?.environmentId ?? // Fork add-on(no-project-start)
             appAtomRegistry.get(primaryEnvironmentIdAtom), // Fork add-on(no-project-start)
         ); // Fork add-on(no-project-start)
-        if (scratchTarget !== null) { // Fork add-on(no-project-start)
+        if (scratchTarget !== null) {
+          // Fork add-on(no-project-start)
           claim(event); // Fork add-on(no-project-start)
           void scratch.startScratchThread(scratchTarget); // Fork add-on(no-project-start)
           return; // Fork add-on(no-project-start)

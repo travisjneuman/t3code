@@ -128,6 +128,7 @@ import {
 } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useScratchThreadClick } from "../fork-sidebar/useScratchThreadClick"; // Fork add-on(no-project-start): scratch-thread action.
+import { startInDefaultProject } from "../default-project/defaultProject"; // Fork add-on(default-project)
 import { isBulkThreadMenuId, useBulkThreadMenu } from "../fork-sidebar/useBulkThreadMenu"; // Fork add-on(multi-select-menu)
 import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
 import { useProjectPin } from "../hooks/useProjectGroupUpdate";
@@ -2326,6 +2327,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       );
       if (threadKeys.length === 0) return;
       const count = threadKeys.length;
+      // oxlint-disable-next-line react/purity -- runs in an event handler (oxc#27309). Fork add-on(multi-select-menu): the fork's lines in this handler surface the false positive.
       const selectionNow = new Date();
       const selectedThreads = threadKeys.flatMap((threadKey) => {
         const thread = threadByKeyRef.current.get(threadKey);
@@ -2356,6 +2358,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         pinnedCount: pinnedSelectedThreads.length,
       });
       // Presets sync across environments, so the first selected thread's stand for all.
+      // oxlint-disable-next-line react/purity -- runs in an event handler (oxc#27309). Fork add-on(multi-select-menu): the fork's lines in this handler surface the false positive.
       const menuOpenedAt = new Date();
       const snoozePresets = resolveSnoozePresets(
         menuOpenedAt,
@@ -3031,6 +3034,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const showJumpHints = useThreadJumpHintsVisible(shouldShowJumpHintsNow);
 
   const handleNewThreadClick = (event?: ReactMouseEvent) => {
+    // Fork add-on(default-project): a plain click starts in the chosen default project.
+    if (startInDefaultProject(projectGroups, newThreadContext, primaryEnvironmentId, event)) {
+      if (isMobile) setOpenMobile(false); // Fork add-on(default-project)
+      return; // Fork add-on(default-project)
+    } // Fork add-on(default-project)
     if (startScratchThreadOnClick(event)) return; // Fork add-on(no-project-start): plain click starts in No project; Shift keeps the current project.
     if (
       shouldCreateNewThreadInCurrentProject(
@@ -3697,7 +3705,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           className={cn(AGENT_MORE_BUTTON_CLASS, "disabled:cursor-default")} // Fork add-on(compact-cards)
                         >
                           {/* Plus means "add", so revealing more uses a chevron. */}
-                          <ChevronDownIcon aria-hidden className={AGENT_LINE_ICON_CLASS} /* Fork add-on(compact-cards) */ />
+                          <ChevronDownIcon
+                            aria-hidden
+                            className={AGENT_LINE_ICON_CLASS} /* Fork add-on(compact-cards) */
+                          />
                           {olderSettledShelf.loading
                             ? "Loading"
                             : olderSettledShelf.failed
@@ -3744,7 +3755,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
           {!isSearchingThreads ? <HermesSidebarSection /> : null /* Fork add-on(hermes) */}
           {!isSearchingThreads ? <OpenBotSidebarSection /> : null /* Fork add-on(openbot) */}
-          {!isSearchingThreads ? <ExternalSessionsSidebarSection /> : null /* Fork add-on(other-agents) */}
+          {
+            !isSearchingThreads ? (
+              <ExternalSessionsSidebarSection />
+            ) : null /* Fork add-on(other-agents) */
+          }
         </SidebarGroup>
       </SidebarContent>
       <SidebarChromeFooter />

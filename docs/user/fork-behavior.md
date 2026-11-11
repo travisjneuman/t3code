@@ -19,6 +19,11 @@ project with your [new-thread defaults](thread-sidebar.md#start-a-thread), Shift
 or press `mod+shift+n` (`chat.newLocal`). `chat.newWithoutProject` (`mod+alt+n`) always starts
 without a project.
 
+To start new threads in a project instead, open it in **Settings → Projects** and turn on
+**Start new threads here**. The button and `mod+n` then start there, on the current thread's
+machine when the project is on it. The choice is kept on this device; turn it off to go back to
+starting without a project.
+
 ## Connected fork hosts follow the desktop app's local builds
 
 Fork hosts update only to the version the source-built desktop app's last successful host build
@@ -149,6 +154,12 @@ only runs when you press **Search**.
 **No project** shows once in Settings and the command palette, as in the sidebar, and can't be
 removed: every machine keeps its own.
 
+A project's icon follows it to every machine. Upstream writes an icon to the checkouts connected
+when you pick it, so a machine added later shows the plain monogram. Here a checkout with no icon
+of its own shows the one chosen on another machine's checkout of the same project. An image icon
+is read from each machine's own checkout by the same path, so it shows where that file exists.
+Checkouts that were given different icons keep their own.
+
 ## Subagents sit under their thread
 
 A thread that started subagents, through `delegate_task` or the provider's own subagent tool, shows
@@ -241,7 +252,7 @@ turns it off and takes it out of the list. To bring it back, choose it under **A
 
 Upstream signs a paired app out after 30 days, and [a link to another environment](remote-access.md#link-another-environment)
 lasts 30 days. In this fork both last 3,650 days. Change it under **Session lifetime** in
-**Settings → Connections**; the setting is stored on each machine, so leave **All environments**
+**Settings → Maintenance**; the setting is stored on each machine, so leave **All environments**
 selected to change every connected machine at once. The lifetime is fixed when a session starts:
 pair or link again to give an existing session the new one. To end a session sooner, revoke it
 in **Settings → Sharing & access**. [Outside agents](outside-agents.md) signed in through OAuth

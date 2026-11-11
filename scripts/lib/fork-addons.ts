@@ -29,6 +29,8 @@ export interface AddOn {
   readonly tier: string;
   readonly title: string;
   readonly summary: string;
+  /** What upstream has for the same need today. */
+  readonly upstream: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly files: ReadonlyArray<string>;
   readonly tests?: ReadonlyArray<string>;
@@ -221,12 +223,13 @@ export const withAddOnTable = (readme: string, manifest: Manifest): string => {
     readme.split("\n").flatMap((line) => (line.startsWith("### ") ? [line.slice(4).trim()] : [])),
   );
   const rows = [
-    ["Id", "Tier", "Add-on", "What it does"],
-    ...manifest.addons.map(({ id, tier, title, summary }) => [
+    ["Id", "Tier", "Add-on", "What it does", "Upstream T3 Code today"],
+    ...manifest.addons.map(({ id, tier, title, summary, upstream }) => [
       `\`${id}\``,
       tier,
       headings.has(title) ? `[${title}](#${headingAnchor(title)})` : title,
       summary.replace(/\|/g, "\\|"),
+      upstream.replace(/\|/g, "\\|"),
     ]),
   ];
   const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));

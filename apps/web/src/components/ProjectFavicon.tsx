@@ -11,6 +11,7 @@ import { projectFaviconUrlAtom } from "../state/assets";
 import { deriveProjectIdentity } from "../projectIdentity";
 import { projectIconColorClassName } from "../projectIconColors";
 import { ProjectMonogram } from "./ProjectMonogram";
+import { useProjectWithInheritedIcon } from "../project-icons/inheritedProjectIcon"; // Fork add-on(project-icons)
 import { cn } from "~/lib/utils";
 
 // All lucide icons load as one chunk, only once a project uses a lucide override.
@@ -37,7 +38,7 @@ export function ProjectFavicon(input: {
   className?: string | undefined;
   fallbackIcon?: ComponentType<{ className?: string }>;
 }) {
-  const { project } = input;
+  const project = useProjectWithInheritedIcon(input.project); // Fork add-on(project-icons): another machine's icon for the same project.
   if (project.projectIcon?.kind === "monogram") {
     return (
       <ProjectMonogram
@@ -74,7 +75,7 @@ export function ProjectFavicon(input: {
       </span>
     );
   }
-  return <AutomaticProjectFavicon {...input} />;
+  return <AutomaticProjectFavicon {...input} project={project} />; // Fork add-on(project-icons)
 }
 
 function AutomaticProjectFavicon(input: Parameters<typeof ProjectFavicon>[0]) {

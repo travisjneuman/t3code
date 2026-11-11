@@ -45,7 +45,6 @@ import { FoldedSettingsSection } from "./FoldedSettingsSection";
 import { LinkedEnvironmentsSettings } from "./LinkedEnvironmentsSettings";
 import { usePeerLinkHosts } from "~/state/peerLinks";
 import { LoadBalancingSettings } from "./LoadBalancingSettings";
-import { SessionLifetimeSettings } from "../../session-lifetime/SessionLifetimeSettings"; // Fork add-on(session-lifetime)
 import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";
 import { Input } from "../ui/input";
 import {
@@ -1666,7 +1665,6 @@ function ConnectionsSettingsContent({
           isSearchTarget={index === 0}
         />
       ))}
-      <SessionLifetimeSettings /> {/* Fork add-on(session-lifetime) */}
       <LoadBalancingSettings environments={loadBalancingEnvironments} />
       <PullRequestRoutingSettings environments={loadBalancingEnvironments} />
     </SettingsPageContainer>

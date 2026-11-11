@@ -51,6 +51,7 @@ import {
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { CheckoutUnlinkButton, ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on(project-links)
+import { DefaultProjectRow } from "../../default-project/defaultProject"; // Fork add-on(default-project)
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
@@ -419,7 +420,12 @@ function ProjectDetail({
       <div className="min-w-0 flex-1 @min-[32rem]/settings-row:w-72 @min-[32rem]/settings-row:flex-none">
         <CheckoutGroupingSelect member={member} />
       </div>
-      <CheckoutUnlinkButton group={group} member={member} canEdit={editableIds.has(member.environmentId)} />{/* Fork add-on(project-links) */}
+      <CheckoutUnlinkButton
+        group={group}
+        member={member}
+        canEdit={editableIds.has(member.environmentId)}
+      />
+      {/* Fork add-on(project-links) */}
       {hasMultipleCheckouts ? (
         <Button
           size="sm"
@@ -433,7 +439,8 @@ function ProjectDetail({
       ) : null}
     </div>
   );
-  const checkoutRows = ( // Fork add-on(project-links): The rows also render inside ProjectMachineLinks' section.
+  const checkoutRows = (
+    // Fork add-on(project-links): The rows also render inside ProjectMachineLinks' section.
     <>
       <p className="px-3 py-2.5 text-xs text-muted-foreground sm:px-4">
         Grouping rule decides how each checkout joins project groups in the sidebar. Changing it can
@@ -655,10 +662,17 @@ function ProjectDetail({
               />
             </>
           ) : null}
+          {representative.isScratch ? null : <DefaultProjectRow projectKey={group.projectKey} />}
+          {/* Fork add-on(default-project) */}
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
-        {hasOtherMembers ? checkoutChoices : <ProjectMachineLinks group={group} canEdit={canEditGroup} checkoutRows={checkoutRows} />}{/* Fork add-on(project-links): One Checkouts section with the link and add rows. */}
+        {hasOtherMembers ? (
+          checkoutChoices
+        ) : (
+          <ProjectMachineLinks group={group} canEdit={canEditGroup} checkoutRows={checkoutRows} />
+        )}
+        {/* Fork add-on(project-links): One Checkouts section with the link and add rows. */}
         {representative.isScratch ? null /* Fork add-on(no-project-start): each server keeps one No project. */ : (
           <SettingsSection title="Danger">
             <SettingsRow

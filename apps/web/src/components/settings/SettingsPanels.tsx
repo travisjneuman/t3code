@@ -106,6 +106,7 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { SaveToNotesSettingsRows } from "../../save-to-notes/SaveToNotesSettings"; // Fork add-on(save-to-notes)
+import { SessionLifetimeSettings } from "../../session-lifetime/SessionLifetimeSettings"; // Fork add-on(session-lifetime)
 import { AgentInstructionsSettingsSection } from "../../agent-instructions/AgentInstructionsSettings"; // Fork add-on(agent-instructions)
 /* Fork add-on(upstream-sync) */ import {
   SOURCE_UPDATE_ACTION_LABELS, // Fork add-on(upstream-sync)
@@ -2034,13 +2035,10 @@ export function MaintenanceSettingsPanel() {
           }
         />
       </SettingsSection>
-
       <SettingsSection id="background" title="Background activity">
         <BackgroundActivitySettingsRow />
       </SettingsSection>
-
       <StorageCleanupSections />
-
       <SettingsSection id="diagnostics-section" title="Diagnostics">
         <SettingsRow
           {...searchableSetting("diagnostics")}
@@ -2062,6 +2060,7 @@ export function MaintenanceSettingsPanel() {
           }
         />
       </SettingsSection>
+      <SessionLifetimeSettings /> {/* Fork add-on(session-lifetime) */}
     </SettingsPageContainer>
   );
 }
