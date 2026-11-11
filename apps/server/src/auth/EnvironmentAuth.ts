@@ -42,6 +42,7 @@ import * as EnvironmentAuthPolicy from "./EnvironmentAuthPolicy.ts";
 import * as PairingGrantStore from "./PairingGrantStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as SessionStore from "./SessionStore.ts";
+import { sessionLifetime } from "./forkSessionLifetime.ts"; // Fork add-on(session-lifetime)
 import { REUSABLE_DEV_SESSION_EXPIRES_AT, resolveReusableDevAuth } from "./ReusableDevAuth.ts";
 import { verifyRequestDpopProof } from "./dpop.ts";
 import { DESKTOP_RENDERER_ORIGINS } from "../httpCors.ts";
@@ -1344,7 +1345,10 @@ export const make = Effect.gen(function* () {
         subject: MCP_CLIENT_SUBJECT,
         method: "bearer-access-token",
         scopes: mcpClientScopes(input.access),
-        ttl: MCP_CLIENT_SESSION_TTL,
+        // Fork add-on(session-lifetime): a link lasts as long as an app session; outside agents keep upstream's lifetime.
+        ttl: input.peerLink
+          ? sessionLifetime(config.settingsPath, MCP_CLIENT_SESSION_TTL) // Fork add-on(session-lifetime)
+          : MCP_CLIENT_SESSION_TTL,
         ...(input.access === "read-only" ? {} : { runtimeModeCeiling: input.access }),
         peerLink: input.peerLink,
         client: { ...input.client, label: input.label, deviceType: "bot" },

@@ -19,8 +19,11 @@ export const MAINTENANCE_QUEUE_WS_METHODS = {
   releaseProviderSessions: "maintenanceQueue.releaseProviderSessions",
 } as const;
 
-/** How long a target must stay without active sessions before a queued update runs. */
-export const MAINTENANCE_QUEUE_IDLE_MS = 2 * 60 * 1000;
+/**
+ * How long a target must stay quiet before a queued update runs. Zero: updates run at once.
+ * Only work running on this machine still holds one (the app's restart, a mid-turn provider).
+ */
+export const MAINTENANCE_QUEUE_IDLE_MS = 0;
 
 const BUSY_RUN_STATUSES: ReadonlySet<string> = new Set([
   "preparing",

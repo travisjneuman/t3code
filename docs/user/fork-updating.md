@@ -95,25 +95,23 @@ For release-based server updates, set `T3CODE_RELEASE_REPOSITORY=owner/name` or
 `T3CODE_RELEASE_BASE_URL=https://github.com/<owner>/<name>/releases/download` on the host;
 update discovery follows that source.
 
-## Updates wait for active sessions
+## Updates run at once
 
-Provider updates, T3 server updates, and the app's own restart into a new version wait while
-the sessions they would interrupt are active. A session is active while it is running or waiting
-for an approval or your input; paused and stopped sessions don't hold anything up, and neither
-does a question an agent left open after finishing its turn. A Hermes
-Agent counts as active while its gateway is busy or any of its agents are running. A provider
-update waits only for that provider's sessions on that machine, and a server or app update waits
-for every session it would restart.
+A T3 server update and a provider update on another machine start as soon as they are asked
+for, whatever that machine's sessions are doing. Threads a restart interrupts resume by
+themselves when [Continue threads after restarts](updating.md#before-you-update) is on, which
+is the default.
 
-A waiting update shows in the sidebar as **Waiting for N active sessions on** the machine's
-name, and runs by itself once those sessions have stayed idle for 2 minutes. After the app starts
-or a machine reconnects, it shows **Waiting for** the machine **to stay idle** for those first 2
-minutes while it gets that machine's current sessions. **Update now** runs
-it right away; **Cancel** drops it, and a downloaded app update stays ready for the update
-button. If an update is still waiting after 4 hours, you get one notification.
+Two updates still wait, both for work running on this machine right now:
 
-Before a provider update runs on this machine, that provider's idle sessions are closed so it
-can restart cleanly. The app's restart is held the same way whoever asks for it, including
-**Update everything**, a remote client, or an agent. Waiting server and provider updates are
-remembered by the browser or app window that queued them, which checks again when the computer
-wakes or the machine reconnects; a waiting app restart is forgotten if you quit the app.
+- The app's own restart into a new version waits while a session on this machine is running or
+  waiting for an approval or your input, whoever asks for the restart, including **Update
+  everything**, a remote client, or an agent. A Hermes Agent counts while its gateway is busy or
+  any of its agents are running. Paused and stopped sessions hold nothing up.
+- A provider update on this machine first closes that provider's idle sessions so it can restart
+  cleanly, and waits only while one of them is in the middle of a turn.
+
+A waiting update shows in the sidebar as **Waiting for N active sessions on** this machine's
+name and runs as soon as they finish. **Update now** runs it right away; **Cancel** drops it, and
+a downloaded app update stays ready for the update button. If an update is still waiting after 4
+hours, you get one notification. A waiting app restart is forgotten if you quit the app.

@@ -26,9 +26,9 @@ staged. **Update** pushes the fork, then builds the Mac app and every host liste
 host inventory in parallel, from the same commit; each host builds and stages its own server
 ([fork host builds](../operations/fork-host-releases.md)). Without that inventory, host builds are
 off and **Update** only builds the app. Once every configured host has staged the build, the app
-queues each connected boot-service fork host for that version, waiting until its sessions are
-idle. List every host you connect in the inventory: a connected host outside it is offered the
-same version without having staged it. If a host build fails, a notice names the log and offers
+updates each connected boot-service fork host to that version at once. List every host you
+connect in the inventory: a connected host outside it is offered the same version without having
+staged it. If a host build fails, a notice names the log and offers
 **Retry** for the same commit. Rows show a fork build as the version plus `(fork <commit>)`. The
 desktop app's own server is never compared with a host build: it ships inside the app, so it
 offers a server update only when its version differs from the app's.
@@ -237,12 +237,15 @@ Built-in providers other than Codex and Claude, such as Cursor, OpenCode, Muse C
 a delete button in their settings under **Settings → Providers**. Deleting one clears its settings,
 turns it off and takes it out of the list. To bring it back, choose it under **Add provider**.
 
-## Claude updates follow Claude's own release channel
+## Sessions and links last ten years
 
-Claude Code installed with Anthropic's native installer updates itself with `claude update`, which
-reads Anthropic's release channel. That channel can trail the npm package by a few days, so T3 Code
-offers a Claude update only when the channel has one. Set `autoUpdatesChannel` to `stable` in
-Claude's `settings.json` to follow the stable channel instead of the latest one.
+Upstream signs a paired app out after 30 days, and [a link to another environment](remote-access.md#link-another-environment)
+lasts 30 days. In this fork both last 3,650 days. Change it under **Session lifetime** in
+**Settings → Connections**; the setting is stored on each machine, so leave **All environments**
+selected to change every connected machine at once. The lifetime is fixed when a session starts:
+pair or link again to give an existing session the new one. To end a session sooner, revoke it
+in **Settings → Sharing & access**. [Outside agents](outside-agents.md) signed in through OAuth
+keep upstream's 30 days.
 
 ## Wrapper scripts can name the install they run
 

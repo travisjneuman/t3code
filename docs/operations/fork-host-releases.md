@@ -60,8 +60,8 @@ result file, even if other hosts completed. **Retry** repeats the host build for
 SHA; it does not choose a newer commit. On success, `host-fleet-build-result.json` contains both the
 full `commit` SHA and `targetVersion`. The desktop accepts it only when the commit matches the saved
 build request, the target version has that commit's SHA prefix, and every configured host reports that
-same target. It then queues the existing host update flow. That flow waits for the host's sessions to
-stay idle before it restarts the server. A failed or cancelled host activation does not trigger another
+same target. It then queues the existing host update flow, which restarts each connected host's server at
+once. A failed or cancelled host activation does not trigger another
 build; retry that host's activation through **Settings → Connections**. Press the desktop's overall
 **Update** again only when you want a new source commit built.
 
@@ -94,7 +94,7 @@ of a build that an orphaned run left going. A lock counts as live only while its
 since the current boot, so a restart never leaves a reused PID holding it. An interrupted `prune` or
 `rollback` still refuses until its journal has been read, because a service may be stopped.
 
-Hosts activate staged builds through the existing idle-aware update queue. After a successful
+Hosts activate staged builds through the existing update queue. After a successful
 commit, the runtime manager removes older runtime versions according to its commit/retention rules.
 After rollback, the failed candidate runtime is removed separately from successful-commit pruning.
 During a pending update, the active runtime and the temporary T3 database recovery copy remain

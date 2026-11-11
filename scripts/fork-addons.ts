@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - a plain Node script, so it runs before `vp i` too.
 // Fork add-on(core): applies fork/addons.config.json to the registries' generated regions and
-// to FORK_ADDONS. Run `node scripts/fork-addons.ts` after changing the config, then rebuild.
+// to FORK_ADDONS, and writes the landing page's add-on table from fork/addons.json. Run
+// `node scripts/fork-addons.ts` after changing the config or the manifest, then rebuild.
 // See docs/internals/fork-add-ons.md.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -9,11 +10,13 @@ import {
   CAPABILITIES_PATH,
   markerIds,
   readManifest,
+  README_PATH,
   readRequestedAddOns,
   resolveAddOns,
   ROOT,
   selectionBlockers,
   selectRegions,
+  withAddOnTable,
   withForkAddOns,
 } from "./lib/fork-addons.ts";
 
@@ -55,5 +58,13 @@ for (const file of registries) {
   NodeFS.writeFileSync(NodePath.join(ROOT, file), after);
   changed += 1;
   console.log(`updated ${file}`);
+}
+// The landing page lists every add-on, whatever this build includes.
+const readme = read(README_PATH);
+const readmeWithTable = withAddOnTable(readme, manifest);
+if (readmeWithTable !== readme) {
+  NodeFS.writeFileSync(NodePath.join(ROOT, README_PATH), readmeWithTable);
+  changed += 1;
+  console.log(`updated ${README_PATH}`);
 }
 console.log(`${included.size} add-ons including core; ${changed} files changed.`);

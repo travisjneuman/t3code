@@ -26,6 +26,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as AuthSessions from "../persistence/AuthSessions.ts";
 import * as PayloadSigner from "./PayloadSigner.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
+import { sessionLifetime } from "./forkSessionLifetime.ts"; // Fork add-on(session-lifetime)
 import {
   REUSABLE_DEV_SESSION_EXPIRES_AT,
   REUSABLE_DEV_SESSION_PREFIX,
@@ -650,7 +651,9 @@ const make = Effect.gen(function* () {
       );
       const issuedAt = yield* DateTime.now;
       const expiresAt = DateTime.add(issuedAt, {
-        milliseconds: Duration.toMillis(input?.ttl ?? DEFAULT_SESSION_TTL),
+        milliseconds: Duration.toMillis(
+          input?.ttl ?? sessionLifetime(serverConfig.settingsPath, DEFAULT_SESSION_TTL), // Fork add-on(session-lifetime)
+        ),
       });
       const claims: SessionClaims = {
         v: 1,

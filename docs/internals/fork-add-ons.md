@@ -40,6 +40,10 @@ add-on. Tiers:
 - `distribution`: how the fork is named, built, signed, installed and updated.
 - `personal`: the owner's own host tooling and instructions; skip these when adopting add-ons.
 
+`node scripts/fork-addons.ts` writes the add-on table in [`.github/README.md`](../../.github/README.md)
+from the manifest, between its `fork-addons:table` comments, so edit a title or summary in the
+manifest and never in the table. A title links to the page's `###` section of the same name.
+
 A new add-on gets an entry and an id before its first marker. Keep the entry in the same change as
 the code: a new fork-owned file goes into one add-on's `files`, and a new hooked upstream file
 into its `hooks`. A registry importing an add-on registers it, so those imports are not counted in

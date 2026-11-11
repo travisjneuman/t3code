@@ -28,6 +28,7 @@
         "maintenance-queue",
         "existing-checkout",
         "thread-retention",
+        "session-lifetime",
         "host-backups",
         "upstream-sync",
         "host-releases"
@@ -61,7 +62,7 @@
       "name": "server settings",
       "registry": "packages/contracts/src/forkServerSettings.ts",
       "hookedFrom": ["packages/contracts/src/settings.ts"],
-      "addons": ["agent-instructions", "save-to-notes", "thread-retention"]
+      "addons": ["agent-instructions", "save-to-notes", "thread-retention", "session-lifetime"]
     },
     {
       "name": "client RPC guards",
@@ -908,7 +909,7 @@
       "id": "maintenance-queue",
       "tier": "feature",
       "title": "Maintenance queue",
-      "summary": "Server and provider updates wait in one queue that closes idle sessions first and counts this app.",
+      "summary": "Updates run at once through one queue; a provider update closes its idle sessions first, and the app's own restart waits for sessions running on this machine.",
       "docs": ["docs/user/fork-behavior.md"],
       "dependsOn": ["core", "hermes"],
       "surfaces": ["contracts", "desktop", "server", "web"],
@@ -1014,6 +1015,28 @@
       "data": {
         "settings": ["thread retention fields (threadRetention.ts)"],
         "wire": ["capability threadRetention"]
+      }
+    },
+    {
+      "id": "session-lifetime",
+      "tier": "feature",
+      "title": "Session lifetime",
+      "summary": "A setting for how many days paired apps and linked environments stay signed in; ten years by default.",
+      "docs": ["docs/user/fork-behavior.md"],
+      "dependsOn": [],
+      "surfaces": ["contracts", "server", "web"],
+      "files": [
+        "apps/server/src/auth/forkSessionLifetime.ts",
+        "apps/web/src/session-lifetime/SessionLifetimeSettings.tsx",
+        "packages/contracts/src/sessionLifetime.ts"
+      ],
+      "hooks": [
+        "apps/server/src/auth/EnvironmentAuth.ts",
+        "apps/server/src/auth/SessionStore.ts",
+        "apps/web/src/components/settings/ConnectionsSettings.tsx"
+      ],
+      "data": {
+        "settings": ["sessionLifetimeDays (sessionLifetime.ts)"]
       }
     },
     {
@@ -1290,17 +1313,6 @@
         "apps/desktop/src/backend/tailscaleEndpointProvider.ts",
         "apps/web/src/components/settings/AuthorizedClientsSettings.tsx"
       ]
-    },
-    {
-      "id": "claude-release-channel",
-      "tier": "feature",
-      "title": "Claude release channel",
-      "summary": "Claude updates follow Claude's own release channel.",
-      "docs": ["docs/user/fork-behavior.md"],
-      "dependsOn": [],
-      "surfaces": ["server"],
-      "files": [],
-      "hooks": ["apps/server/src/provider/Drivers/ClaudeDriver.ts"]
     },
     {
       "id": "removable-providers",

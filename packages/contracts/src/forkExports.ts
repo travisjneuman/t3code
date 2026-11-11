@@ -21,6 +21,7 @@ export * from "./threadExchanges.ts"; // Fork add-on(save-to-notes,compare-agent
 export * from "./hostBackups.ts"; // Fork add-on(host-backups)
 export * from "./existingCheckout.ts"; // Fork add-on(existing-checkout)
 export * from "./threadRetention.ts"; // Fork add-on(thread-retention)
+export * from "./sessionLifetime.ts"; // Fork add-on(session-lifetime)
 export * from "./desktopSourceSync.ts"; // Fork add-on(upstream-sync)
 export * from "./desktopHostRelease.ts"; // Fork add-on(host-releases)
 // fork-addons:end

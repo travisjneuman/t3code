@@ -45,6 +45,7 @@ import { FoldedSettingsSection } from "./FoldedSettingsSection";
 import { LinkedEnvironmentsSettings } from "./LinkedEnvironmentsSettings";
 import { usePeerLinkHosts } from "~/state/peerLinks";
 import { LoadBalancingSettings } from "./LoadBalancingSettings";
+import { SessionLifetimeSettings } from "../../session-lifetime/SessionLifetimeSettings"; // Fork add-on(session-lifetime)
 import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";
 import { Input } from "../ui/input";
 import {
@@ -284,6 +285,7 @@ function ConnectionsSettingsContent({
   }));
   const hostUpdateTarget = useHostUpdateTarget(); // Fork add-on(host-releases)
   const refreshHostUpdateTarget = useRefreshHostUpdateTarget(); // Fork add-on(host-releases)
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-reads the desktop bridge's host build status, which lives outside React, when this page opens
   useEffect(() => refreshHostUpdateTarget(), [refreshHostUpdateTarget]); // Fork add-on(host-releases)
   const savedServerUpdateTargets = savedServerUpdateStates.flatMap(
     ({ environment, updateStatus }): ServerUpdateTarget[] => {
@@ -1620,7 +1622,11 @@ function ConnectionsSettingsContent({
           </div>
         }
       >
-        {listedEnvironments.length > 0 ? <HostReleaseCheckNotice /> : null /* Fork add-on(host-releases) */}
+        {
+          listedEnvironments.length > 0 ? (
+            <HostReleaseCheckNotice />
+          ) : null /* Fork add-on(host-releases) */
+        }
         {listedEnvironments.map((environment) => (
           <SavedBackendListRow
             key={environment.environmentId}
@@ -1660,6 +1666,7 @@ function ConnectionsSettingsContent({
           isSearchTarget={index === 0}
         />
       ))}
+      <SessionLifetimeSettings /> {/* Fork add-on(session-lifetime) */}
       <LoadBalancingSettings environments={loadBalancingEnvironments} />
       <PullRequestRoutingSettings environments={loadBalancingEnvironments} />
     </SettingsPageContainer>

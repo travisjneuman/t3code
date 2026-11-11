@@ -16,6 +16,10 @@ const EXPORT_ONLY = "export only";
 const OFF = "// fork-addons:off ";
 const MARKER = /Fork add-on\(([^)]*)\)/g;
 export const CAPABILITIES_PATH = "packages/contracts/src/forkCapabilities.ts";
+/** The public landing page, whose add-on table is written from the manifest. */
+export const README_PATH = ".github/README.md";
+const README_TABLE =
+  /(<!-- fork-addons:table:begin -->\n\n)[\s\S]*?(\n\n<!-- fork-addons:table:end -->)/;
 const FORK_ADDONS = /export const FORK_ADDONS = \[[^\]]*\] as const;/;
 /** A multi-line import or export whose every name was dropped. */
 const EMPTY_SPECIFIERS = /^[ \t]*(?:import|export)(?: type)? \{\n[ \t]*\} from [^\n]*\n/gm;
@@ -23,6 +27,8 @@ const EMPTY_SPECIFIERS = /^[ \t]*(?:import|export)(?: type)? \{\n[ \t]*\} from [
 export interface AddOn {
   readonly id: string;
   readonly tier: string;
+  readonly title: string;
+  readonly summary: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly files: ReadonlyArray<string>;
   readonly tests?: ReadonlyArray<string>;
@@ -107,9 +113,7 @@ export function withForkAddOns(text: string, manifest: Manifest, included: Reado
 }
 
 export const markerIds = (line: string) =>
-  [...line.matchAll(MARKER)].flatMap((match) =>
-    (match[1] ?? "").split(",").map((id) => id.trim()),
-  );
+  [...line.matchAll(MARKER)].flatMap((match) => (match[1] ?? "").split(",").map((id) => id.trim()));
 
 export const hasRegions = (text: string) => text.includes(REGION_BEGIN);
 
@@ -199,3 +203,39 @@ export function selectionBlockers(
   }
   return blockers;
 }
+
+/** GitHub's anchor for a heading: lowercase, punctuation dropped, spaces to hyphens. */
+const headingAnchor = (heading: string) =>
+  heading
+    .toLowerCase()
+    .replace(/[^a-z0-9 -]/g, "")
+    .replace(/ /g, "-");
+
+/**
+ * The landing page with its add-on table rewritten from the manifest, one row per add-on in
+ * manifest order, so the table cannot drift from it. A title links to its section when the
+ * page has a `###` heading of the same name. Columns are padded the way the formatter pads them.
+ */
+export const withAddOnTable = (readme: string, manifest: Manifest): string => {
+  const headings = new Set(
+    readme.split("\n").flatMap((line) => (line.startsWith("### ") ? [line.slice(4).trim()] : [])),
+  );
+  const rows = [
+    ["Id", "Tier", "Add-on", "What it does"],
+    ...manifest.addons.map(({ id, tier, title, summary }) => [
+      `\`${id}\``,
+      tier,
+      headings.has(title) ? `[${title}](#${headingAnchor(title)})` : title,
+      summary.replace(/\|/g, "\\|"),
+    ]),
+  ];
+  const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));
+  const line = (cells: ReadonlyArray<string>) =>
+    `| ${cells.map((cell, column) => cell.padEnd(widths[column]!)).join(" | ")} |`;
+  const table = [
+    line(rows[0]!),
+    line(widths.map((width) => "-".repeat(width))),
+    ...rows.slice(1).map(line),
+  ].join("\n");
+  return readme.replace(README_TABLE, (_, begin: string, end: string) => `${begin}${table}${end}`);
+};
