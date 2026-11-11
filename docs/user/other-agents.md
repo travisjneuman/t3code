@@ -23,6 +23,21 @@ how much of its context window it has used, and the files it changed, with lines
 removed. Files are read from the end of the session's transcript, so a very long session notes
 that earlier changes were not read.
 
+## Where T3 looks
+
+Each machine's T3 server reads the default session folders of the account it runs as, on that
+machine: `~/.claude/projects` (Claude Code), `~/.codex/sessions` (Codex), `~/.grok/sessions`
+(Grok), `~/.pi/agent/sessions` (Pi) and `~/.gemini/antigravity-cli` (Antigravity).
+
+Sessions kept anywhere else are not listed:
+
+- a home moved with `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME` or Pi's directory variables,
+  or a provider instance in T3 with its own home folder;
+- another user account on the machine, or a Linux home inside WSL on a Windows machine;
+- sessions Codex has archived, which it moves out of `sessions`;
+- agents without an adapter, such as OpenCode, Cursor, Gemini CLI, Kiro, Muse Code and Copilot
+  CLI. [Usage](usage.md) counts several of them; this list does not show them.
+
 ## Continue a session in T3
 
 To keep working on a Claude, Codex, Grok or Pi session in T3, stop it in the other app, then

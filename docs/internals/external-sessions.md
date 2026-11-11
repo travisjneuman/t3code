@@ -7,6 +7,11 @@ in T3, which binds an ordinary thread to that same session.
 
 ## Decisions
 
+- **The list reads each agent's default home only.** Every source builds its path from the
+  server user's home directory. Continue already matches a transcript to a provider instance by
+  that instance's configured home, its `CODEX_HOME`, `CLAUDE_CONFIG_DIR` or `GROK_HOME`, or the
+  host's, so a machine with a custom home can continue sessions the list never shows. Listing
+  another home needs session and registry keys that carry the home, since they are per driver.
 - **Read the providers' own session stores; write them only to delete.** Each agent already persists its
   sessions on disk (`~/.claude/projects`, `~/.codex/sessions`, `~/.grok/sessions`,
   `~/.pi/agent/sessions`, `~/.gemini/antigravity-cli`). One adapter per store lives in
