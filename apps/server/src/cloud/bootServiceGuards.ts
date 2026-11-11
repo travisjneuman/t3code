@@ -7,6 +7,7 @@
 import { cliReleaseBaseUrlProblem } from "@t3tools/shared/cliRelease";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
 const BOOT_SERVICE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -35,4 +36,22 @@ export function releaseMirrorCheckStep(baseUrl: string | undefined): string | un
   return problem === undefined
     ? undefined
     : `checking the release mirror: ${problem.replace(/\.$/, "")}`;
+}
+
+/**
+ * Fork builds' fix for a launcher protocol change, or undefined for an upstream build. Upstream's
+ * names a t3.codes install, which never publishes fork builds, and its `service install` refuses
+ * Windows.
+ */
+export function forkLauncherProtocolBlocked(launcherProtocol: number, version: string) {
+  if (!version.includes("+")) {
+    return undefined;
+  }
+  const reason = [
+    `The installed service launcher speaks protocol ${launcherProtocol}, but t3@${version} requires protocol ${SERVICE_LAUNCHER_PROTOCOL}.`,
+    "A remote update replaces only the server, not the launcher that runs it, so this host needs one local step that restarts its service.",
+    "From the fork checkout on the Mac, run `node scripts/tjn-hosts.ts service-install <host> --confirm-idle`.",
+    `Without the fleet tool, on Linux or macOS run \`"${process.execPath}" service install\` on this machine.`,
+  ].join(" ");
+  return { status: "blocked" as const, version, reason };
 }

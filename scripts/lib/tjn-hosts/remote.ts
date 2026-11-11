@@ -36,7 +36,7 @@ export interface HostConfig {
   buildHosts?: Record<"win32-x64" | "linux-x64", string[]>;
 }
 export interface State {
-  protocol: 3 | 4;
+  protocol: number;
   activeVersion: string;
   update?: {
     id: string;
@@ -79,7 +79,8 @@ export interface Request {
     | "prune"
     | "rollback"
     | "deliver"
-    | "install";
+    | "install"
+    | "service-install";
   version?: string;
   sha?: string;
   sha256?: string;
@@ -87,6 +88,7 @@ export interface Request {
   expected?: Snapshot;
   migrationsUnchanged?: boolean;
   confirmIdle?: boolean;
+  launcherProtocol?: number;
 }
 export class Refusal extends Error {
   readonly exitCode: number;
@@ -326,7 +328,7 @@ async function json(file: string): Promise<unknown> {
 }
 function decodeState(value: unknown): State {
   requireState(
-    record(value) && (value.protocol === 3 || value.protocol === 4),
+    record(value) && Number.isSafeInteger(value.protocol) && Number(value.protocol) >= 3,
     "Unsupported service-state protocol.",
   );
   const activeVersion = version(value.activeVersion);
@@ -1522,6 +1524,98 @@ async function stageBuild(request: Request) {
     await fs.rm(cache, { recursive: true, force: true });
   }
 }
+// Moves the service onto a staged build's own launcher: the local step a launcher protocol
+// change needs, since a remote update only replaces the launcher's child. Works on both OSes
+// without upstream `t3 service install`, which refuses Windows.
+async function serviceInstall(request: Request) {
+  requireState(
+    request.confirmIdle === true,
+    "service-install requires --confirm-idle; service was not stopped.",
+  );
+  const { host, expected } = request;
+  requireState(expected !== undefined, "Missing preflight snapshot.");
+  const target = version(request.version);
+  const protocol = request.launcherProtocol;
+  requireState(
+    Number.isSafeInteger(protocol) && Number(protocol) >= 3,
+    "Missing the target's launcher protocol.",
+  );
+  requireState(
+    typeof request.sha === "string" && target.endsWith(`+${request.sha.slice(0, 12)}`),
+    "Target runtime does not identify the requested source SHA.",
+  );
+  const before = await inspect(host);
+  running(before, host);
+  unchanged(expected, before);
+  await installed(host, target);
+  requireState(
+    (await installedSourceSha(host, target)) === request.sha,
+    "The staged runtime cannot be confirmed as this exact source SHA; run build-local first.",
+  );
+  if (
+    before.state.activeVersion === target &&
+    before.launcherVersion === target &&
+    before.state.protocol === protocol
+  ) {
+    return { action: request.action, activeVersion: target, protocol, restarted: false };
+  }
+  requireState(
+    before.state.activeVersion === target || isUpdateTarget(target, before.state.activeVersion),
+    `Target ${target} is not newer than the active runtime ${before.state.activeVersion}.`,
+  );
+  requireState(
+    launcher(await fs.readFile(host.service.file, "utf8"), host).version === undefined,
+    "Service file does not run runtime/current; refusing to change it.",
+  );
+  await mutableFile(statePath(host));
+  requireState(
+    !(await exists(path.join(host.t3Home, "runtime", ".service-state.host-maintenance"))),
+    "An unfinished maintenance state file exists; resolve it before maintenance.",
+  );
+  // The same read-only check a remote update runs, now against the launcher it will get.
+  const preflight: unknown = JSON.parse(
+    await run(executable(host, target), [
+      "__service-preflight",
+      "--database-path",
+      path.join(host.t3Home, "userdata", "statev2.sqlite"),
+      "--launcher-protocol",
+      String(protocol),
+    ]),
+  );
+  requireState(
+    record(preflight) && preflight.status === "ready" && preflight.version === target,
+    `Target preflight refused; service was not stopped. ${record(preflight) && typeof preflight.reason === "string" ? preflight.reason : ""}`.trim(),
+  );
+  unchanged(before, await inspect(host));
+  let stopped = false;
+  try {
+    await stop(host, before);
+    stopped = true;
+    await unchangedAfterStop(host, before);
+    await syncCurrentRuntime(host.t3Home, target, host.os);
+    // A terminal update record is tied to its old activeVersion, so the new state drops it.
+    const temporary = path.join(host.t3Home, "runtime", ".service-state.host-maintenance");
+    await fs.writeFile(temporary, JSON.stringify({ protocol, activeVersion: target }) + "\n", {
+      flag: "wx",
+      mode: 0o600,
+      flush: true,
+    });
+    await fs.rename(temporary, statePath(host));
+    await start(host);
+    stopped = false;
+    const after = await verifyRestart(host, before, target);
+    requireState(
+      after.state.protocol === protocol,
+      "Service state protocol changed after restart.",
+    );
+    return { action: request.action, activeVersion: target, protocol, restarted: true };
+  } catch (error) {
+    throw new Refusal(
+      `${error instanceof Error ? error.message : String(error)} service-install may be partial; service ${stopped ? "was stopped and was not automatically restarted" : "state must be inspected"}. No automatic repair was attempted.`,
+      4,
+    );
+  }
+}
 export async function runHost(request: Request) {
   validateRepository(request.repository);
   requireState(
@@ -1542,6 +1636,8 @@ export async function runHost(request: Request) {
       return deliver(request);
     case "install":
       return install(request);
+    case "service-install":
+      return serviceInstall(request);
     case "remove-cache": {
       const dir = path.join(request.host.cacheDir, version(request.version));
       await realDirectory(dir);

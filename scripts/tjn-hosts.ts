@@ -38,6 +38,7 @@ const USAGE = `Usage: node scripts/tjn-hosts.ts build-local --expect-sha <full-s
        node scripts/tjn-hosts.ts status
        node scripts/tjn-hosts.ts prune <host>|--all --confirm-idle [--dry-run]
        node scripts/tjn-hosts.ts rollback <host> [--to version] --confirm-idle [--dry-run]
+       node scripts/tjn-hosts.ts service-install <host>|--all --confirm-idle [--dry-run]
 Exit codes: 0 success; 1 command/IO failure; 2 usage; 3 preflight refusal or locked host;
             4 fleet build may be partial (inspect host output before continuing).
 For prune/rollback, --dry-run prints the read-only preflight and steps; it changes nothing and
@@ -48,7 +49,8 @@ No GitHub release, tag, archive transfer or service restart is part of this comm
 idle-aware Update flow activates the staged version later. Offline or failed hosts are listed and
 must succeed on a later user-triggered Update. Rollback requiring a database restore is refused
 before stopping the service. After pruning a migrated release, fix forward; this tool never writes
-live userdata.`;
+live userdata. service-install moves each host's service onto the launcher of the build staged
+for the pushed origin/main, the one-time local step a launcher protocol change needs.`;
 
 interface Release {
   tag_name: string;
@@ -448,7 +450,9 @@ async function buildLocal(cfg: ResolvedHostConfig, sha: string, resultPath: stri
       },
     ]);
     await journal.step(null, "clear-result", () => clearResultFile(resultPath));
-    const plan = await journal.step(null, "preflight", () => localBuildPreflight(sha, cfg.repository));
+    const plan = await journal.step(null, "preflight", () =>
+      localBuildPreflight(sha, cfg.repository),
+    );
 
     // Each host builds in its own checkout, so one slow host should not hold the others back.
     await Promise.all(
@@ -692,6 +696,108 @@ async function maintain(
   }
 }
 
+interface ServiceInstall {
+  name: string;
+  host: Host;
+  before: Snapshot;
+  target: string;
+  sha: string;
+  launcherProtocol: number;
+}
+
+// Read-only. The target is the build `build-local` staged for the pushed origin/main.
+async function serviceInstallPreflight(
+  cfg: ResolvedHostConfig,
+  selected: string[],
+): Promise<ServiceInstall[]> {
+  const sha = (await git("ls-remote", "origin", "refs/heads/main")).split(/\s/)[0] ?? "";
+  const plan = await localBuildPreflight(sha, cfg.repository);
+  const match = /^export const SERVICE_LAUNCHER_PROTOCOL = (\d+) as const;$/m.exec(
+    await git("show", `${sha}:apps/server/src/cloud/serviceProtocol.ts`),
+  );
+  requireState(match !== null, "Could not read SERVICE_LAUNCHER_PROTOCOL at the pushed commit.");
+  const launcherProtocol = Number(match[1]);
+  const work: ServiceInstall[] = [];
+  for (const name of selected) {
+    const host = cfg.hosts[name]!;
+    const before = await snapshot(host, cfg.repository);
+    requireState(
+      before.versions.includes(plan.targetVersion),
+      `${name} has not staged ${plan.targetVersion}; run build-local for ${sha} first.`,
+    );
+    work.push({ name, host, before, target: plan.targetVersion, sha, launcherProtocol });
+  }
+  return work;
+}
+
+// Mirrors remote.ts serviceInstall(); the host rechecks everything before it stops anything.
+function serviceInstallSteps(work: ServiceInstall[], repository: string): Step[] {
+  return work.map(({ name, host, before, target, sha, launcherProtocol }): Step => {
+    const runtime = hostPath(host).join(host.t3Home, "runtime");
+    const service = host.service;
+    const current =
+      before.state.activeVersion === target &&
+      before.launcherVersion === target &&
+      before.state.protocol === launcherProtocol;
+    return {
+      host: name,
+      phase: "service-install",
+      mutates: !current,
+      does: current
+        ? [
+            `on host: already runs ${target} on launcher protocol ${launcherProtocol}; nothing to do`,
+          ]
+        : [
+            remoteShown(host, {
+              repository,
+              action: "service-install",
+              version: target,
+              sha,
+              launcherProtocol,
+              expected: "<preflight snapshot>",
+              confirmIdle: true,
+            }),
+            `on host: run the staged ${target} __service-preflight --launcher-protocol ${launcherProtocol} against the live database (read-only) while the service still runs`,
+            service.kind === "systemd"
+              ? `on host: systemctl --user stop ${service.unit}`
+              : `on host: taskkill /PID <task conhost above server pid ${before.runtime?.pid ?? "?"}> /T /F; schtasks /end /tn ${JSON.stringify(service.name)}`,
+            `on host: fill ${hostPath(host).join(runtime, "current")} with ${target}; write {protocol: ${launcherProtocol}, activeVersion: ${target}} to ${hostPath(host).join(runtime, "service-state.json")} (was protocol ${before.state.protocol}, ${before.state.activeVersion})`,
+            service.kind === "systemd"
+              ? `on host: systemctl --user daemon-reload; systemctl --user start ${service.unit}`
+              : `on host: schtasks /run /tn ${JSON.stringify(service.name)}`,
+            `on host: confirm ${target} is running within 60 seconds`,
+          ],
+      ifStopped: `If the error says the service was not stopped, ${name} kept running unchanged; otherwise the service may still be stopped. Read \`status\` before choosing recovery.`,
+      rerun: `node scripts/tjn-hosts.ts service-install ${name} --confirm-idle`,
+    };
+  });
+}
+
+async function serviceInstall(work: ServiceInstall[], journal: Journal, repository: string) {
+  let completed = 0;
+  for (const item of work) {
+    try {
+      const result = await journal.step(item.name, "service-install", () =>
+        remote(item.host, repository, {
+          action: "service-install",
+          version: item.target,
+          sha: item.sha,
+          launcherProtocol: item.launcherProtocol,
+          expected: item.before,
+          confirmIdle: true,
+        }),
+      );
+      console.log(JSON.stringify({ host: item.name, result }));
+      completed += 1;
+    } catch (error) {
+      throw new Refusal(
+        `service-install stopped at ${item.name}; ${completed} selected hosts completed before it and later hosts were not touched. Inspect status before continuing. ${error instanceof Error ? error.message : String(error)}`,
+        4,
+      );
+    }
+  }
+}
+
 const PREFLIGHT: Step = {
   host: null,
   phase: "preflight",
@@ -768,15 +874,13 @@ async function main() {
   let dryRun = false;
   while (args.length > 0) {
     const arg = args.shift()!;
-    if (arg === "--all" && command === "prune" && !all) {
+    const changingCommand =
+      command === "prune" || command === "rollback" || command === "service-install";
+    if (arg === "--all" && (command === "prune" || command === "service-install") && !all) {
       all = true;
-    } else if (
-      arg === "--confirm-idle" &&
-      (command === "prune" || command === "rollback") &&
-      !idle
-    ) {
+    } else if (arg === "--confirm-idle" && changingCommand && !idle) {
       idle = true;
-    } else if (arg === "--dry-run" && (command === "prune" || command === "rollback") && !dryRun) {
+    } else if (arg === "--dry-run" && changingCommand && !dryRun) {
       dryRun = true;
     } else if (arg === "--expect-sha" && command === "build-local" && !expectSha) {
       expectSha = args.shift();
@@ -793,20 +897,18 @@ async function main() {
       if (!target || target.startsWith("-")) {
         throw new Refusal("--to needs an exact version.\n" + USAGE, 2);
       }
-    } else if (
-      !arg.startsWith("-") &&
-      (command === "prune" || command === "rollback") &&
-      !hostName
-    ) {
+    } else if (!arg.startsWith("-") && changingCommand && !hostName) {
       hostName = arg;
     } else {
       throw new Refusal(USAGE, 2);
     }
   }
+  const hostCommand =
+    command === "prune" || command === "rollback" || command === "service-install";
   if (
     !command ||
-    !["build-local", "status", "prune", "rollback"].includes(command) ||
-    ((command === "prune" || command === "rollback") && all === Boolean(hostName)) ||
+    !["build-local", "status", "prune", "rollback", "service-install"].includes(command) ||
+    (hostCommand && all === Boolean(hostName)) ||
     (command === "build-local" && !expectSha)
   ) {
     throw new Refusal(USAGE, 2);
@@ -815,7 +917,7 @@ async function main() {
     process.platform === "darwin",
     "This CLI runs on the Mac; build hosts are reached over SSH.",
   );
-  if ((command === "prune" || command === "rollback") && !dryRun) {
+  if (hostCommand && !dryRun) {
     requireState(
       idle,
       "Restart interrupts agent turns and terminals. Confirm all selected hosts are idle with --confirm-idle. No host was changed.",
@@ -863,12 +965,37 @@ async function main() {
     }
     return;
   }
-  const maintenance: MaintenanceCommand = command === "prune" ? "prune" : "rollback";
   const selected = all ? Object.keys(cfg.hosts) : [hostName!];
   requireState(
     selected.every((name) => Object.hasOwn(cfg.hosts, name)),
     "Unknown configured host.",
   );
+  if (command === "service-install") {
+    if (dryRun) {
+      const work = await serviceInstallPreflight(cfg, selected);
+      await printDryRun(
+        [
+          `service-install ${selected.join(", ")}${idle ? "" : " (a real run also needs --confirm-idle)"}`,
+          ...work.map(
+            (item) =>
+              `${item.name}: ${item.before.state.activeVersion} (protocol ${item.before.state.protocol}) -> ${item.target} (protocol ${item.launcherProtocol})`,
+          ),
+        ],
+        selected,
+        serviceInstallSteps(work, cfg.repository),
+      );
+      return;
+    }
+    await changing("service-install", selected, "per-host", async (journal) => {
+      const work = await journal.step(null, "preflight", () =>
+        serviceInstallPreflight(cfg, selected),
+      );
+      journal.plan(serviceInstallSteps(work, cfg.repository));
+      await serviceInstall(work, journal, cfg.repository);
+    });
+    return;
+  }
+  const maintenance: MaintenanceCommand = command === "prune" ? "prune" : "rollback";
   if (dryRun) {
     const work = await maintenancePreflight(maintenance, cfg, selected, target);
     await printDryRun(

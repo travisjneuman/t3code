@@ -1,6 +1,7 @@
 import { SERVICE_RUNTIME_VERSION } from "./runtimeVersion.ts"; // Fork add-on(host-releases): service version includes the fork build.
 import { BUILD_MIGRATION_HEAD, recordedMigrations } from "../persistence/databaseMigrationHead.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
+import { forkLauncherProtocolBlocked } from "./bootServiceGuards.ts"; // Fork add-on(host-releases)
 
 export type ServicePreflightResult =
   | {
@@ -21,6 +22,8 @@ export function runServicePreflight(input: {
 }): ServicePreflightResult {
   const version = input.version ?? SERVICE_RUNTIME_VERSION; // Fork add-on(host-releases): fork build suffix.
   if (input.launcherProtocol !== SERVICE_LAUNCHER_PROTOCOL) {
+    const forkBlocked = forkLauncherProtocolBlocked(input.launcherProtocol, version); // Fork add-on(host-releases)
+    if (forkBlocked) return forkBlocked; // Fork add-on(host-releases)
     return {
       status: "blocked",
       version,
