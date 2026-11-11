@@ -916,6 +916,8 @@ export const make = Effect.gen(function* () {
       void runPromise(revealWhenReady);
     });
 
+    // Desktop IPC only answers the main window, so register it before its renderer can call in.
+    yield* electronWindow.setMain(window);
     loadApplication();
     if (environment.isDevelopment) {
       window.webContents.openDevTools({ mode: "detach" });
@@ -934,7 +936,6 @@ export const make = Effect.gen(function* () {
   const createMain = Effect.gen(function* () {
     const window = yield* createWindow();
     if (Option.isSome(window)) {
-      yield* electronWindow.setMain(window.value);
       mainClosedDuringStartup = false;
       yield* logWindowInfo("main window created");
     }

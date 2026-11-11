@@ -38,6 +38,7 @@ apps/mobile/.android-cache/
 artifacts/app-store/screenshots/
 artifacts/mobile-e2e/
 artifacts/mobile-behavior/
+scripts/.e2e/
 .github/pr-assets/
 # Fork add-on(tjn-fleet): fleet host config for scripts/tjn-hosts.ts lives outside the repo.
 hosts.json
