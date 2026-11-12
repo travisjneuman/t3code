@@ -26,3 +26,12 @@ export function resolveHermesChatPresentation(
     hermesFixedRunLocation: hermesRunLocation(hermesAgent, environments),
   };
 }
+
+/** Hermes threads run on Hermes's own machine, so no local workspace control applies to them. */
+export function applyHermesWorkspaceVisibility(
+  show: Record<"environment" | "openIn" | "scripts" | "branch" | "pullRequests" | "git", boolean>,
+  localWorkspace: boolean,
+): void {
+  if (localWorkspace) return;
+  for (const key of Object.keys(show) as Array<keyof typeof show>) show[key] = false;
+}
