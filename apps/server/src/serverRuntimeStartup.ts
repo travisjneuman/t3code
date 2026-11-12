@@ -635,7 +635,7 @@ const make = Effect.fn("serverRuntimeStartup.make")(function* (options?: Startup
     yield* runStartupPhase("http.wait", Deferred.await(httpListening));
     yield* runStartupPhase("auxiliary-roots.parked", options?.awaitAuxiliaryParked ?? Effect.void);
 
-    const updateOutcome = yield* launcher.prepareTrial;
+    const updateOutcome = yield* launcher.prepareTrial({ baseDir: serverConfig.baseDir });
     yield* moveServiceToCurrentRuntime(launcher.managed, serverConfig.baseDir); // Fork add-on(host-releases): fixed runtime/current path.
     yield* refreshLauncherAndPruneRuntimes(launcher.managed, serverConfig.baseDir); // Fork add-on(host-releases): launcher refresh and runtime cleanup.
 

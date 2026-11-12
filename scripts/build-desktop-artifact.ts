@@ -2917,6 +2917,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ],
       desktop: {
         entry: {
+          // Match Electron's WM_CLASS from setDesktopName so docks use this launcher.
           StartupWMClass: Fork.forkAppScheme(false), // Fork add-on(identity)
         },
       },

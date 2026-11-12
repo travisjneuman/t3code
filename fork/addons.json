@@ -1816,7 +1816,6 @@
         ".gitignore",
         "apps/desktop/src/shell/DesktopShellEnvironment.ts",
         "apps/server/vite.config.ts",
-        "apps/web/vite.config.ts",
         "scripts/build-cli-archive.ts"
       ]
     },
