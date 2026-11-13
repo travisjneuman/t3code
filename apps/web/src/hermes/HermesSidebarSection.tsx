@@ -331,6 +331,9 @@ export function HermesSidebarSection() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [keepRows] = useState(createRowKeeper);
   const lastListingRef = useRef<LastListing | null>(null);
+  // Instances whose last listing failed. Focus re-lists every instance, so an
+  // unreachable Hermes toasts once and stays quiet until a listing succeeds.
+  const listFailingRef = useRef(new Set<string>());
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const selectionAnchor = useRef<string | null>(null);
   // Rows whose session is being opened. The ref turns away a repeat click at
@@ -444,13 +447,19 @@ export function HermesSidebarSection() {
     let cancelled = false;
     void Promise.all(
       ready.map(async (target) => {
-        const result = await runHermes(
-          hermesSessionsList,
-          target.environmentId,
-          { instanceId: target.instanceId, extra },
-          "Could not list Hermes sessions",
-        );
-        return [targetKey(target), result] as const;
+        const key = targetKey(target);
+        const input = { instanceId: target.instanceId, extra };
+        const result = listFailingRef.current.has(key)
+          ? await runHermesQuietly(hermesSessionsList, target.environmentId, input)
+          : await runHermes(
+              hermesSessionsList,
+              target.environmentId,
+              input,
+              "Could not list Hermes sessions",
+            );
+        if (result === null) listFailingRef.current.add(key);
+        else listFailingRef.current.delete(key);
+        return [key, result] as const;
       }),
     ).then((results) => {
       if (cancelled) return;
