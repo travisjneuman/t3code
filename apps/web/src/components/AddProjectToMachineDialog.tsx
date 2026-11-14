@@ -7,15 +7,9 @@ import {
 } from "@t3tools/client-runtime/operations/projects";
 import { resolvePastedPath } from "@t3tools/shared/path";
 import {
-  createEnvironmentRpcQueryAtomFamily, // Fork add-on(existing-checkout)
-  executeAtomQuery,
-} from "@t3tools/client-runtime/state/runtime";
-import {
-  EXISTING_CHECKOUT_WS_METHODS,
   type EnvironmentId,
   type ProjectIgnoredFile,
   type ScopedProjectRef,
-  repositoryGroupingKeyOf, // Fork add-on(existing-checkout)
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import {
@@ -28,11 +22,13 @@ import { useId, useState } from "react";
 import { create } from "zustand";
 
 import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
-import { connectionAtomRuntime } from "../connection/runtime"; // Fork add-on(existing-checkout)
+import { CheckoutFolderHint } from "../existing-checkout/CheckoutFolderHint"; // Fork add-on(existing-checkout)
+import { checkedWorkspaceRoot, useExistingCheckout } from "../existing-checkout/useExistingCheckout"; // Fork add-on(existing-checkout)
 import { useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
 import {
+  COPIED_FILES_MAX_COUNT,
   COPYABLE_FILE_MAX_BYTES,
   addExistingCheckout, // Fork add-on(existing-checkout)
   addProjectToMachine,
@@ -40,10 +36,10 @@ import {
 } from "../lib/addProjectToMachine";
 import { formatBytes } from "../lib/formatBytes";
 import { newProjectId } from "../lib/utils";
-import { appAtomRegistry } from "../rpc/atomRegistry"; // Fork add-on(existing-checkout)
 import { readProject, subscribeProject, useProject } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import { projectEnvironment } from "../state/projects";
+import { useDebouncedValue } from "../state/queries";
 import { useEnvironmentQuery } from "../state/query";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { Button } from "./ui/button";
@@ -93,14 +89,6 @@ function close() {
   useRequest.setState({ request: null });
 }
 
-// Fork add-on(existing-checkout): Idle TTL 0: it reads the other machine's disk, so it runs only
-// while the dialog is open and is read fresh each time.
-export const existingCheckoutQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
-  label: "environment-data:existing-checkout:find",
-  tag: EXISTING_CHECKOUT_WS_METHODS.find,
-  idleTtlMs: 0,
-});
-
 export function AddProjectToMachineDialogHost() {
   const request = useRequest((state) => state.request);
   const session = useRequest((state) => state.session);
@@ -128,9 +116,6 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     (protocol === "ssh" ? sshUrl : protocol === "https" ? httpsUrl : null) ?? sourceUrl;
 
   const targetEnvironment = environments.find((env) => env.environmentId === target?.environmentId);
-  const baseDirectory = getAddProjectInitialQuery( // Fork add-on(existing-checkout)
-    targetEnvironment?.serverConfig?.settings.addProjectBaseDirectory, // Fork add-on(existing-checkout)
-  ); // Fork add-on(existing-checkout)
   const defaultPath = getCloneDestinationPath(
     getAddProjectInitialQuery(targetEnvironment?.serverConfig?.settings.addProjectBaseDirectory),
     getCloneDirectoryPath(
@@ -141,42 +126,13 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const [pathOverride, setPathOverride] = useState<string | null>(null);
   const destinationPath = pathOverride ?? defaultPath;
 
-  // Fork add-on(existing-checkout): A machine that already has the repository adds that folder.
-  const subdirectory = project
-    ? projectSubdirectory(project.repositoryIdentity?.rootPath, project.workspaceRoot)
-    : "";
-  const repositoryKey = project?.repositoryIdentity
-    ? repositoryGroupingKeyOf(project.repositoryIdentity)
-    : null;
-  const canFindCheckout =
-    targetEnvironment?.serverConfig?.environment.capabilities.existingCheckout === true;
-  const existingCheckout = useEnvironmentQuery(
-    target && repositoryKey && canFindCheckout
-      ? existingCheckoutQuery({ environmentId: target.environmentId, input: { repositoryKey } })
-      : null,
-  );
-  const searching =
-    target !== null &&
-    repositoryKey !== null &&
-    canFindCheckout &&
-    existingCheckout.data === null &&
-    existingCheckout.error === null;
-  const foundRoot = existingCheckout.data?.repositoryRoot ?? null;
-  const [cloneInstead, setCloneInstead] = useState(false);
-  // A checkout the search cannot reach, such as one outside the add-project folder.
-  const canCheckFolder =
-    repositoryKey !== null &&
-    targetEnvironment?.serverConfig?.environment.capabilities.existingCheckoutFolder === true;
-  const [useOwnFolder, setUseOwnFolder] = useState(false);
-  const addExisting = useOwnFolder || (foundRoot !== null && !cloneInstead);
-  const [existingPathOverride, setExistingPathOverride] = useState<string | null>(null);
-  const existingPath =
-    existingPathOverride ??
-    (foundRoot ? joinSubdirectory(foundRoot, subdirectory) : useOwnFolder ? baseDirectory : "");
-  const folderPath = addExisting ? existingPath : destinationPath;
+  const subdirectory = project ? projectSubdirectory(project.repositoryIdentity?.rootPath, project.workspaceRoot) : ""; // Fork add-on(existing-checkout)
+  const { repositoryKey, searchingCheckout, foundRoot, setCloneInstead, canCheckFolder, useOwnFolder, setUseOwnFolder, addExisting, setExistingPathOverride, existingPath, folderPath } = useExistingCheckout(project, target, targetEnvironment, destinationPath, subdirectory); // Fork add-on(existing-checkout)
 
-  const canListFiles = source?.serverConfig?.environment.capabilities.ignoredFileListing === true;
-  const ignoredFiles = useEnvironmentQuery(
+  const capabilities = source?.serverConfig?.environment.capabilities;
+  const canListFiles = capabilities?.ignoredFileListing === true;
+  const canSearchFiles = canListFiles && capabilities?.ignoredFileSearch === true;
+  const allIgnoredFiles = useEnvironmentQuery(
     project && canListFiles
       ? projectEnvironment.listIgnoredFiles({
           environmentId: project.environmentId,
@@ -184,13 +140,29 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
         })
       : null,
   );
+  const [fileQuery, setFileQuery] = useState("");
+  const sentFileQuery = useDebouncedValue(fileQuery.trim(), 120);
+  const searching = canSearchFiles && sentFileQuery.length > 0;
+  const searchedFiles = useEnvironmentQuery(
+    project && searching
+      ? projectEnvironment.listIgnoredFiles({
+          environmentId: project.environmentId,
+          input: { cwd: project.workspaceRoot, query: sentFileQuery },
+        })
+      : null,
+  );
+  const ignoredFiles = searching ? searchedFiles : allIgnoredFiles;
   const files = ignoredFiles.data?.files ?? [];
-  const [selected, setSelected] = useState<ReadonlySet<string> | null>(null);
-  const selectedFiles = selected ?? defaultSelection(files);
+  // Keyed by path with the file kept, so picks made under one search survive the next.
+  const [selected, setSelected] = useState<ReadonlyMap<string, ProjectIgnoredFile> | null>(null);
+  const selectedFiles = selected ?? defaultSelection(allIgnoredFiles.data?.files ?? []);
   const copyable = files.filter((file) => file.byteLength <= COPYABLE_FILE_MAX_BYTES);
-  const selectedBytes = files
-    .filter((file) => selectedFiles.has(file.path))
-    .reduce((total, file) => total + file.byteLength, 0);
+  const allCopyableSelected = copyable.every((file) => selectedFiles.has(file.path));
+  const atSelectionLimit = selectedFiles.size >= COPIED_FILES_MAX_COUNT;
+  const selectedBytes = [...selectedFiles.values()].reduce(
+    (total, file) => total + file.byteLength,
+    0,
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -201,12 +173,20 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const unavailable =
     project === null ||
     target === null ||
-    searching || // Fork add-on(existing-checkout)
-    (!addExisting && canListFiles && ignoredFiles.data === null && ignoredFiles.error === null); // Fork add-on(existing-checkout)
-  const toggleFile = (path: string, checked: boolean) => {
-    const next = new Set(selectedFiles);
-    if (checked) next.add(path);
-    else next.delete(path);
+    searchingCheckout || // Fork add-on(existing-checkout)
+    (!addExisting && canListFiles && allIgnoredFiles.data === null && allIgnoredFiles.error === null); // Fork add-on(existing-checkout)
+  const toggleFile = (file: ProjectIgnoredFile, checked: boolean) => {
+    const next = new Map(selectedFiles);
+    if (!checked) next.delete(file.path);
+    else if (!atSelectionLimit) next.set(file.path, file);
+    setSelected(next);
+  };
+  const toggleShownFiles = () => {
+    const next = new Map(selectedFiles);
+    for (const file of copyable) {
+      if (allCopyableSelected) next.delete(file.path);
+      else if (next.size < COPIED_FILES_MAX_COUNT) next.set(file.path, file);
+    }
     setSelected(next);
   };
 
@@ -237,9 +217,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const submit = async () => {
     if (!project || !target || submitting) return;
     if (folderPath.trim().length === 0) { // Fork add-on(existing-checkout)
-      setError("Choose a folder on the other machine.");
-      return;
-    }
+      setError("Choose a folder on the other machine."); // Fork add-on(existing-checkout)
+      return; // Fork add-on(existing-checkout)
+    } // Fork add-on(existing-checkout)
     setSubmitting(true);
     setError(null);
     try {
@@ -265,13 +245,16 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
       } else { // Fork add-on(existing-checkout)
         projectId = await addProjectToMachine({ // Fork add-on(existing-checkout): assigns the outer id.
           source: { environmentId: project.environmentId, cwd: project.workspaceRoot },
-          subdirectory, // Fork add-on(existing-checkout)
+          subdirectory: projectSubdirectory(
+            project.repositoryIdentity?.rootPath,
+            project.workspaceRoot,
+          ),
           target: { environmentId: target.environmentId, label: target.label },
           projectId: newProjectId(),
           title: project.title,
           remoteUrl,
           destinationPath: folderPath.trim(), // Fork add-on(existing-checkout)
-          files: files.filter((file) => selectedFiles.has(file.path)).map((file) => file.path),
+          files: [...selectedFiles.keys()],
         });
       } // Fork add-on(existing-checkout)
       close();
@@ -302,7 +285,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
             <DialogTitle>Add to another machine</DialogTitle>
             <DialogDescription>
               {addExisting // Fork add-on(existing-checkout)
-                ? `${target?.label ?? "That machine"} already has ${project?.repositoryIdentity?.displayName ?? project?.title}. Add its folder as the project there.`
+                ? `${target?.label ?? "That machine"} already has ${project?.repositoryIdentity?.displayName ?? project?.title}. Add its folder as the project there.` // Fork add-on(existing-checkout)
                 : `Clone ${project?.repositoryIdentity?.displayName ?? project?.title} and bring the local files git does not track.`}
             </DialogDescription>
           </DialogHeader>
@@ -328,7 +311,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 </span>
                 <span>
                   {addExisting // Fork add-on(existing-checkout)
-                    ? "no copy"
+                    ? "no copy" // Fork add-on(existing-checkout)
                     : selectedFiles.size === 0
                       ? "no files"
                       : `+ ${selectedFiles.size} ${selectedFiles.size === 1 ? "file" : "files"}`}
@@ -341,9 +324,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     onValueChange={(value) => {
                       if (!value) return; // Fork add-on(existing-checkout)
                       setTargetId(value);
-                      setCloneInstead(false);
-                      setUseOwnFolder(false);
-                      setExistingPathOverride(null);
+                      setCloneInstead(false); // Fork add-on(existing-checkout)
+                      setUseOwnFolder(false); // Fork add-on(existing-checkout)
+                      setExistingPathOverride(null); // Fork add-on(existing-checkout)
                     }}
                     items={targets.map((t) => ({ value: t.environmentId, label: t.label }))}
                   >
@@ -398,7 +381,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   {remoteUrl}
                 </span>
               </div>
-            )}
+            ) /* Fork add-on(existing-checkout) */}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-path`}>Folder on {target?.label ?? "the other machine"}</Label>
@@ -413,45 +396,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 spellCheck={false}
                 autoComplete="off"
               />
-              {searching ? ( // Fork add-on(existing-checkout)
-                <p className="text-muted-foreground text-xs">
-                  Looking for a checkout already on {target?.label ?? "that machine"}…
-                </p>
-              ) : foundRoot !== null ? (
-                <p className="flex flex-wrap items-center gap-x-1 text-muted-foreground text-xs">
-                  {addExisting
-                    ? "Found an existing checkout."
-                    : `${target?.label ?? "That machine"} already has a checkout.`}
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="xs"
-                    onClick={() => {
-                      setCloneInstead(addExisting);
-                      setUseOwnFolder(false);
-                    }}
-                  >
-                    {addExisting ? "Clone a new copy instead" : "Use it instead"}
-                  </Button>
-                </p>
-              ) : canCheckFolder ? (
-                <p className="flex flex-wrap items-center gap-x-1 text-muted-foreground text-xs">
-                  {useOwnFolder
-                    ? "Enter the folder of the checkout already there."
-                    : `No checkout found where ${target?.label ?? "that machine"} keeps projects.`}
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="xs"
-                    onClick={() => {
-                      setUseOwnFolder(!useOwnFolder);
-                      setExistingPathOverride(null);
-                    }}
-                  >
-                    {useOwnFolder ? "Clone a new copy instead" : "Use a folder already there"}
-                  </Button>
-                </p>
-              ) : null}
+              <CheckoutFolderHint searchingCheckout={searchingCheckout} foundRoot={foundRoot} addExisting={addExisting} canCheckFolder={canCheckFolder} useOwnFolder={useOwnFolder} label={target?.label} setCloneInstead={setCloneInstead} setUseOwnFolder={setUseOwnFolder} setExistingPathOverride={setExistingPathOverride} /> {/* Fork add-on(existing-checkout) */}
             </div>
 
             {canListFiles && !addExisting ? ( // Fork add-on(existing-checkout)
@@ -461,33 +406,41 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   {copyable.length > 0 ? (
                     <>
                       <span className="text-muted-foreground text-xs">
-                        {selectedFiles.size} of {files.length}
+                        {selectedFiles.size} of {allIgnoredFiles.data?.files.length ?? 0}
                         {selectedBytes > 0 ? ` · ${formatBytes(selectedBytes)}` : ""}
                       </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={() =>
-                          setSelected(
-                            selectedFiles.size === copyable.length
-                              ? new Set()
-                              : new Set(copyable.map((file) => file.path)),
-                          )
-                        }
-                      >
-                        {selectedFiles.size === copyable.length ? "None" : "All"}
+                      <Button type="button" variant="ghost" size="xs" onClick={toggleShownFiles}>
+                        {allCopyableSelected ? "None" : "All"}
                       </Button>
                     </>
                   ) : null}
                 </div>
+                {canSearchFiles && (allIgnoredFiles.data?.truncated || fileQuery.length > 0) ? (
+                  <Input
+                    size="sm"
+                    type="search"
+                    aria-label="Search ignored files"
+                    placeholder="Search ignored files"
+                    value={fileQuery}
+                    maxLength={256}
+                    onChange={(event) => setFileQuery(event.target.value)}
+                    // Enter would otherwise submit the clone.
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.preventDefault();
+                    }}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                ) : null}
                 {ignoredFiles.error ? (
                   <p className="text-destructive-foreground text-xs">{ignoredFiles.error}</p>
                 ) : files.length === 0 ? (
                   <p className="text-muted-foreground text-xs">
-                    {ignoredFiles.isSuccess
-                      ? "No ignored files to copy."
-                      : "Finding ignored files…"}
+                    {!ignoredFiles.isSuccess
+                      ? "Finding ignored files…"
+                      : searching
+                        ? "No ignored files match."
+                        : "No ignored files to copy."}
                   </p>
                 ) : (
                   <div className="max-h-52 overflow-y-auto rounded-md border">
@@ -496,7 +449,8 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                         key={file.path}
                         file={file}
                         checked={selectedFiles.has(file.path)}
-                        onCheckedChange={(checked) => toggleFile(file.path, checked)}
+                        disabled={atSelectionLimit && !selectedFiles.has(file.path)}
+                        onCheckedChange={(checked) => toggleFile(file, checked)}
                       />
                     ))}
                   </div>
@@ -504,6 +458,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 {ignoredFiles.data?.truncated ? (
                   <p className="text-muted-foreground text-xs">
                     Showing the first {files.length} files.
+                    {canSearchFiles ? " Search to find the rest." : ""}
                   </p>
                 ) : null}
                 <p className="text-muted-foreground text-xs">
@@ -522,7 +477,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
             <Button type="submit" disabled={unavailable || submitting}>
               {submitting // Fork add-on(existing-checkout)
                 ? "Starting…"
-                : `${addExisting ? "Add to" : "Clone to"} ${target?.label ?? "machine"}`}
+                : `${addExisting ? "Add to" : "Clone to"} ${target?.label ?? "machine"}` /* Fork add-on(existing-checkout) */}
             </Button>
           </DialogFooter>
         </form>
@@ -532,48 +487,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 }
 
 /**
- * Checks the folder on the other machine is a checkout of this repository. Naming its top folder
- * adds the same subfolder the source project uses. Fork add-on(existing-checkout)
- */
-async function checkedWorkspaceRoot(input: {
-  readonly environmentId: EnvironmentId;
-  readonly repositoryKey: string;
-  readonly folder: string;
-  readonly subdirectory: string;
-  readonly repositoryName: string;
-  readonly machine: string;
-}): Promise<string> {
-  const result = await executeAtomQuery(
-    appAtomRegistry,
-    existingCheckoutQuery({
-      environmentId: input.environmentId,
-      input: { repositoryKey: input.repositoryKey, folder: input.folder },
-    }),
-    { label: "Check existing checkout", reportFailure: false, refresh: true },
-  );
-  if (result._tag === "Failure") throw new Error("Could not check that folder.");
-  const root = result.value.repositoryRoot;
-  if (root === null) {
-    throw new Error(
-      `${input.folder} is not a checkout of ${input.repositoryName} on ${input.machine}.`,
-    );
-  }
-  return comparablePath(root) === comparablePath(input.folder)
-    ? joinSubdirectory(root, input.subdirectory)
-    : input.folder;
-}
-
-/** Windows paths compare without regard to case or slash direction. */
-function comparablePath(path: string) {
-  const trimmed = path.replace(/[\\/]+$/, "");
-  return /^[a-z]:|\\/i.test(trimmed) ? trimmed.replaceAll("\\", "/").toLowerCase() : trimmed;
-}
-
-/**
  * A project can be rooted below its repository's top folder. The clone lands
  * at the top, so copied files keep the same path below it.
  */
-export function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: string) { // Fork add-on(existing-checkout)
+export function projectSubdirectory(repositoryRoot: string | undefined, workspaceRoot: string) {
   if (!repositoryRoot) return "";
   const prefix = repositoryRoot.replace(/[\\/]+$/, "");
   const rest = workspaceRoot.slice(prefix.length);
@@ -582,36 +499,37 @@ export function projectSubdirectory(repositoryRoot: string | undefined, workspac
     : "";
 }
 
-/** Fork add-on(existing-checkout): uses the found folder's own separator, since the other machine may be Windows. */
-export function joinSubdirectory(root: string, subdirectory: string) {
-  if (!subdirectory) return root;
-  const separator = root.includes("\\") ? "\\" : "/";
-  return `${root.replace(/[\\/]+$/, "")}${separator}${subdirectory.replaceAll("/", separator)}`;
-}
-
-function defaultSelection(files: readonly ProjectIgnoredFile[]): ReadonlySet<string> {
-  return new Set(
+function defaultSelection(
+  files: readonly ProjectIgnoredFile[],
+): ReadonlyMap<string, ProjectIgnoredFile> {
+  return new Map(
     files
       .filter(
         (file) => file.byteLength <= COPYABLE_FILE_MAX_BYTES && isDefaultCopiedFile(file.path),
       )
-      .map((file) => file.path),
+      .map((file) => [file.path, file]),
   );
 }
 
 function IgnoredFileRow({
   file,
   checked,
+  disabled,
   onCheckedChange,
 }: {
   file: ProjectIgnoredFile;
   checked: boolean;
+  disabled: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
   const tooLarge = file.byteLength > COPYABLE_FILE_MAX_BYTES;
   return (
     <label className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-sm not-last:border-b has-disabled:cursor-not-allowed has-disabled:opacity-64">
-      <Checkbox checked={checked} disabled={tooLarge} onCheckedChange={onCheckedChange} />
+      <Checkbox
+        checked={checked}
+        disabled={tooLarge || disabled}
+        onCheckedChange={onCheckedChange}
+      />
       <span className="min-w-0 flex-1 truncate font-mono text-xs">{file.path}</span>
       <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
         {tooLarge ? "Over 1 MB" : formatBytes(file.byteLength)}
