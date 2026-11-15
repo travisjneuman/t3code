@@ -1,7 +1,10 @@
 import * as MacPermissions from "./permissions/MacPermissions.ts";
+import { handleStdioError } from "./app/stdioErrors.ts";
+
 for (const stream of [process.stdout, process.stderr]) {
-  stream.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EPIPE" && err.code !== "EIO") throw err; // Fork add-on(stdio-eio): macOS reports EIO too.
+  stream.on("error", (err: unknown) => {
+    if (typeof err === "object" && err !== null && "code" in err && err.code === "EIO") return; // Fork add-on(stdio-eio): macOS reports EIO too.
+    handleStdioError(err);
   });
 }
 

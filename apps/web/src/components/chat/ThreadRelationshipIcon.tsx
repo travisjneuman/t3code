@@ -1,7 +1,11 @@
 import type { ProviderDriverKind, ServerProvider } from "@t3tools/contracts";
 import { BotIcon, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../providerInstances";
+import {
+  hasInstanceBadge,
+  shouldShowInstanceBadge,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
 export function threadRelationshipStatusLabel(status: string | null): string {
@@ -47,6 +51,7 @@ export function ThreadRelationshipIcon({
   driver,
   provider,
   providerEntries = [],
+  anyInstanceBadge = hasInstanceBadge(providerEntries),
   status,
   fallbackIcon: FallbackIcon = BotIcon,
   compact = false, // Fork add-on(subagent-tree)
@@ -54,6 +59,8 @@ export function ThreadRelationshipIcon({
   driver?: ProviderDriverKind | undefined;
   provider?: ServerProvider | undefined;
   providerEntries?: ReadonlyArray<ProviderInstanceEntry>;
+  /** For rows that can't take `providerEntries` but sit in the same list as rows that do. */
+  anyInstanceBadge?: boolean;
   status: string | null;
   fallbackIcon?: LucideIcon;
   compact?: boolean; // Fork add-on(subagent-tree)
@@ -87,15 +94,15 @@ export function ThreadRelationshipIcon({
       <span
         className={cn(
           compact // Fork add-on(subagent-tree)
-            ? "absolute size-1.5 rounded-full border border-card" // Fork add-on(subagent-tree)
-            : "absolute size-2 rounded-full border-2 border-card", // Fork add-on(subagent-tree)
-          showInstanceBadge
+            ? "absolute -right-0.5 size-1.5 rounded-full border border-card" // Fork add-on(subagent-tree)
+            : "absolute -right-1 size-2 rounded-full border-2 border-card",
+          anyInstanceBadge
             ? compact // Fork add-on(subagent-tree)
-              ? "-left-0.5 -top-0.5" // Fork add-on(subagent-tree)
-              : "-left-1 -top-1"
+              ? "-top-0.5" // Fork add-on(subagent-tree)
+              : "-top-1"
             : compact // Fork add-on(subagent-tree)
-              ? "-bottom-0.5 -right-0.5" // Fork add-on(subagent-tree)
-              : "-bottom-1 -right-1",
+              ? "-bottom-0.5" // Fork add-on(subagent-tree)
+              : "-bottom-1",
           status === "running" ||
             status === "in_progress" ||
             status === "pending" ||

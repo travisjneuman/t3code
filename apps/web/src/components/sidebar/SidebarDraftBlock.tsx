@@ -101,7 +101,6 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
       >
-        <span className="sr-only">{preview}</span>
         <div
           data-fork-card-part="box" // Fork add-on(compact-cards)
           className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
@@ -142,7 +141,6 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
             </span>
           </div>
           <div
-            aria-hidden
             data-fork-card-part="title" // Fork add-on(compact-cards)
             className="mt-0.5 truncate text-sm font-medium text-foreground/90"
           >
