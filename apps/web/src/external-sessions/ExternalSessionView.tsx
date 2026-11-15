@@ -44,7 +44,6 @@ import {
 import {
   ANCHORED_COPY_TOAST_TIMEOUT_MS,
   showAnchoredCopyErrorToast,
-  showAnchoredCopySuccessToast,
 } from "../components/ui/anchoredCopyToast";
 import { Button } from "../components/ui/button";
 import { SidebarInset } from "../components/ui/sidebar";
@@ -812,7 +811,6 @@ function SessionIdValue(props: { sessionId: string }) {
   const ref = useRef<HTMLButtonElement>(null);
   const { copyToClipboard } = useCopyToClipboard<void>({
     target: "session ID",
-    onCopy: () => showAnchoredCopySuccessToast(ref),
     onError: (error) => showAnchoredCopyErrorToast(ref, error),
     timeout: ANCHORED_COPY_TOAST_TIMEOUT_MS,
   });
