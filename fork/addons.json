@@ -971,6 +971,8 @@
         "apps/server/src/existing-checkout/ExistingCheckout.ts",
         "apps/server/src/existing-checkout/ExistingCheckoutRpc.ts",
         "apps/web/src/components/settings/FindCheckoutsDialog.tsx",
+        "apps/web/src/existing-checkout/CheckoutFolderHint.tsx",
+        "apps/web/src/existing-checkout/useExistingCheckout.ts",
         "packages/contracts/src/existingCheckout.ts"
       ],
       "hooks": [

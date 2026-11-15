@@ -22,9 +22,8 @@ import { appAtomRegistry } from "../../rpc/atomRegistry";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useEnvironments } from "../../state/environments";
 import { useEnvironmentsWithScope } from "../../state/session";
+import { existingCheckoutQuery, joinSubdirectory } from "../../existing-checkout/useExistingCheckout";
 import {
-  existingCheckoutQuery,
-  joinSubdirectory,
   openAddProjectToMachine,
   projectSubdirectory,
 } from "../AddProjectToMachineDialog";
