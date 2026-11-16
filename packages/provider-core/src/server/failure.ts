@@ -122,6 +122,7 @@ function curatedCauseMessages(cause: unknown): {
         case "ClaudeSettingsLaunchArgError":
         case "ClaudeMcpRegistrationTimeoutError":
         case "ClaudeCodeRootRefusalError":
+        case "ClaudeConversationNotFoundError":
         case "CursorModelUnavailableError":
         case "HermesTurnNotSentError": // Fork add-on(hermes)
         case "CodexGoalObjectiveTooLongError":

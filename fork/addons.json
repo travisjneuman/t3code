@@ -598,7 +598,6 @@
       "hooks": [
         "apps/server/package.json",
         "apps/server/src/orchestration-v2/ThreadLaunchService.ts",
-        "apps/server/src/provider/ProviderRegistry.ts",
         "apps/server/src/provider/builtInDrivers.ts",
         "apps/web/src/components/Sidebar.tsx",
         "apps/web/src/components/chat/ComposerControlsBar.tsx",
@@ -1339,7 +1338,6 @@
       "surfaces": ["server", "shared", "web"],
       "files": ["packages/shared/src/modelBrandNames.ts"],
       "hooks": [
-        "apps/server/src/provider/ProviderRegistry.ts",
         "apps/web/src/components/chat/providerIconUtils.ts",
         "packages/client-runtime/src/state/subagentDisplay.ts",
         "packages/provider-pi/src/server/status.ts",
