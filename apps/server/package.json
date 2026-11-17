@@ -1,6 +1,6 @@
 {
   "name": "t3",
-  "version": "0.1.10",
+  "version": "0.1.11-nightly.20261117.4838",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -52,8 +52,8 @@
     "@t3tools/provider-grok": "workspace:*",
     "@t3tools/provider-hermes": "workspace:*",
     "@t3tools/provider-kiro": "workspace:*",
-    "@t3tools/provider-openbot": "workspace:*",
     "@t3tools/provider-muse": "workspace:*",
+    "@t3tools/provider-openbot": "workspace:*",
     "@t3tools/provider-opencode": "workspace:*",
     "@t3tools/provider-pi": "workspace:*",
     "@t3tools/source-control-azure-devops": "workspace:*",
