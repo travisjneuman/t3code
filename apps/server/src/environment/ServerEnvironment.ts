@@ -231,6 +231,7 @@ export const make = Effect.gen(function* () {
       fileAttachments: { maxUploadBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES },
       pullRequests: true,
       pullRequestChecks: true,
+      issues: true,
       linkedThreadRefreshes: true,
       sideChats: true,
       vcsBranchStatus: true,
@@ -298,6 +299,7 @@ export const make = Effect.gen(function* () {
       mcpModeLimitHeader: true,
       linkFence: true,
       mcpApprovalCodes: true,
+      peerLinkPairingCodes: true,
       mcpHostedApproval: true,
       ...FORK_SERVER_CAPABILITIES, // Fork add-on(core)
       shellThreadFamilies: true,
