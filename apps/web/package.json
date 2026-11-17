@@ -1,6 +1,6 @@
 {
   "name": "@t3tools/web",
-  "version": "0.1.11-nightly.20261117.4838",
+  "version": "0.1.10",
   "private": true,
   "type": "module",
   "scripts": {

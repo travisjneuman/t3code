@@ -1584,7 +1584,26 @@ const make = Effect.gen(function* () {
       ),
       Effect.uninterruptible,
     );
+    // While <git-dir>/checkout-hold exists, the owner's session-end checkpoint hook and
+    // repo-sync pulls skip this checkout, so neither commits the version stamp mid-build.
+    const holdFile = environment.path.join(
+      (yield* runChecked({
+        operation: "build",
+        command: "git",
+        args: ["rev-parse", "--absolute-git-dir"],
+        cwd: repo,
+      })).stdout.trim(),
+      "checkout-hold",
+    );
+    const releaseHold = fileSystem.remove(holdFile, { force: true }).pipe(Effect.ignore);
     const built = yield* Effect.gen(function* () {
+      yield* fileSystem
+        .writeFileString(holdFile, `${process.pid}\n`)
+        .pipe(
+          Effect.mapError((cause) =>
+            makeError("build", `could not write checkout hold ${holdFile}`, cause, repo),
+          ),
+        );
       const markersBeforeBuild = yield* countForkMarkers(repo, "HEAD");
       const timestamp = yield* Clock.currentTimeMillis;
       // A new build supersedes any earlier one that was never installed.
@@ -1744,6 +1763,7 @@ const make = Effect.gen(function* () {
           Effect.flatMap((leftovers) => failAfterCleanup(cause, leftovers)),
         ),
       ),
+      Effect.ensuring(releaseHold),
     );
     // The fix commit is released too, after the release of the merge already running.
     const push = built.fixed ? yield* pushFork(repo, true) : earlyPush;
