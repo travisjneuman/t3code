@@ -89,6 +89,13 @@ export function AgentPresetsControl() {
   const isDefault = selected !== undefined && selected.id === settings.agentDefaultPresetId;
   const savedSelected =
     selected !== undefined && !isBuiltinAgentPreset(selected.id) ? selected : undefined;
+  // Picking the default preset to Save it would first overwrite these rows with its old values.
+  const staleDefault = settings.agentPresets.find(
+    (preset) =>
+      preset.id === settings.agentDefaultPresetId &&
+      preset.id !== savedSelected?.id &&
+      !presetMatches(preset, settings),
+  );
 
   // A thread can only use a preset its own environment has, so a saved or
   // renamed preset is copied by id to each environment the scope covers. Each
@@ -201,6 +208,17 @@ export function AgentPresetsControl() {
           }
         >
           Save
+        </Button>
+      ) : null}
+      {staleDefault ? (
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={() =>
+            copyPreset({ ...staleDefault, settings: agentSettingsDifferences(settings) })
+          }
+        >
+          Save to {staleDefault.name}
         </Button>
       ) : null}
       <Button

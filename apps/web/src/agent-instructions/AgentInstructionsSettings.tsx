@@ -17,11 +17,15 @@ import {
   type AgentWorkerWorkspace,
   agentPresetForThread,
   agentPresetOverriddenKeys,
+  agentPresetValues,
   AGENT_PROJECT_SCOPED_SETTING_KEYS,
   DEFAULT_AGENT_DELEGATION_DEPTH,
   DEFAULT_AGENT_PARALLEL_WORKERS,
+  isBuiltinAgentPreset,
   MAX_AGENT_DELEGATION_DEPTH,
   MIN_AGENT_DELEGATION_DEPTH,
+  type ModelSelection,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import { useRef } from "react";
 
@@ -51,7 +55,7 @@ import { AgentPresetsControl } from "./AgentPresetsControl";
 import { ChoiceSelect } from "./ChoiceSelect";
 import { ParallelWorkersControl } from "./ParallelWorkersControl";
 import { ProviderInstructionsControl } from "./ProviderInstructionsControl";
-import { WorkerModelControl } from "./WorkerModelControl";
+import { WorkerModelControl, type WorkerModelSettingKey } from "./WorkerModelControl";
 
 const SETTING_LABELS: Record<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number], string> = {
   agentDelegationMode: "Delegation",
@@ -98,6 +102,14 @@ const SHARED_CHECKOUT_COMFORT = 12;
 
 function formatGb(value: number): string {
   return value < 10 ? value.toFixed(1).replace(/\.0$/, "") : String(Math.round(value));
+}
+
+function workerModelLabel(
+  providers: ReadonlyArray<ServerProvider>,
+  selection: ModelSelection,
+): string {
+  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  return provider?.models.find((model) => model.slug === selection.model)?.name ?? selection.model;
 }
 
 /** The Parallel workers row's note: what the count means and what it costs. */
@@ -199,6 +211,26 @@ export function AgentInstructionsSettingsSection() {
   const defaultPreset = agentPresetForThread(settings, []);
   const defaultOverrides =
     defaultPreset === undefined ? [] : agentPresetOverriddenKeys(defaultPreset, settings);
+  // Delegation lays the default preset over these rows, so a row can name a model no worker gets.
+  const presetModelNote = (key: WorkerModelSettingKey, offLabel: string) => {
+    if (defaultPreset === undefined || !defaultOverrides.includes(key)) return null;
+    const presetValue = agentPresetValues(defaultPreset)[key] ?? null;
+    const current = settings[key];
+    const value =
+      presetValue === null
+        ? offLabel
+        : current !== null &&
+            current.instanceId === presetValue.instanceId &&
+            current.model === presetValue.model
+          ? `${workerModelLabel(providers, presetValue)} with other options`
+          : workerModelLabel(providers, presetValue);
+    return (
+      <span className="mt-1 block text-warning-foreground">
+        Threads without a preset choice use the default preset, {defaultPreset.name}, which sets
+        this to {value}.
+      </span>
+    );
+  };
 
   return (
     <SettingsSection id="agents" title="Agents">
@@ -214,6 +246,9 @@ export function AgentInstructionsSettingsSection() {
               <span className="mt-1 block text-warning-foreground">
                 Threads without a preset choice run under the default preset, {defaultPreset?.name},
                 which replaces: {defaultOverrides.map((key) => SETTING_LABELS[key]).join(", ")}.
+                {defaultPreset && !isBuiltinAgentPreset(defaultPreset.id)
+                  ? ` Saving to ${defaultPreset.name} copies the values here into it.`
+                  : null}
               </span>
             ) : null}
           </>
@@ -250,7 +285,13 @@ export function AgentInstructionsSettingsSection() {
             serverScoped
             settingKeys={["agentWorkerModelSelection"]}
             {...searchableSetting("agent-worker-model")}
-            description="Provider and model for delegated workers. Off runs workers on the thread's model. T3 uses it whenever the agent leaves out a target."
+            description={
+              <>
+                Provider and model for delegated workers. Off runs workers on the thread's model. T3
+                uses it whenever the agent leaves out a target.
+                {presetModelNote("agentWorkerModelSelection", "Off (the thread's model)")}
+              </>
+            }
             control={
               <WorkerModelControl
                 settingKey="agentWorkerModelSelection"
@@ -293,7 +334,12 @@ export function AgentInstructionsSettingsSection() {
             serverScoped
             settingKeys={["agentReviewWorkerModelSelection"]}
             {...searchableSetting("agent-review-worker-model")}
-            description="Model for review workers. Off uses the worker model."
+            description={
+              <>
+                Model for review workers. Off uses the worker model.
+                {presetModelNote("agentReviewWorkerModelSelection", "Off (the worker model)")}
+              </>
+            }
             control={
               <WorkerModelControl
                 settingKey="agentReviewWorkerModelSelection"
@@ -308,7 +354,12 @@ export function AgentInstructionsSettingsSection() {
             serverScoped
             settingKeys={["agentResearchWorkerModelSelection"]}
             {...searchableSetting("agent-research-worker-model")}
-            description="Model for research workers. Off uses the worker model."
+            description={
+              <>
+                Model for research workers. Off uses the worker model.
+                {presetModelNote("agentResearchWorkerModelSelection", "Off (the worker model)")}
+              </>
+            }
             control={
               <WorkerModelControl
                 settingKey="agentResearchWorkerModelSelection"
