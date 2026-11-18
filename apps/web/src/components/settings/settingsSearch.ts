@@ -1590,7 +1590,8 @@ export function isSettingsSearchScopeAvailable(
   }
 }
 
-function searchableSetting(id: SettingsSearchItemId): {
+// Fork add-on(agent-instructions): exported for fork settings rows that have not moved to the hook.
+export function searchableSetting(id: SettingsSearchItemId): {
   readonly id: string;
   readonly title: string;
 } {
