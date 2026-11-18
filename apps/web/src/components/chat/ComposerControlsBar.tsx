@@ -2,6 +2,7 @@ import type { ChatComposerProps } from "./ChatComposer";
 import type { PromptUltrathink } from "./TraitsPicker";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { type AppModelOption } from "../../modelSelection";
+import { useGT, useMessages } from "gt-react";
 import { CircleAlertIcon } from "lucide-react";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 /* Fork add-on(agent-instructions) */ import {
@@ -157,6 +158,8 @@ export function ComposerControlsBar(props: {
     measuredHiddenBlockCount,
   });
   const controlSize = composerControlsCollapsed ? "xs" : "sm";
+  const gt = useGT();
+  const m = useMessages();
   const applyThreadModelPick = useApplyThreadModelPick();
   const applyRouteThreadModelPick = useStableCallback(() => applyThreadModelPick(routeThreadRef));
   const traitsInput = resolveComposerTraitsInput({
@@ -173,15 +176,16 @@ export function ComposerControlsBar(props: {
     promptUltrathink,
     onPromptEdit,
   });
-  const effort = describeComposerEffort(traitsInput, props.effortDisplay, controlSize);
-  const agentPresetControl = activeThreadId && !openBotThread ? ( // Fork add-on(agent-instructions)
-    <AgentThreadPresetControl // Fork add-on(agent-instructions)
-      environmentId={environmentId} // Fork add-on(agent-instructions)
-      threadId={activeThreadId} // Fork add-on(agent-instructions)
-      size={controlSize} // Fork add-on(agent-instructions)
-      hidden={composerControlsHidden || hiddenRestingBlockIds.length > 0} // Fork add-on(agent-instructions): only the mode block overflows.
-    /> // Fork add-on(agent-instructions)
-  ) : null; // Fork add-on(agent-instructions)
+  const effort = describeComposerEffort(traitsInput, props.effortDisplay, controlSize, m);
+  const agentPresetControl =
+    activeThreadId && !openBotThread ? ( // Fork add-on(agent-instructions)
+      <AgentThreadPresetControl // Fork add-on(agent-instructions)
+        environmentId={environmentId} // Fork add-on(agent-instructions)
+        threadId={activeThreadId} // Fork add-on(agent-instructions)
+        size={controlSize} // Fork add-on(agent-instructions)
+        hidden={composerControlsHidden || hiddenRestingBlockIds.length > 0} // Fork add-on(agent-instructions): only the mode block overflows.
+      /> // Fork add-on(agent-instructions)
+    ) : null; // Fork add-on(agent-instructions)
   const restingBlockDefs = showModeBlock
     ? [
         {
@@ -286,20 +290,22 @@ export function ComposerControlsBar(props: {
       className="shrink-0"
     >
       <CircleAlertIcon className="size-4" />
-      {providerSetupInstanceId ? "Open provider settings" : "No provider available"}
+      {providerSetupInstanceId ? gt("Open provider settings") : gt("No provider available")}
     </ComposerControl>
   ) : (
     <>
-      {selectedProvider === OPENBOT_DRIVER && activeThreadId ? ( // Fork add-on(openbot)
-        <OpenBotAgentControl // Fork add-on(openbot)
-          environmentId={environmentId} // Fork add-on(openbot)
-          instanceId={selectedInstanceId} // Fork add-on(openbot)
-          threadId={activeThreadId} // Fork add-on(openbot)
-          draftTarget={routeKind === "draft" && draftId ? draftId : routeThreadRef} // Fork add-on(openbot)
-          size={controlSize} // Fork add-on(openbot)
-          hidden={composerControlsHidden} // Fork add-on(openbot)
-        /> // Fork add-on(openbot)
-      ) : null /* Fork add-on(openbot) */}
+      {
+        selectedProvider === OPENBOT_DRIVER && activeThreadId ? ( // Fork add-on(openbot)
+          <OpenBotAgentControl // Fork add-on(openbot)
+            environmentId={environmentId} // Fork add-on(openbot)
+            instanceId={selectedInstanceId} // Fork add-on(openbot)
+            threadId={activeThreadId} // Fork add-on(openbot)
+            draftTarget={routeKind === "draft" && draftId ? draftId : routeThreadRef} // Fork add-on(openbot)
+            size={controlSize} // Fork add-on(openbot)
+            hidden={composerControlsHidden} // Fork add-on(openbot)
+          /> // Fork add-on(openbot)
+        ) : null /* Fork add-on(openbot) */
+      }
       {composerModelPicker}
 
       <>

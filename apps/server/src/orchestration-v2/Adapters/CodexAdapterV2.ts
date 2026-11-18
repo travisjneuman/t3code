@@ -7880,14 +7880,15 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             Effect.mapError(mcpAppsError("Codex MCP resource read failed.")),
           ),
         };
-        /* Fork add-on(session-details) */ const sessionInsights = CodexInsightsHooks.makeSessionInsights({
-          client, // Fork add-on(session-details)
-          ensureInitialized, // Fork add-on(session-details)
-          getNativeThreadId, // Fork add-on(session-details)
-          cwd: input.runtimePolicy.cwd, // Fork add-on(session-details)
-          tokenUsage: insightsTokenUsage, // Fork add-on(session-details)
-          mcpServersError: mcpAppsError("Failed to list Codex MCP servers."), // Fork add-on(session-details)
-        }); // Fork add-on(session-details)
+        /* Fork add-on(session-details) */ const sessionInsights =
+          CodexInsightsHooks.makeSessionInsights({
+            client, // Fork add-on(session-details)
+            ensureInitialized, // Fork add-on(session-details)
+            getNativeThreadId, // Fork add-on(session-details)
+            cwd: input.runtimePolicy.cwd, // Fork add-on(session-details)
+            tokenUsage: insightsTokenUsage, // Fork add-on(session-details)
+            mcpServersError: mcpAppsError("Failed to list Codex MCP servers."), // Fork add-on(session-details)
+          }); // Fork add-on(session-details)
 
         // turn/steer carries no settings, and the turns Codex starts on its own reuse the thread's.
         const applyServiceTier = Effect.fn("CodexAdapterV2.applyServiceTier")(function* (
@@ -8178,11 +8179,38 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
 
               yield* applyServiceTier(threadId, turnInput.modelSelection);
               const codexInput = yield* toCodexInput(turnInput);
+              // turn/steer takes no additionalContext, so notes the thread has not been sent go
+              // as quoted user input, the way restoreAdditionalContext resends them.
+              const sentContext = (yield* Ref.get(additionalContextByThread)).get(threadId);
+              const unsentNotes = (turnInput.appContext ?? []).filter(
+                (entry) => sentContext?.[entry.key]?.value !== entry.text,
+              );
               yield* client.request("turn/steer", {
                 expectedTurnId: activeTurn.nativeTurnId,
-                input: codexInput,
+                input: [
+                  ...unsentNotes.map((entry) => ({
+                    type: "text" as const,
+                    text: `<external_${entry.key}>${entry.text}</external_${entry.key}>`,
+                  })),
+                  ...codexInput,
+                ],
                 threadId,
               });
+              if (unsentNotes.length > 0) {
+                yield* Ref.update(additionalContextByThread, (current) => {
+                  const next = new Map(current);
+                  next.set(threadId, {
+                    ...current.get(threadId),
+                    ...Object.fromEntries(
+                      unsentNotes.map((entry) => [
+                        entry.key,
+                        { kind: "untrusted" as const, value: entry.text },
+                      ]),
+                    ),
+                  });
+                  return next;
+                });
+              }
             },
             (effect, turnInput) =>
               effect.pipe(

@@ -4,10 +4,12 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, RunId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { useClosedViewStore } from "./closedViewStore";
+import { m } from "./i18n/messages";
 import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { RemoteAppPanelSurface } from "./remote-apps/panel/remoteAppPanelSurface"; // Fork add-on(web-apps)
@@ -155,7 +157,10 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "issue" | "side-chat" | "remote-app">, // Fork add-on(web-apps)
+    kind: Exclude<
+      RightPanelKind,
+      "file" | "terminal" | "pull-request" | "issue" | "side-chat" | "remote-app"
+    >, // Fork add-on(web-apps)
   ) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
@@ -222,7 +227,10 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "issue" | "side-chat" | "remote-app">, // Fork add-on(web-apps)
+    kind: Exclude<
+      RightPanelKind,
+      "file" | "terminal" | "pull-request" | "issue" | "side-chat" | "remote-app"
+    >, // Fork add-on(web-apps)
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -829,7 +837,13 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             ...current,
             surfaces: current.surfaces.map((surface) =>
               surface.id === surfaceId && surface.kind === "device"
-                ? { ...surface, title: title.trim() || surface.target?.name || "Device" }
+                ? {
+                    ...surface,
+                    title:
+                      title.trim() ||
+                      surface.target?.name ||
+                      m(msg("Device", { $context: "a simulator or emulator" })),
+                  }
                 : surface,
             ),
           })),

@@ -23,7 +23,9 @@ import {
   decodeServiceLauncherChildMessage,
   isExactServiceVersion,
   parseLegacyServiceState,
+  decodeServiceUnit,
   disabledServiceTask,
+  encodeServiceTask,
   parseServiceState,
   serviceTaskIsDisabled,
   serviceUnitBaseDirOf,
@@ -123,8 +125,8 @@ export async function registerServiceTask(
   }
   const disabledPath = `${unitPath}.${process.pid}.disabled`;
   try {
-    const unit = await NodeFSP.readFile(unitPath, "utf8");
-    await NodeFSP.writeFile(disabledPath, disabledServiceTask(unit));
+    const unit = decodeServiceUnit(await NodeFSP.readFile(unitPath));
+    await NodeFSP.writeFile(disabledPath, encodeServiceTask(disabledServiceTask(unit)));
     await register(disabledPath);
   } finally {
     await NodeFSP.rm(disabledPath, { force: true });
@@ -258,7 +260,9 @@ async function serviceLogPath(
 ): Promise<string | undefined> {
   if (options.logFile !== undefined) return options.logFile;
   if (serviceUnit === undefined) return undefined;
-  const contents = await NodeFSP.readFile(serviceUnit.path, "utf8").catch(() => undefined);
+  const contents = await NodeFSP.readFile(serviceUnit.path)
+    .then(decodeServiceUnit)
+    .catch(() => undefined);
   return contents === undefined ? undefined : serviceUnitLogPathOf(contents);
 }
 
@@ -674,7 +678,7 @@ export async function writeServiceState(filePath: string, state: ServiceState): 
   await replaceFileDurably(filePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-async function replaceFileDurably(filePath: string, contents: string): Promise<void> {
+async function replaceFileDurably(filePath: string, contents: string | Uint8Array): Promise<void> {
   const directory = NodePath.dirname(filePath);
   const tempPath = NodePath.join(
     directory,
@@ -683,7 +687,7 @@ async function replaceFileDurably(filePath: string, contents: string): Promise<v
   let handle: NodeFSP.FileHandle | undefined;
   try {
     handle = await NodeFSP.open(tempPath, "wx", 0o600);
-    await handle.writeFile(contents, "utf8");
+    await handle.writeFile(contents);
     await handle.sync();
     await handle.close();
     handle = undefined;
@@ -1263,7 +1267,8 @@ export class Launcher {
       await reject("The requested target is not an exact version.");
       return;
     }
-    if (!isServiceUpdateTarget(message.targetVersion, child.version)) { // Fork add-on(host-releases)
+    if (!isServiceUpdateTarget(message.targetVersion, child.version)) {
+      // Fork add-on(host-releases)
       await reject("Remote updates must select a newer server version or fork build.");
       return;
     }
@@ -1374,7 +1379,7 @@ export class Launcher {
         ) {
           return;
         }
-        const contents = await NodeFSP.readFile(unit.path, "utf8");
+        const contents = decodeServiceUnit(await NodeFSP.readFile(unit.path));
         const installedBaseDir = serviceUnitBaseDirOf(contents);
         if (
           installedBaseDir === undefined ||
@@ -1383,7 +1388,12 @@ export class Launcher {
           return;
         }
         const repointed = repointServiceUnit(contents, version);
-        if (repointed !== contents) await replaceFileDurably(unit.path, repointed);
+        if (repointed !== contents) {
+          await replaceFileDurably(
+            unit.path,
+            unit.path.endsWith(".xml") ? encodeServiceTask(repointed) : repointed,
+          );
+        }
         // A previous rename may have succeeded before reload failed.
         await unit.reload();
       } finally {

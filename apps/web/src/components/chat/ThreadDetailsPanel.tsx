@@ -21,6 +21,7 @@ import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
+import { T, useGT, Var } from "gt-react"; // Fork add-on(hermes)
 import { memo, useState, type ComponentProps } from "react";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
 import { OpenInPicker } from "./OpenInPicker";
@@ -112,6 +113,7 @@ interface ThreadDetailsPanelProps extends Pick<
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const localWorkspace = props.hermesMachine === undefined; // Fork add-on(hermes)
   const visible = useClientSettings(resolveThreadDetailsVisibility);
+  const gt = useGT();
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const fileScripts = useT3ProjectFileScripts(
     props.environmentId,
@@ -204,14 +206,18 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               show.scripts ? (
                 <ThreadDetailsSection
                   headingId="thread-details-workspace-heading"
-                  title="Workspace"
+                  title={gt("Workspace")}
                   separated={false}
                   showHeading={false}
                 >
                   <div className="flex flex-col">
                     {props.hermesMachine !== undefined ? ( // Fork add-on(hermes)
-                      <p className="px-1.5 py-1 text-muted-foreground text-sm" /* Fork add-on(hermes) */>
-                        Runs on {props.hermesMachine /* Fork add-on(hermes) */}, in Hermes's own workspace
+                      <p
+                        className="px-1.5 py-1 text-muted-foreground text-sm" /* Fork add-on(hermes) */
+                      >
+                        <T /* Fork add-on(hermes) */>
+                          Runs on <Var>{props.hermesMachine}</Var>, in Hermes's own workspace
+                        </T>
                       </p> // Fork add-on(hermes)
                     ) : /* Fork add-on(hermes) */ null}
                     {show.environment ? (
@@ -259,7 +265,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               {show.branch || show.pullRequests || show.git ? (
                 <ThreadDetailsSection
                   headingId="thread-details-version-control-heading"
-                  title="Version Control"
+                  title={gt("Version Control")}
                   showHeading={false}
                   separated={density === "full"}
                 >
@@ -343,7 +349,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 >
                   <SlidersHorizontalIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
                   <span className={cn("ml-0.5", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
-                    Choose what to show
+                    <T>Choose what to show</T>
                   </span>
                 </ThreadDetailsControl>
               </div>

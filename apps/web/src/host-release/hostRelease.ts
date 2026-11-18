@@ -6,12 +6,14 @@ import type {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { AsyncResult, Atom } from "effect/reactivity";
+import { msg, useMessages } from "gt-react";
 
 import type { ServerUpdateOutcome } from "~/components/ServerUpdateAction";
 import {
   collectServerUpdateTargets,
   type UpdateEverythingMachine,
 } from "~/components/sidebar/updateEverything.logic";
+import { m, type MessageResolver } from "~/i18n/messages";
 import {
   resolveRuntimeVersionMismatch,
   resolveServerConfigVersionMismatch,
@@ -99,15 +101,24 @@ export function useHostReleaseCheck(): HostReleaseCheck {
   return resolveHostReleaseCheck(useAtomValue(hostReleaseAtom));
 }
 
-const checkFailure = (reason: string) => `couldn't read the local host build status (${reason})`;
+const checkFailure = (reason: string, resolve: MessageResolver) =>
+  resolve(msg("couldn't read the local host build status ({reason})", { reason }));
 
 /** The muted line Connections shows above its hosts, including when a local build is required. */
-export function hostReleaseCheckFailureNotice(check: HostReleaseCheck): string | null {
+export function hostReleaseCheckFailureNotice(
+  check: HostReleaseCheck,
+  resolve: MessageResolver = m,
+): string | null {
   if (check.status === "local-build-required") {
-    return "Local host build required. Press Update in the source desktop app to stage fork hosts.";
+    return resolve(
+      msg("Local host build required. Press Update in the source desktop app to stage fork hosts."),
+    );
   }
-  if (check.status === "building") return "Building and staging the local fork version…";
-  return check.status === "failed" ? `Local host build failed (${check.reason})` : null;
+  if (check.status === "building")
+    return resolve(msg("Building and staging the local fork version…"));
+  return check.status === "failed"
+    ? resolve(msg("Local host build failed ({reason})", { reason: check.reason }))
+    : null;
 }
 
 export type HostReleaseState =
@@ -129,20 +140,25 @@ export function resolveHostReleaseState(
     : { status: "update", version: check.target };
 }
 
-export function describeHostReleaseState(state: HostReleaseState): string {
+export function describeHostReleaseState(
+  state: HostReleaseState,
+  resolve: MessageResolver = m,
+): string {
   switch (state.status) {
     case "checking":
-      return "Checking local host build…";
+      return resolve(msg("Checking local host build…"));
     case "current":
-      return "Up to date";
+      return resolve(msg("Up to date"));
     case "building":
-      return "Building and staging the local fork version…";
+      return resolve(msg("Building and staging the local fork version…"));
     case "local-build-required":
-      return "Local host build required. Press Update in the source desktop app.";
+      return resolve(msg("Local host build required. Press Update in the source desktop app."));
     case "update":
-      return `Update to ${describeRuntimeVersion(state.version)}`;
+      return resolve(
+        msg("Update to {version}", { version: describeRuntimeVersion(state.version) }),
+      );
     case "failed":
-      return `Local host build failed (${state.reason})`;
+      return resolve(msg("Local host build failed ({reason})", { reason: state.reason }));
   }
 }
 
@@ -155,21 +171,22 @@ export function describeRuntimeVersion(runtimeVersion: string): string {
 export function resolveHostVersionMismatch(
   serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
   hostUpdateTarget: string | null,
+  resolve: MessageResolver = m,
 ): VersionMismatch | null {
   // A desktop app's own server ships in the same bundle that publishes host releases, so it is
   // never behind the staged target; a Mac build newer than the last staging would read as one.
   if (serverConfig?.environment.capabilities.serverSelfUpdate === "desktop-managed") {
-    return resolveServerConfigVersionMismatch(serverConfig);
+    return resolveServerConfigVersionMismatch(serverConfig, resolve);
   }
   return hostUpdateTarget === null
     ? null
-    : resolveRuntimeVersionMismatch(serverConfig?.environment, hostUpdateTarget);
+    : resolveRuntimeVersionMismatch(serverConfig?.environment, hostUpdateTarget, resolve);
 }
 
 export function useHostVersionMismatch(
   serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
 ): VersionMismatch | null {
-  return resolveHostVersionMismatch(serverConfig, useHostUpdateTarget());
+  return resolveHostVersionMismatch(serverConfig, useHostUpdateTarget(), useMessages());
 }
 
 /**
@@ -180,10 +197,13 @@ export function collectHostUpdateTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
   hostUpdateTarget: string | null,
   check?: HostReleaseCheck,
+  resolve: MessageResolver = m,
 ): ReturnType<typeof collectServerUpdateTargets> {
-  if (hostUpdateTarget !== null) return collectServerUpdateTargets(machines, hostUpdateTarget);
+  if (hostUpdateTarget !== null) {
+    return collectServerUpdateTargets(machines, hostUpdateTarget, resolve);
+  }
   if (check?.status !== "failed") return { targets: [], skipped: [] };
-  const reason = checkFailure(check.reason);
+  const reason = checkFailure(check.reason, resolve);
   return {
     targets: [],
     skipped: machines
@@ -202,7 +222,7 @@ export function skippedAsFailed<Args extends ReadonlyArray<unknown>>(
   return async (...args) => {
     const outcome = await update(...args);
     return outcome.status === "skipped"
-      ? { status: "failed", message: "Could not start the update" }
+      ? { status: "failed", message: m(msg("Could not start the update")) }
       : outcome;
   };
 }

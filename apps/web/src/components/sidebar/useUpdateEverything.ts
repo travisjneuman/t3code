@@ -1,3 +1,4 @@
+import { useMessages } from "gt-react"; // Fork add-on(maintenance-queue): interruptedProviderUpdateLine owns that copy.
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 
@@ -58,6 +59,7 @@ export function useUpdateEverything(
   const targetVersion = useHostUpdateTarget(); // Fork add-on(host-releases)
   const hostReleaseCheck = useHostReleaseCheck(); // Fork add-on(host-releases): release check states.
   const { environments } = useEnvironments();
+  const resolve = useMessages();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));
   const updateStates = useAtomValue(environmentUpdateStatesAtom(environmentIds));
@@ -71,9 +73,9 @@ export function useUpdateEverything(
     updateState: updateStates[index]!,
   }));
   const { targets: servers, skipped } = channelSwitch
-    ? collectChannelSwitchTargets(machines, channelSwitch)
+    ? collectChannelSwitchTargets(machines, channelSwitch, resolve)
     : // Fork add-on(host-releases): host builds: remote fork hosts move to the latest successfully staged target.
-      collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck); // Fork add-on(host-releases)
+      collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck, resolve); // Fork add-on(host-releases)
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
   const moving = servers.filter((server) => server.trackOnly !== true);
   const restarts = collectRestartingMachines(machines, moving, localUpdateVersion !== null);
@@ -85,19 +87,22 @@ export function useUpdateEverything(
     reportFailure: false,
   });
 
-  const view = describeUpdateEverything({
-    localVersion: localUpdateVersion,
-    localMachines: machines.filter((machine) => machine.hostedByThisApp),
-    servers: moving,
-    skipped,
-    providerMachines: providers.machines.map((machine) => ({
-      environmentId: machine.environmentId,
-      label: machine.label,
-      providers: machine.candidates.map(
-        (candidate) => PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver,
-      ),
-    })),
-  });
+  const view = describeUpdateEverything(
+    {
+      localVersion: localUpdateVersion,
+      localMachines: machines.filter((machine) => machine.hostedByThisApp),
+      servers: moving,
+      skipped,
+      providerMachines: providers.machines.map((machine) => ({
+        environmentId: machine.environmentId,
+        label: machine.label,
+        providers: machine.candidates.map(
+          (candidate) => PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver,
+        ),
+      })),
+    },
+    resolve,
+  );
 
   return {
     hasUpdates: servers.length > 0 || providers.machines.length > 0,

@@ -19,6 +19,14 @@
       "types": "./src/zip/zipDirectory.ts",
       "default": "./src/zip/zipDirectory.ts"
     },
+    "./zip/error": {
+      "types": "./src/zip/zipError.ts",
+      "default": "./src/zip/zipError.ts"
+    },
+    "./zip/error-messages": {
+      "types": "./src/zip/zipErrorMessages.ts",
+      "default": "./src/zip/zipErrorMessages.ts"
+    },
     "./workspace-basename-lookup": {
       "types": "./src/workspaceBasenameLookup.ts",
       "default": "./src/workspaceBasenameLookup.ts"
@@ -34,6 +42,10 @@
     "./composer-model-mentions": {
       "types": "./src/composerModelMentions.ts",
       "default": "./src/composerModelMentions.ts"
+    },
+    "./contract-labels": {
+      "types": "./src/contractLabels.ts",
+      "default": "./src/contractLabels.ts"
     },
     "./locales": {
       "types": "./src/locales.ts",
@@ -626,8 +638,8 @@
     "@t3tools/provider-grok": "workspace:*",
     "@t3tools/provider-hermes": "workspace:*",
     "@t3tools/provider-kiro": "workspace:*",
-    "@t3tools/provider-openbot": "workspace:*",
     "@t3tools/provider-muse": "workspace:*",
+    "@t3tools/provider-openbot": "workspace:*",
     "@t3tools/provider-opencode": "workspace:*",
     "@t3tools/provider-pi": "workspace:*",
     "@t3tools/secret-provider-definitions": "workspace:*",
@@ -635,6 +647,7 @@
     "@t3tools/source-control-core": "workspace:*",
     "@t3tools/source-control-definitions": "workspace:*",
     "effect": "catalog:",
+    "gt-i18n": "1.0.40",
     "jszip": "3.10.1",
     "remark-gfm": "catalog:",
     "remark-parse": "catalog:",

@@ -1,3 +1,5 @@
+import { m } from "../i18n/messages";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useParams } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -19,11 +21,15 @@ import {
 } from "@t3tools/shared/cloneUrl";
 import { ArrowRightIcon } from "lucide-react";
 import { useId, useState } from "react";
+import { T, useGT, Var } from "gt-react";
 import { create } from "zustand";
 
 import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { CheckoutFolderHint } from "../existing-checkout/CheckoutFolderHint"; // Fork add-on(existing-checkout)
-import { checkedWorkspaceRoot, useExistingCheckout } from "../existing-checkout/useExistingCheckout"; // Fork add-on(existing-checkout)
+import {
+  checkedWorkspaceRoot,
+  useExistingCheckout,
+} from "../existing-checkout/useExistingCheckout"; // Fork add-on(existing-checkout)
 import { useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
@@ -65,6 +71,8 @@ interface AddProjectToMachineRequest {
   readonly targetEnvironmentId: EnvironmentId | null;
 }
 
+const GIT_CLONE_LABEL = "git clone"; // Fork add-on(existing-checkout): a git command name, kept English.
+
 const useRequest = create<{ request: AddProjectToMachineRequest | null; session: number }>(() => ({
   request: null,
   session: 0,
@@ -97,6 +105,7 @@ export function AddProjectToMachineDialogHost() {
 }
 
 function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRequest }) {
+  const gt = useGT();
   const id = useId();
   const project = useProject(request.projectRef);
   const handleNewThread = useNewThreadHandler();
@@ -127,8 +136,22 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const [pathOverride, setPathOverride] = useState<string | null>(null);
   const destinationPath = pathOverride ?? defaultPath;
 
-  const subdirectory = project ? projectSubdirectory(project.repositoryIdentity?.rootPath, project.workspaceRoot) : ""; // Fork add-on(existing-checkout)
-  const { repositoryKey, searchingCheckout, foundRoot, setCloneInstead, canCheckFolder, useOwnFolder, setUseOwnFolder, addExisting, setExistingPathOverride, existingPath, folderPath } = useExistingCheckout(project, target, targetEnvironment, destinationPath, subdirectory); // Fork add-on(existing-checkout)
+  const subdirectory = project
+    ? projectSubdirectory(project.repositoryIdentity?.rootPath, project.workspaceRoot)
+    : ""; // Fork add-on(existing-checkout)
+  const {
+    repositoryKey,
+    searchingCheckout,
+    foundRoot,
+    setCloneInstead,
+    canCheckFolder,
+    useOwnFolder,
+    setUseOwnFolder,
+    addExisting,
+    setExistingPathOverride,
+    existingPath,
+    folderPath,
+  } = useExistingCheckout(project, target, targetEnvironment, destinationPath, subdirectory); // Fork add-on(existing-checkout)
 
   const capabilities = source?.serverConfig?.environment.capabilities;
   const canListFiles = capabilities?.ignoredFileListing === true;
@@ -175,7 +198,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
     project === null ||
     target === null ||
     searchingCheckout || // Fork add-on(existing-checkout)
-    (!addExisting && canListFiles && allIgnoredFiles.data === null && allIgnoredFiles.error === null); // Fork add-on(existing-checkout)
+    (!addExisting &&
+      canListFiles &&
+      allIgnoredFiles.data === null &&
+      allIgnoredFiles.error === null); // Fork add-on(existing-checkout)
   const toggleFile = (file: ProjectIgnoredFile, checked: boolean) => {
     const next = new Map(selectedFiles);
     if (!checked) next.delete(file.path);
@@ -218,18 +244,21 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
 
   const submit = async () => {
     if (!project || !target || submitting) return;
-    if (folderPath.trim().length === 0) { // Fork add-on(existing-checkout)
-      setError("Choose a folder on the other machine."); // Fork add-on(existing-checkout)
+    if (folderPath.trim().length === 0) {
+      // Fork add-on(existing-checkout)
+      setError(gt("Choose a folder on the other machine.")); // Fork add-on(existing-checkout)
       return; // Fork add-on(existing-checkout)
     } // Fork add-on(existing-checkout)
     setSubmitting(true);
     setError(null);
     try {
       let projectId = newProjectId(); // Fork add-on(existing-checkout): an added checkout keeps the id it is created with.
-      if (addExisting) { // Fork add-on(existing-checkout)
+      if (addExisting) {
+        // Fork add-on(existing-checkout)
         const workspaceRoot = // Fork add-on(existing-checkout)
           canCheckFolder && repositoryKey !== null // Fork add-on(existing-checkout)
-            ? await checkedWorkspaceRoot({ // Fork add-on(existing-checkout)
+            ? await checkedWorkspaceRoot({
+                // Fork add-on(existing-checkout)
                 environmentId: target.environmentId, // Fork add-on(existing-checkout)
                 repositoryKey, // Fork add-on(existing-checkout)
                 folder: folderPath.trim(), // Fork add-on(existing-checkout)
@@ -238,14 +267,17 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 machine: target.label, // Fork add-on(existing-checkout)
               }) // Fork add-on(existing-checkout)
             : folderPath.trim(); // Fork add-on(existing-checkout)
-        await addExistingCheckout({ // Fork add-on(existing-checkout)
+        await addExistingCheckout({
+          // Fork add-on(existing-checkout)
           environmentId: target.environmentId, // Fork add-on(existing-checkout)
           projectId, // Fork add-on(existing-checkout)
           title: project.title, // Fork add-on(existing-checkout)
           workspaceRoot, // Fork add-on(existing-checkout)
         }); // Fork add-on(existing-checkout)
-      } else { // Fork add-on(existing-checkout)
-        projectId = await addProjectToMachine({ // Fork add-on(existing-checkout): assigns the outer id.
+      } else {
+        // Fork add-on(existing-checkout)
+        projectId = await addProjectToMachine({
+          // Fork add-on(existing-checkout): assigns the outer id.
           source: { environmentId: project.environmentId, cwd: project.workspaceRoot },
           subdirectory: projectSubdirectory(
             project.repositoryIdentity?.rootPath,
@@ -262,8 +294,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
       close();
       openClonedProject(scopeProjectRef(target.environmentId, projectId));
     } catch (cause) {
-      const fallback = addExisting ? "Could not add the project." : "Could not start the clone."; // Fork add-on(existing-checkout)
-      setError(cause instanceof Error ? cause.message : fallback);
+      const fallback = addExisting
+        ? gt("Could not add the project.")
+        : gt("Could not start the clone."); // Fork add-on(existing-checkout)
+      setError(thrownErrorMessage(cause, m) ?? fallback);
       setSubmitting(false);
     }
   };
@@ -284,11 +318,30 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
           }}
         >
           <DialogHeader>
-            <DialogTitle>Add to another machine</DialogTitle>
+            <DialogTitle>
+              <T>Add to another machine</T>
+            </DialogTitle>
             <DialogDescription>
-              {addExisting // Fork add-on(existing-checkout)
-                ? `${target?.label ?? "That machine"} already has ${project?.repositoryIdentity?.displayName ?? project?.title}. Add its folder as the project there.` // Fork add-on(existing-checkout)
-                : `Clone ${project?.repositoryIdentity?.displayName ?? project?.title} and bring the local files git does not track.`}
+              {
+                addExisting ? ( // Fork add-on(existing-checkout)
+                  target ? ( // Fork add-on(existing-checkout)
+                    gt("{machine} already has {project}. Add its folder as the project there.", {
+                      machine: target.label,
+                      project: project?.repositoryIdentity?.displayName ?? project?.title,
+                    }) // Fork add-on(existing-checkout)
+                  ) : (
+                    gt("That machine already has {project}. Add its folder as the project there.", {
+                      project: project?.repositoryIdentity?.displayName ?? project?.title,
+                    })
+                  )
+                ) : (
+                  // Fork add-on(existing-checkout)
+                  <T>
+                    Clone <Var>{project?.repositoryIdentity?.displayName ?? project?.title}</Var>{" "}
+                    and bring the local files git does not track.
+                  </T>
+                ) /* Fork add-on(existing-checkout) */
+              }
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -299,24 +352,30 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     kind={resolveEnvironmentMachineKind(source?.serverConfig ?? null)}
                     className="size-3.5 shrink-0"
                   />
-                  <span className="truncate">{source?.label ?? "This machine"}</span>
+                  <span className="truncate">{source?.label ?? gt("This machine")}</span>
                 </span>
                 <span className="flex min-w-0 font-mono text-muted-foreground text-xs">
                   <MiddleTruncate value={project?.workspaceRoot ?? ""} />
                 </span>
               </div>
               <div className="flex w-28 flex-col items-center gap-0.5 text-muted-foreground text-xs">
-                <span>{addExisting /* Fork add-on(existing-checkout) */ ? "already there" : "git clone"}</span>
+                <span>
+                  {addExisting // Fork add-on(existing-checkout)
+                    ? gt("already there") // Fork add-on(existing-checkout)
+                    : GIT_CLONE_LABEL}
+                </span>
                 <span className="flex w-full items-center">
                   <span className="h-px flex-1 bg-border" />
                   <ArrowRightIcon className="-ms-1 size-3.5" aria-hidden />
                 </span>
                 <span>
                   {addExisting // Fork add-on(existing-checkout)
-                    ? "no copy" // Fork add-on(existing-checkout)
+                    ? gt("no copy", { $context: "no files are copied" }) // Fork add-on(existing-checkout)
                     : selectedFiles.size === 0
-                      ? "no files"
-                      : `+ ${selectedFiles.size} ${selectedFiles.size === 1 ? "file" : "files"}`}
+                      ? gt("no files")
+                      : gt("{count, plural, one {+ {count} file} other {+ {count} files}}", {
+                          count: selectedFiles.size,
+                        })}
                 </span>
               </div>
               <div className="flex min-w-0 flex-col gap-1">
@@ -332,7 +391,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     }}
                     items={targets.map((t) => ({ value: t.environmentId, label: t.label }))}
                   >
-                    <SelectTrigger size="sm" aria-label="Machine to add the project to">
+                    <SelectTrigger size="sm" aria-label={gt("Machine to add the project to")}>
                       {target ? (
                         <EnvironmentMachineIcon kind={target.machine} className="size-3.5" />
                       ) : null}
@@ -354,7 +413,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     {target ? (
                       <EnvironmentMachineIcon kind={target.machine} className="size-3.5 shrink-0" />
                     ) : null}
-                    <span className="truncate">{target?.label ?? "No machine available"}</span>
+                    <span className="truncate">{target?.label ?? gt("No machine available")}</span>
                   </span>
                 )}
                 <span className="flex min-w-0 font-mono text-muted-foreground text-xs">
@@ -363,30 +422,40 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               </div>
             </div>
 
-            {addExisting ? null : ( // Fork add-on(existing-checkout)
-              <div className="flex flex-col gap-1.5">
-                <Label>Clone over</Label>
-                {sshUrl && httpsUrl ? (
-                  <ToggleGroup
-                    aria-label="Clone protocol"
-                    value={protocol ? [protocol] : []}
-                    onValueChange={(next) => {
-                      const value = next[0];
-                      if (value === "ssh" || value === "https") setProtocol(value);
-                    }}
+            {
+              addExisting ? null : ( // Fork add-on(existing-checkout)
+                <div className="flex flex-col gap-1.5">
+                  <Label>
+                    <T>Clone over</T>
+                  </Label>
+                  {sshUrl && httpsUrl ? (
+                    <ToggleGroup
+                      aria-label={gt("Clone protocol")}
+                      value={protocol ? [protocol] : []}
+                      onValueChange={(next) => {
+                        const value = next[0];
+                        if (value === "ssh" || value === "https") setProtocol(value);
+                      }}
+                    >
+                      <Toggle value="ssh">SSH</Toggle>
+                      <Toggle value="https">HTTPS</Toggle>
+                    </ToggleGroup>
+                  ) : null}
+                  <span
+                    className="truncate font-mono text-muted-foreground text-xs" /* Fork add-on(existing-checkout) */
                   >
-                    <Toggle value="ssh">SSH</Toggle>
-                    <Toggle value="https">HTTPS</Toggle>
-                  </ToggleGroup>
-                ) : null}
-                <span className="truncate font-mono text-muted-foreground text-xs" /* Fork add-on(existing-checkout) */>
-                  {remoteUrl}
-                </span>
-              </div>
-            ) /* Fork add-on(existing-checkout) */}
+                    {remoteUrl}
+                  </span>
+                </div>
+              ) /* Fork add-on(existing-checkout) */
+            }
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`${id}-path`}>Folder on {target?.label ?? "the other machine"}</Label>
+              <Label htmlFor={`${id}-path`}>
+                {target
+                  ? gt("Folder on {machine}", { machine: target.label })
+                  : gt("Folder on the other machine")}
+              </Label>
               <Input
                 id={`${id}-path`}
                 value={folderPath} // Fork add-on(existing-checkout)
@@ -398,21 +467,39 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 spellCheck={false}
                 autoComplete="off"
               />
-              <CheckoutFolderHint searchingCheckout={searchingCheckout} foundRoot={foundRoot} addExisting={addExisting} canCheckFolder={canCheckFolder} useOwnFolder={useOwnFolder} label={target?.label} setCloneInstead={setCloneInstead} setUseOwnFolder={setUseOwnFolder} setExistingPathOverride={setExistingPathOverride} /> {/* Fork add-on(existing-checkout) */}
+              <CheckoutFolderHint
+                searchingCheckout={searchingCheckout}
+                foundRoot={foundRoot}
+                addExisting={addExisting}
+                canCheckFolder={canCheckFolder}
+                useOwnFolder={useOwnFolder}
+                label={target?.label}
+                setCloneInstead={setCloneInstead}
+                setUseOwnFolder={setUseOwnFolder}
+                setExistingPathOverride={setExistingPathOverride}
+              />{" "}
+              {/* Fork add-on(existing-checkout) */}
             </div>
 
             {canListFiles && !addExisting ? ( // Fork add-on(existing-checkout)
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <Label className="flex-1">Copy ignored files</Label>
+                  <Label className="flex-1">
+                    <T>Copy ignored files</T>
+                  </Label>
                   {copyable.length > 0 ? (
                     <>
                       <span className="text-muted-foreground text-xs">
-                        {selectedFiles.size} of {allIgnoredFiles.data?.files.length ?? 0}
+                        {gt("{selected} of {total}", {
+                          selected: selectedFiles.size,
+                          total: allIgnoredFiles.data?.files.length ?? 0,
+                        })}
                         {selectedBytes > 0 ? ` · ${formatBytes(selectedBytes)}` : ""}
                       </span>
                       <Button type="button" variant="ghost" size="xs" onClick={toggleShownFiles}>
-                        {allCopyableSelected ? "None" : "All"}
+                        {allCopyableSelected
+                          ? gt("None", { $context: "select no files" })
+                          : gt("All", { $context: "select all files" })}
                       </Button>
                     </>
                   ) : null}
@@ -421,8 +508,8 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                   <Input
                     size="sm"
                     type="search"
-                    aria-label="Search ignored files"
-                    placeholder="Search ignored files"
+                    aria-label={gt("Search ignored files")}
+                    placeholder={gt("Search ignored files")}
                     value={fileQuery}
                     maxLength={256}
                     onChange={(event) => setFileQuery(event.target.value)}
@@ -439,10 +526,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 ) : files.length === 0 ? (
                   <p className="text-muted-foreground text-xs">
                     {!ignoredFiles.isSuccess
-                      ? "Finding ignored files…"
+                      ? gt("Finding ignored files…")
                       : searching
-                        ? "No ignored files match."
-                        : "No ignored files to copy."}
+                        ? gt("No ignored files match.")
+                        : gt("No ignored files to copy.")}
                   </p>
                 ) : (
                   <div className="max-h-52 overflow-y-auto rounded-md border">
@@ -459,13 +546,24 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 )}
                 {ignoredFiles.data?.truncated ? (
                   <p className="text-muted-foreground text-xs">
-                    Showing the first {files.length} files.
-                    {canSearchFiles ? " Search to find the rest." : ""}
+                    {canSearchFiles
+                      ? gt(
+                          "{count, plural, one {Showing the first {count} files. Search to find the rest.} other {Showing the first {count} files. Search to find the rest.}}",
+                          {
+                            count: files.length,
+                          },
+                        )
+                      : gt(
+                          "{count, plural, one {Showing the first {count} files.} other {Showing the first {count} files.}}",
+                          { count: files.length },
+                        )}
                   </p>
                 ) : null}
                 <p className="text-muted-foreground text-xs">
-                  Files are copied after the clone finishes. Folders git ignores whole, like
-                  node_modules, are left out.
+                  <T>
+                    Files are copied after the clone finishes. Folders git ignores whole, like
+                    node_modules, are left out.
+                  </T>
                 </p>
               </div>
             ) : null}
@@ -474,12 +572,20 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
           </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button type="submit" disabled={unavailable || submitting}>
-              {submitting // Fork add-on(existing-checkout)
-                ? "Starting…"
-                : `${addExisting ? "Add to" : "Clone to"} ${target?.label ?? "machine"}` /* Fork add-on(existing-checkout) */}
+              {
+                submitting // Fork add-on(existing-checkout)
+                  ? gt("Starting…")
+                  : addExisting // Fork add-on(existing-checkout)
+                    ? target // Fork add-on(existing-checkout)
+                      ? gt("Add to {machine}", { machine: target.label }) // Fork add-on(existing-checkout)
+                      : gt("Add to machine") // Fork add-on(existing-checkout)
+                    : target
+                      ? gt("Clone to {machine}", { machine: target.label })
+                      : gt("Clone to machine") /* Fork add-on(existing-checkout) */
+              }
             </Button>
           </DialogFooter>
         </form>
@@ -524,6 +630,7 @@ function IgnoredFileRow({
   disabled: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
+  const gt = useGT();
   const tooLarge = file.byteLength > COPYABLE_FILE_MAX_BYTES;
   return (
     <label className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-sm not-last:border-b has-disabled:cursor-not-allowed has-disabled:opacity-64">
@@ -534,7 +641,7 @@ function IgnoredFileRow({
       />
       <span className="min-w-0 flex-1 truncate font-mono text-xs">{file.path}</span>
       <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-        {tooLarge ? "Over 1 MB" : formatBytes(file.byteLength)}
+        {tooLarge ? gt("Over 1 MB") : formatBytes(file.byteLength)}
       </span>
     </label>
   );
