@@ -449,7 +449,7 @@ function SidebarUpdateControl() {
           : { status: "waiting" };
     return (
       <SidebarMenuItem
-        className="ml-auto flex flex-1"
+        className="@container/sidebar-update ml-auto flex min-w-8 flex-1"
         data-update-capsule="" /* Fork add-on(maintenance-queue) */
       >
         <SidebarUpdateCapsule

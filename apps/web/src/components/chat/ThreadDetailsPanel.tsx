@@ -16,13 +16,13 @@ import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window"; // Fork add-on(session-details)
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
-import BaseGitActionsControl from "../GitActionsControl";
+import GitActionsControl from "../GitActionsControl";
 import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
 import { T, useGT, Var } from "gt-react"; // Fork add-on(hermes)
-import { memo, useState, type ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
 import { OpenInPicker } from "./OpenInPicker";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -49,8 +49,6 @@ import {
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
 import { applyHermesWorkspaceVisibility } from "../../fork-chat/hermesChatPresentation"; // Fork add-on(hermes)
-
-const GitActionsControl = memo(BaseGitActionsControl);
 
 interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,

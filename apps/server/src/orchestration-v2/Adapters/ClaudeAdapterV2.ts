@@ -73,7 +73,7 @@ import type {
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- the SDK takes a Node ChildProcess for the CLI.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeUtil from "node:util";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
+import { parseCliArgs, tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import {
   claudeMcpToolName,
@@ -235,6 +235,7 @@ import {
   makeProviderFailure,
   makeProviderRetryTurnItem,
   PROVIDER_RETRY_BUDGET_MS,
+  providerProcessExitGuidance,
 } from "@t3tools/provider-core/server/failure";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
@@ -363,6 +364,27 @@ function mergeClaudeStreamUsage(
 export const CLAUDE_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CLAUDE_PROVIDER);
 // The Claude CLI takes the next token as this flag's value even when it starts with `--`.
 const claudeLaunchArgParseOptions = { valueFlags: ["append-system-prompt"] };
+
+// Claude's --plugin-dir is repeatable; parseCliArgs keeps only the last one.
+function claudeLaunchArgPluginDirectories(launchArgs: string): ReadonlyArray<string> {
+  const tokens = tokenizeCliArgs(launchArgs);
+  const directories: string[] = [];
+  for (let index = 0; index < tokens.length && tokens[index] !== "--"; index++) {
+    const token = tokens[index]!;
+    if (!token.startsWith("--") || token.includes("=")) {
+      if (token.startsWith("--plugin-dir=")) directories.push(token.slice("--plugin-dir=".length));
+      continue;
+    }
+    const next = tokens[index + 1];
+    const takesNext =
+      next !== undefined &&
+      (!next.startsWith("--") || claudeLaunchArgParseOptions.valueFlags.includes(token.slice(2)));
+    if (!takesNext) continue;
+    if (token === "--plugin-dir") directories.push(next);
+    index++;
+  }
+  return directories;
+}
 
 const CLAUDE_SCRIPT_EXTENSIONS = [".js", ".mjs", ".tsx", ".ts", ".jsx"];
 // The SDK has no control-request deadline; the CLI waits up to 30 s per MCP server.
@@ -516,6 +538,43 @@ function claudeDescendants(
   return found;
 }
 
+/** What a CLI started, by pid and start time, recorded from each process table read while it runs. */
+export function makeClaudeDescendantTracker(
+  cliPid: number,
+  readProcessTable: Effect.Effect<ReadonlyArray<ClaudeProcessRow>>,
+) {
+  const tracked = new Map<string, ClaudeProcessRow>();
+  const identity = (row: ClaudeProcessRow) => `${row.pid} ${row.started}`;
+  // The poll, a session close and the exit read one at a time, so each table is newer than all
+  // recorded here, and a pid and start time it no longer lists never run again.
+  const reading = Semaphore.makeUnsafe(1);
+  // After exit the CLI's pid may belong to an unrelated process, so only tracked jobs are roots.
+  const refresh = Effect.fn("ClaudeAgentSdkQueryRunner.trackDescendants")(
+    function* (cliRunning: boolean) {
+      const rows = yield* readProcessTable;
+      const running = new Set(rows.map(identity));
+      // `ps -A` lists itself, so no rows is a failed read.
+      if (rows.length === 0) return running;
+      const roots = cliRunning ? [cliPid] : [];
+      for (const [key, row] of tracked) {
+        if (running.has(key)) roots.push(row.pid);
+        else tracked.delete(key);
+      }
+      for (const row of claudeDescendants(rows, roots)) tracked.set(identity(row), row);
+      return running;
+    },
+    (effect) => reading.withPermits(1)(effect),
+  );
+  return {
+    tracked: tracked as ReadonlyMap<string, ClaudeProcessRow>,
+    refresh: refresh(true).pipe(Effect.asVoid),
+    /** Reads the table after the CLI exited: what it left that is still the same process. */
+    leftovers: refresh(false).pipe(
+      Effect.map((running) => [...tracked.values()].filter((row) => running.has(identity(row)))),
+    ),
+  };
+}
+
 export const ClaudeProviderCapabilitiesV2 = {
   sessions: {
     supportsMultipleProviderThreadsPerSession: false,
@@ -539,6 +598,7 @@ export const ClaudeProviderCapabilitiesV2 = {
     emitsTurnStarted: true,
     emitsTurnCompleted: true,
     supportsInterrupt: true,
+    supportsNativeResume: true,
     supportsActiveSteering: true,
     activeSteeringInterruptsTools: true,
     supportsSteeringByInterruptRestart: false,
@@ -746,6 +806,19 @@ export class ClaudeConversationNotFoundError extends Schema.TaggedError<ClaudeCo
   }
 }
 
+export class ClaudeCodeStartupExitError extends Schema.TaggedError<ClaudeCodeStartupExitError>()(
+  "ClaudeCodeStartupExitError",
+  {
+    status: Schema.String,
+    guidance: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `${this.status} before it started. ${this.guidance}`;
+  }
+}
+
 class ClaudeMcpRegistrationTimeoutError extends Schema.TaggedError<ClaudeMcpRegistrationTimeoutError>()(
   "ClaudeMcpRegistrationTimeoutError",
   { phase: Schema.Literals(["initialize", "setMcpServers"]) },
@@ -870,18 +943,24 @@ const CLAUDE_PROCESS_EXIT_ERROR_CLASSES: ReadonlySet<unknown> = new Set([
 ]);
 
 // The SDK's exit Error appends Claude's stderr tail to `message`; `telemetryMessage` omits it.
-function claudeProcessExitFailure(
-  cause: Cause.Cause<ClaudeAgentSdkQueryRunnerError>,
-): { readonly message: string; readonly code: string } | undefined {
-  const error = Cause.squash(cause);
-  const sdkError = isClaudeAgentSdkQueryRunnerError(error) ? error.cause : error;
+function claudeProcessExit(
+  sdkError: unknown,
+): { readonly status: string; readonly code: string } | undefined {
   if (typeof sdkError !== "object" || sdkError === null) return undefined;
   const { errorClass, telemetryMessage } = sdkError as Record<string, unknown>;
   return typeof errorClass === "string" &&
     CLAUDE_PROCESS_EXIT_ERROR_CLASSES.has(errorClass) &&
     typeof telemetryMessage === "string"
-    ? { message: `${telemetryMessage}.`, code: errorClass }
+    ? { status: telemetryMessage, code: errorClass }
     : undefined;
+}
+
+function claudeProcessExitFailure(
+  cause: Cause.Cause<ClaudeAgentSdkQueryRunnerError>,
+): { readonly message: string; readonly code: string } | undefined {
+  const error = Cause.squash(cause);
+  const exit = claudeProcessExit(isClaudeAgentSdkQueryRunnerError(error) ? error.cause : error);
+  return exit === undefined ? undefined : { message: `${exit.status}.`, code: exit.code };
 }
 
 function closeClaudeQuery(queryRuntime: ClaudeQuery) {
@@ -1367,6 +1446,10 @@ const runClaudeWorker = Effect.fn("runClaudeWorker")(function* (input: {
         },
       },
     ),
+    // Complete session histories have no status-probe size limit; stderr stays bounded.
+    input.method === "getSessionMessages"
+      ? { maxStdoutBytes: Number.POSITIVE_INFINITY }
+      : undefined,
   ).pipe(Effect.timeout("30 seconds"));
   if (result.code !== 0) {
     return yield* new ClaudeAgentSdkQueryRunnerError({
@@ -1437,29 +1520,13 @@ export const layerQueryRunner: Layer.Layer<
     // re-parented once the CLI exits. So the CLI's tree is recorded while it runs, and what is
     // still the same process (pid and start time) is stopped after it exits.
     const trackDescendants = (cliPid: number) => {
-      const tracked = new Map<string, ClaudeProcessRow>();
-      const identity = (row: ClaudeProcessRow) => `${row.pid} ${row.started}`;
-      // After exit the CLI's pid may belong to an unrelated process, so only tracked jobs are roots.
-      const refresh = Effect.fn("ClaudeAgentSdkQueryRunner.trackDescendants")(function* (
-        cliRunning: boolean,
-      ) {
-        const rows = yield* readProcessTable;
-        const running = new Set(rows.map(identity));
-        const roots = [
-          ...(cliRunning ? [cliPid] : []),
-          ...[...tracked.values()].flatMap((row) => (running.has(identity(row)) ? [row.pid] : [])),
-        ];
-        for (const row of claudeDescendants(rows, roots)) tracked.set(identity(row), row);
-        return running;
-      });
-      const stop = refresh(false).pipe(
-        Effect.map((running) => {
-          for (const row of tracked.values()) {
-            if (running.has(identity(row))) killClaudeDescendant(row);
-          }
+      const tracker = makeClaudeDescendantTracker(cliPid, readProcessTable);
+      const stop = tracker.leftovers.pipe(
+        Effect.map((rows) => {
+          for (const row of rows) killClaudeDescendant(row);
         }),
       );
-      return { refresh: refresh(true).pipe(Effect.asVoid), stop };
+      return { refresh: tracker.refresh, stop };
     };
 
     // The open span below is the tracing boundary for both attempts.
@@ -1713,13 +1780,28 @@ export const layerQueryRunner: Layer.Layer<
                   );
                 }
                 const refusedRoot = !answered && stderrTail.includes(CLAUDE_ROOT_REFUSAL);
+                const startupExit = answered ? undefined : claudeProcessExit(cause);
+                if (startupExit !== undefined) {
+                  // The turn failure omits this output, so the log is the only place it is kept.
+                  yield* Effect.logWarning("orchestration-v2.claude-startup-exit", {
+                    threadId: input.threadId,
+                    status: startupExit.status,
+                    stderr: stderrTail,
+                  });
+                }
                 return yield* queryRunnerError(
                   refusedRoot
                     ? new ClaudeCodeRootRefusalError({ cause })
                     : conversationMissing ||
                         (!answered && stderrTail.includes(CLAUDE_CONVERSATION_NOT_FOUND))
                       ? new ClaudeConversationNotFoundError({ cause })
-                      : cause,
+                      : startupExit !== undefined
+                        ? new ClaudeCodeStartupExitError({
+                            status: startupExit.status,
+                            guidance: providerProcessExitGuidance(stderrTail),
+                            cause,
+                          })
+                        : cause,
                   "fromAsyncIterable",
                 );
               }),
@@ -2236,6 +2318,8 @@ export function makeClaudeQueryOptions(input: {
   const {
     // claudeLaunchArgDirectories reads every --add-dir into additionalDirectories.
     "add-dir": _launchArgAddDir,
+    // claudeLaunchArgPluginDirectories reads every --plugin-dir into plugins.
+    "plugin-dir": launchArgPluginDir,
     "permission-mode": launchArgPermissionMode,
     "dangerously-skip-permissions": launchArgSkipPermissions,
     "append-system-prompt": launchArgAppendSystemPrompt,
@@ -2259,6 +2343,10 @@ export function makeClaudeQueryOptions(input: {
   if (requestThinkingSummaries && extraArgs["thinking-display"] === undefined) {
     extraArgs["thinking-display"] = "summarized";
   }
+  const pluginDirectories =
+    input.settings === undefined ? [] : claudeLaunchArgPluginDirectories(input.settings.launchArgs);
+  // A bare --plugin-dir still reaches Claude, which reports the missing path.
+  if (launchArgPluginDir === null) extraArgs["plugin-dir"] = null;
   const threadIdentity: ClaudeAgentSdkThreadIdentity = input.resume
     ? { resume: input.nativeThreadId }
     : { sessionId: input.nativeThreadId };
@@ -2400,6 +2488,9 @@ export function makeClaudeQueryOptions(input: {
           },
         }
       : {}),
+    ...(pluginDirectories.length === 0
+      ? {}
+      : { plugins: pluginDirectories.map((path) => ({ type: "local" as const, path })) }),
     ...(Object.keys(extraArgs).length === 0 ? {} : { extraArgs }),
   };
   const additionalDirectories = [
@@ -3042,6 +3133,9 @@ const makeClaudeAttachmentBudget = (used?: { pagesUsed: number; bytesUsed: numbe
   },
 });
 
+const joinFallbackText = (earlier: string, current: string) =>
+  earlier.length === 0 ? current : current.length === 0 ? earlier : `${earlier}\n\n${current}`;
+
 const reserveClaudePdfBudget = (
   budget: ReturnType<typeof makeClaudeAttachmentBudget>,
   persist: Effect.Effect<void>,
@@ -3052,6 +3146,7 @@ const reserveClaudePdfBudget = (
       pages: 0,
       bytes: 0,
       delivered: false,
+      refunded: false,
       commit() {
         if (this.delivered) return;
         this.delivered = true;
@@ -3059,6 +3154,13 @@ const reserveClaudePdfBudget = (
         budget.pending.bytes -= this.bytes;
         budget.committed.pages += this.pages;
         budget.committed.bytes += this.bytes;
+      },
+      // Claude dropped the message unread, so its files never entered the session.
+      refund() {
+        if (!this.delivered || this.refunded) return;
+        this.refunded = true;
+        budget.committed.pages -= this.pages;
+        budget.committed.bytes -= this.bytes;
       },
     })),
     (reservation) =>
@@ -5044,6 +5146,8 @@ interface ActiveClaudeTurnContext {
   readonly itemOrdinals: Map<string, number>;
   readonly assistant: {
     fallbackText: string;
+    // Result-only replies of steered segments that ended before the current one.
+    earlierFallbackText: string;
     fallbackNativeItemId: string;
     emittedNativeItemIds: Set<string>;
     // Text blocks stream as `${message.id}:text:${n}`; the block's snapshot has its own uuid.
@@ -5138,10 +5242,16 @@ interface ActiveClaudeTurnContext {
       readonly messageId: MessageId;
       readonly text: string;
       readonly liveQuery: ClaudeLiveQueryContext;
+      readonly pdfReservation: Effect.Success<ReturnType<typeof reserveClaudePdfBudget>>;
+      readonly appContextOffered: ReadonlyMap<string, string> | undefined;
+      readonly appContextBefore: ReadonlyMap<string, string> | undefined;
     }
   >;
   // Claude may settle a turn with a result that echoes only a steer's uuid.
   readonly steerUuids: Set<string>;
+  // A completed result whose turn stays open while Claude still holds a steer; it settles the
+  // turn if Claude drops that steer instead of starting it.
+  heldResult: SDKResultMessage | undefined;
   // Claude can run another model than requested, such as when an organization disallows it.
   executedModel: string | undefined;
 }
@@ -9263,6 +9373,25 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             status,
           });
 
+        // A held result's usage joins the steered segments once another result settles the turn.
+        const absorbHeldResult = (context: ActiveClaudeTurnContext) => {
+          if (context.heldResult === undefined) return;
+          const { assistant } = context;
+          if (assistant.fallbackText.length > 0) {
+            assistant.earlierFallbackText = joinFallbackText(
+              assistant.earlierFallbackText,
+              assistant.fallbackText,
+            );
+            assistant.fallbackText = "";
+          }
+          context.steeredSegmentUsage.push(context.heldResult.usage);
+          context.steeredLedgerUsage = addClaudeLedgerUsage(
+            context.steeredLedgerUsage,
+            resultLedgerUsage.get(context.heldResult),
+          );
+          context.heldResult = undefined;
+        };
+
         const markSteersAccepted = Effect.fnUntraced(function* (
           context: ActiveClaudeTurnContext,
           message: SDKMessage,
@@ -9280,7 +9409,39 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             const steer = context.pendingSteers.get(uuid);
             if (steer === undefined) continue;
             context.pendingSteers.delete(uuid);
+            // Claude now answers this steer, and that answer's result ends the turn.
+            absorbHeldResult(context);
             yield* emitSteerStatus(context, steer.messageId, "completed");
+          }
+          // Claude removed the steer before reading it. Its item stays pending, so the orchestrator
+          // sends it as the next turn once this run ends.
+          const dropped =
+            lifecycle !== null &&
+            (lifecycle.state === "cancelled" ||
+              lifecycle.state === "discarded" ||
+              lifecycle.state === "refused")
+              ? context.pendingSteers.get(lifecycle.uuid)
+              : undefined;
+          if (dropped === undefined || lifecycle === null) return;
+          context.pendingSteers.delete(lifecycle.uuid);
+          // The follow-up turn sends the same files and notes again.
+          if (
+            dropped.appContextOffered !== undefined &&
+            context.appContextOffered === dropped.appContextOffered
+          ) {
+            context.appContextOffered = dropped.appContextBefore;
+          }
+          if (dropped.pdfReservation.delivered && !dropped.pdfReservation.refunded) {
+            dropped.pdfReservation.refund();
+            yield* persistAttachmentBudget(context.nativeThreadId);
+          }
+          if (context.pendingSteers.size === 0 && context.heldResult !== undefined) {
+            yield* finalizeActiveTurn({
+              context,
+              status: "completed",
+              completedAt: yield* DateTime.now,
+              result: context.heldResult,
+            });
           }
         });
 
@@ -9311,10 +9472,14 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           if (input.status === "completed" && input.context.appContextOffered !== undefined) {
             deliveredAppContext.set(input.context.nativeThreadId, input.context.appContextOffered);
           }
-          // A turn that completes has taken in every steer; one that stops drops them unread.
+          // A live Claude still runs a steer queued at a completed result, and Stop drops them unread
+          // with a notice below. A steer whose process exited stays pending: nothing can read it now,
+          // so the orchestrator sends it as the next turn.
           const droppedSteers = [...input.context.pendingSteers];
           input.context.pendingSteers.clear();
-          for (const [, { messageId }] of droppedSteers) {
+          const currentQuery = yield* Ref.get(queryContext);
+          for (const [, { messageId, liveQuery }] of droppedSteers) {
+            if (input.status !== "interrupted" && liveQuery !== currentQuery) continue;
             yield* emitSteerStatus(
               input.context,
               messageId,
@@ -9388,10 +9553,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             subagentToolCalls.delete(toolCall.nativeItemId);
           }
 
-          if (
-            input.context.assistant.emittedNativeItemIds.size === 0 &&
-            input.context.assistant.fallbackText.length > 0
-          ) {
+          const fallbackText = joinFallbackText(
+            input.context.assistant.earlierFallbackText,
+            input.context.assistant.fallbackText,
+          );
+          if (input.context.assistant.emittedNativeItemIds.size === 0 && fallbackText.length > 0) {
             const ordinal = yield* resolveItemOrdinal(
               input.context,
               input.context.assistant.fallbackNativeItemId,
@@ -9401,7 +9567,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               turnInput: input.context.input,
               providerTurnId: input.context.providerTurnId,
               nativeItemId: input.context.assistant.fallbackNativeItemId,
-              text: input.context.assistant.fallbackText,
+              text: fallbackText,
               ordinal,
               startedAt: input.context.startedAt,
               completedAt: input.completedAt,
@@ -10322,10 +10488,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           activeContext: ActiveClaudeTurnContext | null,
           toolUseId: string | undefined,
         ): Pick<OrchestrationV2PendingBackgroundTask, "command" | "itemId" | "sourceThreadId"> => {
+          // A background subagent keeps launching shells after the root turn settles.
           const launch =
-            toolUseId === undefined || activeContext === null
+            toolUseId === undefined
               ? undefined
-              : findToolCall(activeContext, toolUseId);
+              : (activeContext?.toolCalls.get(toolUseId) ?? subagentToolCalls.get(toolUseId));
           const command =
             launch?.classification.itemType === "command_execution" ||
             launch?.toolName === "Monitor"
@@ -11909,6 +12076,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             const completedAt = yield* DateTime.now;
             const interrupted = (yield* Ref.get(interruptedTurns)).has(context.providerTurnId);
             const wasSteered = (yield* Ref.get(steeredTurns)).has(context.providerTurnId);
+            absorbHeldResult(context);
             if (!interrupted && wasSteered && isClaudeActiveSteeringAbortResult(message)) {
               const cutOffReply = context.assistant.lastReply;
               context.assistant.lastReply = null;
@@ -12023,13 +12191,25 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               resultFailure?.class === "usage_limit"
                 ? { ...resultFailure, resetAt }
                 : resultFailure;
+            const status = interrupted
+              ? "interrupted"
+              : limitedCompaction !== null
+                ? "failed"
+                : terminalStatusFromResult(message, failureHint);
+            // Claude answers a steer it has not read yet as the next native turn, which echoes
+            // the steer. A result without echoes cannot prove that turn will come.
+            if (
+              status === "completed" &&
+              terminalFailure === null &&
+              context.pendingSteers.size > 0 &&
+              claudeEchoedPromptUuids(message).length > 0
+            ) {
+              context.heldResult = message;
+              return;
+            }
             yield* finalizeActiveTurn({
               context,
-              status: interrupted
-                ? "interrupted"
-                : limitedCompaction !== null
-                  ? "failed"
-                  : terminalStatusFromResult(message, failureHint),
+              status,
               completedAt,
               result: message,
               ...(terminalFailure === null ? {} : { failure: terminalFailure }),
@@ -12429,6 +12609,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             activePermissionMode === "bypassPermissions" &&
             callbackOptions.matchedAskRule === undefined &&
             (/^Dangerous rm(?:dir)?\b/i.test(safetyReason) ||
+              /\bdangerous removal\b/i.test(safetyReason) ||
               safetyReason === "This shell -c script runs rm and could not be checked" ||
               safetyReason === "A permission rule denies a command in this shell -c script")
           ) {
@@ -13350,6 +13531,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               itemOrdinals: new Map(),
               assistant: {
                 fallbackText: "",
+                earlierFallbackText: "",
                 fallbackNativeItemId: `assistant:${turnInput.runId}`,
                 emittedNativeItemIds: new Set(),
                 streamBlocks: new Map(),
@@ -13397,6 +13579,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               heldRootFrames: [],
               pendingSteers: new Map(),
               steerUuids: new Set(),
+              heldResult: undefined,
               executedModel: undefined,
             };
             const attachTurn = Effect.gen(function* () {
@@ -13740,7 +13923,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             ),
         );
 
-        // Move subagents to the background before priority "now" steers cancel foreground tools.
+        // Move subagents to the background so a steer reaches Claude without waiting for them to finish.
         const backgroundForegroundSubagents = Effect.fnUntraced(function* (
           live: ClaudeLiveQueryContext,
           deadline: number,
@@ -13870,7 +14053,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ).promptEffort,
               ),
               attachments: turnInput.message.attachments,
-              priority: "now",
+              // "now" makes Claude Code cancel the tool calls in flight and report them as a user refusal.
+              priority: "next",
               uuid: steerUuid,
               attachmentsDir,
               fileSystem,
@@ -13891,14 +14075,17 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             );
             // `offer` may call this twice; a second call must not restore notes compaction cleared.
             let offerCommitted = false;
+            const appContextBefore = currentTurn.appContextOffered;
+            const appContextOffered =
+              userMessage === steerMessage
+                ? undefined
+                : new Map(appContext.map((entry) => [entry.key, entry.text]));
             const commitOffer = () => {
               if (offerCommitted) return;
               offerCommitted = true;
               pdfReservation.commit();
-              if (userMessage !== steerMessage) {
-                currentTurn.appContextOffered = new Map(
-                  appContext.map((entry) => [entry.key, entry.text]),
-                );
+              if (appContextOffered !== undefined) {
+                currentTurn.appContextOffered = appContextOffered;
               }
             };
             yield* backgroundForegroundSubagents(existing, backgroundDeadline);
@@ -13926,6 +14113,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               messageId,
               text: turnInput.message.text,
               liveQuery: existing,
+              pdfReservation,
+              appContextOffered,
+              appContextBefore,
             });
             yield* Ref.update(steeredTurns, (current) => {
               const next = new Set(current);

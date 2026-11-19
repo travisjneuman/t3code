@@ -1244,20 +1244,17 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (
-    (thread.runtime?.status === "running" && thread.blockedOnThreadWait === true) ||
-    backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])
-  ) {
-    // Fork add-on(status-colors): background work is still in progress, so it takes the
-    // in-progress blue rather than the grey of a finished thread.
-    return {
-      label: msg("Waiting"),
-      colorClass: "text-sky-600 dark:text-sky-300/80", // Fork add-on(status-colors)
-      dotClass: "bg-sky-500 dark:bg-sky-300/80", // Fork add-on(status-colors)
-      pulse: false,
-    };
-  }
+  // Fork add-on(status-colors): background work is still in progress, so it takes the
+  // in-progress blue rather than the grey of a finished thread.
+  const waiting = {
+    label: msg("Waiting"),
+    colorClass: "text-sky-600 dark:text-sky-300/80", // Fork add-on(status-colors)
+    dotClass: "bg-sky-500 dark:bg-sky-300/80", // Fork add-on(status-colors)
+    pulse: false,
+  };
+  if (thread.runtime?.status === "running" && thread.blockedOnThreadWait === true) return waiting;
 
+  // A failed run goes to the inbox even while background work holds the thread.
   if (hasUnseenRunFailure(thread)) {
     return {
       label: msg("Failed"),
@@ -1266,6 +1263,8 @@ export function resolveThreadStatusPill(input: {
       pulse: false,
     };
   }
+
+  if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) return waiting;
 
   const hasPlanReadyPrompt =
     !thread.hasPendingUserInput &&
