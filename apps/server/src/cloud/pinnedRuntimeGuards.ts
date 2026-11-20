@@ -38,11 +38,11 @@ export const checkReleaseAssetLength = (
 };
 
 /**
- * One counter per download. Fails the stream as soon as the running total passes the cap, so an
- * oversize body is never fully buffered.
+ * One counter per download attempt, starting at the bytes a Range resume already holds. Fails the
+ * stream as soon as the running total passes the cap, so an oversize body is never fully buffered.
  */
-export const releaseAssetByteCap = () => {
-  let received = 0;
+export const releaseAssetByteCap = (alreadyReceived = 0) => {
+  let received = alreadyReceived;
   return (chunk: Uint8Array): Effect.Effect<void, ReleaseAssetTooLargeError> => {
     received += chunk.byteLength;
     const problem = cliReleaseAssetSizeProblem(received);
