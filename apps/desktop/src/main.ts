@@ -75,6 +75,7 @@ import * as ForkLayers from "./fork/layers.ts"; // Fork add-on(core): its update
 import * as ForkFileSafeStorage from "./fork/fileSafeStorage.ts"; // Fork add-on(keychain-free-secrets): replaces ElectronSafeStorage.
 import * as BrowserImport from "./preview/BrowserImport/BrowserImport.ts";
 import * as LinuxBrowserSecret from "./preview/BrowserImport/LinuxBrowserSecret.ts";
+import * as AppleSpeech from "./speech/AppleSpeech.ts";
 import * as BrowserSession from "./preview/BrowserSession.ts";
 import * as DesktopBrowserHost from "./preview/DesktopBrowserHost.ts";
 import * as LoopbackTunnel from "./preview/LoopbackTunnel.ts";
@@ -160,6 +161,7 @@ const layerDesktopFoundation = Layer.mergeAll(
   DesktopPrimaryPaste.layer,
   DesktopObservability.layer,
   DesktopRendererHistory.layer,
+  AppleSpeech.layer,
 ).pipe(Layer.provideMerge(layerDesktopEnvironment));
 
 const layerDesktopSsh = layerDesktopSshEnvironment.pipe(

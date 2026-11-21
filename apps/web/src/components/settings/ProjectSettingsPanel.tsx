@@ -54,6 +54,7 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { ProjectRepositoriesSettings } from "./ProjectRepositoriesSettings";
 import { CheckoutUnlinkButton, ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on(project-links)
 import { DefaultProjectRow } from "../../default-project/defaultProject"; // Fork add-on(default-project)
 import {
@@ -704,6 +705,7 @@ function ProjectDetail({
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
+        <ProjectRepositoriesSettings members={group.memberProjects} />
         {hasOtherMembers ? (
           checkoutChoices
         ) : (
