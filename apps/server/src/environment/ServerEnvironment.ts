@@ -310,6 +310,7 @@ export const make = Effect.gen(function* () {
       ...FORK_SERVER_CAPABILITIES, // Fork add-on(core)
       shellThreadFamilies: true,
       shellOlderSettled: true,
+      agentFeedback: true,
     },
   };
 
