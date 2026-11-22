@@ -1,9 +1,9 @@
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import type { EnvironmentMachineKind } from "@t3tools/contracts";
+import { FolderGit2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { EnvironmentMachineIcon } from "../components/EnvironmentMachineIcon";
-import { ThreadWorktreeIndicator } from "../components/ThreadStatusIndicators";
 import { MiddleTruncate } from "../components/ui/middle-truncate";
 import { ContinuedThreadMarker } from "../external-sessions/handBack";
 import { SubagentToggle } from "../subagents/SidebarSubagentRows";
@@ -33,7 +33,9 @@ export function ThreadCardMeta(props: {
         <SubagentToggle threadKey={props.threadKey} count={props.subagentCount} />
         {props.thread.branch ? (
           <>
-            <ThreadWorktreeIndicator thread={props.thread} />
+            {props.thread.worktreePath?.trim() ? (
+              <FolderGit2Icon aria-hidden className="size-3 shrink-0" />
+            ) : null}
             <span className="flex min-w-0 flex-1">
               <MiddleTruncate value={props.thread.branch} showTitle={false} />
             </span>
