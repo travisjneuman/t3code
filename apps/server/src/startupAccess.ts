@@ -52,6 +52,9 @@ export const isLoopbackHost = (host: string | undefined): boolean => {
 const VIRTUAL_INTERFACE =
   /^(docker|br-|veth|virbr|vmnet|vboxnet|vEthernet \((?:WSL|Default Switch)|podman|cni|flannel|cali|lxcbr|lxdbr|bridge[1-9]\d\d)/; // Fork add-on(vpn-lan): a Hyper-V external switch carries the LAN.
 
+// VirtualBox and VMware host-only adapters on Windows. Their names are mutable; Linux bridges can inherit these MACs.
+export const WINDOWS_HOST_ADAPTER_MAC = /^(0a:00:27|00:50:56:c0:00):/i;
+
 /**
  * systemd-nspawn's `ve-*`/`vz-*` and NixOS containers' `vb-*` name host-side
  * veths after the machine. Windows aliases are user-renameable, so these
@@ -157,7 +160,9 @@ const resolveHeadlessConnectionHost = (
       !entry.internal &&
       isIpv4Family(entry.family) &&
       !(privateNetworkOnly && isVpnTunnelEntry(entry)) && // Fork add-on(vpn-lan)
-      (!privateNetworkOnly || isPrivateNetworkAddress(entry.address)),
+      (!privateNetworkOnly ||
+        (isPrivateNetworkAddress(entry.address) &&
+          !(platform === "win32" && WINDOWS_HOST_ADAPTER_MAC.test(entry.mac)))),
   );
   // A tailnet or other CGNAT address reaches fewer devices than the LAN one.
   const externalIpv4 = privateNetworkOnly

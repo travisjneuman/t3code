@@ -140,6 +140,8 @@ function curatedCauseMessages(cause: unknown): {
         case "CursorModelUnavailableError":
         case "HermesTurnNotSentError": // Fork add-on(hermes)
         case "CodexGoalObjectiveTooLongError":
+        case "CodexAppServerUnresponsiveError":
+        case "CodexAppServerRetiredError":
         case "ProviderSetupError":
         case "ProviderAdapterThreadInUseError":
         case "ProviderCompactionUnsupportedError":
