@@ -16,7 +16,6 @@ export function ThreadCardMeta(props: {
   subagentCount: number;
   environmentLabel: string | null;
   environmentMachine: EnvironmentMachineKind;
-  isRemote: boolean;
   terminalStatusIcon: ReactNode;
   prBadge: ReactNode;
   diff: { insertions: number; deletions: number } | null;
@@ -68,15 +67,6 @@ export function ThreadCardMeta(props: {
           </span>
         ) : null}
         <span aria-hidden className="pointer-events-none inline-flex shrink-0 items-center gap-1">
-          {props.isRemote && !showsMachine ? (
-            <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
-              <EnvironmentMachineIcon
-                aria-hidden
-                kind={props.environmentMachine}
-                className="size-3.5"
-              />
-            </span>
-          ) : null}
           <ContinuedThreadMarker threadId={props.thread.id} />
           {props.providerStack}
         </span>

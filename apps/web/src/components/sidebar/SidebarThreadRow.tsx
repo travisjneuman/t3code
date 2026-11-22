@@ -1760,7 +1760,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 subagentCount={props.subagentCount} // Fork add-on(subagent-tree)
                 environmentLabel={props.environmentLabel}
                 environmentMachine={props.environmentMachine}
-                isRemote={isRemote}
                 terminalStatusIcon={terminalStatusIcon}
                 prBadge={prBadge}
                 diff={diff}

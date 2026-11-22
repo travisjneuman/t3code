@@ -32,7 +32,6 @@ interface ForkSlots {
     readonly subagentCount: number;
     readonly environmentLabel: string | null;
     readonly environmentMachine: EnvironmentMachineKind;
-    readonly isRemote: boolean;
     readonly terminalStatusIcon: ReactNode;
     readonly prBadge: ReactNode;
     readonly diff: { insertions: number; deletions: number } | null;
