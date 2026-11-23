@@ -1537,6 +1537,17 @@
       "hooks": ["apps/web/src/components/settings/ScheduledTasksSettings.tsx"]
     },
     {
+      "id": "webhook-node-http",
+      "tier": "fix",
+      "title": "Webhook node:http client",
+      "summary": "MCP webhook deliveries use node:http, so the server CLI single-executable still builds.",
+      "upstream": "Upstream #41141 delivers through undici, which the single-executable import check rejects. Drop this when upstream changes it.",
+      "dependsOn": [],
+      "surfaces": ["server"],
+      "files": [],
+      "hooks": ["apps/server/src/mcp/McpWebhookTransport.ts"]
+    },
+    {
       "id": "identity",
       "tier": "distribution",
       "title": "Identity",
