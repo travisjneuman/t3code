@@ -21,8 +21,7 @@ export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
 
-// Fork add-on(web-apps): exported for the remote app tabs.
-export function getDesktopOrigin(isDevelopment: boolean /* Fork add-on(web-apps) */): string {
+export function getDesktopOrigin(isDevelopment: boolean): string {
   return `${getDesktopScheme(isDevelopment)}://${DESKTOP_HOST}`;
 }
 
