@@ -74,7 +74,6 @@ export const FORK_ADDONS = [
   "update-wrappers",
   "telemetry-check-failure",
   "scheduled-tasks-error",
-  "webhook-node-http",
   "identity",
   "ndev-icons",
   "keychain-free-secrets",

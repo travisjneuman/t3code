@@ -120,6 +120,8 @@ export interface LocalSourceUpdateInspection {
   readonly repositoryPath: string;
   readonly currentCommit: string;
   readonly installedCommit?: string; // Fork add-on: nightly version alone does not identify a fork build.
+  /** Commit of the build waiting to be installed, if any. */
+  readonly pendingBuildCommit?: string;
   /** Newest upstream nightly tag reachable from upstream/main, e.g. `v0.0.46-nightly.20261003.2610`. */
   readonly upstreamTag: string;
   /** The tag without its leading `v`; used as the local build version. */
@@ -390,6 +392,33 @@ function parseMarkerDispositions(stdout: string): ReadonlyArray<ForkMarkerDispos
   const decoded = decodeMarkerDispositions(body.slice(0, closing.index).trim());
   return Option.isSome(decoded) ? decoded.value.dispositions : [];
 }
+
+// Comments and quoted strings; template literals stay, since `${}` holds code.
+const SOURCE_NOISE_PATTERN =
+  /\/\/[^\n]*|\/\*[\s\S]*?\*\/|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/gu;
+const IDENTIFIER_PATTERN = /(?<![\w$])[A-Za-z_$][\w$]{2,}/gu;
+const SCANNED_SOURCE_PATHSPECS = [
+  "*.ts",
+  "*.tsx",
+  ":(exclude).repos",
+  ":(exclude)*.test.ts",
+  ":(exclude)*.test.tsx",
+];
+const DANGLING_NAME_FILE_LIMIT = 100;
+
+const sourceIdentifiers = (source: string): ReadonlySet<string> =>
+  new Set(source.replace(SOURCE_NOISE_PATTERN, " ").match(IDENTIFIER_PATTERN));
+
+interface DanglingNames {
+  readonly path: string;
+  readonly names: ReadonlyArray<string>;
+}
+
+/** Names an upstream change (`before` → `after`) deleted from a file. */
+const removedNames = (before: string, after: string): ReadonlyArray<string> => {
+  const kept = sourceIdentifiers(after);
+  return Array.from(sourceIdentifiers(before)).filter((name) => !kept.has(name));
+};
 
 function accountForMarkerLoss(
   dispositions: ReadonlyArray<ForkMarkerDisposition>,
@@ -865,10 +894,12 @@ const make = Effect.gen(function* () {
       headParents.startsWith(installedCommit)
         ? currentCommit.slice(0, installedCommit.length)
         : installedCommit;
+    const pendingBuild = yield* Ref.get(builtUpdateRef);
     return {
       repositoryPath: repo,
       currentCommit,
       ...(builtCommit ? { installedCommit: builtCommit } : {}), // Fork add-on: offer locally changed source too.
+      ...(pendingBuild ? { pendingBuildCommit: pendingBuild.commit } : {}),
       upstreamTag,
       upstreamVersion: nightlyVersionFromTag(upstreamTag),
       upstreamCommit: upstreamCommit.stdout.trim(),
@@ -1198,6 +1229,128 @@ const make = Effect.gen(function* () {
         return { listing: result.stdout.trim(), lines };
       }),
     );
+
+  /**
+   * Fork code that still uses a name upstream deleted since the installed build: one the same
+   * file lost, or one gone from every upstream file. Vite builds such code and it fails at
+   * runtime, so Update hands it to the build-repair agent. An unknown installed build skips it.
+   */
+  const findDanglingNames = Effect.fn("desktop.localSourceUpdates.findDanglingNames")(function* (
+    repo: string,
+    installedCommit: string | undefined,
+  ) {
+    const git = (args: ReadonlyArray<string>) =>
+      runCommand({
+        operation: "build",
+        command: "git",
+        args,
+        cwd: repo,
+        outputLimit: Number.POSITIVE_INFINITY,
+      });
+    const read = (args: ReadonlyArray<string>) =>
+      git(args).pipe(Effect.map((result) => (result.exitCode === 0 ? result.stdout : null)));
+    const paths = (stdout: string | null) =>
+      (stdout ?? "").split("\0").filter((path) => path.length > 0);
+    // git grep exits 1 when nothing matches.
+    const grep = (args: ReadonlyArray<string>) =>
+      git(["grep", "-w", "-F", ...args]).pipe(
+        Effect.flatMap((result) =>
+          result.exitCode <= 1
+            ? Effect.succeed(result.exitCode === 0 ? result.stdout.split("\n") : [])
+            : Effect.fail(makeError("build", `git grep failed: ${trimOutput(result)}`)),
+        ),
+      );
+    if (installedCommit === undefined) return [];
+    const newBase = (yield* read(["merge-base", "HEAD", "upstream/main"]))?.trim();
+    const oldBase = newBase && (yield* read(["merge-base", installedCommit, newBase]))?.trim();
+    if (!newBase || !oldBase || oldBase === newBase) return [];
+    const forked = paths(
+      yield* read([
+        "diff",
+        "--name-only",
+        "-z",
+        newBase,
+        "HEAD",
+        "--",
+        ...SCANNED_SOURCE_PATHSPECS,
+      ]),
+    );
+    const changed = paths(
+      yield* read([
+        "diff",
+        "--name-only",
+        "-z",
+        "--diff-filter=M",
+        oldBase,
+        newBase,
+        "--",
+        ...SCANNED_SOURCE_PATHSPECS,
+      ]),
+    );
+    const removedByPath = new Map<string, ReadonlyArray<string>>();
+    yield* Effect.forEach(
+      changed,
+      (path) =>
+        Effect.all([
+          read(["show", `${oldBase}:${path}`]),
+          read(["show", `${newBase}:${path}`]),
+        ]).pipe(
+          Effect.map(([before, after]) => {
+            if (before !== null && after !== null) {
+              removedByPath.set(path, removedNames(before, after));
+            }
+          }),
+        ),
+      { concurrency: 8, discard: true },
+    );
+    const patterns = (names: ReadonlySet<string>) =>
+      Array.from(names).flatMap((name) => ["-e", name]);
+    const removed = new Set(Array.from(removedByPath.values()).flat());
+    const gone = new Set(removed);
+    if (removed.size > 0) {
+      const kept = yield* grep([
+        "-o",
+        "-h",
+        ...patterns(removed),
+        newBase,
+        "--",
+        ...SCANNED_SOURCE_PATHSPECS,
+      ]);
+      for (const name of kept) gone.delete(name);
+    }
+    const goneUsers =
+      gone.size === 0 || forked.length === 0
+        ? []
+        : yield* grep([
+            "-l",
+            ...patterns(gone),
+            "HEAD",
+            "--",
+            ...forked.map((path) => `:(literal)${path}`),
+          ]);
+    const candidates = new Set([
+      ...forked.filter((path) => removedByPath.has(path)),
+      ...goneUsers.map((line) => line.replace(/^HEAD:/u, "")).filter((path) => path.length > 0),
+    ]);
+    const found = yield* Effect.forEach(
+      Array.from(candidates),
+      (path) =>
+        read(["show", `HEAD:${path}`]).pipe(
+          Effect.map((merged): DanglingNames => {
+            const used = merged === null ? new Set<string>() : sourceIdentifiers(merged);
+            const names = new Set([...(removedByPath.get(path) ?? []), ...gone]);
+            return {
+              path,
+              names: Array.from(names)
+                .filter((name) => used.has(name))
+                .sort(),
+            };
+          }),
+        ),
+      { concurrency: 8 },
+    );
+    return found.filter((entry) => entry.names.length > 0);
+  });
 
   /** HEAD's marked lines in files changed since HEAD, for repair passes after the first. */
   const editedHeadMarkerListing = Effect.fn("desktop.localSourceUpdates.editedHeadMarkerListing")(
@@ -1662,6 +1815,38 @@ const make = Effect.gen(function* () {
         .slice(0, 12);
       const buildEnv = { ...scratchEnv, T3CODE_FORK_BUILD: forkBuild };
       const repairDispositions = yield* Effect.gen(function* () {
+        const reports: Array<string> = [];
+        const earlierEdits = Effect.gen(function* () {
+          return reports.length === 0
+            ? "The checkout starts at HEAD, so a line's number before your edits is its HEAD line."
+            : `Earlier repair passes already edited this checkout, so current line numbers can differ from HEAD; report HEAD line numbers, and list only lines this pass removes or moves. HEAD's ${FORK_MARKER} lines in the files edited so far:\n${yield* editedHeadMarkerListing(repo)}\n`;
+        });
+        const reportFormat = `If the fix removes or moves a line marked ${FORK_MARKER} (such as a fork import upstream now declares itself), end your final response with one fenced json block: {"dispositions":[{"path":"<HEAD path>","line":<HEAD line number>,"status":"moved"|"obsolete","destination":"<current path, moved only>","reason":"<one sentence>"}]}. Never fake markers.`;
+        // Fork add-on: the build passes these, so they would otherwise first fail at runtime.
+        const dangling = yield* findDanglingNames(repo, inspection.installedCommit).pipe(
+          Effect.catchTags({
+            LocalSourceUpdateError: (error) =>
+              logSourceWarning("skipped the dangling-name scan", { detail: error.detail }).pipe(
+                Effect.as([]),
+              ),
+          }),
+        );
+        if (dangling.length > 0) {
+          yield* logSourceInfo("fork code still uses names upstream deleted", {
+            files: dangling.map((entry) => entry.path),
+          });
+          const listing = dangling
+            .slice(0, DANGLING_NAME_FILE_LIMIT)
+            .map((entry) => `${entry.path}: ${entry.names.join(", ")}`)
+            .join("\n");
+          reports.push(
+            yield* runMergeAgent(
+              repo,
+              "build-repair",
+              `Upstream deleted these names since the installed build, from the file listed or from every upstream file, yet the merged checkout still uses them there. The build does not typecheck, so a stale use fails only at runtime. Check each use: point stale ones at upstream's replacement, and leave a name the fork itself still defines. ${yield* earlierEdits} ${reportFormat} Names by file:\n${listing}`,
+            ),
+          );
+        }
         yield* stampReleaseVersion(repo, inspection.upstreamVersion);
         const build = runCommand({
           operation: "build",
@@ -1671,21 +1856,15 @@ const make = Effect.gen(function* () {
           env: buildEnv,
         });
         let result = yield* build;
-        if (result.exitCode === 0) return null;
         // Upstream reshaped code the fork builds on. Fixing one error often exposes
         // the next, so repair repeats while each pass changes the failure.
-        const reports: Array<string> = [];
-        for (let pass = 1; ; pass++) {
+        for (let pass = 1; result.exitCode !== 0; pass++) {
           const failure = trimOutput(result);
-          const earlier =
-            pass === 1
-              ? "The checkout starts at HEAD, so a line's number before your edits is its HEAD line."
-              : `Earlier repair passes already edited this checkout, so current line numbers can differ from HEAD; report HEAD line numbers, and list only lines this pass removes or moves. HEAD's ${FORK_MARKER} lines in the files edited so far:\n${yield* editedHeadMarkerListing(repo)}\n`;
           reports.push(
             yield* runMergeAgent(
               repo,
               "build-repair",
-              `The merged checkout no longer builds. Fix the code so it builds again. ${earlier} If the fix removes or moves a line marked ${FORK_MARKER} (such as a fork import upstream now declares itself), end your final response with one fenced json block: {"dispositions":[{"path":"<HEAD path>","line":<HEAD line number>,"status":"moved"|"obsolete","destination":"<current path, moved only>","reason":"<one sentence>"}]}. Never fake markers. Build output (tail):\n${failure}`,
+              `The merged checkout no longer builds. Fix the code so it builds again. ${yield* earlierEdits} ${reportFormat} Build output (tail):\n${failure}`,
             ),
           );
           result = yield* build;
@@ -1700,6 +1879,7 @@ const make = Effect.gen(function* () {
             );
           }
         }
+        if (reports.length === 0) return null;
         // Every pass reports HEAD lines, so a later report of the same line replaces an earlier one.
         const dispositions = new Map<string, ForkMarkerDisposition>();
         for (const entry of reports.flatMap(parseMarkerDispositions)) {
@@ -1839,6 +2019,25 @@ const make = Effect.gen(function* () {
     const builtUpdate = yield* Ref.get(builtUpdateRef);
     if (!builtUpdate) {
       return yield* makeError("install", "no locally built application is waiting to be installed");
+    }
+    // A commit made after the build (a fix, a sync) would be silently left out.
+    const head = repositoryPath
+      ? yield* runCommand({
+          operation: "install",
+          command: "git",
+          args: ["rev-parse", "HEAD"],
+          cwd: repositoryPath,
+        }).pipe(
+          Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
+          Effect.orElseSucceed(() => null),
+        )
+      : null;
+    if (head && head !== builtUpdate.commit) {
+      yield* Ref.set(builtUpdateRef, null);
+      return yield* makeError(
+        "install",
+        `the checkout moved to ${head.slice(0, 12)} after this build of ${builtUpdate.commit.slice(0, 12)}; update again to build it`,
+      );
     }
     const sourceApp = builtUpdate.applicationBundlePath;
     const targetApp = resolveMacApplicationBundlePath(

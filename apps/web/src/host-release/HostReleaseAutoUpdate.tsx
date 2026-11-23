@@ -1,17 +1,21 @@
 /**
- * The source-built Mac app queues idle boot-service hosts to update to a locally staged target.
- * A failed build offers Retry for the same requested commit. Other clients render nothing.
+ * The source-built Mac app queues idle boot-service hosts to update to a locally staged target
+ * once this app itself runs that target, so a build that breaks here stops here. A failed build
+ * offers Retry for the same requested commit. Other clients render nothing.
  * Fork add-on: local host builds.
  */
 import { useAtomValue } from "@effect/atom-react";
 import type { DesktopHostReleaseBridge, DesktopHostReleaseStatus } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import { useEffect, useRef, useState } from "react";
 
 import { canUpdateServer } from "~/components/ServerUpdateAction";
 import { toastManager } from "~/components/ui/toast";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
+import { m } from "~/i18n/messages";
 import { enqueueUpdate, type QueuedUpdate } from "~/maintenance-queue/queueStore";
+import { useDesktopUpdateState } from "~/state/desktopUpdate";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { useEnvironments } from "~/state/environments";
 import { environmentUpdateStatesAtom } from "~/state/server";
@@ -60,11 +64,16 @@ function reportFailure(
   writeJson(NOTIFIED_KEY, runKey);
   const id = toastManager.add({
     type: "error",
-    title: "Local fork hosts were not staged",
-    description: `${status.detail ?? "The local host build failed."} Log: ${status.logPath}`,
+    title: m(msg("Local fork hosts were not staged")),
+    description: m(
+      msg("{detail} Log: {logPath}", {
+        detail: status.detail ?? m(msg("The local host build failed.")),
+        logPath: status.logPath,
+      }),
+    ),
     timeout: 0,
     actionProps: {
-      children: "Retry",
+      children: m(msg("Retry")),
       onClick: () => {
         toastManager.close(id);
         void bridge.retry();
@@ -81,6 +90,7 @@ function usePublisherStatus(bridge: DesktopHostReleaseBridge | undefined) {
     readonly id: ReturnType<typeof toastManager.add>;
     readonly runKey: string;
   } | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the desktop bridge's host-release status and its failure toast while mounted
   useEffect(() => {
     if (bridge === undefined) return;
     const apply = (next: DesktopHostReleaseStatus | null) => {
@@ -108,6 +118,7 @@ function useAutoUpdateHosts(target: string | null) {
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));
   const updateStates = useAtomValue(environmentUpdateStatesAtom(environmentIds));
+  const desktopUpdate = useDesktopUpdateState();
   const machines = environments.map((environment, index) => ({
     environmentId: environment.environmentId,
     label: environment.label,
@@ -120,19 +131,32 @@ function useAutoUpdateHosts(target: string | null) {
     canMaintain: canUpdateServer(sessionStates[index]!),
     updateState: updateStates[index]!,
   }));
+  const [targetNightly, targetBuild] = target?.split("+", 2) ?? [];
+  // A build that Update repaired is stamped with the fix commit's parent, so the updater's
+  // up-to-date (this app runs the checked-out commit) stands in for the stamp.
+  const runsTargetHere = machines.some(({ hostedByThisApp, connected, serverConfig }) => {
+    const local = hostedByThisApp && connected ? serverConfig?.environment : undefined;
+    return (
+      local !== undefined &&
+      local.serverVersion === targetNightly &&
+      (local.forkBuild === targetBuild || desktopUpdate?.status === "up-to-date")
+    );
+  });
   // A desktop-managed host would relaunch someone's app, and respawn hosts install from npm.
   const due =
-    target === null
+    target === null || !runsTargetHere
       ? []
       : collectHostUpdateTargets(machines, target).targets.filter(
           (server) => server.selfUpdate === "boot-service",
         );
   const dueKey = due.map((server) => `${server.environmentId}=${server.targetVersion}`).join(",");
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- queues due hosts in the persisted maintenance queue, which runs the updates outside React
   useEffect(() => {
     if (due.length === 0) return;
     const queued = readQueued();
     let changed = false;
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- `due` is rebuilt each render; `dueKey` changes only when it does.
     for (const server of due) {
       if (queued[server.environmentId] === server.targetVersion) continue;
       const job: QueuedUpdate = {
@@ -152,7 +176,6 @@ function useAutoUpdateHosts(target: string | null) {
       changed = true;
     }
     if (changed) writeJson(QUEUED_KEY, queued);
-    // `due` is rebuilt each render; `dueKey` changes only when it does.
   }, [dueKey]);
 }
 

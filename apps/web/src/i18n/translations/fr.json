@@ -12801,5 +12801,8 @@
   "99d51127f573296b": "Autre compte",
   "8ec2c57414669b79": "Connectez un second espace de travail ou utilisateur {tracker}.",
   "99963c0142e17f00": "Pour le nouveau compte {tracker}.",
-  "6d8e4ebc889bace9": "Ajouter un compte"
+  "6d8e4ebc889bace9": "Ajouter un compte",
+  "72399d5b02b38f6a": "Les hôtes locaux du fork n'ont pas été préparés",
+  "f08963e179ae16e6": "{detail} Journal : {logPath}",
+  "3303f06ad500381a": "La compilation locale de l'hôte a échoué."
 }

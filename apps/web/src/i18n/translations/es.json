@@ -12796,5 +12796,8 @@
   "99d51127f573296b": "Otra cuenta",
   "8ec2c57414669b79": "Conecta un segundo espacio de trabajo o usuario de {tracker}.",
   "99963c0142e17f00": "Para la nueva cuenta de {tracker}.",
-  "6d8e4ebc889bace9": "Añadir cuenta"
+  "6d8e4ebc889bace9": "Añadir cuenta",
+  "72399d5b02b38f6a": "No se prepararon los hosts locales del fork",
+  "f08963e179ae16e6": "{detail} Registro: {logPath}",
+  "3303f06ad500381a": "Falló la compilación local del host."
 }

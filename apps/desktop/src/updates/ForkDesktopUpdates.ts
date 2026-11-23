@@ -171,6 +171,11 @@ export const makeLocalSource = Effect.gen(function* () {
       yield* logUpdaterInfo("checking for updates", { reason });
 
       const inspection = yield* localSourceUpdates.inspect;
+      // A build older than HEAD would install without the commits after it, so offer a new one.
+      const withoutStaleBuild = (current: DesktopUpdateState) =>
+        inspection.pendingBuildCommit === inspection.currentCommit
+          ? current
+          : { ...current, downloadedVersion: null };
       // A build that predates the newest nightly still needs one, even when
       // a sync already merged it.
       if (
@@ -178,12 +183,18 @@ export const makeLocalSource = Effect.gen(function* () {
         environment.appVersion === inspection.upstreamVersion &&
         LocalSourceUpdates.runsCheckedOutCommit(inspection)
       ) {
-        yield* updateState((current) => reduceDesktopUpdateStateOnNoUpdate(current, checkedAt));
+        yield* updateState((current) =>
+          reduceDesktopUpdateStateOnNoUpdate(withoutStaleBuild(current), checkedAt),
+        );
         yield* logUpdaterInfo("no updates available");
         return true;
       }
       yield* updateState((current) =>
-        reduceDesktopUpdateStateOnUpdateAvailable(current, inspection.upstreamVersion, checkedAt),
+        reduceDesktopUpdateStateOnUpdateAvailable(
+          withoutStaleBuild(current),
+          inspection.upstreamVersion,
+          checkedAt,
+        ),
       );
       yield* logUpdaterInfo("upstream nightly available for the local source build", {
         ahead: inspection.ahead,
@@ -194,20 +205,21 @@ export const makeLocalSource = Effect.gen(function* () {
       });
       return true;
     }).pipe(
-      Effect.catchTag(
-        "LocalSourceUpdateError",
-        Effect.fn("desktop.updates.handleCheckForUpdatesFailure")(function* (error) {
-          const failedAt = yield* currentIsoTimestamp;
-          yield* updateState((current) =>
-            reduceDesktopUpdateStateOnCheckFailure(current, error.message, failedAt),
-          );
-          yield* logUpdaterError(error.message, {
-            errorTag: error._tag,
-            operation: error.operation,
-          });
-          return true;
-        }),
-      ),
+      Effect.catchTags({
+        LocalSourceUpdateError: Effect.fn("desktop.updates.handleCheckForUpdatesFailure")(
+          function* (error) {
+            const failedAt = yield* currentIsoTimestamp;
+            yield* updateState((current) =>
+              reduceDesktopUpdateStateOnCheckFailure(current, error.message, failedAt),
+            );
+            yield* logUpdaterError(error.message, {
+              errorTag: error._tag,
+              operation: error.operation,
+            });
+            return true;
+          },
+        ),
+      }),
       Effect.onInterrupt(() => setState(state)),
       Effect.ensuring(finishUpdateAction("check")),
     );
@@ -236,19 +248,20 @@ export const makeLocalSource = Effect.gen(function* () {
       });
       return { accepted: true, completed: true };
     }).pipe(
-      Effect.catchTag(
-        "LocalSourceUpdateError",
-        Effect.fn("desktop.updates.handleDownloadFailure")(function* (error) {
-          yield* updateState((current) =>
-            reduceDesktopUpdateStateOnDownloadFailure(current, error.message),
-          );
-          yield* logUpdaterError(error.message, {
-            errorTag: error._tag,
-            operation: error.operation,
-          });
-          return { accepted: true, completed: false };
-        }),
-      ),
+      Effect.catchTags({
+        LocalSourceUpdateError: Effect.fn("desktop.updates.handleDownloadFailure")(
+          function* (error) {
+            yield* updateState((current) =>
+              reduceDesktopUpdateStateOnDownloadFailure(current, error.message),
+            );
+            yield* logUpdaterError(error.message, {
+              errorTag: error._tag,
+              operation: error.operation,
+            });
+            return { accepted: true, completed: false };
+          },
+        ),
+      }),
       Effect.onInterrupt(() =>
         updateState((current) => (current.status === "downloading" ? state : current)).pipe(
           Effect.asVoid,
@@ -400,17 +413,18 @@ export const makeLocalSource = Effect.gen(function* () {
           yield* electronApp.quit;
           return { accepted: true, completed: false, failed: false };
         }).pipe(
-          Effect.catchTag(
-            "LocalSourceUpdateError",
-            Effect.fn("desktop.updates.handleInstallFailure")(function* (error) {
-              yield* recoverFailedInstall(error.message);
-              yield* logUpdaterError(error.message, {
-                errorTag: error._tag,
-                operation: error.operation,
-              });
-              return { accepted: true, completed: false, failed: true };
-            }),
-          ),
+          Effect.catchTags({
+            LocalSourceUpdateError: Effect.fn("desktop.updates.handleInstallFailure")(
+              function* (error) {
+                yield* recoverFailedInstall(error.message);
+                yield* logUpdaterError(error.message, {
+                  errorTag: error._tag,
+                  operation: error.operation,
+                });
+                return { accepted: true, completed: false, failed: true };
+              },
+            ),
+          }),
           Effect.onInterrupt(() => resetInstallAction),
           Effect.catchCause((cause) =>
             Effect.gen(function* () {
@@ -603,11 +617,12 @@ export const syncSource: Effect.Effect<
       merged: result.merged,
       message: describeSourceSync(result),
     })),
-    Effect.catchTag("LocalSourceUpdateError", (error) =>
-      logUpdaterError(error.message, { errorTag: error._tag, operation: error.operation }).pipe(
-        Effect.as<DesktopSourceSyncResult>({ ok: false, merged: 0, message: error.message }),
-      ),
-    ),
+    Effect.catchTags({
+      LocalSourceUpdateError: (error) =>
+        logUpdaterError(error.message, { errorTag: error._tag, operation: error.operation }).pipe(
+          Effect.as<DesktopSourceSyncResult>({ ok: false, merged: 0, message: error.message }),
+        ),
+    }),
   );
 }).pipe(Effect.withSpan("desktop.updates.syncSource"));
 
@@ -620,16 +635,17 @@ const gateInstalls = Effect.fn("desktop.updates.gateInstalls")(function* (
   updates: DesktopUpdates.DesktopUpdates["Service"],
 ) {
   const gate = yield* DesktopUpdateGate.DesktopUpdateGate;
-  const heldState = (expectedVersion: Option.Option<string>) =>
-    Effect.gen(function* () {
-      const state = yield* updates.getState;
-      if (!DesktopUpdateGate.isHoldable(state, expectedVersion)) return Option.none();
-      if (!(yield* gate.holdIfBusy(expectedVersion))) return Option.none();
-      return Option.some<DesktopUpdateState>({
-        ...state,
-        message: DesktopUpdateGate.HELD_INSTALL_MESSAGE,
-      });
+  const heldState = Effect.fn("desktop.updates.heldState")(function* (
+    expectedVersion: Option.Option<string>,
+  ) {
+    const state = yield* updates.getState;
+    if (!DesktopUpdateGate.isHoldable(state, expectedVersion)) return Option.none();
+    if (!(yield* gate.holdIfBusy(expectedVersion))) return Option.none();
+    return Option.some<DesktopUpdateState>({
+      ...state,
+      message: DesktopUpdateGate.HELD_INSTALL_MESSAGE,
     });
+  });
 
   yield* gate.takeReady.pipe(
     Effect.flatMap((held) =>
@@ -685,7 +701,4 @@ export const layer = Layer.effect(
     const updates = sourceBuild ? yield* makeLocalSource : yield* DesktopUpdates.make;
     return yield* gateInstalls(updates);
   }),
-).pipe(
-  Layer.provideMerge(LocalSourceUpdates.layer),
-  Layer.provideMerge(DesktopUpdateGate.layer),
-);
+).pipe(Layer.provideMerge(LocalSourceUpdates.layer), Layer.provideMerge(DesktopUpdateGate.layer));

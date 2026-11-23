@@ -60,8 +60,10 @@ result file, even if other hosts completed. **Retry** repeats the host build for
 SHA; it does not choose a newer commit. On success, `host-fleet-build-result.json` contains both the
 full `commit` SHA and `targetVersion`. The desktop accepts it only when the commit matches the saved
 build request, the target version has that commit's SHA prefix, and every configured host reports that
-same target. It then queues the existing host update flow, which restarts each connected host's server at
-once. A failed or cancelled host activation does not trigger another
+same target. Once this Mac app itself runs that target (after **Restart & Install** on the Mac), it
+queues the existing host update flow, which restarts each connected host's server at once, so a build
+that breaks the Mac never reaches the hosts. Until then the hosts keep their current build; **Update
+everything** still updates them by hand. A failed or cancelled host activation does not trigger another
 build; retry that host's activation through **Settings → Connections**. Press the desktop's overall
 **Update** again only when you want a new source commit built.
 

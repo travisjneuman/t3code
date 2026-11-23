@@ -1,17 +1,7 @@
 /**
- * Fork add-on: the fork's own schema migrations, in their own ledger.
- *
- * Upstream's migrator compares ids only and skips every id at or below the
- * highest one recorded, so a fork migration in `effect_sql_migrations` would
- * mask a future upstream migration at that id forever, and upstream builds
- * reject such a history from id 55 on (docs/internals/legacy-orchestration-migration.md,
- * "Divergent migration ids"). Fork tables are therefore migrated here, in
- * `fork_sql_migrations`, which upstream never reads. The fork shares `~/.t3`
- * with official T3 Code, so these migrations only add tables that upstream
- * builds can ignore.
- *
- * A fork-owned repository runs `runForkMigrations` when its layer is built;
- * the migrator records each id once and treats a concurrent run as done.
+ * Fork add-on: fork migrations use their own `fork_sql_migrations` ledger, because upstream's
+ * migrator skips every id at or below the highest recorded, so a fork id would mask a future
+ * upstream one. Tables only, which upstream builds sharing `~/.t3` ignore.
  */
 import * as Effect from "effect/Effect";
 import * as Migrator from "effect/sql/Migrator";

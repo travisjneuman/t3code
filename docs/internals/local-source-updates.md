@@ -76,6 +76,14 @@ environment, so the variable is read from the login shell with `PATH`. The runne
 exits 0 when it refuses, so only a last output line starting with `pushed` counts as
 pushed; a push whose fan-out was blocked is logged as a warning.
 
+The desktop build bundles without typechecking, so fork code that still uses a name upstream
+deleted builds and fails only at runtime. Before the build, Update lists such names: names a file
+lost between the installed build's upstream base and HEAD's that the fork's copy still uses, and
+names gone from every upstream file that a fork-changed file uses. A non-empty list gets one
+build-repair agent pass first, reporting dispositions like the build repair. The scan ignores
+comments and quoted strings, may list a name the fork defines itself, and is skipped when the
+installed build's commit is unknown.
+
 ## Sync without building
 
 `syncSource` (the sidebar merge button) merges `upstream/main` itself, commits,
@@ -208,4 +216,5 @@ The installed bundle is replaced only by a detached helper after the parent proc
 exits; it keeps the prior app at a `.previous-<pid>` path and restores it if the
 replacement move fails. On success it deletes that backup and the build output, so
 an update leaves exactly one installed app. At most one build is kept on disk: each
-new build and each failed build clears the `source-updates` directory.
+new build and each failed build clears the `source-updates` directory. A build older than HEAD
+is not installed: the update check offers a new build instead, and install refuses it.
