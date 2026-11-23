@@ -13,6 +13,7 @@ import {
   AuthOrchestrationOperateScope,
   type ScopedThreadRef,
   type ThreadId,
+  type ContextMenuSource,
 } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import { msg } from "gt-react";
@@ -119,7 +120,7 @@ export function useThreadActionMenu(input: {
     onError: (error) => failureToast(m(msg("Failed to copy thread ID")), error),
   });
 
-  const openMenu = (position: { x: number; y: number }) => {
+  const openMenu = (position: { x: number; y: number }, source?: ContextMenuSource) => {
     if (threadRef === null) return;
     void (async () => {
       const api = readLocalApi();
@@ -162,7 +163,7 @@ export function useThreadActionMenu(input: {
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
       });
       const menuItems = withForkThreadMenuItems(items, thread); // Fork add-on(core)
-      const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position)); // Fork add-on(core)
+      const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position, source)); // Fork add-on(core)
       if (clicked._tag === "Failure" || clicked.value === null) return;
       if (isForkThreadMenuId(clicked.value) /* Fork add-on(core) */)
         return runForkThreadMenuItem(threadRef, clicked.value, router); // Fork add-on(core)

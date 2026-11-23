@@ -1,4 +1,6 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import type { ContextMenuSource } from "@t3tools/contracts";
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import { m as resolveMessage } from "~/i18n/messages";
 import { settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
 import { Spinner } from "~/components/ui/spinner";
@@ -241,7 +243,11 @@ export function ArchivedThreadsPanel() {
     );
   };
 
-  const handleContextMenu = async (thread: ArchivedThread, position: { x: number; y: number }) => {
+  const handleContextMenu = async (
+    thread: ArchivedThread,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => {
     const pending = pendingActionsRef.current;
     if (pending.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)))) return;
     const result = await settlePromise(async () => {
@@ -252,6 +258,7 @@ export function ArchivedThreadsPanel() {
           destructive: action === "delete",
         })),
         position,
+        source,
       );
       if (clicked === "unarchive" || clicked === "delete")
         await handleThreadAction(clicked, thread);
@@ -267,7 +274,11 @@ export function ArchivedThreadsPanel() {
         className="rounded-none"
         onContextMenu={(event) => {
           event.preventDefault();
-          void handleContextMenu(thread, { x: event.clientX, y: event.clientY });
+          void handleContextMenu(
+            thread,
+            { x: event.clientX, y: event.clientY },
+            contextMenuSourceOf(event),
+          );
         }}
         title={thread.title}
         description={
