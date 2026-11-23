@@ -3879,7 +3879,6 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             );
             return {
               providerThread: state.providerThread,
-              providerTurns: [],
               messages,
               runtimeRequests: [],
             };
@@ -4391,7 +4390,7 @@ function piExtensionDisplayName(extensionPath: string | undefined): string {
 function piThreadSnapshot(
   providerThread: OrchestrationV2ProviderThread,
 ): ProviderAdapter.ProviderAdapterV2ThreadSnapshot {
-  return { providerThread, providerTurns: [], messages: [], runtimeRequests: [] };
+  return { providerThread, messages: [], runtimeRequests: [] };
 }
 
 function piQuestion(

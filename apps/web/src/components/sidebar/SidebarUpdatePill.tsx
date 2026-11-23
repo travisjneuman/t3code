@@ -22,6 +22,7 @@ import {
   getDesktopUpdateDownloadedVersion,
   getDesktopUpdateIdleTooltip,
   getDesktopUpdateInstallConfirmationMessage,
+  installDesktopUpdate,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
   shouldShowArm64IntelBuildWarning,
@@ -180,7 +181,7 @@ export async function installLocalUpdate(
 ): Promise<boolean> {
   if (await queueDesktopInstallWhileBusy(bridge)) return false; // Fork add-on(maintenance-queue)
   try {
-    const result = await bridge.installUpdate(expectedVersion);
+    const result = await installDesktopUpdate(bridge, expectedVersion);
     if (!result.accepted) {
       showDesktopUpdateDownloadedToast(bridge, result.state);
       return false;

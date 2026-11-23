@@ -1,7 +1,6 @@
 import * as NodeDns from "node:dns";
 import * as NodeNet from "node:net";
 
-// Fork add-on(webhook-node-http): node:http, since the CLI single-executable cannot load undici.
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
@@ -78,7 +77,7 @@ const resolveAll = (host: string) =>
 /**
  * The webhook address check and the client deliveries go through. The client resolves again
  * as it connects, to the address it checks, so DNS rebinding cannot reach a private address;
- * TLS still sees the host name. The client never follows redirects. Fork add-on(webhook-node-http)
+ * TLS still sees the host name. The client never follows redirects.
  */
 export const make = (hosts: ReadonlyArray<string>) => {
   const allowed = new Set(hosts.map((host) => host.trim().toLowerCase()));
@@ -123,6 +122,7 @@ export const make = (hosts: ReadonlyArray<string>) => {
   return {
     check,
     allowsPlaintext: (url: URL) => allowed.has(hostOf(url)),
-    layerClient: NodeHttpClient.layerNodeHttpOptions({ lookup }), // Fork add-on(webhook-node-http)
+    // The Undici client statically imports undici, which a single-executable cannot load.
+    layerClient: NodeHttpClient.layerNodeHttpOptions({ lookup }),
   };
 };
