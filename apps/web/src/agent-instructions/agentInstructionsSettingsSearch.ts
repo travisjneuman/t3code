@@ -49,6 +49,20 @@ export const AGENT_INSTRUCTIONS_SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["delegate_task researcher research role subagent model target"],
   },
   {
+    id: "agent-worker-balance",
+    title: "Balance workers",
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: ["delegate_task usage limits weekly pace subscription balance spread models quota"],
+  },
+  {
+    id: "agent-main-reserve",
+    title: "Main agent reserve",
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: ["weekly usage reserve keep orchestrator subscription workers limit percent"],
+  },
+  {
     id: "agent-parallel-workers",
     title: "Parallel workers",
     to: "/settings/threads",

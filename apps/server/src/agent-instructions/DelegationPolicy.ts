@@ -3,6 +3,7 @@
  * Fork add-on: agent instructions; see docs/user/agent-instructions.md.
  */
 import {
+  agentBalancesWorkers,
   AGENT_READ_ONLY_WORKER_LINE,
   agentWorkerIsReadOnly,
   agentWorkerModelForRole,
@@ -16,14 +17,17 @@ import {
   type OrchestratorMcpDelegateTaskInput,
   OrchestratorMcpFailure,
   type ServerProvider,
+  type ModelSelection,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { resolveThreadAgentSettings } from "./AgentInstructionsSync.ts";
+import { balanceWorker, checkExplicitTarget } from "./WorkerBalance.ts";
 
 const ACTIVE_WORKER_STATUSES = new Set(["pending", "running", "waiting"]);
 
@@ -135,8 +139,13 @@ function applyDelegationPolicy(input: {
   readonly level: DelegationLevel;
   readonly request: OrchestratorMcpDelegateTaskInput;
   readonly isRetry: boolean;
+  readonly now: number;
+  /** The thread's agent's model; its subscription keeps the reserve. */
+  readonly mainSelection: ModelSelection;
 }): Effect.Effect<
-  Pick<OrchestratorMcpDelegateTaskInput, "target" | "task" | "isolation">,
+  Pick<OrchestratorMcpDelegateTaskInput, "target" | "task" | "isolation"> & {
+    readonly routing?: string;
+  },
   OrchestratorMcpFailure
 > {
   const { settings, parent, level, request } = input;
@@ -172,6 +181,7 @@ function applyDelegationPolicy(input: {
   }
   const requested = request.target;
   let target = requested;
+  let routing: string | undefined;
   if (settings.agentWorkerModelSelectionFixed && !input.isRetry) {
     const fixedSelection = agentWorkerModelForRole(settings, request.role);
     if (fixedSelection === null) {
@@ -186,12 +196,11 @@ function applyDelegationPolicy(input: {
       options: fixedSelection.options ?? [],
     };
   } else if (!settings.agentWorkerModelSelectionFixed) {
-    const roleModel =
-      requested?.providerInstanceId === undefined &&
-      requested?.driverKind === undefined &&
-      requested?.model === undefined
-        ? agentWorkerModelForRole(settings, request.role)
-        : null;
+    const explicit =
+      requested?.providerInstanceId !== undefined ||
+      requested?.driverKind !== undefined ||
+      requested?.model !== undefined;
+    const roleModel = explicit ? null : agentWorkerModelForRole(settings, request.role);
     const options = requested?.options ?? roleModel?.options;
     target =
       roleModel === null
@@ -201,6 +210,35 @@ function applyDelegationPolicy(input: {
             model: roleModel.model,
             ...(options === undefined ? {} : { options }),
           };
+    if (agentBalancesWorkers(settings) && !input.isRetry) {
+      const context = {
+        settings,
+        providers: input.providers ?? [],
+        now: input.now,
+        mainInstanceId: input.mainSelection.instanceId,
+      };
+      if (explicit && requested !== undefined) {
+        const refused = checkExplicitTarget(
+          context,
+          requested,
+          parent.thread.modelSelection.instanceId,
+        );
+        if (refused !== undefined) return Effect.fail(refused);
+      } else {
+        const balanced = balanceWorker(context, roleModel ?? parent.thread.modelSelection);
+        if (balanced instanceof OrchestratorMcpFailure) return Effect.fail(balanced);
+        routing = balanced.routing;
+        if (balanced.selection !== undefined) {
+          target = {
+            providerInstanceId: balanced.selection.instanceId,
+            model: balanced.selection.model,
+            ...(balanced.selection.options === undefined
+              ? {}
+              : { options: balanced.selection.options }),
+          };
+        }
+      }
+    }
   }
   // An explicit isolation, "shared" included, wins over the Worker workspace setting.
   const isolation =
@@ -209,6 +247,7 @@ function applyDelegationPolicy(input: {
   return Effect.succeed({
     target,
     isolation,
+    ...(routing === undefined ? {} : { routing }),
     task: [
       isolation === "worktree" && !readOnly ? WORKTREE_WORKER_LINE : null,
       readOnly ? AGENT_READ_ONLY_WORKER_LINE : null,
@@ -229,6 +268,8 @@ export interface PreparedDelegation extends Pick<
 > {
   readonly settings: AgentSettings;
   readonly isRetry: boolean;
+  /** Why worker balancing picked the target, when it ran. */
+  readonly routing?: string;
 }
 
 const orchestrationFailure = (message: string) =>
@@ -335,6 +376,8 @@ export const make = Effect.gen(function* () {
       providers: input.providers,
       settings,
       level: { depth: chain.length - 1, activeWorkers },
+      now: yield* Clock.currentTimeMillis,
+      mainSelection: top.thread.modelSelection,
     });
     return { ...policy, settings, isRetry: input.isRetry };
   });

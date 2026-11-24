@@ -237,6 +237,8 @@ export const OrchestratorMcpDelegateTaskResult = Schema.Struct({
   latestTerminalResultContextTransferId: Schema.NullOr(ContextTransferId),
   providerInstanceId: ProviderInstanceId,
   model: Schema.NullOr(Schema.String),
+  /** Fork add-on(agent-instructions): why worker balancing picked this model. */
+  routing: Schema.optional(Schema.String),
   executedModel: Schema.optional(OrchestratorMcpExecutedModel),
   options: Schema.optional(Schema.Array(ProviderOptionSelection)),
   summary: Schema.NullOr(Schema.String),
@@ -676,6 +678,8 @@ export const OrchestratorMcpProviderCapability = Schema.Struct({
   canRunChildTask: Schema.Boolean,
   canRunCrossProviderChildTask: Schema.Boolean,
   constraints: Schema.Array(Schema.String),
+  /** Fork add-on(agent-instructions): weekly room against pace and session use. */
+  headroom: Schema.optional(Schema.String),
 });
 export type OrchestratorMcpProviderCapability = typeof OrchestratorMcpProviderCapability.Type;
 

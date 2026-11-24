@@ -20,6 +20,7 @@ import {
   agentPresetValues,
   AGENT_PROJECT_SCOPED_SETTING_KEYS,
   DEFAULT_AGENT_DELEGATION_DEPTH,
+  DEFAULT_AGENT_MAIN_RESERVE_PERCENT,
   DEFAULT_AGENT_PARALLEL_WORKERS,
   isBuiltinAgentPreset,
   MAX_AGENT_DELEGATION_DEPTH,
@@ -52,6 +53,7 @@ import { useEnvironmentProviders } from "../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../state/server";
 import { AgentInstructionsPreview } from "./AgentInstructionsPreview";
 import { AgentPresetsControl } from "./AgentPresetsControl";
+import { BalanceModelsControl } from "./BalanceModelsControl";
 import { ChoiceSelect } from "./ChoiceSelect";
 import { ParallelWorkersControl } from "./ParallelWorkersControl";
 import { ProviderInstructionsControl } from "./ProviderInstructionsControl";
@@ -63,6 +65,8 @@ const SETTING_LABELS: Record<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number],
   agentWorkerModelSelectionFixed: "Fixed worker targets",
   agentReviewWorkerModelSelection: "Review worker model",
   agentResearchWorkerModelSelection: "Research worker model",
+  agentWorkerBalanceModels: "Balance workers",
+  agentMainReservePercent: "Main agent reserve",
   agentMaxParallelWorkers: "Parallel workers",
   agentMaxDelegationDepth: "Delegation depth",
   agentReadOnlyReviewers: "Read-only reviewers",
@@ -86,6 +90,11 @@ const DELEGATION_OPTIONS: ReadonlyArray<readonly [AgentDelegationMode, string]> 
 ];
 
 const NO_LIMIT = "none";
+
+const RESERVE_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  ["0", "Off"],
+  ...[10, 15, 20, 25, 30, 40, 50].map((percent) => [String(percent), `${percent}%`] as const),
+];
 
 const DELEGATION_DEPTH_OPTIONS: ReadonlyArray<readonly [string, string]> = Array.from(
   { length: MAX_AGENT_DELEGATION_DEPTH - MIN_AGENT_DELEGATION_DEPTH + 1 },
@@ -193,6 +202,7 @@ export function AgentInstructionsSettingsSection() {
   const mixedVerification = useScopedSettingsMixed(["agentVerification"]);
   const mixedPushPolicy = useScopedSettingsMixed(["agentPushPolicy"]);
   const mixedInstructions = useScopedSettingsMixed(["agentInstructions"]);
+  const mixedReserve = useScopedSettingsMixed(["agentMainReservePercent"]);
   const scopeKey = targets.map((entry) => `${entry.environmentId}:${entry.projectId}`).join(",");
   const instructionsEdited = useRef(false);
 
@@ -369,6 +379,62 @@ export function AgentInstructionsSettingsSection() {
               />
             }
           />
+
+          <SettingsRow
+            serverScoped
+            settingKeys={["agentWorkerBalanceModels"]}
+            {...searchableSetting("agent-worker-balance")}
+            description="With two or more models, each worker goes to the one most ahead of its subscription's weekly pace, never one at a usage limit. Fixed worker targets turns this off."
+            resetAction={
+              settings.agentWorkerBalanceModels.length > 0 ? (
+                <SettingResetButton
+                  label="balance workers"
+                  onClick={() => updateSettings({ agentWorkerBalanceModels: [] })}
+                />
+              ) : null
+            }
+            control={
+              <BalanceModelsControl
+                suggestions={[
+                  settings.agentWorkerModelSelection,
+                  settings.agentReviewWorkerModelSelection,
+                  settings.agentResearchWorkerModelSelection,
+                  settings.defaultModelSelection,
+                  workerSeed,
+                ]}
+                {...modelControl}
+              />
+            }
+          />
+
+          {settings.agentWorkerBalanceModels.length > 1 ? (
+            <SettingsRow
+              serverScoped
+              settingKeys={["agentMainReservePercent"]}
+              {...searchableSetting("agent-main-reserve")}
+              description="When the thread's agent's own subscription has this much of its week left or less, T3 sends no workers to it, even when the agent asks for that model, so the main thread keeps running."
+              resetAction={
+                settings.agentMainReservePercent !== DEFAULT_AGENT_MAIN_RESERVE_PERCENT ? (
+                  <SettingResetButton
+                    label="main agent reserve"
+                    onClick={() =>
+                      updateSettings({
+                        agentMainReservePercent: DEFAULT_AGENT_MAIN_RESERVE_PERCENT,
+                      })
+                    }
+                  />
+                ) : null
+              }
+              control={
+                <ChoiceSelect
+                  value={mixedReserve ? null : String(settings.agentMainReservePercent)}
+                  options={RESERVE_OPTIONS}
+                  ariaLabel="Main agent reserve"
+                  onChange={(value) => updateSettings({ agentMainReservePercent: Number(value) })}
+                />
+              }
+            />
+          ) : null}
 
           <SettingsRow
             serverScoped

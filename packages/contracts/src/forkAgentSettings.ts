@@ -95,6 +95,12 @@ export const AgentProviderInstructions = Schema.Record(Schema.String, TrimmedStr
 export type AgentProviderInstructions = typeof AgentProviderInstructions.Type;
 
 const NullableModelSelection = Schema.NullOr(ModelSelection);
+
+/** Weekly percent left on the main agent's own subscription at or below which no workers go to it. 0 turns it off. */
+export const AgentMainReservePercent = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: 100 }),
+);
+export const DEFAULT_AGENT_MAIN_RESERVE_PERCENT = 25;
 const NullableWorkerTimeLimit = Schema.NullOr(AgentWorkerTimeLimitMinutes);
 
 /**
@@ -116,6 +122,12 @@ export const AgentSettingsFields = {
   ),
   agentResearchWorkerModelSelection: NullableModelSelection.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  agentWorkerBalanceModels: Schema.Array(ModelSelection).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  agentMainReservePercent: AgentMainReservePercent.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_MAIN_RESERVE_PERCENT)),
   ),
   agentMaxParallelWorkers: PersistedParallelWorkers.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_PARALLEL_WORKERS)),
@@ -158,6 +170,8 @@ export const AgentSettingsOptionalFields = {
   agentWorkerModelSelectionFixed: Schema.optionalKey(Schema.Boolean),
   agentReviewWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
   agentResearchWorkerModelSelection: Schema.optionalKey(NullableModelSelection),
+  agentWorkerBalanceModels: Schema.optionalKey(Schema.Array(ModelSelection)),
+  agentMainReservePercent: Schema.optionalKey(AgentMainReservePercent),
   agentMaxParallelWorkers: Schema.optionalKey(PersistedParallelWorkers),
   agentMaxDelegationDepth: Schema.optionalKey(AgentMaxDelegationDepth),
   agentReadOnlyReviewers: Schema.optionalKey(Schema.Boolean),
@@ -218,6 +232,8 @@ export const AGENT_PROJECT_SCOPED_SETTING_KEYS = [
   "agentWorkerModelSelectionFixed",
   "agentReviewWorkerModelSelection",
   "agentResearchWorkerModelSelection",
+  "agentWorkerBalanceModels",
+  "agentMainReservePercent",
   "agentMaxParallelWorkers",
   "agentMaxDelegationDepth",
   "agentReadOnlyReviewers",
@@ -320,6 +336,8 @@ const AGENT_PRESET_PROFILE_KEYS = [
   "agentWorkerModelSelectionFixed",
   "agentReviewWorkerModelSelection",
   "agentResearchWorkerModelSelection",
+  "agentWorkerBalanceModels",
+  "agentMainReservePercent",
   "agentMaxParallelWorkers",
   "agentMaxDelegationDepth",
   "agentReadOnlyReviewers",
@@ -330,10 +348,12 @@ const AGENT_PRESET_PROFILE_KEYS = [
   "agentBlockNativeSubagents",
 ] as const satisfies ReadonlyArray<(typeof AGENT_PROJECT_SCOPED_SETTING_KEYS)[number]>;
 
-// Built-in presets keep the configured worker targets.
+// Built-in presets keep the configured worker targets and balancing.
 const AGENT_WORKER_TARGET_KEYS: ReadonlyArray<string> = [
   ...AGENT_MODEL_SELECTION_KEYS,
   "agentWorkerModelSelectionFixed",
+  "agentWorkerBalanceModels",
+  "agentMainReservePercent",
 ];
 
 /** The values applying `preset` sets: its stored values, plus defaults for the profile rows it leaves out. */
@@ -452,6 +472,25 @@ export function agentWorkerModelForRole(
   return roleModel ?? settings.agentWorkerModelSelection;
 }
 
+/** Whether T3 picks worker models by subscription pace: two or more balance models, targets not fixed. */
+export function agentBalancesWorkers(
+  settings: Pick<AgentSettings, "agentWorkerBalanceModels" | "agentWorkerModelSelectionFixed">,
+): boolean {
+  return !settings.agentWorkerModelSelectionFixed && settings.agentWorkerBalanceModels.length > 1;
+}
+
+function balanceLine(settings: AgentSettings): string {
+  const models = settings.agentWorkerBalanceModels.map(workerTarget).join(", ");
+  const reserve = settings.agentMainReservePercent;
+  return [
+    `- T3 balances workers between ${models} by each subscription's weekly pace. Leave target out: T3 keeps the role's target unless another has clearly more weekly room, and never routes into a usage limit.`,
+    reserve > 0
+      ? ` Once your own subscription has ${reserve}% or less of its week left, T3 sends no workers to it, explicit targets included.`
+      : "",
+    " Pass a target only when a task needs that model; the delegate_task result's routing says why a model was picked or refused.",
+  ].join("");
+}
+
 /** Whether a worker of `role` is held to read-only work. */
 export function agentWorkerIsReadOnly(
   settings: Pick<AgentSettings, "agentReadOnlyReviewers">,
@@ -477,8 +516,12 @@ function workerTarget(selection: ModelSelection): string {
 function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> {
   const review = settings.agentReviewWorkerModelSelection;
   const research = settings.agentResearchWorkerModelSelection;
+  const balancing = agentBalancesWorkers(settings);
   const anyTarget =
-    settings.agentWorkerModelSelection !== null || review !== null || research !== null;
+    settings.agentWorkerModelSelection !== null ||
+    review !== null ||
+    research !== null ||
+    balancing;
   const ownsGit = settings.agentOrchestratorOwnsGit;
   const worktrees = settings.agentWorkerWorkspace === "worktree";
   return [
@@ -504,6 +547,7 @@ function delegationLines(settings: AgentSettings): ReadonlyArray<string | null> 
       : anyTarget
         ? "- Set role on every delegate_task. Leave out target and T3 uses the target for that role."
         : null,
+    balancing ? balanceLine(settings) : null,
     `- At most ${settings.agentMaxParallelWorkers} ${settings.agentMaxParallelWorkers === 1 ? "worker runs" : "workers run"} at once under the thread's agent, counting workers that workers start; T3 refuses more.`,
     "- Give each worker one short, scoped task with the files it owns, the files it must not touch, and what done means. Ask for a short report: changed files, what was verified, open questions.",
     settings.agentReadOnlyReviewers

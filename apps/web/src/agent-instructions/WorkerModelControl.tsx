@@ -41,32 +41,33 @@ function workerModelPatch(key: WorkerModelSettingKey, value: ModelSelection | nu
   }
 }
 
-export function WorkerModelControl({
-  settingKey,
-  label,
-  seed,
-  providers,
-  entries,
-  modelDisabledReason,
-}: {
-  readonly settingKey: WorkerModelSettingKey;
-  /** Names the setting in the picker's label and in the not-saved toast. */
-  readonly label: string;
-  /** What the switch turns on with. */
-  readonly seed: ModelSelection | null;
+export interface PickerContext {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly entries: ReadonlyArray<ProviderInstanceEntry>;
   readonly modelDisabledReason: (
     instanceId: ModelSelection["instanceId"],
     model: string,
   ) => string | null;
+}
+
+/** Provider, model and traits pickers for one stored selection. */
+export function WorkerModelPicker({
+  stored,
+  label,
+  mixed,
+  onChange,
+  providers,
+  entries,
+  modelDisabledReason,
+}: PickerContext & {
+  readonly stored: ModelSelection | null;
+  readonly label: string;
+  readonly mixed: boolean;
+  readonly onChange: (value: ModelSelection) => void;
 }) {
   const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
   const navigate = useNavigate();
-  const { environment, connectedEnvironments } = useSettingsScope();
-  const mixed = useScopedSettingsMixed([settingKey]);
-  const stored = settings[settingKey];
+  const { environment } = useSettingsScope();
   const selection = resolveDefaultProviderModelSelection(providers, stored);
   const entry = entries.find((candidate) => candidate.instanceId === selection?.instanceId);
   const modelOptions = getCustomModelOptionsByInstance(
@@ -75,6 +76,70 @@ export function WorkerModelControl({
     selection?.instanceId,
     selection?.model,
   );
+  if (!selection || !entry) return null;
+  return (
+    <>
+      <ProviderModelPicker
+        environmentId={environment?.environmentId ?? null}
+        activeInstanceId={selection.instanceId}
+        model={selection.model}
+        lockedProvider={null}
+        instanceEntries={entries}
+        modelOptionsByInstance={modelOptions}
+        triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+        triggerAriaLabel={label}
+        {...(mixed ? { triggerLabel: "Mixed" } : {})}
+        getModelDisabledReason={modelDisabledReason}
+        onOpenProviderSetup={(instanceId) => {
+          if (environment)
+            void navigate({
+              to: "/settings/providers",
+              search: { environmentId: environment.environmentId, instanceId },
+            });
+        }}
+        onInstanceModelChange={(instanceId, model) =>
+          onChange(createModelSelection(instanceId, model))
+        }
+      />
+      {!mixed ? (
+        <TraitsPicker
+          provider={entry.driverKind}
+          models={entry.models}
+          model={selection.model}
+          prompt=""
+          onPromptChange={() => {}}
+          modelOptions={selection.options ?? []}
+          allowPromptInjectedEffort={false}
+          includePlanAgent={selectsPlanAgent(selection.options)}
+          triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+          onModelOptionsChange={(options) =>
+            onChange(createModelSelection(selection.instanceId, selection.model, options))
+          }
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function WorkerModelControl({
+  settingKey,
+  label,
+  seed,
+  providers,
+  entries,
+  modelDisabledReason,
+}: PickerContext & {
+  readonly settingKey: WorkerModelSettingKey;
+  /** Names the setting in the picker's label and in the not-saved toast. */
+  readonly label: string;
+  /** What the switch turns on with. */
+  readonly seed: ModelSelection | null;
+}) {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const { connectedEnvironments } = useSettingsScope();
+  const mixed = useScopedSettingsMixed([settingKey]);
+  const stored = settings[settingKey];
   const enabled = stored !== null;
 
   const save = (value: ModelSelection | null) => {
@@ -96,47 +161,16 @@ export function WorkerModelControl({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-      {(enabled || mixed) && selection && entry ? (
-        <>
-          <ProviderModelPicker
-            environmentId={environment?.environmentId ?? null}
-            activeInstanceId={selection.instanceId}
-            model={selection.model}
-            lockedProvider={null}
-            instanceEntries={entries}
-            modelOptionsByInstance={modelOptions}
-            triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-            triggerAriaLabel={label}
-            {...(mixed ? { triggerLabel: "Mixed" } : {})}
-            getModelDisabledReason={modelDisabledReason}
-            onOpenProviderSetup={(instanceId) => {
-              if (environment)
-                void navigate({
-                  to: "/settings/providers",
-                  search: { environmentId: environment.environmentId, instanceId },
-                });
-            }}
-            onInstanceModelChange={(instanceId, model) =>
-              save(createModelSelection(instanceId, model))
-            }
-          />
-          {!mixed ? (
-            <TraitsPicker
-              provider={entry.driverKind}
-              models={entry.models}
-              model={selection.model}
-              prompt=""
-              onPromptChange={() => {}}
-              modelOptions={selection.options ?? []}
-              allowPromptInjectedEffort={false}
-              includePlanAgent={selectsPlanAgent(selection.options)}
-              triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-              onModelOptionsChange={(options) =>
-                save(createModelSelection(selection.instanceId, selection.model, options))
-              }
-            />
-          ) : null}
-        </>
+      {enabled || mixed ? (
+        <WorkerModelPicker
+          stored={stored}
+          label={label}
+          mixed={mixed}
+          onChange={save}
+          providers={providers}
+          entries={entries}
+          modelDisabledReason={modelDisabledReason}
+        />
       ) : null}
       <Switch
         mixed={mixed}

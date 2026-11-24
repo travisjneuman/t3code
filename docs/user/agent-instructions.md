@@ -13,13 +13,14 @@ provider-specific text.
 - **Presets**: picking a preset sets its values in the scope you picked. **Solo** has the agent
   work alone, **Orchestrator** always delegates and runs one review round, and **Review-heavy**
   delegates when useful, reviews until clean, and keeps reviewers read-only. A preset always sets
-  every delegation row (Delegation, the worker models, Fixed worker targets, Parallel workers,
-  Delegation depth, Worker workspace, Worker time limit, Review rounds, Read-only reviewers,
-  Orchestrator handles git, and Block native subagents), using the default for any it doesn't
-  store, so switching presets never keeps the previous one's workers. Built-in presets leave the
-  worker models and Fixed worker targets as they are. The other rows change only where the preset
-  stores a value. Once you change a row, the preset shows **(edited)**: **Save** writes the change
-  back to the preset you saved, **Revert** puts its values back, and **Save as…** saves the
+  every delegation row (Delegation, the worker models, Fixed worker targets, Balance workers, Main
+  agent reserve, Parallel workers, Delegation depth, Worker workspace, Worker time limit, Review
+  rounds, Read-only reviewers, Orchestrator handles git, and Block native subagents), using the
+  default for any it doesn't store, so switching presets never keeps the previous one's workers.
+  Built-in presets leave the worker models, Fixed worker targets, Balance workers and Main agent
+  reserve as they are. The other rows change only where the preset stores a value. Once you
+  change a row, the preset shows **(edited)**: **Save** writes the change back to the preset you
+  saved, **Revert** puts its values back, and **Save as…** saves the
   current values under a new name (a saved preset with the same name is replaced; built-in presets
   can't be). Saving or renaming copies that one preset to every connected server the scope picker
   covers, so a thread on any of them can use it; each server keeps its other presets. **Rename**
@@ -57,6 +58,19 @@ These rows show while Delegation is on:
   model takes precedence; other roles use Worker model. Delegations without a configured target
   are refused. This setting is project-scoped and can be saved in an Agents preset. It does not
   change the thread's main model or provider-native subagents.
+- **Balance workers**: add two or more models, say one from each subscription you pay for, and T3
+  picks each worker's model from that list by how far each subscription is ahead of or behind its
+  weekly pace (weekly percent left against the share of the week left). When the agent leaves out a
+  target, T3 keeps the role's model unless another listed model has at least 10 points more room.
+  It skips a model whose limit is reached or whose 5-hour session is 90% used, and never routes
+  into overage. A usage reading older than 30 minutes doesn't move workers. An agent may still ask
+  for a model; T3 refuses one that is at a stop and names one with room. The `delegate_task` result
+  says why a model was picked, and `orchestrator_capabilities` shows each provider's weekly room.
+  Fixed worker targets turns balancing off. Usage comes from each provider's own limits, so a
+  provider that doesn't report them is never balanced away from or toward.
+- **Main agent reserve** (with Balance workers on): once the thread's agent's own subscription has
+  this much of its week left or less (25% by default), T3 sends no workers to it, explicit targets
+  included, so the main thread keeps room to finish. **Off** turns the reserve off.
 - **Parallel workers**: the most workers running at once under one thread's agent, counting
   workers that workers start. The default is 12; pick another count, or **Custom…** to type one
   from 1 to 30. Each worker is a full agent process, so every worker adds memory use (the row

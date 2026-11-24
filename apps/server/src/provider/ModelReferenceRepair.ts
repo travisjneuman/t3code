@@ -76,7 +76,20 @@ function repairSlugList(
   return out;
 }
 
-type SelectionFields = Partial<Record<(typeof SELECTION_KEYS)[number], ModelSelection | null>>;
+type SelectionFields = Partial<Record<(typeof SELECTION_KEYS)[number], ModelSelection | null>> & {
+  readonly agentWorkerBalanceModels?: ReadonlyArray<ModelSelection>;
+};
+
+function repairSelectionList(
+  selections: ReadonlyArray<ModelSelection> | undefined,
+  renames: ModelRenames,
+): ReadonlyArray<ModelSelection> | undefined {
+  if (selections === undefined) return undefined;
+  const repaired = selections.map((selection) => repairSelection(selection, renames));
+  return repaired.some((selection, index) => selection !== selections[index])
+    ? repaired
+    : selections;
+}
 
 function repairSelectionFields<T extends SelectionFields>(
   fields: T,
@@ -91,6 +104,10 @@ function repairSelectionFields<T extends SelectionFields>(
       if (next === fields) next = { ...fields };
       Object.assign(next, { [key]: repaired });
     }
+  }
+  const balance = repairSelectionList(fields.agentWorkerBalanceModels, renames);
+  if (balance !== fields.agentWorkerBalanceModels) {
+    next = { ...next, agentWorkerBalanceModels: balance };
   }
   return next;
 }
@@ -108,6 +125,8 @@ function buildModelReferenceRepairPatch(
     const repaired = repairSelection(current, renames);
     if (repaired !== current) patch[key] = repaired;
   }
+  const balance = repairSelectionList(settings.agentWorkerBalanceModels, renames);
+  if (balance !== settings.agentWorkerBalanceModels) patch.agentWorkerBalanceModels = balance;
 
   let presetsChanged = false;
   const agentPresets = settings.agentPresets.map((preset) => {

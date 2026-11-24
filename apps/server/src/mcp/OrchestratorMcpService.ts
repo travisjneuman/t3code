@@ -123,6 +123,7 @@ import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as DelegationPolicy from "../agent-instructions/DelegationPolicy.ts"; // Fork add-on(agent-instructions)
+import { usageHeadroom } from "../agent-instructions/WorkerBalance.ts"; // Fork add-on(agent-instructions)
 import {
   clientModeCeiling,
   type McpInvocationScope,
@@ -594,6 +595,20 @@ function isTerminalTaskStatus(
     status === "cancelled" ||
     status === "interrupted"
   );
+}
+
+// Fork add-on(agent-instructions): worker balancing's view of usage, and why it picked a model.
+function headroomField(provider: ServerProvider, now: number): { readonly headroom?: string } {
+  const headroom = usageHeadroom(provider, now);
+  return headroom === undefined ? {} : { headroom };
+}
+
+// Fork add-on(agent-instructions)
+function withRouting(
+  result: OrchestratorMcpDelegateTaskResult,
+  routing: string | undefined,
+): OrchestratorMcpDelegateTaskResult {
+  return routing === undefined ? result : { ...result, routing };
 }
 
 function endsTaskWait(result: OrchestratorMcpDelegateTaskResult): boolean {
@@ -2778,6 +2793,7 @@ const make = Effect.gen(function* () {
         Effect.mapError(() => failure("orchestration_error", "Unable to read server settings.")),
       );
       const inherited = parent?.thread.modelSelection;
+      const now = yield* Clock.currentTimeMillis; // Fork add-on(agent-instructions)
       const searchTerms = input.search?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
       return {
         parentThreadId: parent?.thread.id ?? null,
@@ -2840,6 +2856,7 @@ const make = Effect.gen(function* () {
             canRunChildTask: constraints.length === 0,
             canRunCrossProviderChildTask: constraints.length === 0,
             constraints: [...constraints],
+            ...headroomField(provider, now), // Fork add-on(agent-instructions)
           };
         }),
         features: {
@@ -3031,9 +3048,11 @@ const make = Effect.gen(function* () {
             taskId, // Fork add-on(agent-instructions)
             commandId, // Fork add-on(agent-instructions)
           }); // Fork add-on(agent-instructions)
-          return yield* input.mode === "wait"
-            ? awaitTask(scope, taskId, key, input.timeoutMs, restore)
-            : restore(readTask(scope, taskId, false, true));
+          return yield* (
+            input.mode === "wait"
+              ? awaitTask(scope, taskId, key, input.timeoutMs, restore)
+              : restore(readTask(scope, taskId, false, true))
+          ).pipe(Effect.map((result) => withRouting(result, policy.routing))); // Fork add-on(agent-instructions)
         }),
       );
     }),
