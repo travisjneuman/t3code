@@ -7,7 +7,7 @@ scripts** API, so OpenBot keeps running as it is, with its schedules, side threa
 ## Set it up
 
 1. In OpenBot, turn on **Local scripts** for each agent you want to message from T3.
-2. In T3, open **Settings › Providers**, add **OpenBot**, and turn it on. Add it on one server
+2. In T3, open **Settings → Providers**, add **OpenBot**, and turn it on. Add it on one server
    only, usually the desktop app you use every day.
 3. If OpenBot runs on another machine, set **SSH host** to that machine, as you would type it after
    `ssh`. The T3 server must reach it with a key and no password prompt, and the machine needs
@@ -28,7 +28,7 @@ The **Usage** page shows the tokens and cost OpenBot records for each turn, by m
 ## Find and open conversations
 
 Each OpenBot provider has its own section in the sidebar, above **Other Agents**. It is titled with
-the provider's name from **Settings › Providers**, or **OpenBot · <SSH host>** when OpenBot runs on
+the provider's name from **Settings → Providers**, or **OpenBot · <SSH host>** when OpenBot runs on
 another machine and its name is left as "OpenBot". It lists each agent's main conversation as
 **Name - Role**, newest first, with the role shortened to its initials (Chief Technology Officer is
 CTO, Chief of Staff is CoS; hover a row for the full role). The agent's side threads are nested
@@ -40,12 +40,16 @@ to show them all. Collapsed, the section still shows the conversations that are 
   brings in whatever OpenBot added since.
 - An agent is listed once it has a conversation or a side thread in OpenBot. A conversation with
   no messages isn't listed, even after you open it, until you or OpenBot write in it.
-- Click **+** beside the section title to message your Chief of Staff (Buster - CoS, or the first
-  agent with Local scripts on if no agent has that role). The agent picker left of the model picker
-  switches to another agent's main conversation and takes what you typed along.
-- Right-click for **Open**, **Copy conversation ID**, and, once opened, **Archive thread** and
-  **Delete thread**. These act on the T3 thread only; the conversation stays in OpenBot. Opening
-  it again brings back an archived thread.
+- Click **+** beside the section title to message your Chief of Staff: the agent whose role is
+  Chief of Staff, or else the first agent T3 can message. If no agent has Local scripts on, T3 says
+  there is no OpenBot agent to message.
+- In an OpenBot thread, the **OpenBot agent** picker left of the model picker switches to another
+  agent's main conversation and takes what you typed along. Agents marked **(Local scripts off)**
+  can't be picked.
+- Right-click for **Open in T3** (**Open** once it is a T3 thread), **Copy conversation ID**, and,
+  once opened, **Archive thread** and **Delete thread**. These act on the T3 thread only; the
+  conversation stays in OpenBot, and opening it again brings back an archived thread. Neither works
+  while a T3 turn is running in it.
 - Right-click the section header to **Refresh**. The section also refreshes when T3 comes back to
   the front.
 
@@ -56,8 +60,9 @@ Side threads and agents without Local scripts show an eye icon: you can read the
 message them. T3 never starts a second chat with an agent, so its history and context stay in one
 place, and agents still message each other inside OpenBot, as they always do.
 
-- A new thread can use OpenBot too. Its agent picker starts on the Chief of Staff, and sending
-  opens the agent's main conversation with your message in it.
+- A new thread can use OpenBot too: pick OpenBot in its model picker, and sending opens the Chief
+  of Staff's main conversation with your message in it. A thread already running on another
+  provider can't switch to OpenBot.
 - T3 can't start or message side threads, because OpenBot's Local scripts API only posts to an
   agent's main conversation, and OpenBot's team access signs members in through openbot.run, so it
   can't stay on your own network. Start side threads in OpenBot, or ask an agent in its main
@@ -78,7 +83,8 @@ place, and agents still message each other inside OpenBot, as they always do.
   agents under OpenBot's own rules, and T3 sends OpenBot only what you type.
 - A turn can't be stopped or steered from T3, because OpenBot offers no way to do that from
   outside. Stop it in OpenBot if you need to.
-- A conversation OpenBot is working on outside T3 shows **Running in OpenBot**. That state comes
+- In the sidebar, a conversation OpenBot is working on outside T3 shows a spinner labelled
+  **Running in OpenBot**. That state comes
   from the last refresh, so it can lag behind OpenBot.
 - If you message the same agent from OpenBot's app while a T3 turn is running, those messages may
   show up in T3's turn.

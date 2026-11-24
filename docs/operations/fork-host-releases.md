@@ -2,10 +2,18 @@
 
 Fleet builds are optional and stay off when `~/.config/t3code-fork/hosts.json` is absent; desktop
 source updates still work without a fleet. With that private inventory present and local source
-updates enabled, **Update** starts the Mac app build and each configured Windows or Linux host's
+updates enabled, **Sync & Build** starts the Mac app build and each configured Windows or Linux host's
 server build in parallel for the same commit, before the new Mac app is installed. Ordinary repository
 pushes, pulls, commits, startup and reconnects do not start a build. No hosted build, GitHub release,
-tag, or archive transfer is part of this workflow.
+tag, or archive transfer is part of this workflow. Every push goes to the fork's `origin`; nothing
+here pushes to or opens pull requests against upstream `pingdotgg/t3code`.
+
+Two add-ons share this flow. `host-releases` (distribution) is the part in the app: the desktop
+publisher that starts and watches host builds, the web auto-update that activates them, the fork's
+release source and HTTPS mirror checks, server release facts and runtime retention. `tjn-fleet`
+(personal) is the owner's scripts it runs: `scripts/tjn-hosts.ts`, `scripts/lib/tjn-hosts/` and
+`scripts/tjn-build-host-archive.ts`. Without a host inventory the publisher stays off, and the
+scripts are of no use to anyone else.
 
 ## Private host configuration
 
@@ -31,13 +39,23 @@ from the private inventory when convenient; the command does not require a confi
 
 ## User-triggered build
 
-The desktop's **Update** pushes the fork commit, then starts the local Mac build and remote host
-coordinator in parallel for the same full commit SHA:
+The desktop's **Sync & Build** commits and pushes the upstream merge, then starts the local Mac build and
+remote host coordinator in parallel for the same full commit SHA
+([local source updates](../internals/local-source-updates.md#merge-push-then-build)). Only a push
+that succeeded starts host builds. If the Mac build needs a fix commit, its push queues one more host
+run for that commit, started when the current run ends. Starting the app only observes a run that an
+earlier **Sync & Build** left; it never starts one. The coordinator runs detached from the app, so quitting
+the app does not stop it; its log and exit code are kept in the app's state directory, and a run
+with no exit code after six hours is no longer counted as running:
 
 ```sh
 node scripts/tjn-hosts.ts build-local --expect-sha <full-sha> --result-file "$HOME/Library/Application Support/t3code-fork/host-fleet-build-result.json"
 node scripts/tjn-hosts.ts status
 ```
+
+`node scripts/tjn-hosts.ts` with no arguments prints the full usage. Exit codes: 0 success, 1
+command or I/O failure, 2 usage, 3 preflight refusal or a locked host, 4 the fleet build may be
+partial (read each host's output before continuing).
 
 The old `release` command fails closed with instructions to update the desktop and retry the host
 build. During the one-time bootstrap, an older desktop's explicit **Update** installs the new desktop,
@@ -47,7 +65,7 @@ build to build the same already-pushed commit. The old startup fallback must nev
 repository sync or push.
 
 Before a remote build, the coordinator checks that the expected SHA is the current pushed
-`origin/main`, the Mac checkout is on `main`, and the source files sent to hosts match that commit.
+`origin/main`, the Mac checkout is on `main`, and the host build tools it sends match that commit.
 Each host checks its canonical checkout, fetches the fork, fast-forwards to the exact SHA, and builds
 its own server at lower priority. A host stages the result in its local
 `runtime/versions/<nightly>+<sha-prefix>` directory. The full SHA is written as installed provenance.
@@ -57,19 +75,30 @@ may remain ignored so a later build can reuse them.
 The coordinator attempts every configured host even if another host is unavailable. It names hosts
 that are offline or fail to build or stage. Any such failure exits unsuccessfully and leaves no success
 result file, even if other hosts completed. **Retry** repeats the host build for the same expected
-SHA; it does not choose a newer commit. On success, `host-fleet-build-result.json` contains both the
-full `commit` SHA and `targetVersion`. The desktop accepts it only when the commit matches the saved
-build request, the target version has that commit's SHA prefix, and every configured host reports that
-same target. Once this Mac app itself runs that target (after **Restart & Install** on the Mac), it
-queues the existing host update flow, which restarts each connected host's server at once, so a build
-that breaks the Mac never reaches the hosts. Until then the hosts keep their current build; **Update
-everything** still updates them by hand. A failed or cancelled host activation does not trigger another
-build; retry that host's activation through **Settings → Connections**. Press the desktop's overall
-**Update** again only when you want a new source commit built.
+SHA; it does not choose a newer commit. Only once every configured host has staged the target does
+the coordinator write `host-fleet-build-result.json`, with the full `commit` SHA and
+`targetVersion`. The desktop accepts it only when the commit matches the saved build request and
+the target version ends with `+` and that commit's 12-character prefix.
+
+Staged is not active. The hosts switch only once this Mac app itself runs that target, after
+**Restart & Install** on the Mac, so a build that breaks the Mac never reaches the hosts. "Runs the
+target" means this app's own connected server reports the target's nightly version and either the
+same fork build or, for a build **Sync & Build** repaired with a fix commit, the desktop updater reports it is
+up to date. The app then queues each connected host whose server updates itself as a boot service
+in the existing update queue, which restarts its server at once. Hosts whose server belongs to a
+desktop app or is respawned from npm are never queued, since that would relaunch someone's app or
+install from npm. Each host is queued once per target, remembered across relaunches, so a failed or
+cancelled activation is not queued again. Until then the hosts keep their current build; **Update
+everything** still updates them by hand. A failed host build shows one error toast with the log
+path and **Retry**. A failed or cancelled host activation does not trigger another
+build; retry that host's activation through **Settings → Environments**. Press the desktop's overall
+**Sync & Build** again only when you want a new source commit built.
 
 The Mac app's own source build remains in `LocalSourceUpdates`; the host coordinator never builds the
-Mac app. The app and every configured remote host use the same SHA-based runtime identity so an app
-update always targets the exact source commit that was pushed.
+Mac app. Each host's server is built with `T3CODE_FORK_BUILD` set to the commit's 12-character prefix,
+as the Mac's is, so every machine reports which commit it runs. The app and every configured
+remote host use the same SHA-based runtime identity, so an app update always targets the exact
+source commit that was pushed.
 
 ## Builder details
 
@@ -84,6 +113,34 @@ builds the server, client and native resource monitor, and packages a temporary 
 not run the archive smoke script. Output must stay outside the checkout; temporary builder scratch is
 kept under the supplied output directory rather than the system temp directory. The archive exists
 only long enough for the same host to install it into its local runtime directory.
+
+## Release source and mirrors
+
+Hosts that update from a published release rather than a local build resolve the release
+repository from the validated `T3CODE_RELEASE_REPOSITORY=owner/name` first; otherwise they derive it
+from `T3CODE_RELEASE_BASE_URL` only when that is `https://github.com/<owner>/<name>/releases/download`,
+falling back to the fork's own repository. Downloads default to
+`https://github.com/<resolved>/releases/download`; `T3CODE_RELEASE_BASE_URL` remains the download
+override, including custom HTTPS mirrors, and the two variables must not name different
+repositories. `cliReleaseSourceOf` reflects the resolved repository and download base in the
+descriptor's `releaseSource`, used only for display and gating; a server installs from its own base.
+A mobile app built from this repository still defaults to the fork's repository even when the
+host uses another source; the published mobile app is upstream's. Bulk update
+gating is in `apps/web/src/host-release/hostReleaseSource.ts`, and the single-update warning reads
+the live config at click time (`hostReleaseGuard.ts`), so every `ServerUpdateAction` caller gets it
+without new props. The HTTPS mirror check is the one function `cliReleaseBaseUrlProblem` in
+`packages/shared/src/cliReleaseGuards.ts`, called by `t3 update`, self-update, boot-service install
+and the SSH runner's release mirror; release downloads are capped at 768 MB, counted as they stream
+whenever the declared length can't bound the body.
+
+The repository still carries two GitHub workflows from before local builds,
+`.github/workflows/tjn-upstream-sync.yml` (a scheduled text merge of `upstream/main`) and
+`tjn-macos-nightly-release.yml` (a scheduled hosted Mac release). Neither is part of this flow: the
+desktop app does every upstream merge and every build. Their conditions allow this repository, or
+another fork that sets `T3CODE_FORK_UPSTREAM_SYNC` or `T3CODE_FORK_NIGHTLY_RELEASE` to `true`, so
+both stay disabled in this repository's Actions settings. The sync workflow pushes only to the
+fork, but has no lockfile rebuild and no marker check, so it is not a substitute for the desktop's
+merge.
 
 ## Status, cleanup, and rollback
 

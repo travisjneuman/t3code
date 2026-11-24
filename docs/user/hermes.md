@@ -10,9 +10,10 @@ its CLI, keeps working as before.
 1. On the Hermes machine, turn on Hermes's API server and its web dashboard, and make both
    reachable from the computer running T3, for example over a tailnet. Give the API server a key
    (`API_SERVER_KEY`) and the dashboard a username and password.
-2. In T3, open **Settings › Providers**, add **Hermes Agent**, and fill in the API URL and key.
-   The dashboard URL, username and password are optional; they unlock the Hermes settings below.
-   **Agent name** names the sidebar section and the composer's Hermes chip.
+2. In T3, open **Settings → Providers**, add **Hermes Agent**, and fill in the API URL and key.
+   The dashboard URL, username and password are optional; they unlock [T3 tools](#t3-tools) and
+   the [Hermes settings](#hermes-settings) below. **Agent name** names the sidebar section and the
+   composer's Hermes chip; left blank, both say Hermes.
 3. Turn the provider on. The keys and password are stored as secrets on the T3 host and never
    sent back to a client.
 
@@ -23,7 +24,8 @@ Agents**, and never inside a project. It lists the T3 threads you started with H
 with the sessions Hermes holds from anywhere else, newest first, from the last three days.
 **Load more** goes further back and **Show less** returns to the last three days. Pin a session
 to keep it at the top whatever its age. Subagents a session started with Hermes's `delegate_task`
-appear indented under it.
+appear indented under it. Collapsed, the section still shows the sessions that are running.
+Right-click the section header to **Refresh** it or **Show archived sessions**.
 
 - Click **+** on the section header to start a new session, or pick **Hermes Agent** in any new
   thread's model picker. Either way the thread moves into the Hermes section. Hermes works in its
@@ -33,13 +35,16 @@ appear indented under it.
   provider to choose a machine again.
 - Click a session Hermes started elsewhere to continue it in T3 with its history. Its next turn
   goes on in the same Hermes session.
-- Cmd/Ctrl-click or Shift-click selects several. Right-click for **Continue**, **Pin**,
-  **Unpin**, **Archive**, **Delete** and **Copy session IDs**; each applies to the selected
-  sessions it fits, and a mix of pinned and unpinned ones offers both. Open and Details stay one
-  session at a time.
+- Right-click a session for **Open** (or **Continue in T3** if it isn't a T3 thread yet),
+  **Details**, **Pin** or **Unpin**, **Copy session ID**, **Archive** and **Delete**. **Details**
+  shows a session's [details card](#session-details) without bringing it into T3.
+- Cmd/Ctrl-click or Shift-click selects several. The menu's actions then apply to every selected
+  session they fit, with a count, and a mix of pinned and unpinned ones offers both. **Open** and
+  **Details** stay one session at a time, while **Continue in T3** brings in every selected
+  session that isn't a T3 thread yet; **Clear selection** ends the selection.
 
-**Archive** archives the session in Hermes too. Archived sessions are listed in **Settings ›
-Archived**, where **Unarchive** brings them back. **Delete** removes the session from Hermes and
+**Archive** archives the session in Hermes too. Archived sessions are listed in **Settings →
+Archive**, where **Unarchive** brings them back. **Delete** removes the session from Hermes and
 its T3 thread after one confirmation, including the earlier parts of a conversation Hermes
 compressed into new sessions. A session that is still running can't be archived or
 deleted until it stops.
@@ -52,7 +57,7 @@ sent anywhere by this; the chat platform keeps showing exactly what it did.
 
 ## Session details
 
-The thread details card (`mod+shift+b`) reads a Hermes thread's details from Hermes, whether or
+The [thread details card](session-details.md) (`mod+shift+b`) reads a Hermes thread's details from Hermes, whether or
 not the thread is running: where the session came from, its message, tool and API call counts,
 token totals, cost, and when it was last active or ended. **Machine** is the computer Hermes runs
 on. Context is estimated from the stored messages and marked **Estimated**; it leaves out
@@ -60,8 +65,9 @@ Hermes's system prompt and tool definitions, so the real use is higher. The wind
 only when the session uses the model Hermes is configured with. **Connectors** lists the MCP
 servers in Hermes's config. Hermes doesn't report whether they connected, so an enabled server
 shows **Enabled** until the session calls one of its tools: then it shows **Connected**, or amber
-with the error when its latest call failed. The card doesn't show the thread's T3 folder or
-branch, since Hermes works in its own folders.
+with the error when its latest call failed. In place of the folder, branch and git controls, the
+card says the thread runs on Hermes's machine, in Hermes's own workspace. **Outputs** lists the
+files Hermes's edit tools changed; choose one to open it in your editor.
 
 The **Usage** page counts each Hermes session's tokens and cost on the day it was last active,
 under its first model.
@@ -90,19 +96,22 @@ is fresh. When T3's Codex provider is signed in to the same ChatGPT account, the
 group also lists every model T3's Codex sees, so those models stay offered and the list follows
 your account as it changes.
 
-**Settings › Providers › Hermes Agent › Models** groups the models by Hermes provider. Expand a
+**Settings → Providers → Hermes Agent → Models** groups the models by Hermes provider. Expand a
 provider to hide single models, or turn off its switch to hide the whole provider. Hiding only
 changes what T3 offers; Hermes, its chat platforms and its other clients still see every
 provider.
 
 Some providers are never offered through Hermes because their terms don't allow their models to
 be used from another app: Anthropic always, and Google when signed in through Gemini CLI or
-Antigravity rather than an API key. They are listed under **Unavailable** in the Models section.
-Kilo's gateway shows only its free models, which need no key.
+Antigravity rather than an API key. They are listed under **Unavailable** in the Models section,
+together with providers Hermes isn't signed in to; hover one for the reason. Kilo's gateway shows
+only its free models, which need no key.
 
 ## Hermes settings
 
-With the dashboard filled in, the Hermes Agent card in **Settings › Providers** also shows:
+The Hermes Agent card in **Settings → Providers** also has these sections. Each needs the
+dashboard filled in, and until it is they say so. On a remote connection without provider
+management access they say that instead.
 
 - **Hermes config**: every Hermes setting, by category, with search. This is Hermes's global
   config, so changes also apply to its chat platforms, cron jobs and CLI. Hidden values show as
@@ -114,20 +123,23 @@ With the dashboard filled in, the Hermes Agent card in **Settings › Providers*
 
 ## T3 tools
 
-With **T3 tools** on, Hermes can start T3 coworker threads (Codex, Claude, Grok and the rest) in
-any of your T3 projects, wait for them, read them and message them. Each coworker is its own
+With **T3 tools** on, Hermes can list your T3 projects and threads, start T3 coworker threads
+(Codex, Claude, Grok and the rest) in any of them, wait for them, read them, message them and stop
+them. Each coworker is its own
 thread in its project, and Hermes links to it in its reply. A coworker that runs on Hermes itself
 lands in the Scratch project, like every Hermes thread. Hermes can call only these project and
 thread tools; T3 refuses any other T3 tool even if Hermes's own config is changed to include it.
 
-To turn it on, open **Settings › Providers › Hermes Agent › T3 tools**, check the T3 address
-Hermes will use and flip the switch. The address must end in `/mcp` and be reachable from Hermes's
-machine; the desktop app fills in its Tailscale address when it has one. Some VPN kill switches,
-such as ProtonVPN's Advanced kill switch, block connections Hermes's machine starts over Tailscale,
-even though connections coming in over the tailnet or the LAN still work. If Hermes's machine runs
-one, use an address it can reach outside Tailscale instead, such as this computer's LAN address
-and T3's port (`http://192.168.1.20:3773/mcp`). To change the address, turn the switch off, edit
-it, and turn it back on.
+To turn it on, fill in the dashboard (T3 sets the tools up through it), open **Settings →
+Providers → Hermes Agent → T3 tools**, check **T3 address Hermes uses** and flip the switch. The
+address is T3's own `/mcp` address, such as `https://<mac>.ts.net/mcp`, and must be reachable from
+Hermes's machine. The desktop app fills in its Tailscale address when it has one; otherwise the
+field may start with the address you opened T3 at. A VPN with a
+strict kill switch on Hermes's machine can block the connections Hermes starts over Tailscale, even
+while connections coming in still work. If T3's tools can't be reached from Hermes, try an address
+it can reach outside Tailscale, such as this computer's LAN address and T3's port
+(`http://<lan-address>:3773/mcp`). To change the address, turn the switch off, edit it, and turn it
+back on.
 
 - Only Hermes's API server, which T3 uses, gets the tools. T3 pins every other platform, including
   Discord, cron and the CLI, to no MCP servers while the switch is on, and puts their settings
@@ -153,4 +165,4 @@ it, and turn it back on.
   queue the message.
 - T3's own text jobs, such as thread titles and commit messages, don't use Hermes, so they don't
   fill Hermes's session history.
-- Not available in the mobile app yet.
+- The mobile app has no Hermes section, settings or details card yet.

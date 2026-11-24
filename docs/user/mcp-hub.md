@@ -6,9 +6,10 @@ its access and revoke it separately.
 
 ## Choose the URL
 
-The MCP URL is the environment's address followed by `/mcp`. **Settings →
-Environments → Copy MCP URL** copies the route your current device uses; choose
-a route the agent can reach:
+The MCP URL is the environment's address followed by `/mcp`. On **Settings →
+Environments**, **Copy MCP URL** in an environment's **⋯** menu copies its
+[T3 Connect](remote-access.md#t3-connect) address when it has one, and otherwise
+the route your current device uses. Choose a route the agent can reach:
 
 - **On the environment's host:** `http://127.0.0.1:3773/mcp`, using the
   environment's configured port if different.
@@ -28,16 +29,18 @@ control, command arguments, and shared configuration.
 Follow [Outside agents](outside-agents.md) to connect Claude Code, Codex,
 ChatGPT, or another OAuth-capable MCP client and approve its access.
 
-For Hermes Agent, add this to its configuration:
+For Hermes Agent, pick **Hermes Agent** in **Use T3 Code in another app (MCP)**
+(in the command palette, or **Use in another app (MCP)** on **Settings → Sharing &
+access**), or run this on the Hermes machine and approve the sign-in it starts:
 
-```yaml
-mcp_servers:
-  t3:
-    url: https://<environment-address>/mcp
-    auth: oauth
+```sh
+hermes mcp add t3code --url https://<environment-address>/mcp --auth oauth --connect-timeout 315
 ```
 
-Then run `hermes mcp login t3` and approve the sign-in.
+The longer timeout leaves time to approve the sign-in on its first connection.
+On a remote host, paste the final URL back when Hermes asks for it. A Hermes
+added as a provider in T3 can instead get a limited set of T3 tools from its
+settings; see [Hermes T3 tools](hermes.md#t3-tools).
 
 ## Agents that accept a URL and header
 
@@ -46,6 +49,9 @@ On the environment's host, issue a token with a name and an explicit access leve
 ```sh
 t3 mcp token --name "Desktop bot" --access supervised
 ```
+
+The name, up to 100 characters, is how the token appears in **Settings → Sharing
+& access**.
 
 The command prints the token once to standard output. It prints the session id
 and revocation instructions to standard error. Use `--json` for JSON output.
@@ -99,13 +105,13 @@ only MCP messages to standard output; it never accepts a token as an argument.
 
 ## Choose access and revoke it
 
-| `--access` | What the agent may do |
-| --- | --- |
-| `read-only` | Read projects, threads, providers, and models; make no changes. |
-| `supervised` or `approval-required` | Start and steer threads that ask for command and edit approval. |
-| `auto-accept-edits` | Allow automatic file edits; other actions can still require approval. |
-| `auto` | Use the provider's automatic review where supported. |
-| `full-access` | Allow commands and edits without approval prompts. |
+| `--access`                          | What the agent may do                                                 |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| `read-only`                         | Read projects, threads, providers, and models; make no changes.       |
+| `supervised` or `approval-required` | Start and steer threads that ask for command and edit approval.       |
+| `auto-accept-edits`                 | Allow automatic file edits; other actions can still require approval. |
+| `auto`                              | Use the provider's automatic review where supported.                  |
+| `full-access`                       | Allow commands and edits without approval prompts.                    |
 
 These are the same access levels as OAuth approval. A writable grant is a ceiling:
 an agent cannot start or steer a thread above it. Provider-specific behavior is

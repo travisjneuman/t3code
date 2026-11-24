@@ -5,7 +5,21 @@ a context breakdown, the MCP servers of a thread's provider session, the server'
 for agents that keep one, the agent's own session record. Code:
 [`apps/server/src/sessionInsights/`](../../apps/server/src/sessionInsights/), contracts in
 [`sessionInsights.ts`](../../packages/contracts/src/sessionInsights.ts).
-`externalSessions.insights` answers the same card for an Other Agents session.
+`externalSessions.insights` answers the same card for an Other Agents session. A T3 thread's
+Outputs are its own turn diffs, so the server reports `outputs` only for agents whose edits leave
+none (Hermes, Other Agents).
+
+The add-on hooks upstream directly rather than through the RPC registries: the RPC in `rpc.ts`,
+its handler in `ws.ts`, its scope in `RpcAuthorization.ts`, its span label in
+`RpcInstrumentation.ts`, the service in `runtimeLayer.ts`, an optional member on the adapter
+interface and its implementation in each adapter, and the card mount in `ThreadDetailsPanel.tsx`,
+which `ChatView.tsx` feeds the context window, the composer's compact action and the turn diff
+opener. Claude and Codex build theirs in `claudeInsightsHooks.ts` and `codexInsightsHooks.ts`
+(see [Hook modules](./fork-add-ons.md#hook-modules-for-large-fork-blocks)); the other adapters
+carry marked blocks. Its table goes through the fork migrations registry (see Constraints), and
+other add-ons read sessions this service cannot reach through `forkInsightsReaders.ts`.
+[`fork/addons.json`](../../fork/addons.json) lists every hook. Left out, the card shows upstream's
+rows only.
 
 ## Adapter capability
 
@@ -28,17 +42,17 @@ Shared mapping helpers, including the totals-only breakdown, are in
 ## Hermes
 
 Hermes keeps its own session store, so `get` reads a Hermes thread from Hermes over HTTP before it
-looks for a live provider session
-([`provider-hermes/src/server/insights.ts`](../../packages/provider-hermes/src/server/insights.ts)).
-The reader is registered by driver in
-[`forkInsightsReaders.ts`](../../apps/server/src/forkInsightsReaders.ts), so this service never
-imports Hermes.
-`hermesSessions.insights` makes the same read for a session T3 has not opened, so the sidebar's
-Details item never imports it. The instance's settings are decoded on the server, as the Hermes
-adapter does; credentials never reach the reply or the logs. Five read-only GETs run together, each
-allowed to fail alone: the session record, its messages, and the dashboard's model info, MCP
-servers and status. The whole read has a 30-second timeout, since a long session's messages come
-in pages. When Hermes answers nothing, the usual live-session path runs.
+looks for a live provider session, running or not. The reader
+([`hermesInsightsReader.ts`](../../apps/server/src/hermes/hermesInsightsReader.ts), over
+[`provider-hermes/src/server/insights.ts`](../../packages/provider-hermes/src/server/insights.ts))
+is registered by driver in [`forkInsightsReaders.ts`](../../apps/server/src/forkInsightsReaders.ts),
+so this service never imports Hermes. `hermesSessions.insights` makes the same read for a session
+T3 has not opened, so the sidebar's Details item works without importing or continuing it. The
+instance's settings are decoded on the server, as the Hermes adapter does; credentials never reach
+the reply or the logs. Five read-only GETs run together, each allowed to fail alone: the session
+record, its messages, and the dashboard's model info, MCP servers and status. The whole read has a
+longer timeout than a live read, since a long session's messages come in pages. When Hermes
+answers nothing, the usual live-session path runs.
 
 - The session record (`SessionRecord`) is Hermes's own count of messages, tool and API calls,
   tokens and cost. `costEstimated` marks Hermes's estimated cost, used only when it reports no
@@ -52,8 +66,10 @@ in pages. When Hermes answers nothing, the usual live-session path runs.
   exposes no other model's window (`/api/model/options` carries none), so otherwise the breakdown
   has no limit or free space.
 - MCP servers come from the dashboard's configuration, not a connection, so an enabled server is
-  `configured`. Only names, the enabled flag and tool counts are read, never commands, URLs or
-  environment values.
+  `configured` until the session's own stored results for its tools (Hermes names them
+  `mcp__<server>__<tool>`) show it answered: one success makes it `connected`, and a failed latest
+  call adds its error. Only names, the enabled flag and tool counts are read from the config, never
+  commands, URLs or environment values.
 - Hermes edits leave no T3 turn diff, so `outputs` lists the files its `write_file` and `patch`
   calls changed, from the stored tool-call arguments. Failed calls are left out; edits made through
   `terminal` commands are not seen.
@@ -67,19 +83,21 @@ in pages. When Hermes answers nothing, the usual live-session path runs.
 edit and write tools changed, and what the agent's own store records: a `SessionRecord`, a context
 breakdown and MCP servers. Each source may implement `readInsights`
 ([`ExternalSessionSource.ts`](../../apps/server/src/external-sessions/ExternalSessionSource.ts));
-the source readers and the outputs read run side by side, each with an 8-second timeout, and a
-failure comes back empty.
+the source readers and the outputs read run side by side, each with a timeout, and a failure
+comes back empty.
 
 - Transcripts are read forward from a saved byte offset (`scanForward`), so a repeat read parses
-  only appended lines, and the whole session is covered rather than a tail. `truncated` is set
-  only when a read times out. Small JSON files are re-read when their mtime moves.
+  only appended lines, and the whole session is covered rather than a tail. Outputs are
+  `truncated` when a read times out or a transcript records more changes than the scan keeps (the
+  oldest are dropped). Small JSON files are re-read when their mtime moves.
 - Outputs: each agent records edits its own way. Claude's tool results carry the patch (its
   subagents' `agent-*.jsonl` are merged in), Codex's `apply_patch` envelopes name each file, Pi's
   `edit` calls carry each replacement, and Grok's ACP updates carry old and new text. A later
   record of the same call replaces an earlier one. Other drivers return `null`, which hides
   Outputs.
 - Claude's window is the CLI's: `autoCompactWindow` (env, managed, project, then user settings)
-  capped at the model's catalog window, with the threshold `min(max output, 20k) + 13k` below it
+  capped at the model's catalog window, with the auto-compact threshold placed by the CLI's own
+  arithmetic, so it can drift when the CLI changes it
   ([`claudeContextWindow.ts`](../../apps/server/src/external-sessions/claudeContextWindow.ts)).
   Used tokens are the latest request's input and cache tokens; output joins the next request.
 - Claude's breakdown comes from the transcript's start-of-session attachments (memory files, skill
@@ -98,14 +116,16 @@ failure comes back empty.
 
 - A read never starts or resumes a session. It asks only a live provider session; otherwise it
   answers with the last report it read, marked not live with its capture time. Each live report is
-  saved to `session_insights_reports` (newest 500), so a stopped thread keeps its card across a
+  saved to `session_insights_reports` (the newest few hundred), so a stopped thread keeps its card across a
   server restart. That table belongs to the fork's own migration ledger, `fork_sql_migrations`
   ([`ForkMigrations.ts`](../../apps/server/src/persistence/ForkMigrations.ts)): upstream's migrator
   skips every id at or below the highest it has recorded, and the fork shares `~/.t3` with
   official T3 Code, so a fork id in upstream's ledger would hide a future upstream migration.
-  Hermes reports are read from Hermes each time and always count as live.
-- Each part has its own 10-second timeout, and a failed or slow part comes back empty without
-  hiding the other.
+  Hermes reports are read from Hermes on every request and count as live.
+- Each part has its own timeout, and a failed or slow part comes back empty without hiding the
+  other.
+- A reopened provider session answers nothing until its first turn (Claude opens its query then),
+  so the stored report stands in, still dated when it was read.
 - MCP status rows can carry a server's configuration, headers included, so they stay out of
   provider logs: Claude's protocol log records only the count, and OpenCode logs nothing.
 - Estimates are labeled as estimates. A provider that reports no categories shows token totals,

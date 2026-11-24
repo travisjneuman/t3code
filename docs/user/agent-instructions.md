@@ -6,7 +6,7 @@ conflict with these settings, agents are told to follow the settings.
 
 ## Set them
 
-Open **Settings → General** and find **Agents**. **Preview** on the **What agents receive** row
+Open **Settings → Threads** and find **Agents**. **Preview** on the **What agents receive** row
 shows the exact text these settings produce for the scope you picked, including any
 provider-specific text.
 
@@ -34,7 +34,7 @@ provider-specific text.
   Worker, Review and Research worker model rows also say which model the default preset gives
   workers, since in a thread without its own preset that, not the row, is what a delegated worker
   gets. When the shown values differ from the default preset and it isn't the one selected,
-  **Save to** *default name* saves them into it without picking it first. OpenBot
+  **Save to** _default name_ saves them into it without picking it first. OpenBot
   chats don't use presets or these settings: OpenBot's own rules decide how its agents delegate.
 
 - **Delegation**: **When useful**, the default, has the thread's agent hand independent pieces of
@@ -68,7 +68,7 @@ These rows show while Delegation is on:
   says why a model was picked, and `orchestrator_capabilities` shows each provider's weekly room.
   Fixed worker targets turns balancing off. Usage comes from each provider's own limits, so a
   provider that doesn't report them is never balanced away from or toward.
-- **Main agent reserve** (with Balance workers on): once the thread's agent's own subscription has
+- **Main agent reserve** (shown once Balance workers lists two or more models): once the thread's agent's own subscription has
   this much of its week left or less (25% by default), T3 sends no workers to it, explicit targets
   included, so the main thread keeps room to finish. **Off** turns the reserve off.
 - **Parallel workers**: the most workers running at once under one thread's agent, counting
@@ -77,8 +77,8 @@ These rows show while Delegation is on:
   estimates it) and draws on your plan's limits. T3 refuses a delegation past the limit: an agent
   with workers running is told to wait for one to finish, and one without is told to do that piece
   itself.
-- **Delegation depth**: how many levels of workers there can be. The thread's agent's workers are
-  level 1. At the default of 1 they can't delegate; at 2 they may start workers of their own,
+- **Delegation depth**: how many levels of workers there can be, from 1 to 6. The thread's agent's
+  workers are level 1. At the default of 1 they can't delegate; at 2 they may start workers of their own,
   which can't go further. Workers decide for themselves whether to delegate, and the top of each
   worker's task says how many levels it has left. T3 refuses a delegation deeper than this.
 - **Worker workspace**: **Shared checkout** runs workers in the agent's own checkout, and the
@@ -126,24 +126,28 @@ to start a new worker for each review round, and to wait for workers to finish i
 
 ## All projects or one project
 
-The scope picker at the top of Settings chooses what you're editing. With all projects selected you
-set the defaults for an environment. Select a project to override any Agents setting for that
+The scope picker at the top of Settings chooses what you're editing. With **All projects** selected
+you set the defaults for an environment. Select a project to override any Agents setting for that
 project only; the reset arrow beside a row removes the override. Each server you connect to keeps
-its own settings.
+its own settings; with **All environments** selected, a change goes to every connected server, and
+a row whose servers disagree shows **Mixed** until you pick a value.
 
 ## A preset for one thread
 
 The people icon in the composer, next to the access mode, picks a preset for that thread only. Its
 agent, and any worker it starts, run under the preset's values on top of the project's settings,
 with every delegation row set as picking the preset in Settings would. You can switch it while the
-thread runs; see below for when each provider picks it up. A thread you haven't picked one for uses the default preset. **Project settings** keeps the thread
-on the project's values even when a default is set. The control shows the preset's name while one
-applies. In a narrow composer it's in the **…** menu.
+thread runs; see below for when each provider picks it up. A thread you haven't picked one for
+follows the thread it was started from, if any, and otherwise the default preset. **Project
+settings** keeps the thread on the project's values even when a default is set. The control shows
+the preset's name while one applies. In a narrow composer it's under **Agents preset** in the
+**…** menu. OpenBot chats don't show it.
 
 ## When agents pick up changes
 
-Codex, Grok, Cursor, Muse, and OpenCode receive the current instructions with every turn, so a
-change applies from the next message. Claude restarts its session, keeping the conversation, on
+Codex, Grok, Cursor, Muse, OpenCode, Kiro, fx, Hermes Agent, and agents added from the ACP
+Registry receive the current instructions with every turn, so a change applies from the next
+message. Claude restarts its session, keeping the conversation, on
 the next message after a change; while it has background work running it keeps the old
 instructions until that finishes, but still can't start native subagents once they're turned off.
 Pi gets them when its session starts. Codex's multi-agent feature is turned off when its session

@@ -7,14 +7,18 @@ sessions are still found by search. Sessions running right now
 come first and stay in view even when you collapse the list; the header counts them as active.
 Each session takes one line; hover it for its folder, model and machine. Below the running ones
 are the sessions active in the last 3 days from every machine, newest first; **Load more** adds
-the next 10. A session you opened but never typed into drops out after an hour. Runs that
-the sidebar's sync button starts to finish an upstream merge are named by when they started, such
-as **t3 100626 143205** for October 6, 2026 at 14:32:05. Subagents that T3 threads start are not
-listed here; they sit under their thread in the sidebar.
+the next 10. A session you opened but never typed into drops out after an hour. The Claude runs
+that [**Sync & Build**](fork-updating.md) starts to finish an upstream merge are named by when they
+started, such as **t3 100626 143205** for October 6, 2026 at 14:32:05. Sessions T3 started itself,
+including subagents of T3 threads and anything run inside T3's own data, worktree or No project
+folders, are not listed here; they show as T3 threads instead. While you type in the sidebar's
+**Search** box, the list gives way to the search results.
 
 A session's view opens with its latest 200 messages, up to about 4 MB. **Load more** at the top adds
-the 200 before those, as often as you press it, back to the first message. **Continue in T3**
-brings over the whole history.
+the 200 before those, as often as you press it. In a very long session it stops before the
+oldest messages. **Continue in T3**
+copies the first prompt and the latest 200 messages into the thread; the agent itself still
+resumes the whole session.
 In the desktop app, the view has the right panel for [web apps](./desktop-remote-apps.md), one
 panel shared by every session; the browser, terminal, files and diff need a thread, so continue the
 session in T3 for those.
@@ -22,8 +26,8 @@ session in T3 for those.
 **Toggle thread details** (`mod+shift+b`, or the button in the session's header) opens the same
 details card a thread has: the session's model and settings, the machine and folder it runs in,
 how much of its context window it has used, and the files it changed, with lines added and
-removed. Files are read from the end of the session's transcript, so a very long session notes
-that earlier changes were not read.
+removed. When a session has too many changes to keep, or its transcript can't be read in time, the
+card notes that earlier changes were not read.
 
 ## Where T3 looks
 
@@ -52,7 +56,7 @@ followed but not continued, because T3 runs Antigravity with its own session sto
 
 A continued thread shows a small import icon in the sidebar, and its hover card says which agent
 it came from. You can switch it to another agent with the model picker; the new agent gets the
-session's whole history, including what happened before T3. Its own turns stay in T3, though: the
+thread's history, including what happened before T3. Its own turns stay in T3, though: the
 original session only records turns its own agent ran. Before going back to the other app,
 right-click the thread and choose **Hand back to** the original agent. T3 sends a short "Handing
 back" message on the model and reasoning level the session was continued with, the agent is told
@@ -69,7 +73,7 @@ a continued thread any other way does the same.
 Right-click a session to continue it, copy its session ID or folder path, open its folder,
 archive it, or [delete it](#delete-a-session). Archiving only takes the session off T3's list: it stays where it is in the agent's
 own app. A running session can't be archived until it stops, and an archived session that runs
-again comes back to the list on its own. Archived sessions are listed in **Settings › Archived**,
+again comes back to the list on its own. Archived sessions are listed in **Settings → Archive**,
 where **Unarchive** brings them back. Right-click the **Other Agents** header and choose **Show
 archived sessions** to go there.
 
@@ -79,28 +83,30 @@ one of them. The menu has the single session's actions, each over the sessions i
 **Continue in T3** (running sessions are skipped, and the first one opens), **Open in** each
 session's own app, **Copy session IDs** and **Copy folder paths** (one per line), **Open folders**
 and **Open folders in** an editor (each folder once), **Archive** and **Delete** (running
-sessions are skipped). Press Escape to clear the selection.
+sessions are skipped). **Clear selection** in the menu, or Escape, ends the selection.
 
 ## Delete a session
 
-**Delete** in a session's right-click menu, or in **Settings › Archived** for an archived one,
+**Delete** in a session's right-click menu, or in **Settings → Archive** for an archived one,
 removes the session from the agent itself, so it is gone from that agent's own app too, such as
 Claude desktop or the Codex app. T3 asks first, and it cannot be undone. A running session can't
-be deleted until it stops. A session you continued in T3 is deleted by deleting its T3 thread.
-Antigravity keeps all its sessions in one database, so delete those in Antigravity. If Claude
+be deleted until it stops, and neither can a session you continued in T3. Deleting that T3 thread
+removes it from T3 only: the session stays in the agent's own app, and it can't be continued in T3
+again. To list it under Other Agents again, use **Move back to Other Agents** instead. Antigravity keeps all its sessions in one database, so delete those in Antigravity. If Claude
 desktop is open, it may keep showing a deleted session until you restart it.
 
-Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings ›
-Archived** marked as archived in Claude desktop. Unarchive those in Claude; they come back here
+Claude sessions you archive in the Claude desktop app leave the list too and show in **Settings →
+Archive** marked as archived in Claude desktop. Unarchive those in Claude; they come back here
 within a few seconds. Sessions you delete in the Claude desktop app leave the list as well.
 
 ## Open a session in its own app
 
 Sessions from the Claude desktop app or the Codex app open in that app on the same session: click
 **Claude Desktop** or **Codex Desktop** under the session, or right-click the row and choose
-**Open in**. The app opens on the computer running T3, and Claude needs deep links turned on and
-you signed in. That is also where you stop a running session; T3 can't stop a session another app
-is running. Sessions from a terminal or an IDE have no such link.
+**Open in**. This is offered only for sessions on the computer you are using, such as the desktop
+app's own machine; a session on another machine shows where it came from but can't be opened from
+here. Claude needs deep links turned on and you signed in. That is also where you stop a running
+session; T3 can't stop a session another app is running. Sessions from a terminal or an IDE have no such link.
 
 ## Search other agents' sessions
 

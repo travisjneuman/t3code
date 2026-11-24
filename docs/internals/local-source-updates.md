@@ -3,12 +3,13 @@
 A packaged macOS build of the fork whose source checkout is still available updates
 from that checkout instead of a release feed. `LocalSourceUpdates`
 (`apps/desktop/src/updates/LocalSourceUpdates.ts`) turns the desktop update button
-into "merge the newest upstream nightly into the fork, build it here, push it, swap
-the bundle". `ForkDesktopUpdates` (`updates/ForkDesktopUpdates.ts`), which `main.ts`
-provides through `fork/layers.ts` in place of upstream's `DesktopUpdates.layer`, routes check, download, and
-install to it whenever it reports `enabled`; otherwise the release feed is the repository named at build
-time (`T3CODE_DESKTOP_UPDATE_REPOSITORY` or `GITHUB_REPOSITORY`), and a build without
-one has no feed.
+into "merge the newest upstream nightly into the fork, push it, build it here, swap
+the bundle". The fork only pulls from upstream: every push goes to `origin`, never to
+`upstream`, and nothing opens an upstream pull request. `ForkDesktopUpdates`
+(`updates/ForkDesktopUpdates.ts`), which `main.ts` provides through `fork/layers.ts` in place of
+upstream's `DesktopUpdates.layer`, routes check, download, and install to it whenever it reports
+`enabled`; otherwise the release feed is the repository named at build time
+(`T3CODE_DESKTOP_UPDATE_REPOSITORY` or `GITHUB_REPOSITORY`), and a build without one has no feed.
 
 ## Target: the nightly tag, not upstream/main
 
@@ -39,16 +40,48 @@ version label and `--build-version` (tag without the leading `v`).
   nightly` commit lands after the build that stamped its parent, so inspect counts
   a `HEAD` that is that commit, directly on the stamped one, as built.
 
-## Merge, build, then commit
+## Merge, push, then build
 
-The merge runs with `--no-ff --no-commit`. Nothing is committed until the build
-succeeds. Failures before that point (unresolvable conflicts, build failure,
-interruption) attempt `git merge --abort` without staging edits during cleanup:
-that could discard unrelated work created while the agent ran. Cleanup checks Git's
-exit status; failure reports manual recovery with Git's output. After a successful
-abort, any remaining modified or untracked paths are reported as "left in the checkout"
-rather than removed or claimed clean. Only after the commit is the build remembered
-and the fork pushed.
+Update commits the merge before it builds and pushes it right away, so configured
+[fork hosts](../operations/fork-host-releases.md) build that commit while the Mac
+builds it. A failed build therefore leaves the merge commit in place; the next
+Update builds it again without merging.
+
+1. **Merge.** `git merge --no-ff --no-commit` of the nightly's commit, then conflict
+   repair, the lockfile rebuild and the marker check (below), then
+   `git commit --no-verify` as `chore(sync): merge upstream nightly <tag>`, with any
+   accepted marker dispositions in the body. Hooks are skipped so the formatter cannot
+   rewrite upstream files. A failure here attempts `git merge --abort` without
+   staging edits during cleanup: that could discard unrelated work created while the
+   agent ran. Cleanup checks Git's exit status; failure reports manual recovery with
+   Git's output. After a successful abort, any remaining modified or untracked paths
+   are reported as "left in the checkout" rather than removed or claimed clean.
+2. **Push.** The merge is pushed (see below). A successful push hands the commit to the
+   host builds; a skipped push builds the Mac alone.
+3. **Build.** While it builds, Update writes `<git-dir>/checkout-hold` holding its pid,
+   which the owner's checkpoint hook and repository sync honour by skipping the
+   checkout, so neither commits the version stamp mid-build. It clears any earlier
+   unused build, runs `vp i` (nightlies change dependencies), runs the dangling-name
+   scan below, stamps the version, and runs
+   `vp run dist:desktop:artifact --platform mac --target dir` for the app's own
+   architecture (`arm64` or `x64`). Build scratch (`TMPDIR`, `TMP`, `TEMP`) stays under
+   the build's output directory, not system temporary storage. `T3CODE_FORK_BUILD` is set
+   to the 12-character `HEAD`, which is compiled into the server as its fork build, so
+   hosts and the Mac can be matched to one commit.
+4. **Fix commit.** If the build changed anything (the regenerated route tree, the
+   install's lockfile, agent fixes), it is staged with `git add -u`, checked for marker
+   loss, committed as `fix(desktop): build upstream nightly <tag>`, and pushed. That push hands the fix
+   commit to the host builds too, queued behind the merge commit's run.
+
+On a build failure, tracked edits are stashed as "local source update: unbuilt fixes"
+and the build output is deleted; untracked files are left untouched and reported as
+checkout leftovers. A failed stash is surfaced as a checkout that may still be dirty
+and needs manual recovery. The hold is removed either way.
+
+When the fork already contains the nightly, Update reuses a finished build of `HEAD`
+that was never installed, pushes again, and offers it. If the running app is already
+that nightly built from `HEAD`, it reports that there is nothing to update. Otherwise
+it builds `HEAD` without merging.
 
 Post-repair and build-finalization staging uses `git add -u`, never blanket staging
 of untracked files. Conflict resolutions still stage only their explicit paths, and
@@ -58,11 +91,10 @@ reads their working-tree markers before explicitly staging those literal paths.
 Any other non-ignored untracked files at these staging points fail the operation
 with a bounded path list and are left untouched. This also refuses genuinely new
 build-repair files that were not already accepted and staged during marker repair.
-Both repair and finalization failures use the same abort-and-report cleanup above;
-finalization happens after the temporary release version has been restored. If abort
-fails, the merge is left for manual recovery, not claimed clean. The initial clean-tree
-check and in-process lock do not detect concurrent edits to tracked files; those edits
-can still be staged, committed, or affected by cleanup. Avoid other writers during a run.
+Finalization happens after the temporary release version has been restored. The
+repository lock does not detect concurrent edits to tracked files by other programs;
+those edits can still be staged, committed, or affected by cleanup. Avoid other
+writers during a run.
 
 The push is best-effort and goes only to `origin`, which must not be upstream. Whoever
 builds the fork may have no write access to it, so a failed push never fails the
@@ -82,18 +114,17 @@ lost between the installed build's upstream base and HEAD's that the fork's copy
 names gone from every upstream file that a fork-changed file uses. A non-empty list gets one
 build-repair agent pass first, reporting dispositions like the build repair. The scan ignores
 comments and quoted strings, may list a name the fork defines itself, and is skipped when the
-installed build's commit is unknown.
+installed build's commit is unknown; a scan that fails is logged and skipped rather than failing
+the build.
 
 ## Sync without building
 
-`syncSource` (the sidebar merge button) merges `upstream/main` itself, commits,
-and pushes, with the same conflict handling but no build gate. Update then has two
-triggers: the fork is behind the newest nightly, or the fork already contains it
-(merged by a sync) while the running app's version is older. The second case
-builds without merging and commits only what the build changed (lockfile, agent
-fixes); on failure tracked edits are stashed, while untracked files remain untouched
-and are reported as checkout leftovers. A failed stash is surfaced as a checkout
-that may still be dirty and needs manual recovery. Sync and update share one lock
+`syncSource` (the sidebar merge button) merges the tip of `upstream/main` itself,
+commits it as `chore(sync): merge upstream main <sha>`, and pushes, with the same
+conflict handling and marker check but no build. Its push does not start host builds;
+only Update's do. Update then has two triggers: the fork is behind the newest nightly,
+or the fork already contains it (merged by a sync) while the running app is older, in
+which case it builds `HEAD` without merging. Sync and update share one lock
 because both rewrite the checkout, and the exported `inspect` takes it too, so an
 update check never reads the checkout mid-merge.
 
@@ -137,9 +168,9 @@ becoming `@volar/typescript@2.4.28(typescript@7.0.2)`) across every importer it
 owns, git keeps the fork-only importers' old references, and pnpm rejects the
 result with `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Fork hosts install the pushed
 merge commit from a clean checkout before the Mac build could fix it, so the
-lockfile has to be right in the merge commit itself. For the same reason, any build
-fix the Mac makes leaves the hosts failed on the merge commit; once the fix commit is
-pushed, rerun host staging.
+lockfile has to be right in the merge commit itself. When the Mac's build needs a fix
+commit, its push queues another host run, so the hosts end on the same commit as the
+Mac even if their run for the merge commit failed.
 
 The route tree is the opposite case. The web build regenerates `routeTree.gen.ts`, and
 a merged copy can differ from it in route order alone, so host builds restore it after
@@ -182,7 +213,8 @@ originals are rejected. Moves must spend a real destination's surplus over HEAD 
 per marker, resolving renamed destinations to their original HEAD paths; a destination
 with its own deficit has no surplus. Obsolete lines need a non-empty reason.
 Valid dispositions cover only their source file's remaining
-deficit and are recorded in both sync and build-gated merge commit bodies. The build
+deficit and are recorded in the merge commit body, from the button and from Update
+alike. The build
 repair agent answers in the same format for marked lines its fix removes, such as a fork
 import upstream now declares itself; its line numbers are HEAD's, since the build starts
 from the merge commit. Accepted entries go into the build-fix commit body, and the check
@@ -191,9 +223,7 @@ move or obsolescence explanation, even when unrelated files gained markers. Unex
 losses still abort. Counts and agent explanations detect possible loss; they do not
 prove behavior is preserved.
 
-For a source update with a build, nothing is committed or pushed unless the build
-passes; sidebar sync has no build gate. The merge commit skips hooks so the formatter
-cannot rewrite upstream files. At least one listed agent's CLI must be installed and signed in where
+At least one listed agent's CLI must be installed and signed in where
 the desktop app can find it on `PATH`. The desktop's startup shell probe gives up
 after five seconds and is cached, and a launch where it timed out keeps launchd's
 `PATH`, which has neither `claude` nor `vp`. So sync and update re-read `PATH` and
@@ -209,7 +239,10 @@ updater is enabled only for a packaged macOS build whose recorded checkout still
 exists and is a git work tree. `T3CODE_SOURCE_REPOSITORY_PATH` overrides the recorded
 path. Nothing names a particular fork: the checkout needs an `upstream` remote at
 `pingdotgg/t3code` and an `origin` that is not upstream. It refuses dirty checkouts,
-in-progress merges, and branches other than `main`. Builds use a directory target with
+in-progress merges, and branches other than `main`. The one exception to the clean
+check is a version stamp left by a build that was quit midway: when only the release
+package manifests differ, each by one line, and no build holds the lock, inspect
+restores them and continues. Builds use a directory target with
 `--publish never` and are stored outside the checkout until installation. Unsigned
 packages are ad-hoc sealed so local bundle validation can run, but stay unnotarized.
 The installed bundle is replaced only by a detached helper after the parent process

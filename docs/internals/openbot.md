@@ -3,6 +3,16 @@
 _Fork add-on (`openbot`)._ How T3 talks to OpenBot, and what a maintainer would get wrong without
 reading every file. Usage: [user guide](../user/openbot.md).
 
+The driver is its own package, `@t3tools/provider-openbot`, registered in `builtInDrivers.ts`
+like a built-in one; its sessions service and RPCs go through the `core` registries. The rest of
+its footprint in upstream files is marked `Fork add-on(openbot)` and listed in
+[`fork/addons.json`](../../fork/addons.json): the Scratch move it shares with Hermes in
+`ThreadLaunchService`, the sidebar section, the composer's agent control and draft send, and the
+places that leave it out of work that would start a conversation (the model picker of a thread
+already on another provider, scheduled tasks, and Compare agents' composer). The session details
+card also marks it, so it never shows T3's runtime mode for an agent whose access OpenBot sets.
+Left out, there is no OpenBot driver and nothing else changes.
+
 ## Two channels, one record
 
 `openbot.db` in the OpenBot folder is the conversation of record. OpenBot's Local scripts API
@@ -35,8 +45,9 @@ thread on OpenBot binds to the agent's main conversation (`openbot-thread-<agent
 Local scripts posts to. Side threads, and agents without Local scripts, are listed but watch-only.
 Opening a conversation from the section creates or reuses one Scratch thread for it
 (`openbot:<instance>:<conversation>`) and imports its rows with keys taken from OpenBot's message
-ids, so a re-sync writes only new rows. Rows that fall inside the window of a T3 turn (30 s either
-side) are skipped, because the adapter already wrote them as turn items.
+ids, so a re-sync writes only new rows. Rows that fall inside the window of a T3 turn (with
+slack either side for clock skew) are skipped, because the adapter already wrote them as turn
+items.
 
 Before sending, the adapter moves the agent to the picked pair and reasoning effort through
 `POST /v1/agents/:id/settings`, which accepts only `provider`, `model`, `reasoningEffort` and
@@ -72,6 +83,14 @@ be had locally in a packaged OpenBot (0.58.0): account members sign in at api.op
 redeems their tickets there, and members connect over WebRTC signalled through it. Password members
 need local invites, which only a development host makes. Revisit if OpenBot's Local scripts gain
 task routes.
+
+## Usage
+
+OpenBot records each turn's tokens and its own list-price estimate per model in `openbot.db`, so
+the Usage page reads those rows, through the same local or SSH path, and each refresh reads only
+rows added since the last one
+([`usage.ts`](../../packages/provider-openbot/src/server/usage.ts)). A zero or missing cost means
+OpenBot had no rate for the model, so shared pricing estimates it.
 
 ## Known gaps
 

@@ -48,14 +48,17 @@ in T3, which binds an ordinary thread to that same session.
 - **Continued history is "native", not "v1_import".** With `v1_import`, the first turn would also
   hand the whole history over as a legacy context handoff, on top of a provider session that
   already holds it. If the native resume fails, the adapter's fresh-session fallback still sends
-  these runless items in its summary handoff, so nothing is lost. The cost: a fork of a continued
-  thread copies only items from T3 runs, while the native fork still carries the full session.
-  The onboarding project import keeps `v1_import` and skips a continued thread as modified.
+  these runless items in its summary handoff, so nothing is lost. The fork's handoff checks read
+  an `import:` thread as `v1_import` (see Constraints), so a provider switch, a fork or a side chat
+  of a continued thread still carries the imported and synced history. The onboarding project
+  import keeps `v1_import` and skips a continued thread as modified.
 - **Continue is a single-session import, and only while the session is not running.** It writes
   the project (bootstrapped or reused), an active thread, its messages and the provider thread.
   For Claude and Codex it also writes the importer's runtime row and imported-transcript record.
   The thread id is `import:<instance>:<session>`, so a second continue, or a later project import,
-  returns the same thread instead of duplicating it. Claude and Codex history comes from the
+  returns the same thread instead of duplicating it. For Claude and Codex the thread starts at the
+  session's last reasoning effort, read from its store; Grok and Pi keep the session's own. Claude
+  and Codex history comes from the
   importer's parser, Grok and Pi history from this add-on's own parsers (user and assistant text
   only). Two writers on one native session would interleave its transcript, so the server refuses
   while the session is running. Logic lives in
@@ -95,8 +98,8 @@ in T3, which binds an ordinary thread to that same session.
     still grow), plus Codex's open turn id. Threads continued before the sync existed catch up from
     the size continue recorded (Claude, Codex) or start at the current end (Grok, Pi).
   - **Watching costs nothing while idle.** One non-recursive watch per transcript directory, a
-    600 ms debounce, a size check before any read, and reads of appended bytes only (at most 8 MB a
-    pass). A 30 second size check covers a missed watch event.
+    short debounce, a size check before any read, and reads of appended bytes only, bounded per
+    pass. A periodic size check covers a missed watch event.
   - **"Running elsewhere" is a warning, not a lock.** `externalSessions.subscribeRunningElsewhere`
     sends the set of continued threads whose transcript gained an entry from the other app in the
     last minute, or that hold an open Codex turn the other app started. The whole set goes out on
@@ -106,13 +109,13 @@ in T3, which binds an ordinary thread to that same session.
 - **Watch the list only while someone looks.** The registry is an `RcRef`. The first list or session
   subscriber starts the file watchers and the initial discovery, which covers the last 14 days, or
   every Codex thread still in `~/.codex/sessions` (Codex moves archived rollouts out of it, so the
-  list matches Codex's own). A watcher the OS drops is started again 30 seconds later and its store
-  re-read. The watchers stop 30 seconds after the last subscriber leaves. Bursts of writes, such as a streamed
-  reply, are batched into one re-read about every 600 ms.
+  list matches Codex's own). A watcher the OS drops is started again after a short wait and its
+  store re-read. The watchers stop a short while after the last subscriber leaves. Bursts of
+  writes, such as a streamed reply, are batched into one re-read.
 - **Codex rollouts are also polled.** Codex Desktop keeps every loaded thread's rollout open while
   it appends, and macOS FSEvents report a write to an open file only when it closes. The watcher
   alone left a running Codex thread idle for as long as the app stayed open. Sources flagged
-  `writesHeldOpen` have their listed files' mtimes checked every 5 seconds while the list is
+  `writesHeldOpen` have their listed files' mtimes checked every few seconds while the list is
   watched, and a change goes through the same re-read.
 - **Older sessions open on demand.** A session subscribe for a key the registry lacks, such as an
   older [session search](./session-search.md) result, walks that one store once over search's
@@ -120,9 +123,10 @@ in T3, which binds an ordinary thread to that same session.
   ([`sessionHistory.ts`](../../apps/server/src/external-sessions/sessionHistory.ts)) and keeps
   only files named after the session id. The match is registered like a discovered session, so
   the existing watchers keep it current and it can be continued. The list still covers 14 days.
-- **The live list carries 3 days; older rows are paged on request.** Each change re-sends the
-  live list, so it holds only the sessions updated in the last 3 days, at most 60: a prefix of the
-  full order. Discovery still covers 14 days. `ExternalSessionListResult.total` counts every
+- **The live list carries only recent sessions; older rows are paged on request.** Each change
+  re-sends the live list, so it holds only the sessions updated in the last few days, capped in
+  count: a prefix of the full order. Discovery still covers 14 days.
+  `ExternalSessionListResult.total` counts every
   listable session, so `total > sessions.length` marks a cut host. `externalSessions.listOlder` is
   a read-only request outside the live subscription. Its `{updatedAt, key}` cursor pages over the
   last published order: newest first, ties by key, at whole milliseconds so a cursor read back from
@@ -137,11 +141,17 @@ in T3, which binds an ordinary thread to that same session.
   while it is open or written within the hour, then hides it; a prompt brings it back with its
   title.
 - **The transcript stream follows bytes, not files.** A session stream opens with the newest
-  messages from at most 8 MB of the transcript's tail, then reads only the bytes appended after
-  that. Messages are upserted by id, so a streamed reply grows in place. Each event is bounded on
-  the wire: a snapshot holds at most 200 messages and 4 MiB, an append at most 100 messages and
-  1 MiB per frame. A burst of more than 200 new messages becomes a replacement snapshot marked
-  `truncated`, so nothing is dropped without the client knowing.
+  messages from a bounded tail of the transcript, then reads only the bytes appended after that.
+  Messages are upserted by id, so a streamed reply grows in place. Each event is bounded on the
+  wire, in messages and bytes per frame. A burst larger than a snapshot becomes a replacement
+  snapshot marked `truncated`, so nothing is dropped without the client knowing.
+- **Earlier messages are a request, not a bigger stream.** The view's Load more calls
+  `externalSessions.readEarlier` with the oldest message it shows. The server reads back from the
+  transcript's end in growing windows, up to a cap, until it has a page before that message, so
+  the live stream stays small however long the session is. The message is found by id, or else by
+  time, role and text start, because some stores number messages from where a read starts and
+  give the same message another id in a longer read. Paging never reads back past the cap, so a
+  very long transcript's oldest messages are not reachable from the view.
 - **T3's own sessions are excluded.** The first two items below are `ownedSessionIds`, which
   session search reads too. That covers:
   - the native id of every provider thread on a live T3 thread, which covers threads T3 started
@@ -164,9 +174,10 @@ in T3, which binds an ordinary thread to that same session.
   [`claudeDesktopArchive.ts`](../../apps/server/src/external-sessions/claudeDesktopArchive.ts)
   keeps only `cliSessionId` and `isArchived` from the Claude app's
   `claude-code-sessions/*/*/local_*.json` records; the rest holds account and bridge ids. Those
-  sessions leave the list and reach Settings › Archived with `archivedIn: "claudeDesktop"` and no
-  Unarchive, because T3 never writes Claude's files. The scan rides the list's republish (at most
-  every 10 seconds, only while the list is watched, re-reading only files whose mtime changed) and
+  sessions leave the list and reach Settings › Archive with `archivedIn: "claudeDesktop"` and no
+  Unarchive, because T3 never edits Claude's records; it only removes them when the session is
+  deleted. The scan rides the list's republish (rate
+  limited, only while the list is watched, re-reading only files whose mtime changed) and
   covers only sessions the registry knows, since their titles come from the transcripts.
   A session whose transcript says `entrypoint: "claude-desktop"` but has no record there is left
   out: it was deleted in Claude, or it is a background `claude` run (a `/doctor` check, a probe)
@@ -179,24 +190,34 @@ in T3, which binds an ordinary thread to that same session.
   record's file name, which the archive scan maps from `cliSessionId` for unarchived records; its
   handler ignores archived ones and needs deep links on and a signed-in app. `claude://resume`
   would import a CLI session as a new one, so it is not used. Ids are checked against what each
-  handler accepts before they go in a URL. Terminal and IDE sessions have no link.
+  handler accepts before they go in a URL. Terminal and IDE sessions have no link. The launcher
+  runs on the server, so the web client offers "Open in" only when the environment resolves to
+  local execution (`externalSessionOriginIsLocalAtom` in
+  [`atoms.ts`](../../apps/web/src/external-sessions/atoms.ts), through upstream's
+  `resolveRemoteOpenState`); for a remote host the app would open on that machine, out of the
+  user's sight.
 - **T3 does not stop sessions other apps run.** The other app owns the process and offers no
   stop call; signalling a process found by matching its arguments would be killing by pattern and
   could leave that app's session state broken. Stopping happens in the app, one click away through
   "Open in".
+- **The session view's right panel holds web apps only.** The browser, terminal, files and diff
+  need a T3 thread, which Continue makes. One panel serves every session, so its web app tabs and
+  the details card stay put while the user moves between sessions. It reuses the
+  [web apps](./remote-apps.md) panel, which is why this add-on depends on that one, and it shows
+  only in the desktop app with web apps on.
 - **Stay mergeable with upstream.** All logic lives in the add-on folders: server
   `external-sessions/`, web `apps/web/src/external-sessions/` plus one route, and contracts
   `externalSessions.ts`. The contract exports the RPC tuple (`ExternalSessionsRpcs`), the scope
-  map, and the subscription method type, so a new RPC never touches an upstream file. Upstream
-  files only gain one-line hooks marked `Fork add-on(other-agents)`:
-  - the contracts index and RPC group (one spread)
-  - RPC authorization (one spread)
-  - the client subscription tag union
-  - the server runtime layer
-  - `ws.ts`
-  - the sidebar mount
-  - the Settings › Archived route's panel import
-  - the composer banner stack in `ChatView`
+  map, and the subscription method type, so a new RPC never touches an upstream file. The RPC
+  group, scopes, handlers, runtime layer, Settings › Archive panel, composer banner and menu icons
+  go through the `core` fork registries ([fork add-ons](./fork-add-ons.md)). Upstream files gain
+  only hooks marked `Fork add-on(other-agents)`: the sidebar mount and the "continued from" line
+  on a thread row, the command palette line that appends [session search](./session-search.md)'s
+  Other Agents group, the client subscription tag union, the `ChatView` banner stack, an export
+  in `providerInstances.ts`, and the handoff checks in `ContextHandoffService.ts` and
+  `Orchestrator.ts`. The route tree is regenerated from the fork route, unmarked.
+  [`fork/addons.json`](../../fork/addons.json) lists them. Left out, the sidebar has no Other
+  Agents section and imported threads hand off as upstream does.
 
 ## Constraints
 
@@ -213,23 +234,25 @@ in T3, which binds an ordinary thread to that same session.
   `~/.claude/sessions/<pid>.json` entry decides it when `kill(pid, 0)` finds the process, Codex
   `task_started` without a matching completion) or the transcript changed in the last minute. One
   Codex turn can write megabytes of tool output after its `task_started`, so a rollout's first
-  read looks back up to 64 MB past its 256 KB tail for it, and later writes read only the appended
-  bytes. A turn whose end was never written stops counting after an hour of quiet. A
+  read looks back well past its tail for it, and later writes read only the appended bytes. A
+  turn whose end was never written stops counting after an hour of quiet. A
   session left open but quiet in another app reads as idle, so continue can't refuse it. The
   composer block asks the user to stop it there first.
-- Continue reads the whole transcript up to 64 MB. A larger one is read as its first 1 MB and
-  last 32 MB, which still covers the first prompt and the newest messages that history keeps. The
+- Continue reads the whole transcript up to a size cap. A larger one is read as its head and a
+  long tail, which still covers the first prompt and the newest messages that history keeps. The
   agent resumes the full session from its own store.
-- Synced messages are runless. Reverting or rolling back a T3 run does not hide them, and a fork
-  copies only run items. A rewind in the other app shows up as more messages after the old ones.
-  Message text is clipped at 20,000 characters, as in the live view.
+- Synced messages are runless. Reverting or rolling back a T3 run does not hide them. A rewind in
+  the other app shows up as more messages after the old ones.
+  Message text is clipped at the same length as in the live view.
 - If the other app and T3 write the same session at the same time, the other app's entries inside
   T3's window are not copied, and a detach can race a turn the user sends right then.
 - A continued thread is "native" so its own provider resumes without replaying history, but
   upstream reads runless items as handoff context only for `v1_import` threads. In
-  `Orchestrator.ts`, `handoffHistoryOrigin` (`importedHistory.ts`) also counts `import:` threads, so a switch to
-  another provider carries the imported and synced history; the first same-provider turn still
-  skips it, because `shouldPrepareLegacyImportHandoff` keeps requiring `v1_import`.
+  `Orchestrator.ts` and `ContextHandoffService.ts`, `handoffHistoryOrigin`
+  ([`importedHistory.ts`](../../apps/server/src/external-sessions/importedHistory.ts)) also counts
+  `import:` threads, so a switch to another provider, a fork and a side chat digest carry the
+  imported and synced history; the first same-provider turn still skips it, because
+  `shouldPrepareLegacyImportHandoff` keeps requiring `v1_import`.
 - Turns run by another provider never reach the original session. When the thread switches back,
   the usual handoff delta goes into the resumed session, so the other app sees it from then on.
   "Hand back" (`handBack.ts`) is that switch as one message. It reads the original model
