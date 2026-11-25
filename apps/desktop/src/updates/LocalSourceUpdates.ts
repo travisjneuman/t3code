@@ -1251,15 +1251,6 @@ const make = Effect.gen(function* () {
       git(args).pipe(Effect.map((result) => (result.exitCode === 0 ? result.stdout : null)));
     const paths = (stdout: string | null) =>
       (stdout ?? "").split("\0").filter((path) => path.length > 0);
-    // git grep exits 1 when nothing matches.
-    const grep = (args: ReadonlyArray<string>) =>
-      git(["grep", "-w", "-F", ...args]).pipe(
-        Effect.flatMap((result) =>
-          result.exitCode <= 1
-            ? Effect.succeed(result.exitCode === 0 ? result.stdout.split("\n") : [])
-            : Effect.fail(makeError("build", `git grep failed: ${trimOutput(result)}`)),
-        ),
-      );
     if (installedCommit === undefined) return [];
     const newBase = (yield* read(["merge-base", "HEAD", "upstream/main"]))?.trim();
     const oldBase = newBase && (yield* read(["merge-base", installedCommit, newBase]))?.trim();
@@ -1303,52 +1294,55 @@ const make = Effect.gen(function* () {
         ),
       { concurrency: 8, discard: true },
     );
-    const patterns = (names: ReadonlySet<string>) =>
-      Array.from(names).flatMap((name) => ["-e", name]);
     const removed = new Set(Array.from(removedByPath.values()).flat());
-    const gone = new Set(removed);
-    if (removed.size > 0) {
-      const kept = yield* grep([
-        "-o",
-        "-h",
-        ...patterns(removed),
-        newBase,
-        "--",
-        ...SCANNED_SOURCE_PATHSPECS,
-      ]);
-      for (const name of kept) gone.delete(name);
-    }
-    const goneUsers =
-      gone.size === 0 || forked.length === 0
-        ? []
-        : yield* grep([
-            "-l",
-            ...patterns(gone),
-            "HEAD",
-            "--",
-            ...forked.map((path) => `:(literal)${path}`),
-          ]);
-    const candidates = new Set([
-      ...forked.filter((path) => removedByPath.has(path)),
-      ...goneUsers.map((line) => line.replace(/^HEAD:/u, "")).filter((path) => path.length > 0),
-    ]);
-    const found = yield* Effect.forEach(
-      Array.from(candidates),
+    if (removed.size === 0) return [];
+    const forkedUses = new Map<string, ReadonlySet<string>>();
+    yield* Effect.forEach(
+      forked,
       (path) =>
         read(["show", `HEAD:${path}`]).pipe(
-          Effect.map((merged): DanglingNames => {
-            const used = merged === null ? new Set<string>() : sourceIdentifiers(merged);
-            const names = new Set([...(removedByPath.get(path) ?? []), ...gone]);
-            return {
-              path,
-              names: Array.from(names)
-                .filter((name) => used.has(name))
-                .sort(),
-            };
+          Effect.map((merged) => {
+            if (merged !== null) forkedUses.set(path, sourceIdentifiers(merged));
           }),
         ),
-      { concurrency: 8 },
+      { concurrency: 8, discard: true },
     );
+    // Only a name some fork file still uses can dangle; keep those no upstream file uses.
+    const gone = new Set<string>();
+    for (const used of forkedUses.values()) {
+      for (const name of used) if (removed.has(name)) gone.add(name);
+    }
+    // One multi-name git grep over the tree ran for 25 minutes. Files outside the fork diff
+    // match upstream, so they are read from the checkout and only fork files from git.
+    const forkedPaths = new Set(forked);
+    const unforked = paths(
+      yield* read(["ls-files", "-z", "--", ...SCANNED_SOURCE_PATHSPECS]),
+    ).filter((path) => !forkedPaths.has(path));
+    const dropKept = (source: string | null) => {
+      if (source === null) return;
+      for (const name of sourceIdentifiers(source)) gone.delete(name);
+    };
+    yield* Effect.forEach(
+      [
+        ...forked.map((path) => read(["show", `${newBase}:${path}`])),
+        ...unforked.map((path) =>
+          fileSystem
+            .readFileString(environment.path.join(repo, path))
+            .pipe(Effect.orElseSucceed(() => null)),
+        ),
+      ],
+      (source) => (gone.size === 0 ? Effect.void : source.pipe(Effect.map(dropKept))),
+      { concurrency: 8, discard: true },
+    );
+    const found = Array.from(forkedUses, ([path, used]): DanglingNames => {
+      const names = new Set([...(removedByPath.get(path) ?? []), ...gone]);
+      return {
+        path,
+        names: Array.from(names)
+          .filter((name) => used.has(name))
+          .sort(),
+      };
+    });
     return found.filter((entry) => entry.names.length > 0);
   });
 

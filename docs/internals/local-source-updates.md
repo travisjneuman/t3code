@@ -115,7 +115,9 @@ names gone from every upstream file that a fork-changed file uses. A non-empty l
 build-repair agent pass first, reporting dispositions like the build repair. The scan ignores
 comments and quoted strings, may list a name the fork defines itself, and is skipped when the
 installed build's commit is unknown; a scan that fails is logged and skipped rather than failing
-the build.
+the build. Files outside the fork's diff are read from the held checkout and tokenized in process:
+`git grep` with one `-e` per name tests every line once per name, and it ran for 25 minutes with a
+few hundred names.
 
 ## Sync without building
 
