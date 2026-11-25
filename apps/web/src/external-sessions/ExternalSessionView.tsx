@@ -292,7 +292,6 @@ export function ExternalSessionView(props: { environmentId: EnvironmentId; sessi
                   latestRun={null}
                   turnDiffSummaries={NO_TURN_DIFFS}
                   routeThreadKey={`external:${environmentId}:${sessionKey}`}
-                  onOpenTurnDiff={noop}
                   onOpenThread={noop}
                   onForkFromRun={noopAsync}
                   onRollbackCheckpoint={noop}

@@ -15,7 +15,6 @@ import {
   type EnvironmentId,
   modelSelectionLabel,
   providerInstanceLabel,
-  type RunId,
   type ThreadId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
@@ -32,7 +31,7 @@ import {
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { Button } from "../components/ui/button";
 import { Spinner } from "../components/ui/spinner";
-import { useDiffPanelStore } from "../diffPanelStore";
+import { type ToolCallDiffTarget, useDiffPanelStore } from "../diffPanelStore";
 import { useTimelineLiveFollow } from "../forkTimelineLiveFollow";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import { useEnvironmentSettings } from "../hooks/useSettings";
@@ -103,8 +102,8 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(scopeThreadRef(environmentId, target)),
     });
-  const onOpenTurnDiff = (runId: RunId, filePath?: string) => {
-    useDiffPanelStore.getState().selectTurn(threadRef, runId, filePath);
+  const onOpenToolDiff = (target: ToolCallDiffTarget) => {
+    useDiffPanelStore.getState().selectToolCall(threadRef, target);
     useRightPanelStore.getState().open(threadRef, "diff");
     openThread(threadId);
   };
@@ -153,7 +152,7 @@ export function CompareThreadColumn(props: { environmentId: EnvironmentId; threa
               runningRunId={runtime?.activeRunId ?? null}
               turnDiffSummaries={turnDiffSummaries}
               routeThreadKey={`compare:${threadKey}`}
-              onOpenTurnDiff={onOpenTurnDiff}
+              onOpenToolDiff={onOpenToolDiff}
               onOpenThread={openThread}
               onForkFromRun={noopAsync}
               onRollbackCheckpoint={noop}
