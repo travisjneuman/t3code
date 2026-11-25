@@ -276,6 +276,10 @@ async function main() {
     // the Mac's build-fix commit records the regenerated one. Restore it like the stamps.
     const routeTree = path.join(repoRoot, "apps/web/src/routeTree.gen.ts");
     originals.set(routeTree, await fs.readFile(routeTree));
+    // The install above already matched the commit. A host-global pnpm that vp reaches during
+    // the build can still record its own version switch here (packageManagerDependencies).
+    const lockfile = path.join(repoRoot, "pnpm-lock.yaml");
+    originals.set(lockfile, await fs.readFile(lockfile));
 
     await vp(["run", "--filter", "t3", "build"]);
     await vp(["run", "build:resource-monitor"]);
