@@ -75,10 +75,20 @@ export function useUpdateEverything(
     canMaintain: canUpdateServer(sessionStates[index]!),
     updateState: updateStates[index]!,
   }));
-  const { targets: servers, skipped } = channelSwitch
-    ? collectChannelSwitchTargets(machines, channelSwitch, resolve)
+  const {
+    targets: servers,
+    skipped,
+    following, // Fork add-on(host-releases): hosts this app's Update builds for.
+  } = channelSwitch
+    ? { ...collectChannelSwitchTargets(machines, channelSwitch, resolve), following: [] } // Fork add-on(host-releases)
     : // Fork add-on(host-releases): host builds: remote fork hosts move to the latest successfully staged target.
-      collectHostUpdateTargets(machines, targetVersion, hostReleaseCheck, resolve); // Fork add-on(host-releases)
+      collectHostUpdateTargets(
+        machines,
+        targetVersion,
+        hostReleaseCheck,
+        resolve,
+        localUpdateVersion !== null,
+      ); // Fork add-on(host-releases)
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
   const moving = servers.filter((server) => server.trackOnly !== true);
   const restarts = collectRestartingMachines(machines, moving, localUpdateVersion !== null);
@@ -96,6 +106,7 @@ export function useUpdateEverything(
       localMachines: machines.filter((machine) => machine.hostedByThisApp),
       servers: moving,
       skipped,
+      following, // Fork add-on(host-releases)
       providerMachines: providers.machines.map((machine) => ({
         environmentId: machine.environmentId,
         label: machine.label,

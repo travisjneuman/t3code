@@ -190,25 +190,33 @@ export function useHostVersionMismatch(
 }
 
 /**
- * Without a staged target, a failed local-status read reports every remote host it could not
- * compare, so Update everything doesn't look like nothing needs updating.
+ * Without a staged target, a failed local build reports every remote host it could not update,
+ * so Update everything doesn't look like nothing needs updating. When this app's own Update is
+ * pending, that Update builds and stages a new commit for those hosts, which then update after
+ * this app restarts on it (HostReleaseAutoUpdate), so they follow it instead of being skipped.
  */
 export function collectHostUpdateTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
   hostUpdateTarget: string | null,
   check?: HostReleaseCheck,
   resolve: MessageResolver = m,
-): ReturnType<typeof collectServerUpdateTargets> {
+  localUpdatePending = false,
+): ReturnType<typeof collectServerUpdateTargets> & {
+  readonly following: ReadonlyArray<Pick<UpdateEverythingMachine, "environmentId" | "label">>;
+} {
   if (hostUpdateTarget !== null) {
-    return collectServerUpdateTargets(machines, hostUpdateTarget, resolve);
+    return { ...collectServerUpdateTargets(machines, hostUpdateTarget, resolve), following: [] };
   }
-  if (check?.status !== "failed") return { targets: [], skipped: [] };
+  if (check?.status !== "failed") return { targets: [], skipped: [], following: [] };
+  const remote = machines
+    .filter((machine) => !machine.hostedByThisApp)
+    .map(({ environmentId, label }) => ({ environmentId, label }));
+  if (localUpdatePending) return { targets: [], skipped: [], following: remote };
   const reason = checkFailure(check.reason, resolve);
   return {
     targets: [],
-    skipped: machines
-      .filter((machine) => !machine.hostedByThisApp)
-      .map(({ environmentId, label }) => ({ environmentId, label, reason })),
+    skipped: remote.map((machine) => ({ ...machine, reason })),
+    following: [],
   };
 }
 

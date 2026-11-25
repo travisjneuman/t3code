@@ -792,12 +792,14 @@ export interface UpdateEverythingPlan {
     readonly providers: ReadonlyArray<string>;
   }>;
   readonly skipped: ReadonlyArray<SkippedMachine>;
+  /** Fork add-on(host-releases): hosts that update once this app's Update has staged their build. */
+  readonly following?: ReadonlyArray<Pick<SkippedMachine, "environmentId" | "label">>;
 }
 
 export interface UpdateEverythingRow {
   readonly environmentId: EnvironmentId | null;
   readonly label: string;
-  readonly app: "this-app" | "server" | "desktop-app" | null;
+  readonly app: "this-app" | "server" | "desktop-app" | "after-this-app" | null; // Fork add-on(host-releases): after-this-app
   readonly skipped: string | null;
   readonly providers: ReadonlyArray<string>;
 }
@@ -964,6 +966,9 @@ export function describeUpdateEverything(
     update(server.environmentId, server.serverLabel, {
       app: server.selfUpdate === "desktop-managed" ? "desktop-app" : "server",
     });
+  }
+  for (const machine of plan.following ?? []) {
+    update(machine.environmentId, machine.label, { app: "after-this-app" }); // Fork add-on(host-releases)
   }
   for (const machine of plan.providerMachines) {
     update(machine.environmentId, machine.label, { providers: machine.providers });

@@ -91,6 +91,7 @@ const APP_LABELS = {
   "this-app": msg("This app"),
   server: msg("Server"),
   "desktop-app": msg("Desktop app"),
+  "after-this-app": msg("After this app"), // Fork add-on(host-releases)
 } as const;
 
 function UpdateEverythingDialogContent({
@@ -202,6 +203,12 @@ function UpdateEverythingDialogContent({
                   {row.app === "this-app" ? (
                     <span className="block text-muted-foreground text-xs">
                       <T>restarts last</T>
+                    </span>
+                  ) : null}
+                  {/* Fork add-on(host-releases): built from this app's Update, then updated. */}
+                  {row.app === "after-this-app" ? (
+                    <span className="block text-muted-foreground text-xs">
+                      <T>builds, then updates</T>
                     </span>
                   ) : null}
                 </span>
