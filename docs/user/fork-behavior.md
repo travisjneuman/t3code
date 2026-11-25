@@ -65,7 +65,9 @@ every host you connect in the inventory: a connected host outside it is offered 
 without having staged it.
 
 If a host build fails, a notice names the log and offers **Retry** for the same commit, and the
-host's row says **Local host build failed** with the reason. Rows show a fork build as the version
+host's row says **Local host build failed** with the reason. After you fix the cause, the update
+button retries that build too, so the hosts follow it instead of being skipped. When the Mac app
+has its own update waiting, that update builds a new commit for the hosts instead. Rows show a fork build as the version
 plus `(fork <commit>)`. The desktop app's own server is never compared with a host build. It ships
 inside the app, so it offers a server update only when its version differs from the app's.
 

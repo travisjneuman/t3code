@@ -1,4 +1,4 @@
-import { useMessages } from "gt-react"; // Fork add-on(maintenance-queue): interruptedProviderUpdateLine owns that copy.
+import { msg, useMessages } from "gt-react"; // Fork add-on(maintenance-queue): interruptedProviderUpdateLine owns that copy.
 import { useAtomValue } from "@effect/atom-react";
 import { connectionErrorText } from "@t3tools/client-runtime/connection";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
@@ -8,6 +8,7 @@ import { isElectron } from "~/env";
 import { collectHostUpdateTargets, useHostUpdateTarget } from "~/host-release/hostRelease"; // Fork add-on(host-releases)
 import { useHostReleaseCheck } from "~/host-release/hostRelease"; // Fork add-on(host-releases): release check states.
 import { skippedAsFailed } from "~/host-release/hostRelease"; // Fork add-on(host-releases): skipped updates stay retryable.
+import { retryHostBuild, toastHostBuildError } from "~/host-release/hostRelease"; // Fork add-on(host-releases): Update rebuilds a failed host build.
 import { interruptedProviderUpdateLine } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
 import { useEnvironments } from "~/state/environments";
 import { environmentIdsKey } from "~/state/environmentAtomList";
@@ -79,8 +80,13 @@ export function useUpdateEverything(
     targets: servers,
     skipped,
     following, // Fork add-on(host-releases): hosts this app's Update builds for.
+    retryBuild, // Fork add-on(host-releases): Update rebuilds a failed host build first.
   } = channelSwitch
-    ? { ...collectChannelSwitchTargets(machines, channelSwitch, resolve), following: [] } // Fork add-on(host-releases)
+    ? {
+        ...collectChannelSwitchTargets(machines, channelSwitch, resolve),
+        following: [], // Fork add-on(host-releases)
+        retryBuild: false, // Fork add-on(host-releases)
+      }
     : // Fork add-on(host-releases): host builds: remote fork hosts move to the latest successfully staged target.
       collectHostUpdateTargets(
         machines,
@@ -118,10 +124,13 @@ export function useUpdateEverything(
     resolve,
   );
 
+  const retryOnly = retryBuild && servers.length === 0 && providers.machines.length === 0; // Fork add-on(host-releases): a host rebuild alone still runs.
+
   return {
-    hasUpdates: servers.length > 0 || providers.machines.length > 0,
+    hasUpdates: servers.length > 0 || providers.machines.length > 0 || retryBuild, // Fork add-on(host-releases)
     machines,
     ...view,
+    ...(retryOnly ? { summary: resolve(msg("Rebuild and update the fork hosts")) } : {}), // Fork add-on(host-releases)
     restarts,
     run: async ({
       downloadLocal,
@@ -134,6 +143,8 @@ export function useUpdateEverything(
       const reportLocalError: ReportLocalUpdateError = (title, description) => {
         localFailures.push(`${title}: ${description}`);
       };
+      if (retryOnly) return retryHostBuild(toastHostBuildError, resolve); // Fork add-on(host-releases)
+      const hostRetry = retryBuild ? retryHostBuild(reportLocalError, resolve) : null; // Fork add-on(host-releases)
       const startedAt = Date.now();
       const machinesById = new Map<UpdateRunMachine["environmentId"], UpdateRunMachine>();
       for (const machine of providers.machines) {
@@ -257,6 +268,7 @@ export function useUpdateEverything(
             return runs;
           },
         });
+        await hostRetry; // Fork add-on(host-releases)
         const result = (finished: ReadonlyArray<{ label: string; outcome: ServerUpdateOutcome }>) =>
           collectUpdateEverythingResult({
             localVersion: null,

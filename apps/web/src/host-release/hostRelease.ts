@@ -13,6 +13,7 @@ import {
   collectServerUpdateTargets,
   type UpdateEverythingMachine,
 } from "~/components/sidebar/updateEverything.logic";
+import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { m, type MessageResolver } from "~/i18n/messages";
 import {
   resolveRuntimeVersionMismatch,
@@ -26,13 +27,17 @@ type HostBuildLookup =
   | { readonly _tag: "found"; readonly targetVersion: string }
   | { readonly _tag: "building" }
   | { readonly _tag: "local-build-required" }
-  | { readonly _tag: "failed"; readonly reason: string };
+  | { readonly _tag: "failed"; readonly reason: string; readonly retryable?: true };
 
 function hostBuildLookup(status: DesktopHostReleaseStatus | null): HostBuildLookup {
   if (status === null) return { _tag: "local-build-required" };
   if (status.state === "running") return { _tag: "building" };
   if (status.state === "failed") {
-    return { _tag: "failed", reason: status.detail ?? "local host build failed" };
+    return {
+      _tag: "failed",
+      reason: status.detail ?? "local host build failed",
+      retryable: true,
+    };
   }
   return status.targetVersion === undefined || status.targetVersion.trim() === ""
     ? { _tag: "local-build-required" }
@@ -78,7 +83,8 @@ export type HostReleaseCheck =
   | { readonly status: "known"; readonly target: string | null }
   | { readonly status: "building" }
   | { readonly status: "local-build-required" }
-  | { readonly status: "failed"; readonly reason: string };
+  /** `retryable`: a recorded build failed, so the desktop bridge can rebuild its commit. */
+  | { readonly status: "failed"; readonly reason: string; readonly retryable?: true };
 
 const CHECKING: HostReleaseCheck = { status: "checking" };
 
@@ -91,7 +97,13 @@ function resolveHostReleaseCheck(
     return { status: "failed", reason: "desktop host build status unavailable" };
   }
   const lookup = result.value;
-  if (lookup._tag === "failed") return { status: "failed", reason: lookup.reason };
+  if (lookup._tag === "failed") {
+    return {
+      status: "failed",
+      reason: lookup.reason,
+      ...(lookup.retryable ? { retryable: true as const } : {}),
+    };
+  }
   if (lookup._tag === "building") return { status: "building" };
   if (lookup._tag === "local-build-required") return { status: "local-build-required" };
   return { status: "known", target: lookup.targetVersion };
@@ -190,10 +202,9 @@ export function useHostVersionMismatch(
 }
 
 /**
- * Without a staged target, a failed local build reports every remote host it could not update,
- * so Update everything doesn't look like nothing needs updating. When this app's own Update is
- * pending, that Update builds and stages a new commit for those hosts, which then update after
- * this app restarts on it (HostReleaseAutoUpdate), so they follow it instead of being skipped.
+ * Without a staged target, remote hosts are never silently left out: they follow this app's
+ * pending Update (it stages a new commit), or the same Update rebuilds a recorded failure
+ * (`retryBuild`); HostReleaseAutoUpdate updates them once staged. Otherwise they are skipped.
  */
 export function collectHostUpdateTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
@@ -203,20 +214,33 @@ export function collectHostUpdateTargets(
   localUpdatePending = false,
 ): ReturnType<typeof collectServerUpdateTargets> & {
   readonly following: ReadonlyArray<Pick<UpdateEverythingMachine, "environmentId" | "label">>;
+  readonly retryBuild: boolean;
 } {
   if (hostUpdateTarget !== null) {
-    return { ...collectServerUpdateTargets(machines, hostUpdateTarget, resolve), following: [] };
+    return {
+      ...collectServerUpdateTargets(machines, hostUpdateTarget, resolve),
+      following: [],
+      retryBuild: false,
+    };
   }
-  if (check?.status !== "failed") return { targets: [], skipped: [], following: [] };
+  if (check?.status !== "failed") {
+    return { targets: [], skipped: [], following: [], retryBuild: false };
+  }
   const remote = machines
     .filter((machine) => !machine.hostedByThisApp)
     .map(({ environmentId, label }) => ({ environmentId, label }));
-  if (localUpdatePending) return { targets: [], skipped: [], following: remote };
+  if (localUpdatePending) {
+    return { targets: [], skipped: [], following: remote, retryBuild: false };
+  }
+  if (check.retryable && remote.length > 0) {
+    return { targets: [], skipped: [], following: remote, retryBuild: true };
+  }
   const reason = checkFailure(check.reason, resolve);
   return {
     targets: [],
     skipped: remote.map((machine) => ({ ...machine, reason })),
     following: [],
+    retryBuild: false,
   };
 }
 
@@ -233,4 +257,28 @@ export function skippedAsFailed<Args extends ReadonlyArray<unknown>>(
       ? { status: "failed", message: m(msg("Could not start the update")) }
       : outcome;
   };
+}
+
+/** For a rebuild run alone, which has no Update everything result to carry its failure. */
+export const toastHostBuildError = (title: string, description: string) => {
+  toastManager.add(stackedThreadToast({ type: "error", title, description }));
+};
+
+/**
+ * Rebuilds the recorded failed host build at its commit. It returns once the build starts;
+ * HostReleaseAutoUpdate queues the hosts when it stages them, and reports a new failure itself.
+ */
+export async function retryHostBuild(
+  report: (title: string, description: string) => void,
+  resolve: MessageResolver = m,
+): Promise<void> {
+  const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.hostRelease;
+  if (bridge === undefined) return;
+  const title = resolve(msg("Could not rebuild the fork hosts"));
+  try {
+    const status = await bridge.retry();
+    if (status?.state === "failed") report(title, status.detail ?? status.logPath);
+  } catch (error) {
+    report(title, error instanceof Error ? error.message : String(error));
+  }
 }

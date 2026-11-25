@@ -23,10 +23,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as NodeOS from "node:os";
 
 import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { isLoopbackHost } from "../startupAccess.ts";
 
 const HERMES_DRIVER = ProviderDriverKind.make("hermes");
 // The queue asks again on its next check, so a slow Hermes reads as unknown
@@ -52,6 +54,22 @@ export class MaintenanceQueue extends Context.Service<
 >()("t3/maintenance-queue/MaintenanceQueue") {}
 
 const failed = (message: string) => () => new MaintenanceQueueError({ message });
+
+const shortHostName = (host: string) => host.toLowerCase().replace(/^\[|\]$/g, "").split(".")[0];
+
+/**
+ * Updating this server interrupts a Hermes Agent only when it runs here or calls back into this
+ * server's T3 tools. A Hermes elsewhere keeps running; a T3 thread driving it counts as a thread.
+ */
+function hermesDependsOnThisServer(settings: HermesSettings): boolean {
+  if (settings.t3Tools) return true;
+  const host = URL.parse(settings.apiUrl)?.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === undefined || isLoopbackHost(host)) return true;
+  if (shortHostName(host) === shortHostName(NodeOS.hostname())) return true;
+  return Object.values(NodeOS.networkInterfaces()).some((addresses) =>
+    (addresses ?? []).some((address) => address.address.toLowerCase() === host),
+  );
+}
 
 const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -91,7 +109,9 @@ const make = Effect.gen(function* () {
     const instances = Object.entries(settings.providerInstances).flatMap(([id, instance]) => {
       if (instance.driver !== HERMES_DRIVER || instance.enabled === false) return [];
       const hermes = decodeHermesSettings(instance.config ?? {});
-      return Option.isSome(hermes) && hermes.value.apiUrl !== ""
+      return Option.isSome(hermes) &&
+        hermes.value.apiUrl !== "" &&
+        hermesDependsOnThisServer(hermes.value)
         ? [{ instanceId: id as ProviderInstanceId, settings: hermes.value }]
         : [];
     });

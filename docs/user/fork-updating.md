@@ -44,10 +44,15 @@ The checkout needs two remotes:
 - `origin`, pointing at your copy of the fork. It must not be the official repository.
 
 When a new upstream T3 Code nightly is out, the update button and **Settings → About** offer
-**Sync & Build** and name that nightly's version. **Sync & Build** merges the nightly into the
-checkout's `main`, keeps the fork's additions, and builds the app on this Mac. Then
-**Restart & Install** replaces the installed app with the new build and removes the old copy and
-the build files.
+**Sync & Build** and name that nightly's version. **Sync & Build** merges everything on upstream's
+`main` into the checkout's `main`, including changes that aren't in a nightly yet, keeps the fork's
+additions, and builds the app on this Mac. Then **Restart & Install** replaces the installed app
+with the new build and removes the old copy and the build files.
+
+On a source build, pressing the update button runs the whole release without a confirmation
+dialog: it rechecks provider updates, then merges and builds the app, builds and updates the
+connected fork hosts, and updates providers on every connected machine. The app restarts on the
+new build once no agent turn is running on this Mac.
 
 When the checkout has commits the installed app wasn't built from but no newer nightly is out, the
 update button says so, and **Sync & Build** builds them at the current nightly's version.
@@ -106,7 +111,8 @@ one is out or you press the merge button.
 
 The merge button beside the update button (**Sync fork with official T3 Code**) merges everything
 on upstream's `main` branch, including changes that aren't in a nightly yet, without building. It
-uses the repair agents for conflicts.
+uses the repair agents for conflicts. **Sync & Build** does the same merge first, so you don't need
+to press the merge button before updating.
 
 ### Pushing the merge
 

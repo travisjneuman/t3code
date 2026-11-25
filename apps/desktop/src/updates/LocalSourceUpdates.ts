@@ -1664,7 +1664,16 @@ const make = Effect.gen(function* () {
     yield* loadLoginShellEnvironment();
     const inspection = yield* inspect;
     const repo = inspection.repositoryPath;
-    const merging = inspection.behind > 0;
+    // Update takes every upstream/main commit, as the sync button does, so one press merges and builds.
+    const gitMerge = (args: ReadonlyArray<string>) =>
+      runChecked({ operation: "merge", command: "git", args, cwd: repo });
+    const upstreamMain = (
+      yield* gitMerge(["rev-parse", "--verify", "upstream/main^{commit}"])
+    ).stdout.trim();
+    const behindMain = Number(
+      (yield* gitMerge(["rev-list", "--count", `HEAD..${upstreamMain}`])).stdout.trim(),
+    );
+    const merging = behindMain > 0;
     if (!merging) {
       const pendingBuild = yield* Ref.get(builtUpdateRef);
       if (pendingBuild && pendingBuild.commit === inspection.currentCommit) {
@@ -1690,11 +1699,10 @@ const make = Effect.gen(function* () {
     // Committed and pushed before building, as the background sync does, so the fork hosts
     // build this commit while this Mac does. A failed build then leaves the merge in place.
     if (merging) {
-      // The peeled commit is merged (not the tag) so it matches what inspect counted.
       yield* commitUpstreamMerge(
         repo,
-        inspection.upstreamCommit,
-        `upstream nightly ${inspection.upstreamTag}`,
+        upstreamMain,
+        `upstream main ${upstreamMain.slice(0, 10)}`,
         true,
       ).pipe(
         Effect.catchCause((cause) =>

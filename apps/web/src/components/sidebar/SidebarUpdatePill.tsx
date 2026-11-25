@@ -3,7 +3,7 @@ import { managedUpdatesDenial } from "@t3tools/client-runtime/contract-labels";
 import { type DesktopBridge, type DesktopUpdateState } from "@t3tools/contracts";
 import { TriangleAlertIcon } from "lucide-react";
 import { msg, T, useGT, useMessages } from "gt-react";
-import { type ComponentProps, useId, useRef, useState } from "react";
+import { type ComponentProps, useEffect, useEffectEvent, useId, useRef, useState } from "react"; // Fork add-on(host-releases): one-press Update.
 import { flushSync } from "react-dom";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { isElectron } from "../../env";
@@ -215,6 +215,8 @@ function SidebarUpdateControl() {
   const [providerCheck, setProviderCheck] = useState<"button" | "dialog" | null>(null);
   const isCheckingProviders = providerCheck === "button";
   const [isConfirmingEverything, setIsConfirmingEverything] = useState(false);
+  const [runRequest, setRunRequest] = useState(0); // Fork add-on(host-releases): one-press Update.
+  const startedRunRequest = useRef(0); // Fork add-on(host-releases)
   const [checkAnimationKey, setCheckAnimationKey] = useState(0);
   const [releaseNotesPopoverHandle] = useState(() => PopoverCreateHandle());
   const suppressReleaseNotesFocusOpen = useRef(false);
@@ -301,6 +303,15 @@ function SidebarUpdateControl() {
     if (isInteractionDisabled) return;
     refreshHost(); // Fork add-on(host-releases)
 
+    // Fork add-on(host-releases): a source build's Update is the whole fleet release, so it skips the dialog.
+    if (runsEverything && state?.sourceUpdate === true) { // Fork add-on(host-releases)
+      setProviderCheck("button"); // Fork add-on(host-releases)
+      void checkProviderUpdates({ quiet: true }).finally(() => {
+        setProviderCheck(null); // Fork add-on(host-releases)
+        setRunRequest((request) => request + 1); // Fork add-on(host-releases)
+      }); // Fork add-on(host-releases)
+      return; // Fork add-on(host-releases)
+    } // Fork add-on(host-releases)
     if (runsEverything) {
       setIsConfirmingEverything(true);
       // Machines that still cache an older latest version add their rows while the dialog is open.
@@ -407,6 +418,16 @@ function SidebarUpdateControl() {
     }
     setIsActionPending(false);
   };
+
+  const startRequestedRun = useEffectEvent(() => { // Fork add-on(host-releases)
+    if (runsEverything) void runEverything(); // Fork add-on(host-releases)
+  }); // Fork add-on(host-releases)
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Fork add-on(host-releases): starts the one-press run once the provider re-check has rendered fresh update rows.
+  useEffect(() => { // Fork add-on(host-releases)
+    if (runRequest === startedRunRequest.current) return; // Fork add-on(host-releases)
+    startedRunRequest.current = runRequest; // Fork add-on(host-releases)
+    startRequestedRun(); // Fork add-on(host-releases)
+  }, [runRequest]); // Fork add-on(host-releases)
 
   const handleCheckAnimationIteration = () => {
     setIsCheckAnimationLatched(

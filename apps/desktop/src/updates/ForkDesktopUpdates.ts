@@ -237,7 +237,7 @@ export const makeLocalSource = Effect.gen(function* () {
 
     return yield* Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnDownloadStart(state));
-      yield* logUpdaterInfo("merging upstream nightly and building local source update");
+      yield* logUpdaterInfo("merging upstream main and building local source update");
       const build = yield* localSourceUpdates.syncAndBuild;
       yield* updateState((current) =>
         reduceDesktopUpdateStateOnDownloadComplete(current, build.version),

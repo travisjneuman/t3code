@@ -41,7 +41,12 @@ const BUSY_RUN_STATUSES: ReadonlySet<string> = new Set([
 export function isMaintenanceBusyThread(
   thread: Pick<
     OrchestrationV2ThreadShell,
-    "activeRunId" | "status" | "pendingRuntimeRequest" | "pendingBackgroundTasks" | "deletedAt"
+    | "activeRunId"
+    | "activityRunStatus"
+    | "status"
+    | "pendingRuntimeRequest"
+    | "pendingBackgroundTasks"
+    | "deletedAt"
   >,
 ): boolean {
   if (thread.deletedAt !== null) return false;
@@ -49,7 +54,10 @@ export function isMaintenanceBusyThread(
     thread.activeRunId !== null ||
     BUSY_RUN_STATUSES.has(thread.status) ||
     // An async question outlives its run and is answered by a new one; only a blocking one holds a live run.
-    (thread.pendingRuntimeRequest !== null && thread.pendingRuntimeRequest.blocking !== false) ||
+    // A null activityRunStatus means no run is live, so a request left from an old run holds nothing.
+    (thread.pendingRuntimeRequest !== null &&
+      thread.pendingRuntimeRequest.blocking !== false &&
+      thread.activityRunStatus !== null) ||
     (thread.pendingBackgroundTasks ?? []).some((task) => task.kind !== "command")
   );
 }

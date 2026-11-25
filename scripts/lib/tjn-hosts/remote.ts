@@ -1314,7 +1314,15 @@ async function buildArchive(request: Request) {
     (await git("branch", "--show-current")) === "main",
     "Build checkout is not on main.",
   );
-  requireState((await git("status", "--porcelain")) === "", "Build checkout is dirty.");
+  const dirty = (await git("status", "--porcelain"))
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const more = dirty.length > 5 ? ` and ${dirty.length - 5} more` : "";
+  requireState(
+    dirty.length === 0,
+    `Build checkout is dirty: ${dirty.slice(0, 5).join(", ")}${more}.`,
+  );
   requireState(
     githubRepository(await git("remote", "get-url", "origin")) === request.repository,
     "Build checkout origin is not the fork.",
