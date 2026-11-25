@@ -38,6 +38,8 @@ import {
   isProviderSettingsUpdateCandidate,
   isProviderUpdateActive,
 } from "../ProviderUpdateLaunchNotification.logic";
+import { providerInstallStateAtom } from "../providerRuntimeUpdates";
+import { isRuntimeInstallActive, runtimeNeedsInstall } from "../providerRuntimeUpdates.logic";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { getProviderVersionLabel } from "./providerStatus";
@@ -231,40 +233,9 @@ function filterModelPreferencesPatch(
   return Object.keys(next).length > 0 ? next : null;
 }
 
-function installStateAtom(environmentId: EnvironmentId, instanceId: ProviderInstanceId) {
-  return serverEnvironment.providerInstallState({ environmentId, input: { instanceId } });
-}
-
-/** Antigravity's managed runtime is behind the published one, or missing on an enabled instance. */
-function runtimeNeedsInstall(found: {
-  readonly instance: ProviderInstanceConfig;
-  readonly live: ServerProvider | undefined;
-  readonly install: {
-    readonly phase: string;
-    readonly version: string | null;
-    readonly installedVersion: string | null;
-  } | null;
-}): boolean {
-  const { instance, live, install } = found;
-  if (!live?.setup?.canInstall || install === null) return false;
-  if (
-    install.phase === "downloading" ||
-    install.phase === "extracting" ||
-    install.phase === "verifying"
-  ) {
-    return false;
-  }
-  const binaryPath = asRecord(instance.config).binaryPath;
-  if (typeof binaryPath === "string" && binaryPath.trim().length > 0) return false;
-  if (install.installedVersion !== null) {
-    return install.version !== null && install.version !== install.installedVersion;
-  }
-  return !live.installed && resolveProviderInstanceEnabled(instance);
-}
-
 function readInstallState(environmentId: EnvironmentId, instanceId: ProviderInstanceId) {
   return AsyncResult.getOrElse(
-    appAtomRegistry.get(installStateAtom(environmentId, instanceId)),
+    appAtomRegistry.get(providerInstallStateAtom(environmentId, instanceId)),
     () => null,
   );
 }
@@ -590,10 +561,14 @@ const providerStatusesAtom = Atom.family((key: string) => {
     ): EnvironmentStatus => {
       const install =
         found.live?.driver === "antigravity"
-          ? AsyncResult.getOrElse(get(installStateAtom(environmentId, instanceId)), () => null)
+          ? AsyncResult.getOrElse(
+              get(providerInstallStateAtom(environmentId, instanceId)),
+              () => null,
+            )
           : null;
       const live = found.live;
-      const running = live !== undefined && isProviderUpdateActive(live);
+      const running =
+        (live !== undefined && isProviderUpdateActive(live)) || isRuntimeInstallActive(install);
       const available =
         (live !== undefined && isProviderSettingsUpdateCandidate(live)) ||
         runtimeNeedsInstall({ ...found, install });

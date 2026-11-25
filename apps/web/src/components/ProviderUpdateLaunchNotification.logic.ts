@@ -15,6 +15,10 @@ import {
 import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../i18n/messages";
+import {
+  getRuntimeInstallRunOutcome,
+  type RuntimeInstallRun,
+} from "./providerRuntimeUpdates.logic"; // Fork add-on(provider-runtime-updates)
 
 export type ProviderUpdateCandidate = ServerProvider & {
   readonly versionAdvisory: NonNullable<ServerProvider["versionAdvisory"]> & {
@@ -239,12 +243,13 @@ export interface ProviderUpdateRun {
 }
 
 export function getProviderUpdateRunOutcome(
-  run: ProviderUpdateRun,
+  run: ProviderUpdateRun | RuntimeInstallRun, // Fork add-on(provider-runtime-updates)
   resolve: MessageResolver = m,
 ):
   | { readonly status: "interrupted" }
   | { readonly status: "updated"; readonly message: string | null }
   | { readonly status: "failed"; readonly line: string } {
+  if ("kind" in run) return getRuntimeInstallRunOutcome(run, resolve); // Fork add-on(provider-runtime-updates)
   if (isAtomCommandInterrupted(run.result)) return { status: "interrupted" };
   const label = `${run.machineLabel} · ${PROVIDER_DISPLAY_NAMES[run.driver] ?? run.driver}`;
   if (run.result._tag === "Failure") {
@@ -268,7 +273,7 @@ export function getProviderUpdateRunOutcome(
 }
 
 export function getProviderUpdateRunToastView(
-  runs: ReadonlyArray<ProviderUpdateRun>,
+  runs: ReadonlyArray<ProviderUpdateRun | RuntimeInstallRun>, // Fork add-on(provider-runtime-updates)
   resolve: MessageResolver = m,
 ): {
   readonly type: "success" | "error";

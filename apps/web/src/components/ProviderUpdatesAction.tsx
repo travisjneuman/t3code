@@ -6,6 +6,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { useAtomValue } from "@effect/atom-react"; // Fork add-on(provider-runtime-updates)
 import { useRef, useState } from "react";
 import { T, useGT } from "gt-react";
 
@@ -14,6 +15,9 @@ import { serverEnvironment } from "~/state/server";
 import { useEnvironmentsWithScope } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useQueuedProviderUpdate } from "~/maintenance-queue/useQueuedUpdate"; // Fork add-on(maintenance-queue)
+import { environmentIdsKey } from "~/state/environmentAtomList"; // Fork add-on(provider-runtime-updates)
+import { providerRuntimeInstallsAtom, runRuntimeInstall } from "./providerRuntimeUpdates"; // Fork add-on(provider-runtime-updates)
+import type { RuntimeInstallRun } from "./providerRuntimeUpdates.logic"; // Fork add-on(provider-runtime-updates)
 import {
   canOneClickUpdateProviderCandidate,
   collectProviderUpdateCandidates,
@@ -77,7 +81,14 @@ export function useProviderUpdates() {
   const manageableIds = useEnvironmentsWithScope(environments, AuthProvidersManageScope);
   const providersByEnvironment = useEnvironmentProviders();
   const updateProvider = useQueuedProviderUpdate(serverEnvironment.updateProvider); // Fork add-on(maintenance-queue)
-  const machines = environments.flatMap((environment) => {
+  // Fork add-on(provider-runtime-updates): managed runtimes have no CLI advisory; install them too.
+  const runtimeInstalls = useAtomValue(
+    providerRuntimeInstallsAtom(environmentIdsKey(environments.map((e) => e.environmentId))),
+  );
+  const startInstall = useAtomCommand(serverEnvironment.startProviderInstall, {
+    reportFailure: false,
+  }); // Fork add-on(provider-runtime-updates)
+  const machines = environments.flatMap((environment, index) => {
     const providers = providersByEnvironment.get(environment.environmentId) ?? [];
     if (
       environment.connection.phase !== "connected" ||
@@ -85,9 +96,18 @@ export function useProviderUpdates() {
     ) {
       return [];
     }
-    const candidates = collectProviderUpdateCandidates(providers).filter((candidate) =>
-      canOneClickUpdateProviderCandidate(candidate, providers),
-    );
+    const candidates = [
+      ...collectProviderUpdateCandidates(providers).filter((candidate) =>
+        canOneClickUpdateProviderCandidate(candidate, providers),
+      ),
+      // Fork add-on(provider-runtime-updates)
+      ...(runtimeInstalls[index] ?? "").split("\n").flatMap((instanceId) => {
+        const live = providers.find((provider) => provider.instanceId === instanceId);
+        return live
+          ? [{ driver: live.driver, instanceId: live.instanceId, runtime: true as const }]
+          : [];
+      }),
+    ];
     return candidates.length > 0
       ? [{ environmentId: environment.environmentId, label: environment.label, candidates }]
       : [];
@@ -96,16 +116,25 @@ export function useProviderUpdates() {
   const updateAll = async ({ quiet = false }: { readonly quiet?: boolean } = {}) => {
     const runs = await Promise.all(
       machines.flatMap(({ environmentId, label, candidates }) =>
-        candidates.map(async (candidate): Promise<ProviderUpdateRun> => ({
-          environmentId,
-          machineLabel: label,
-          driver: candidate.driver,
-          instanceId: candidate.instanceId,
-          result: await updateProvider({
-            environmentId,
-            input: { provider: candidate.driver, instanceId: candidate.instanceId },
-          }),
-        })),
+        candidates.map(async (candidate): Promise<ProviderUpdateRun | RuntimeInstallRun> =>
+          "runtime" in candidate // Fork add-on(provider-runtime-updates)
+            ? runRuntimeInstall(startInstall, {
+                environmentId,
+                machineLabel: label,
+                driver: candidate.driver,
+                instanceId: candidate.instanceId,
+              })
+            : {
+                environmentId,
+                machineLabel: label,
+                driver: candidate.driver,
+                instanceId: candidate.instanceId,
+                result: await updateProvider({
+                  environmentId,
+                  input: { provider: candidate.driver, instanceId: candidate.instanceId },
+                }),
+              },
+        ),
       ),
     );
     const view = quiet ? null : getProviderUpdateRunToastView(runs);
