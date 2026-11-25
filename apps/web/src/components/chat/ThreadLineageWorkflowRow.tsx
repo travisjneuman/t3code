@@ -18,7 +18,8 @@ import type { ProviderInstanceEntry } from "../../providerInstances";
 import { cn } from "../../lib/utils";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible-section-header";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Tooltip, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { Spinner } from "../ui/spinner";
 import {
   THREAD_DETAILS_PANEL_AGENT_SPLIT_GROUP_CLASS, // Fork add-on(subagent-tree)
@@ -177,33 +178,34 @@ export function ThreadLineageWorkflowRow({
           <div
             className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100" /* Fork add-on(subagent-tree) */
           >
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <ThreadDetailsControl
-                    size="icon-xs"
-                    variant="ghost"
-                    part="agentIcon" // Fork add-on(subagent-tree)
-                    tone="destructive"
-                    aria-label={gt("Stop workflow {label}", { label })}
-                    disabled={stopDisabled}
-                    onClick={onStop}
-                  />
-                }
-              >
-                {stopping ? (
-                  <Spinner aria-hidden size="2xs" /* Fork add-on(subagent-tree) */ />
-                ) : (
-                  <SquareIcon
-                    aria-hidden
-                    className={"size-2.5 fill-current" /* Fork add-on(subagent-tree) */}
-                  />
-                )}
-              </TooltipTrigger>
-              <TooltipPopup side="left">
-                <T>Stop entire workflow</T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <ThreadDetailsControl
+                  size="icon-xs"
+                  variant="ghost"
+                  part="agentIcon" // Fork add-on(subagent-tree)
+                  tone="destructive"
+                  aria-label={gt("Stop workflow {label}", { label })}
+                  disabled={stopDisabled}
+                  onClick={onStop}
+                />
+              }
+              label={
+                <>
+                  <T>Stop entire workflow</T>
+                </>
+              }
+              side="left"
+            >
+              {stopping ? (
+                <Spinner aria-hidden size="2xs" /* Fork add-on(subagent-tree) */ />
+              ) : (
+                <SquareIcon
+                  aria-hidden
+                  className={"size-2.5 fill-current" /* Fork add-on(subagent-tree) */}
+                />
+              )}
+            </SharedTooltipTrigger>
           </div>
         ) : null}
         <span

@@ -19,7 +19,6 @@ import { cn } from "~/lib/utils";
 import { useTerminalLabelsByThreadKey } from "~/state/terminalSessions";
 import { resolveSidebarRowAccessibility } from "../Sidebar.logic";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   composerDraftHasUserContent,
   DraftId,
@@ -34,6 +33,7 @@ import {
   JumpHintBadge,
 } from "./SidebarThreadRow";
 import { THREAD_CARD_LAYOUT } from "../../sidebar-compact/threadCardLayout"; // Fork add-on(compact-cards)
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const EMPTY_COMPOSER_PARTS = {
   prompt: "",
@@ -185,23 +185,23 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
                 props.jumpLabel && JUMP_HINT_SLOT_CLASS_NAME,
               )}
             >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={gt("Discard draft")}
-                      onClick={handleDiscard}
-                      className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
-                    >
-                      <XIcon className="size-3" />
-                    </button>
-                  }
-                />
-                <TooltipPopup side="top">
-                  <T>Discard draft</T>
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={gt("Discard draft")}
+                    onClick={handleDiscard}
+                    className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                }
+                label={
+                  <>
+                    <T>Discard draft</T>
+                  </>
+                }
+              />
               {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
             </span>
           </div>
