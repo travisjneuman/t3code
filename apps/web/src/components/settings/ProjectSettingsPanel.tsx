@@ -57,6 +57,7 @@ import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ProjectRepositoriesSettings } from "./ProjectRepositoriesSettings";
 import { CheckoutUnlinkButton, ProjectMachineLinks } from "./ProjectMachineLinks"; // Fork add-on(project-links)
 import { DefaultProjectRow } from "../../default-project/defaultProject"; // Fork add-on(default-project)
+import { ProjectWorktreeLayoutSettings } from "./ProjectWorktreeLayoutSettings";
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
@@ -706,6 +707,7 @@ function ProjectDetail({
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
         <ProjectRepositoriesSettings members={group.memberProjects} />
+        <ProjectWorktreeLayoutSettings members={group.memberProjects} />
         {hasOtherMembers ? (
           checkoutChoices
         ) : (
