@@ -1665,13 +1665,11 @@ const make = Effect.gen(function* () {
     const inspection = yield* inspect;
     const repo = inspection.repositoryPath;
     // Update takes every upstream/main commit, as the sync button does, so one press merges and builds.
-    const gitMerge = (args: ReadonlyArray<string>) =>
-      runChecked({ operation: "merge", command: "git", args, cwd: repo });
     const upstreamMain = (
-      yield* gitMerge(["rev-parse", "--verify", "upstream/main^{commit}"])
+      yield* gitMerge(repo, ["rev-parse", "--verify", "upstream/main^{commit}"])
     ).stdout.trim();
     const behindMain = Number(
-      (yield* gitMerge(["rev-list", "--count", `HEAD..${upstreamMain}`])).stdout.trim(),
+      (yield* gitMerge(repo, ["rev-list", "--count", `HEAD..${upstreamMain}`])).stdout.trim(),
     );
     const merging = behindMain > 0;
     if (!merging) {
