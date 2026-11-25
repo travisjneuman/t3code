@@ -169,9 +169,14 @@ async function main() {
 
   const git = (args: string[], cleanup = false) => run("git", args, { capture: true, cleanup });
   async function requireCleanCheckout(cleanup = false) {
+    const dirty = (await git(["status", "--porcelain", "--untracked-files=all"], cleanup))
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "");
+    const more = dirty.length > 5 ? ` and ${dirty.length - 5} more` : "";
     requireState(
-      (await git(["status", "--porcelain", "--untracked-files=all"], cleanup)) === "",
-      "Checkout is dirty; pending changes were preserved.",
+      dirty.length === 0,
+      `Checkout is dirty; pending changes were preserved: ${dirty.slice(0, 5).join(", ")}${more}.`,
     );
     requireState(
       (await git(["rev-parse", "HEAD"], cleanup)) === expectedSha,

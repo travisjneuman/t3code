@@ -1370,8 +1370,14 @@ async function buildArchive(request: Request) {
       const { size } = await file.stat();
       const bytes = Buffer.alloc(Math.min(size, 16_384));
       await file.read(bytes, 0, bytes.length, Math.max(0, size - bytes.length));
+      const tail = bytes.toString("utf8");
+      // The build script prints its failures last, so lead with them for the coordinator.
+      const reason = tail
+        .split("\n")
+        .map((line) => line.trim())
+        .findLast((line) => line !== "");
       throw new Refusal(
-        `${error instanceof Error ? error.message : String(error)}\nBuild log tail:\n${bytes.toString("utf8")}`,
+        `${reason === undefined ? "" : `${reason}\n`}${error instanceof Error ? error.message : String(error)}\nBuild log tail:\n${tail}`,
         1,
       );
     } finally {

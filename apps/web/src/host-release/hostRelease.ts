@@ -102,7 +102,7 @@ export function useHostReleaseCheck(): HostReleaseCheck {
 }
 
 const checkFailure = (reason: string, resolve: MessageResolver) =>
-  resolve(msg("couldn't read the local host build status ({reason})", { reason }));
+  resolve(msg("Local host build failed ({reason})", { reason }));
 
 /** The muted line Connections shows above its hosts, including when a local build is required. */
 export function hostReleaseCheckFailureNotice(

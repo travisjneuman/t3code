@@ -477,14 +477,14 @@ async function buildLocal(cfg: ResolvedHostConfig, sha: string, resultPath: stri
           completed.push(name);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          failures.push(`${name}: ${message}`);
+          failures.push(`${name}: ${hostFailureReason(message)}`);
           console.error(`${name}: build/stage failed or host is offline: ${message}`);
         }
       }),
     );
     if (failures.length > 0) {
       throw new Refusal(
-        `Fleet build incomplete for ${plan.targetVersion}. Completed: ${completed.join(", ") || "none"}. Pending or failed: ${failures.join(" | ")}. No success result was written; use the desktop Retry action to repeat this same commit.`,
+        `Fleet build incomplete for ${plan.targetVersion}. Completed: ${completed.join(", ") || "none"}. Failed: ${failures.join(" | ")}. No success result was written; use the desktop Retry action to repeat this same commit.`,
         4,
       );
     }
@@ -493,6 +493,16 @@ async function buildLocal(cfg: ResolvedHostConfig, sha: string, resultPath: stri
     );
     console.log(JSON.stringify({ commit: plan.sha, targetVersion: plan.targetVersion }));
   });
+}
+
+// A remote failure reads `ssh exited N.` then the host's own error; the summary keeps the latter
+// on one line, since the desktop shows only the last line of this run's output.
+function hostFailureReason(message: string): string {
+  const lines = message
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  return lines.find((line) => !/^ssh exited \S+\.$/u.test(line)) ?? lines[0] ?? message;
 }
 
 function releaseReceipt(release: Release): ReleaseReceipt {
@@ -822,8 +832,9 @@ async function changing(
     if (!run.journal.touched()) {
       throw error;
     }
+    // The error goes last: the desktop shows a failed build's last output line.
     throw new Refusal(
-      `${error instanceof Error ? error.message : String(error)}\n${run.journal.report()}`,
+      `${run.journal.report()}\n${error instanceof Error ? error.message : String(error)}`,
       error instanceof Refusal ? error.exitCode : 1,
     );
   } finally {
