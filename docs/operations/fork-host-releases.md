@@ -100,6 +100,25 @@ as the Mac's is, so every machine reports which commit it runs. The app and ever
 remote host use the same SHA-based runtime identity, so an app update always targets the exact
 source commit that was pushed.
 
+## Service updaters
+
+The private inventory may also list other services the fleet runs, under a top-level `services`
+array. Each entry has a unique `name`, a configured `host` (or `null` for the Mac itself), an optional
+`after` naming an earlier entry, and a `command` argv that runs on that host. After every host
+build attempt, the same detached run calls:
+
+```sh
+node scripts/tjn-hosts.ts services-update
+```
+
+Entries run in parallel; one with `after` runs only once that entry is updated or current, and is
+held otherwise. Each updater owns its idle check, lock and restart, and prints one JSON line last,
+`{state, from, to, detail}` with state `updated`, `current`, `held` or `failed`. The summary is
+written to `host-services-result.json` next to the fleet build result and the output to
+`host-services.log` in the app's state directory. It never changes the host build's status. Exit 0
+means every service is updated or current, 3 that one held, 1 that one failed. Keep the updaters
+themselves and their host details out of this repository.
+
 ## Builder details
 
 The remote builder is invoked by the coordinator, not as a separate release process:

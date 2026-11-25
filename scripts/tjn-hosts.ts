@@ -24,6 +24,7 @@ import {
   type Snapshot,
 } from "./lib/tjn-hosts/remote.ts";
 import { beginRun, heldLocks, runSummary, type Journal, type Step } from "./lib/tjn-hosts/runs.ts";
+import { services, servicesUpdate } from "./lib/tjn-hosts/services.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CONFIG = path.join(homedir(), ".config", "t3code-fork", "hosts.json");
@@ -34,11 +35,16 @@ const FLEET_RESULT_FILE = path.join(
   "t3code-fork",
   "host-fleet-build-result.json",
 );
+const SERVICES_RESULT_FILE = path.join(
+  path.dirname(FLEET_RESULT_FILE),
+  "host-services-result.json",
+);
 const USAGE = `Usage: node scripts/tjn-hosts.ts build-local --expect-sha <full-sha> [--result-file <path>]
        node scripts/tjn-hosts.ts status
        node scripts/tjn-hosts.ts prune <host>|--all --confirm-idle [--dry-run]
        node scripts/tjn-hosts.ts rollback <host> [--to version] --confirm-idle [--dry-run]
        node scripts/tjn-hosts.ts service-install <host>|--all --confirm-idle [--dry-run]
+       node scripts/tjn-hosts.ts services-update
 Exit codes: 0 success; 1 command/IO failure; 2 usage; 3 preflight refusal or locked host;
             4 fleet build may be partial (inspect host output before continuing).
 For prune/rollback, --dry-run prints the read-only preflight and steps; it changes nothing and
@@ -50,7 +56,9 @@ idle-aware Update flow activates the staged version later. Offline or failed hos
 must succeed on a later user-triggered Update. Rollback requiring a database restore is refused
 before stopping the service. After pruning a migrated release, fix forward; this tool never writes
 live userdata. service-install moves each host's service onto the launcher of the build staged
-for the pushed origin/main, the one-time local step a launcher protocol change needs.`;
+for the pushed origin/main, the one-time local step a launcher protocol change needs.
+services-update runs the updaters listed in hosts.json \`services\` (each waits for its own service
+to be idle and prints a JSON result); exit 3 means one held, 1 that one failed.`;
 
 interface Release {
   tag_name: string;
@@ -918,7 +926,9 @@ async function main() {
     command === "prune" || command === "rollback" || command === "service-install";
   if (
     !command ||
-    !["build-local", "status", "prune", "rollback", "service-install"].includes(command) ||
+    !["build-local", "status", "prune", "rollback", "service-install", "services-update"].includes(
+      command,
+    ) ||
     (hostCommand && all === Boolean(hostName)) ||
     (command === "build-local" && !expectSha)
   ) {
@@ -935,6 +945,11 @@ async function main() {
     );
   }
   const cfg = await config();
+  if (command === "services-update") {
+    const list = services((cfg as unknown as Record<string, unknown>).services, cfg.hosts);
+    process.exitCode = await servicesUpdate(list, cfg.hosts, SERVICES_RESULT_FILE);
+    return;
+  }
   if (command === "build-local") {
     const selectedResultFile = resultFile(requestedResultFile);
     await buildLocal(cfg, expectSha!, selectedResultFile);

@@ -30,14 +30,18 @@ import * as LocalSourceUpdates from "./LocalSourceUpdates.ts";
 const RECORD_FILE = "host-release.json";
 const LOG_FILE = "host-release.log";
 const EXIT_FILE = "host-release.exit";
+// Fork add-on(fleet-service-updates): the private service updaters run after the host build.
+const SERVICES_LOG_FILE = "host-services.log";
 const RESULT_FILE = "host-fleet-build-result.json";
 const WATCH_INTERVAL = "15 seconds";
 // A recorded process this old without an exit code is a reused pid, not the build.
 const BUILD_MAX_MS = 6 * 60 * 60 * 1000;
 // The exit code goes through a rename so a half-written file never reads as a result.
+// Service updates run after it, so they never change the build's status.
 const BUILD_SCRIPT = `node scripts/tjn-hosts.ts build-local --expect-sha "$1" --result-file "$2" > "$3" 2>&1
 code=$?
-printf '%s\\n' "$code" > "$4.tmp" && mv "$4.tmp" "$4"`;
+printf '%s\\n' "$code" > "$4.tmp" && mv "$4.tmp" "$4"
+node scripts/tjn-hosts.ts services-update > "$5" 2>&1`;
 
 const BuildRecord = Schema.fromJsonString(
   Schema.Struct({
@@ -120,6 +124,7 @@ const make = Effect.gen(function* () {
   const recordPath = environment.path.join(environment.stateDir, RECORD_FILE);
   const logPath = environment.path.join(environment.stateDir, LOG_FILE);
   const exitPath = environment.path.join(environment.stateDir, EXIT_FILE);
+  const servicesLogPath = environment.path.join(environment.stateDir, SERVICES_LOG_FILE);
   // Matches the host script's default result path so an explicit build remains observable
   // across the Mac app's automatic install/relaunch.
   const resultPath = environment.path.join(
@@ -270,7 +275,7 @@ const make = Effect.gen(function* () {
           .spawn(
             ChildProcess.make(
               "/bin/sh",
-              ["-c", BUILD_SCRIPT, "sh", commit, resultPath, logPath, exitPath],
+              ["-c", BUILD_SCRIPT, "sh", commit, resultPath, logPath, exitPath, servicesLogPath],
               {
                 cwd: repo,
                 env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "Never" },
