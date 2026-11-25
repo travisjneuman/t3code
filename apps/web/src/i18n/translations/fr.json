@@ -66,7 +66,7 @@
   "2f6e4f7cd364da73": "Résultat attendu",
   "9d11c93d4035de3e": "Résultat obtenu",
   "c87d0595693704f9": "Solution de repli",
-  "d7a4ea6ce5af44e0": "{speaker} · {count} caractères",
+  "ed5c85bb4aecb472": "{count, plural, one {{speaker} · {count} caractère} other {{speaker} · {count} caractères}}",
   "f5114fb9c40fd929": "Vous",
   "cd03eb1b84271c02": "Agent",
   "bfe1a60f3f9c60fb": "Tour {turn} · {what}",
@@ -1863,7 +1863,7 @@
   "67f5b13c3c7bcd40": "Partager avec un invité",
   "82da5b8b340217ac": "Redémarrer la session de l’agent",
   "963d099509eabcd6": "La session de l’agent va redémarrer",
-  "1d384d4fe7888a09": "Votre prochain message démarre une nouvelle session.",
+  "71ed7c0da0b93c77": "Votre prochain message redémarre l’agent. Cette conversation est conservée.",
   "e4b61c891fed297e": "Aller au fichier",
   "d2ccdb8cd3297212": "Ajouter un projet",
   "594bcbef04093f72": "Ouvrir un dossier WSL",
@@ -12295,10 +12295,26 @@
   "a16b48709357a5a7": "Gérer l’utilisation",
   "a00e74aaa421c524": "restant",
   "0e34c3076c08feb2": [
-    { "t": "span", "i": 1, "c": ["↻ +", { "i": 2, "k": "_gt_value_2", "v": "v" }, "%"] },
+    {
+      "t": "span",
+      "i": 1,
+      "c": [
+        "↻ +",
+        {
+          "i": 2,
+          "k": "_gt_value_2",
+          "v": "v"
+        },
+        "%"
+      ]
+    },
     " ",
     "dans ",
-    { "i": 3, "k": "_gt_value_3", "v": "v" }
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    }
   ],
   "8bd6f07136317c8f": "Aucun fournisseur des environnements sélectionnés ne signale de limites d’abonnement.",
   "87f5d0c61b335f38": "Consultez l’utilisation dans ChatGPT avec votre compte connecté.",
@@ -12338,7 +12354,6 @@
   "d2d071e45a2d6b89": "Sélectionnez un environnement pour voir les limites.",
   "c9180daea905a0a6": "Sélectionnez un environnement pour voir l’utilisation.",
   "f0297ec79e896a13": "{environment} : {error}",
-  "6dcbf651d51d4023": "{count, plural, one {{formatted} session} other {{formatted} sessions}}",
   "b01bf98dd90ee819": "Estimation API",
   "bab34b28e9ee8e88": "Détails de l’utilisation sans prix",
   "61571f4542da9903": "{count, plural, one {{formatted} session} other {{formatted} sessions}}",
@@ -12912,6 +12927,11 @@
   "c92657bb7f2293ff": "Approbation requise",
   "f1e5c1be1ac92361": "Approuver",
   "fcb5f3c4d4753326": "Cette connexion ne peut pas approuver de commandes. Utilisez un client qui peut utiliser le terminal.",
+  "7150557773b3818b": "En file d’attente",
+  "efbeb3993ee2c3f5": "En attente de {pool}",
+  "0398ca6c1d24b92d": "en attente, le prochain",
+  "0af6d5ffd5166214": "{count, plural, one {en attente, {count} devant} other {en attente, {count} devant}}",
+  "49be26a27dcb30e5": "en attente",
   "4e96712d839ccbff": "{who} a répondu {choice}",
   "19097cfb8f5a79cf": [
     {
@@ -12972,5 +12992,10 @@
       "v": "v"
     },
     " nécessite une raison."
-  ]
+  ],
+  "91aadfc843c600de": "Vérifier le compte Google",
+  "201490988858b511": "retirée par {by}",
+  "99451a5d2d40440f": "Retirée par {by}.",
+  "3ee30a50b70fffab": "Retirée par {by} : {reason}",
+  "92e129bf413a1220": "retirée"
 }

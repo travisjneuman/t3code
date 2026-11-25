@@ -1407,10 +1407,12 @@ export class Launcher {
     };
     await this.#selectState(next);
     child.role = "active";
-    await discardDatabaseBackup(this.#baseDir, committed.id).catch(reportRecoveryCleanupFailure); // Fork add-on(host-releases)
+    // The commit is already durable, so answer before the cleanup: the trial waits only
+    // 30 seconds for this reply, and dropping the backup can take longer than that.
     try {
       await sendMessage(child.process, { type: "committed", updateId: committed.id });
     } finally {
+      await discardDatabaseBackup(this.#baseDir, committed.id).catch(reportRecoveryCleanupFailure); // Fork add-on(host-releases)
       await this.#repointServiceUnit(committed.targetVersion);
     }
   }
