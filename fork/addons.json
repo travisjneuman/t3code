@@ -284,7 +284,6 @@
         "apps/web/src/sidebar-compact/agentLines.ts",
         "docs/internals/README.md",
         "docs/internals/fork-add-ons.md",
-        "docs/user/README.md",
         "docs/user/fork-behavior.md",
         "packages/contracts/src/forkCapabilities.ts",
         "packages/contracts/src/forkClientRpcScopes.ts",
@@ -316,6 +315,7 @@
         "apps/web/src/hooks/useThreadActionMenu.ts",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/routes/_chat.settings.archived.tsx",
+        "docs/user/README.md",
         "knip.jsonc",
         "packages/contracts/src/clientRpcPermissions.ts",
         "packages/contracts/src/environment.ts",
@@ -414,7 +414,8 @@
         "apps/web/src/index.css",
         "apps/web/src/localApi.ts",
         "apps/web/src/reopenClosedView.ts",
-        "apps/web/src/rightPanelStore.ts"
+        "apps/web/src/rightPanelStore.ts",
+        "docs/user/README.md"
       ]
     },
     {
@@ -473,6 +474,7 @@
         "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
         "apps/web/src/providerInstances.ts",
         "apps/web/src/routeTree.gen.ts",
+        "docs/user/README.md",
         "packages/client-runtime/src/rpc/client.ts"
       ],
       "unmarkedUpstreamEdits": {
@@ -548,6 +550,7 @@
         "apps/web/src/components/chat/useDraftEnvironmentRouting.ts",
         "apps/web/src/components/settings/ProviderInstanceCard.tsx",
         "apps/web/src/components/usage/usageProviders.ts",
+        "docs/user/README.md",
         "packages/client-runtime/package.json",
         "packages/client-runtime/src/providerClients.ts",
         "packages/contracts/src/model.ts",
@@ -609,6 +612,7 @@
         "apps/web/src/components/chat/useComposerSend.ts",
         "apps/web/src/components/settings/ScheduledTasksSettings.tsx",
         "apps/web/src/components/usage/usageProviders.ts",
+        "docs/user/README.md",
         "packages/client-runtime/package.json",
         "packages/client-runtime/src/providerClients.ts",
         "packages/contracts/src/model.ts",
@@ -657,7 +661,8 @@
         "apps/web/src/components/ChatView.tsx",
         "apps/web/src/components/CommandPalette.tsx",
         "apps/web/src/components/sidebar/SidebarChrome.tsx",
-        "apps/web/src/routeTree.gen.ts"
+        "apps/web/src/routeTree.gen.ts",
+        "docs/user/README.md"
       ],
       "unmarkedUpstreamEdits": {
         "apps/web/src/routeTree.gen.ts": "generated from the fork routes"
@@ -703,6 +708,7 @@
         "apps/web/src/components/settings/SettingsPanels.tsx",
         "apps/web/src/components/settings/scopedSettings.ts",
         "apps/web/src/components/settings/settingsSearch.ts",
+        "docs/user/README.md",
         "packages/contracts/src/orchestratorMcp.ts",
         "packages/contracts/src/settings.ts",
         "packages/provider-acp/src/server/adapter.ts",
@@ -755,7 +761,8 @@
       ],
       "hooks": [
         "apps/web/src/components/settings/SettingsPanels.tsx",
-        "apps/web/src/components/settings/settingsSearch.ts"
+        "apps/web/src/components/settings/settingsSearch.ts",
+        "docs/user/README.md"
       ],
       "data": {
         "settings": ["notesDirectory", "savedThreadsDirectory"]
@@ -780,7 +787,7 @@
         "apps/web/src/thread-export/threadExport.ts",
         "packages/contracts/src/threadExport.ts"
       ],
-      "hooks": []
+      "hooks": ["docs/user/README.md"]
     },
     {
       "id": "session-details",
@@ -826,6 +833,7 @@
         "apps/web/src/components/chat/ThreadDetailsCard.tsx",
         "apps/web/src/components/chat/ThreadDetailsPanel.tsx",
         "apps/web/src/providerInstances.ts",
+        "docs/user/README.md",
         "packages/contracts/src/rpc.ts",
         "packages/provider-acp/src/server/adapter.ts",
         "packages/provider-core/package.json",
@@ -1260,7 +1268,7 @@
       "dependsOn": [],
       "surfaces": ["server"],
       "files": ["apps/server/src/cli/forkMcp.ts", "docs/user/mcp-hub.md"],
-      "hooks": ["apps/server/src/binCli.ts"]
+      "hooks": ["apps/server/src/binCli.ts", "docs/user/README.md"]
     },
     {
       "id": "multi-select-menu",
@@ -1712,6 +1720,7 @@
         "apps/web/src/components/desktopUpdate.toast.tsx",
         "apps/web/src/components/settings/SettingsPanels.tsx",
         "apps/web/src/components/sidebar/SidebarChrome.tsx",
+        "docs/user/README.md",
         "packages/contracts/src/ipc.ts",
         "scripts/build-desktop-artifact.ts"
       ],
