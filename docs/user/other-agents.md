@@ -4,7 +4,8 @@
 used in the last 14 days, such as Claude Code or Codex in a terminal, a desktop app, or an IDE.
 Codex threads stay listed until you archive them in Codex. Open one to follow it live. Older
 sessions are still found by search. Sessions running right now
-come first and stay in view even when you collapse the list; the header counts them as active.
+come first and stay in view even when you collapse the list; the header counts them as active,
+beside the number of sessions the list holds in all, including those Load more has not shown yet.
 Each session takes one line; hover it for its folder, model and machine. Below the running ones
 are the sessions active in the last 3 days from every machine, newest first; **Load more** adds
 the next 10. A session you opened but never typed into drops out after an hour. The Claude runs

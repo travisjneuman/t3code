@@ -415,6 +415,21 @@ export const externalSessionListCutsAtom = Atom.make((get) => {
 }).pipe(Atom.withLabel("external-sessions:list-cuts"));
 
 /**
+ * Every listed session on the connected hosts, including the ones each live
+ * list cut: the server's `total`, or the list's length from servers without it.
+ */
+export const externalSessionTotalAtom = Atom.make((get) => {
+  let total = 0;
+  for (const environmentId of get(environmentSummaries.connectedEnvironmentIdsAtom)) {
+    const list = Option.getOrNull(
+      AsyncResult.value(get(externalSessionList({ environmentId, input: {} }))),
+    );
+    if (list !== null) total += Math.max(list.total ?? 0, list.sessions.length);
+  }
+  return total;
+}).pipe(Atom.withLabel("external-sessions:total"));
+
+/**
  * One page of a host's sessions past its live list's cut, read on request
  * (Load more). Not live: the shelf holds the pages until the host's cut ends.
  */

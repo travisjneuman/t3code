@@ -67,6 +67,7 @@ import {
   externalSessionOriginLabel,
   externalSessionProductName,
   externalSessionTitle,
+  externalSessionTotalAtom,
   LIVENESS_LABEL,
   shortModelLabel,
   type ExternalSessionEntry,
@@ -277,6 +278,7 @@ function takeLegacyHiddenKeys(): ReadonlySet<string> | null {
 export function ExternalSessionsSidebarSection() {
   const liveEntries = useAtomValue(externalSessionEntriesAtom);
   const cuts = useAtomValue(externalSessionListCutsAtom);
+  const total = useAtomValue(externalSessionTotalAtom);
   const [olderPages, setOlderPages] = useState(NO_OLDER_PAGES);
   const [selection, setSelection] = useState<RowSelection>({
     keys: NO_SELECTED_KEYS,
@@ -1015,7 +1017,7 @@ export function ExternalSessionsSidebarSection() {
     if (clicked === "show-archived") await showArchived();
   };
 
-  if (entries.length === 0) return null;
+  if (entries.length === 0 && total === 0) return null;
   const activeCount = active.length;
   const loadingOlder = hostsWithMore.some(({ pages }) => pages?.loading === true);
   const canLoadMore = rest.length > shownRestCount || hostsWithMore.length > 0;
@@ -1040,7 +1042,7 @@ export function ExternalSessionsSidebarSection() {
           onMouseDown={preventMouseFocus}
           accessory={
             <AgentSectionAccessory
-              count={active.length + shownRest.length}
+              count={Math.max(total, entries.length)}
               running={activeCount}
               // At the narrowest sidebar the word drops out, so the chevron stays in view.
               runningSuffix={
