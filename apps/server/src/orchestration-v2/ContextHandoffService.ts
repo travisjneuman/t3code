@@ -18,6 +18,7 @@ import * as Schema from "effect/Schema";
 import {
   DEFAULT_HANDOFF_TOKEN_CAP,
   handoffTokenCapConfig,
+  handoffByteCap,
   handoffCoverage,
   historicalMessage,
   renderHistory,
@@ -375,8 +376,8 @@ function makeLegacyImportSummary(items: ReadonlyArray<OrchestrationV2TurnItem>):
 const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffService.layer")(
   function* () {
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
-    const tokenCap = yield* handoffTokenCapConfig.pipe(
-      Effect.orElseSucceed(() => DEFAULT_HANDOFF_TOKEN_CAP),
+    const historyBudget = handoffByteCap(
+      yield* handoffTokenCapConfig.pipe(Effect.orElseSucceed(() => DEFAULT_HANDOFF_TOKEN_CAP)),
     );
 
     const prepareLegacyImport = Effect.fn("orchestrationV2.contextHandoff.prepareLegacyImport")(
@@ -413,7 +414,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
             return message === null ? [] : [message];
           }),
           coverage,
-          budget: tokenCap,
+          budget: historyBudget,
         });
         return {
           id: handoffId,
@@ -483,7 +484,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
             return message === null ? [] : [message];
           }),
           coverage,
-          budget: tokenCap,
+          budget: historyBudget,
         });
         return {
           id: handoffId,
@@ -566,7 +567,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
               ];
         }),
         coverage,
-        budget: tokenCap,
+        budget: historyBudget,
       });
       return {
         id: handoffId,
