@@ -54,8 +54,11 @@ Update builds it again without merging.
    rewrite upstream files. A failure here attempts `git merge --abort` without
    staging edits during cleanup: that could discard unrelated work created while the
    agent ran. Cleanup checks Git's exit status; failure reports manual recovery with
-   Git's output. After a successful abort, any remaining modified or untracked paths
-   are reported as "left in the checkout" rather than removed or claimed clean.
+   Git's output. After a successful abort, untracked files that appeared while a repair
+   agent ran are removed, since the abort already undid that agent's edits and a leftover
+   would make the next inspect refuse the checkout. Any other remaining modified or
+   untracked paths are reported as "left in the checkout" rather than removed or claimed
+   clean.
 2. **Push.** The merge is pushed (see below). A successful push hands the commit to the
    host builds; a skipped push builds the Mac alone.
 3. **Build.** While it builds, Update writes `<git-dir>/checkout-hold` holding its pid,
@@ -73,9 +76,9 @@ Update builds it again without merging.
    loss, committed as `fix(desktop): build upstream nightly <tag>`, and pushed. That push hands the fix
    commit to the host builds too, queued behind the merge commit's run.
 
-On a build failure, tracked edits are stashed as "local source update: unbuilt fixes"
-and the build output is deleted; untracked files are left untouched and reported as
-checkout leftovers. A failed stash is surfaced as a checkout that may still be dirty
+On a build failure, tracked edits and the files repair agents created are stashed as
+"local source update: unbuilt fixes" and the build output is deleted; other untracked
+files are left untouched and reported as checkout leftovers. A failed stash is surfaced as a checkout that may still be dirty
 and needs manual recovery. The hold is removed either way.
 
 When the fork already contains the nightly, Update reuses a finished build of `HEAD`
@@ -86,11 +89,12 @@ it builds `HEAD` without merging.
 Post-repair and build-finalization staging uses `git add -u`, never blanket staging
 of untracked files. Conflict resolutions still stage only their explicit paths, and
 files added by Git's merge are already in the index. The only additional new files
-allowed are exact destinations of accepted `moved` dispositions: repair accounting
-reads their working-tree markers before explicitly staging those literal paths.
-Any other non-ignored untracked files at these staging points fail the operation
-with a bounded path list and are left untouched. This also refuses genuinely new
-build-repair files that were not already accepted and staged during marker repair.
+allowed are exact destinations of accepted `moved` dispositions and files that appeared
+while a repair agent ran (an agent often splits a reshaped module into a new file);
+each is staged by its literal path. Attribution is a before-and-after listing of
+untracked files around each agent run, so a file another program creates in that window
+counts as the agent's. Any other non-ignored untracked files at these staging points
+fail the operation with a bounded path list and are left untouched.
 Finalization happens after the temporary release version has been restored. The
 repository lock does not detect concurrent edits to tracked files by other programs;
 those edits can still be staged, committed, or affected by cleanup. Avoid other
@@ -131,8 +135,8 @@ because both rewrite the checkout, and the exported `inspect` takes it too, so a
 update check never reads the checkout mid-merge.
 
 The sidebar button's tooltip and accessible label show the current phase: fetching,
-merging, resolving conflicts with Claude (including the conflict count), checking
-fork add-ons, repairing, committing, and pushing. The main process owns progress;
+merging, resolving conflicts (with the conflict count and the repair agent working on
+them), checking fork add-ons, repairing (also naming the agent), committing, and pushing. The main process owns progress;
 a fork IPC snapshot plus events keep reloaded and additional windows in sync.
 Concurrent interactive requests join one in-flight result, with one completion
 clear per operation. Older desktop shells retain the generic syncing label.
@@ -186,8 +190,13 @@ reshaped something the fork imports), go to a headless agent run in the checkout
 `claude -p`, in the order of the `sourceUpdateRepairAgents` setting
 ([`repairAgents.ts`](../../packages/contracts/src/repairAgents.ts)). The desktop reads that
 setting from its own environment's `settings.json` in the state directory at each repair, so
-the main process needs no connection to its server. An agent that cannot start or exits
-non-zero hands over to the next; a timeout stops the repair, since that agent was working.
+the main process needs no connection to its server. Before each agent runs, its sign-in is
+checked (`claude auth status --json`, or `pi auth check --model <model> --json`, 20-second
+limit); one that reports no usable credentials is skipped rather than started, and a check
+that fails or times out lets the agent run. An agent that is skipped, cannot start, or exits
+non-zero hands over to the next, and the reason (with the last line of its output) is logged
+and listed in the sync result, so a fallback is never silent. A timeout stops the repair,
+since that agent was working.
 Each run is limited to file tools (no Bash, git, or network; Pi also runs without extensions,
 skills, MCP or context files), told to keep
 both upstream changes and fork additions, and capped at 20 minutes. A path that

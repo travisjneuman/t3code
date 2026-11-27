@@ -88,7 +88,8 @@ function isDesktopSourceSyncProgress(value: unknown): value is DesktopSourceSync
       progress.phase === "committing" ||
       progress.phase === "pushing") &&
     (progress.conflictCount === undefined ||
-      (Number.isSafeInteger(progress.conflictCount) && progress.conflictCount >= 0))
+      (Number.isSafeInteger(progress.conflictCount) && progress.conflictCount >= 0)) &&
+    (progress.agent === undefined || typeof progress.agent === "string")
   );
 }
 

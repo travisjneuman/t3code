@@ -40,6 +40,7 @@ const LOCKFILE_PATH = "pnpm-lock.yaml";
 // stamped the app with the commit before it.
 const BUILD_FIX_SUBJECT = "fix(desktop): build upstream nightly ";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
+const AGENT_READINESS_TIMEOUT = "20 seconds";
 // Each pass can only see the first error the build reports.
 const MAX_BUILD_REPAIR_PASSES = 3;
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
@@ -160,6 +161,8 @@ export interface LocalSourceSyncResult {
   readonly upstreamTag: string;
   /** Null when nothing was merged, so nothing was pushed. */
   readonly push: ForkPushResult | null;
+  /** Repair agents passed over for the next one, each with its label and reason. */
+  readonly skippedAgents?: ReadonlyArray<string>;
 }
 
 export class LocalSourceUpdates extends Context.Service<
@@ -248,6 +251,34 @@ function tailOutput(value: string, limit = COMMAND_OUTPUT_LIMIT): string {
 // out by the long asset list on stdout; color codes would only eat the budget.
 function trimOutput(result: CommandResult): string {
   return tailOutput(`${result.stdout}\n${result.stderr}`.replace(ANSI_PATTERN, "").trim());
+}
+
+/** The last line an agent printed, which is where a CLI puts why it stopped. */
+function lastOutputLine(result: CommandResult): string {
+  const line = trimOutput(result).split("\n").at(-1)?.trim() ?? "";
+  return line.length > 200 ? `${line.slice(0, 199)}…` : line;
+}
+
+/**
+ * Why an agent's own readiness check says it cannot run, or null when it can. Output that isn't
+ * the expected report (an older CLI without the check) is not a reason to skip the agent.
+ */
+function repairAgentUnreadyReason(agent: RepairAgent, stdout: string): string | null {
+  let report: unknown;
+  try {
+    report = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (typeof report !== "object" || report === null) return null;
+  if (agent.agent === "claude") {
+    return "loggedIn" in report && report.loggedIn === false
+      ? "not signed in; run `claude auth login`"
+      : null;
+  }
+  return "status" in report && (report.status === "not_ready" || report.status === "invalid")
+    ? `no ready credentials for ${agent.model}; run \`pi auth login ${agent.model.split("/")[0]}\``
+    : null;
 }
 
 function parseCountPair(output: string): readonly [number, number] | null {
@@ -524,6 +555,12 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const builtUpdateRef = yield* Ref.make<LocalSourceUpdateBuild | null>(null);
+  // Per run: files that appeared while a repair agent ran, and agents skipped for the next one.
+  const agentCreatedRef = yield* Ref.make<ReadonlySet<string>>(new Set());
+  const skippedAgentsRef = yield* Ref.make<ReadonlyArray<string>>([]);
+  const startRun = Ref.set(agentCreatedRef, new Set()).pipe(
+    Effect.andThen(Ref.set(skippedAgentsRef, [])),
+  );
   const buildCommits = yield* PubSub.unbounded<string>();
 
   // The environment variable wins; otherwise the path the build recorded.
@@ -941,6 +978,11 @@ const make = Effect.gen(function* () {
       outputLimit: Number.POSITIVE_INFINITY,
     });
 
+  const listUntrackedPaths = (repo: string) =>
+    gitMerge(repo, ["ls-files", "--others", "--exclude-standard", "-z"]).pipe(
+      Effect.map((result) => result.stdout.split("\0").filter((path) => path.length > 0)),
+    );
+
   const listConflictedPaths = (repo: string) =>
     gitMerge(repo, ["diff", "--name-only", "--diff-filter=U", "-z"]).pipe(
       Effect.map((result) => result.stdout.split("\0").filter((path) => path.length > 0)),
@@ -953,6 +995,33 @@ const make = Effect.gen(function* () {
     .pipe(
       Effect.map(repairAgentsFromSettings),
       Effect.orElseSucceed(() => repairAgentsFromSettings("")),
+    );
+
+  // A lapsed sign-in makes an agent exit at once; asking first names the reason it was skipped.
+  const repairAgentUnready = (agent: RepairAgent, repo: string) =>
+    runCommand({
+      operation: "merge",
+      ...(agent.agent === "pi"
+        ? { command: "pi", args: ["auth", "check", "--model", agent.model, "--json"] }
+        : { command: "claude", args: ["auth", "status", "--json"] }),
+      cwd: repo,
+    }).pipe(
+      Effect.map((result) => repairAgentUnreadyReason(agent, result.stdout)),
+      Effect.timeoutOrElse({
+        duration: AGENT_READINESS_TIMEOUT,
+        orElse: () => Effect.succeed(null),
+      }),
+      Effect.orElseSucceed(() => null),
+    );
+
+  const recordSkippedAgent = (label: string, reason: string) =>
+    logSourceWarning("repair agent skipped", { agent: label, reason }).pipe(
+      Effect.andThen(
+        Ref.update(skippedAgentsRef, (skipped) => {
+          const entry = `${label}: ${reason}`;
+          return skipped.includes(entry) ? skipped : [...skipped, entry];
+        }),
+      ),
     );
 
   // Conflict/build repair uses file tools only: no git, shell, or network.
@@ -1012,21 +1081,41 @@ const make = Effect.gen(function* () {
     };
   };
 
-  // An agent that cannot start or exits non-zero (no credits, not signed in, not installed)
-  // hands over to the next one. A timeout stops the repair: that agent was working.
+  // An agent that is not signed in, cannot start or exits non-zero (no credits, not installed)
+  // hands over to the next one, and the run's result names it. A timeout stops the repair: that
+  // agent was working. Files that appear while an agent runs are the run's own (see
+  // attributableUntrackedPaths); avoid other writers in the checkout during a run.
   const runMergeAgent = Effect.fn("desktop.localSourceUpdates.runMergeAgent")(function* (
     repo: string,
     phase: "resolving" | "repairing" | "build-repair",
     task: string,
+    progress?: DesktopSourceSyncProgress,
   ) {
     const startedAt = yield* Clock.currentTimeMillis;
     yield* Effect.annotateCurrentSpan({ phase, exitCode: null });
     const agents = yield* repairAgents;
     const prompt = `${MERGE_AGENT_RULES}\n\n${task}`;
+    const untrackedBefore = new Set(yield* listUntrackedPaths(repo));
+    const recordCreated = listUntrackedPaths(repo).pipe(
+      Effect.flatMap((after) =>
+        Ref.update(
+          agentCreatedRef,
+          (created) => new Set([...created, ...after.filter((path) => !untrackedBefore.has(path))]),
+        ),
+      ),
+      Effect.ignore,
+    );
     return yield* Effect.gen(function* () {
       const failures: Array<string> = [];
       for (const agent of agents) {
         const label = repairAgentLabel(agent);
+        const unready = yield* repairAgentUnready(agent, repo);
+        if (unready !== null) {
+          failures.push(`${label} skipped: ${unready}`);
+          yield* recordSkippedAgent(label, unready);
+          continue;
+        }
+        if (progress) yield* reportProgress({ ...progress, agent: label });
         const result = yield* runCommand({
           operation: "merge",
           ...mergeAgentCommand(agent, prompt, phase),
@@ -1049,11 +1138,15 @@ const make = Effect.gen(function* () {
         );
         if (result._tag === "None") {
           failures.push(`${label} could not be started`);
+          yield* recordSkippedAgent(label, "could not be started");
           continue;
         }
         yield* Effect.annotateCurrentSpan({ exitCode: result.value.exitCode, agent: label });
         if (result.value.exitCode !== 0) {
-          failures.push(`${label} exited with code ${result.value.exitCode}`);
+          const output = lastOutputLine(result.value);
+          const reason = `exited with code ${result.value.exitCode}${output ? `: ${output}` : ""}`;
+          failures.push(`${label} ${reason}`);
+          yield* recordSkippedAgent(label, reason);
           continue;
         }
         if (phase !== "resolving" && result.value.stdoutTruncated) {
@@ -1069,6 +1162,7 @@ const make = Effect.gen(function* () {
         `no merge agent finished during ${phase} (${failures.join("; ")}); no further agent pass will run`,
       );
     }).pipe(
+      Effect.ensuring(recordCreated),
       Effect.ensuring(
         Clock.currentTimeMillis.pipe(
           Effect.flatMap((finishedAt) =>
@@ -1084,11 +1178,13 @@ const make = Effect.gen(function* () {
     repo: string,
     paths: ReadonlyArray<string>,
   ): Effect.fn.Return<ReadonlyArray<string>, LocalSourceUpdateError> {
-    yield* reportProgress({ phase: "resolving", conflictCount: paths.length });
+    const progress = { phase: "resolving", conflictCount: paths.length } as const;
+    yield* reportProgress(progress);
     yield* runMergeAgent(
       repo,
       "resolving",
       `These files still have merge conflicts: ${paths.join(", ")}. Resolve every conflict so no file contains conflict markers.`,
+      progress,
     );
     const left: Array<string> = [];
     for (const path of paths) {
@@ -1142,15 +1238,17 @@ const make = Effect.gen(function* () {
     yield* gitMerge(repo, ["add", "--", LOCKFILE_PATH]);
   });
 
+  // New files the run may stage: accepted move destinations and files that appeared while a
+  // repair agent ran (a fork-owned file it split out). Anything else may be another writer's.
   const attributableUntrackedPaths = Effect.fn(
     "desktop.localSourceUpdates.attributableUntrackedPaths",
   )(function* (repo: string, dispositions: ReadonlyArray<ForkMarkerDisposition> = []) {
-    const result = yield* gitMerge(repo, ["ls-files", "--others", "--exclude-standard", "-z"]);
-    const paths = result.stdout.split("\0").filter((path) => path.length > 0);
+    const paths = yield* listUntrackedPaths(repo);
+    const created = yield* Ref.get(agentCreatedRef);
     const destinations = new Set(
       dispositions.flatMap((entry) => (entry.status === "moved" ? [entry.destination] : [])),
     );
-    const unrelated = paths.filter((path) => !destinations.has(path));
+    const unrelated = paths.filter((path) => !destinations.has(path) && !created.has(path));
     if (unrelated.length > 0) {
       return yield* makeError(
         "merge",
@@ -1409,6 +1507,7 @@ const make = Effect.gen(function* () {
       repo,
       "repairing",
       `Repair the fork behaviors below in upstream's current form. For listed original lines you do not restore in place, explain moves or obsolescence; never fake markers. End your final response with one fenced json block: {"dispositions":[{"path":"<HEAD path>","line":<HEAD line number>,"status":"moved"|"obsolete","destination":"<current path, moved only>","reason":"<one sentence>"}]}. Include only unrestored lines. A moved line needs a real destination with a new marker; obsolete lines need a reason.\n\n${sections.join("\n\n")}`,
+      { phase: "repairing" },
     );
     yield* gitMerge(repo, ["add", "-u"]);
     yield* reportProgress({ phase: "checking" });
@@ -1450,6 +1549,18 @@ const make = Effect.gen(function* () {
       }
       // Staging here could make abort discard unrelated edits made while the agent ran.
       if (head.exitCode === 0) yield* gitMerge(repo, ["merge", "--abort"]);
+      // The abort undid the agents' edits; their new files go too, or the next inspect refuses.
+      const created = yield* Ref.get(agentCreatedRef);
+      if (created.size > 0) {
+        yield* Effect.forEach(
+          (yield* listUntrackedPaths(repo)).filter((path) => created.has(path)),
+          (path) =>
+            fileSystem
+              .remove(environment.path.join(repo, path), { force: true })
+              .pipe(Effect.ignore),
+          { discard: true },
+        );
+      }
       const status = yield* gitMerge(repo, ["status", "--porcelain=v1", "--untracked-files=all"]);
       return status.stdout.trim();
     },
@@ -1661,13 +1772,16 @@ const make = Effect.gen(function* () {
 
   const syncAndBuild = Effect.gen(function* () {
     yield* requireIdleCheckout("build");
+    yield* startRun;
     yield* loadLoginShellEnvironment();
     const inspection = yield* inspect;
     const repo = inspection.repositoryPath;
     // Update takes every upstream/main commit, as the sync button does, so one press merges and builds.
-    const upstreamMain = (
-      yield* gitMerge(repo, ["rev-parse", "--verify", "upstream/main^{commit}"])
-    ).stdout.trim();
+    const upstreamMain = (yield* gitMerge(repo, [
+      "rev-parse",
+      "--verify",
+      "upstream/main^{commit}",
+    ])).stdout.trim();
     const behindMain = Number(
       (yield* gitMerge(repo, ["rev-list", "--count", `HEAD..${upstreamMain}`])).stdout.trim(),
     );
@@ -1715,13 +1829,23 @@ const make = Effect.gen(function* () {
       Effect.andThen(fileSystem.remove(buildsDir, { recursive: true, force: true })),
       Effect.ignore,
     );
-    // Stashes tracked fixes only: new files may belong to another writer.
-    const restoreCheckout = runChecked({
-      operation: "build",
-      command: "git",
-      args: ["stash", "push", "-m", "local source update: unbuilt fixes"],
-      cwd: repo,
-    }).pipe(
+    // Stashes tracked fixes and the files repair agents created; other new files may belong
+    // to another writer.
+    const stageAgentCreated = Effect.gen(function* () {
+      const created = yield* Ref.get(agentCreatedRef);
+      for (const path of yield* listUntrackedPaths(repo)) {
+        if (created.has(path)) yield* gitMerge(repo, ["--literal-pathspecs", "add", "--", path]);
+      }
+    });
+    const restoreCheckout = stageAgentCreated.pipe(
+      Effect.andThen(
+        runChecked({
+          operation: "build",
+          command: "git",
+          args: ["stash", "push", "-m", "local source update: unbuilt fixes"],
+          cwd: repo,
+        }),
+      ),
       Effect.mapError((error) =>
         makeError(
           "build",
@@ -1890,7 +2014,9 @@ const make = Effect.gen(function* () {
       const applicationBundlePath = yield* findAppBundle(outputDir);
       // Records the regenerated lockfile and agent fixes; the author comes from
       // the repo config. Hooks are skipped so the formatter does not rewrite upstream files.
-      yield* attributableUntrackedPaths(repo);
+      for (const path of yield* attributableUntrackedPaths(repo)) {
+        yield* gitMerge(repo, ["--literal-pathspecs", "add", "--", path]);
+      }
       yield* gitMerge(repo, ["add", "-u"]);
       // A build repair must not introduce marker loss; the merge's own was settled before it.
       const { after, changes, lost } = yield* findLostMarkers(repo, markersBeforeBuild);
@@ -1978,6 +2104,7 @@ const make = Effect.gen(function* () {
       agent ? "desktop.localSourceUpdates.syncSource" : "desktop.localSourceUpdates.autoSyncSource",
     )(function* () {
       yield* requireIdleCheckout("merge");
+      yield* startRun;
       yield* loadLoginShellEnvironment();
       const inspection = yield* inspect;
       const repo = inspection.repositoryPath;
@@ -2012,6 +2139,7 @@ const make = Effect.gen(function* () {
         merged: behind,
         upstreamTag: inspection.upstreamTag,
         push: yield* pushFork(repo, false),
+        skippedAgents: yield* Ref.get(skippedAgentsRef),
       } satisfies LocalSourceSyncResult;
     }, repositoryLock.withPermits(1))();
 

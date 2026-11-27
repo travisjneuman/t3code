@@ -505,12 +505,17 @@ async function buildLocal(cfg: ResolvedHostConfig, sha: string, resultPath: stri
 
 // A remote failure reads `ssh exited N.` then the host's own error; the summary keeps the latter
 // on one line, since the desktop shows only the last line of this run's output.
+// OpenSSH prints notices such as the post-quantum key exchange warning as `** ` lines.
 function hostFailureReason(message: string): string {
   const lines = message
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
-  return lines.find((line) => !/^ssh exited \S+\.$/u.test(line)) ?? lines[0] ?? message;
+  return (
+    lines.find((line) => !/^ssh exited \S+\.$/u.test(line) && !line.startsWith("** ")) ??
+    lines[0] ??
+    message
+  );
 }
 
 function releaseReceipt(release: Release): ReleaseReceipt {

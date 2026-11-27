@@ -85,19 +85,21 @@ the Mac never reaches them. See
 
 Conflicts and build breaks that the merge can't settle on its own go to a repair agent.
 **Settings → Maintenance → Source update repairs → Repair agents** lists the agents to try, in
-order, one per line: `pi` or `claude`, a model, and an effort. The default is Pi on an Anthropic
-model, then Pi on an OpenAI model, then Claude Code:
+order, one per line: `pi` or `claude`, a model, and an effort. The default is Claude Code on
+its own sign-in, then Pi on an OpenAI model, then Pi on an Anthropic model:
 
 ```text
+claude claude-opus-5-5 high
+pi openai/gpt-6.2-sol medium
 pi anthropic/claude-opus-5-5 medium
-pi openai/gpt-6.1-sol medium
-claude claude-opus-5-5 medium
 ```
 
 The desktop app reads the list saved on its own machine. Pi uses the API keys it has stored
 (`pi auth login <provider> --api-key`), so its runs spend API credit; Claude Code uses its own
 sign-in. An agent that isn't installed, isn't signed in, or has run out of credit is skipped for
-the next line, so keep at least one that is ready where the app can find it. Pi's repair sessions
+the next line, so keep at least one that is ready where the app can find it. The sync button
+names the agent that is working, and the sync result lists each agent that was skipped and why;
+"not signed in; run `claude auth login`" means Claude Code's sign-in has expired. Pi's repair sessions
 are saved like any other Pi session, named `t3 repair` and the step, so they show under Other
 Agents and in Usage.
 

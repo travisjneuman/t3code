@@ -26,6 +26,8 @@ export const DesktopSourceSyncProgressSchema = Schema.Struct({
     "pushing",
   ]),
   conflictCount: Schema.optionalKey(Schema.Number),
+  /** The repair agent working on this phase, e.g. `Pi on openai/gpt-6.2-sol (medium)`. */
+  agent: Schema.optionalKey(Schema.String),
 });
 export type DesktopSourceSyncProgress = typeof DesktopSourceSyncProgressSchema.Type;
 

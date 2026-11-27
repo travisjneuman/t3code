@@ -585,10 +585,12 @@ const pluralCommits = (count: number): string =>
 
 function describeSourceSync(result: LocalSourceUpdates.LocalSourceSyncResult): string {
   if (result.merged === 0) return "Already includes everything from the official repository.";
-  if (result.push === null || result.push.pushed) {
-    return `Merged ${pluralCommits(result.merged)} and pushed the fork.`;
-  }
-  return `Merged ${pluralCommits(result.merged)}. The push to origin was skipped: ${result.push.reason}`;
+  const merged =
+    result.push === null || result.push.pushed
+      ? `Merged ${pluralCommits(result.merged)} and pushed the fork.`
+      : `Merged ${pluralCommits(result.merged)}. The push to origin was skipped: ${result.push.reason}`;
+  const skipped = result.skippedAgents ?? [];
+  return skipped.length > 0 ? `${merged} Repair agents skipped: ${skipped.join("; ")}.` : merged;
 }
 
 /**

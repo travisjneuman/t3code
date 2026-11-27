@@ -17,6 +17,7 @@ export function SidebarSourceSyncButton() {
 }
 
 function describeProgress(progress: DesktopSourceSyncProgress): string {
+  const agent = progress.agent ?? "a repair agent";
   switch (progress.phase) {
     case "fetching":
       return "Fetching official T3 Code…";
@@ -24,12 +25,12 @@ function describeProgress(progress: DesktopSourceSyncProgress): string {
       return "Merging official T3 Code…";
     case "resolving":
       return progress.conflictCount === undefined
-        ? "Resolving conflicts with Claude…"
-        : `Resolving ${progress.conflictCount} conflict${progress.conflictCount === 1 ? "" : "s"} with Claude…`;
+        ? `Resolving conflicts with ${agent}…`
+        : `Resolving ${progress.conflictCount} conflict${progress.conflictCount === 1 ? "" : "s"} with ${agent}…`;
     case "checking":
       return "Checking fork add-ons…";
     case "repairing":
-      return "Repairing fork add-ons with Claude…";
+      return `Repairing fork add-ons with ${agent}…`;
     case "committing":
       return "Committing the upstream merge…";
     case "pushing":

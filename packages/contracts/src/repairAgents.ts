@@ -15,11 +15,11 @@ export interface RepairAgent {
   readonly effort: string;
 }
 
-/** Pi on API keys first, then Claude Code on its own sign-in. */
+/** Claude Code on its own sign-in first, then Pi on API keys, which spend credit. */
 export const DEFAULT_REPAIR_AGENTS = [
+  "claude claude-opus-5-5 high",
+  "pi openai/gpt-6.2-sol medium",
   "pi anthropic/claude-opus-5-5 medium",
-  "pi openai/gpt-6.1-sol medium",
-  "claude claude-opus-5-5 medium",
 ].join("\n");
 
 const EFFORTS: Readonly<Record<RepairAgentKind, ReadonlySet<string>>> = {
