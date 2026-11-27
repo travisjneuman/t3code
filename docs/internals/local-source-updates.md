@@ -193,7 +193,10 @@ setting from its own environment's `settings.json` in the state directory at eac
 the main process needs no connection to its server. Before each agent runs, its sign-in is
 checked (`claude auth status --json`, or `pi auth check --model <model> --json`, 20-second
 limit); one that reports no usable credentials is skipped rather than started, and a check
-that fails or times out lets the agent run. An agent that is skipped, cannot start, or exits
+that fails or times out lets the agent run. Claude Code runs get `CLAUDE_CODE_OAUTH_TOKEN` when
+the app has one in its environment or, on macOS, in the Keychain item
+`t3code-repair-claude-token` (read at each run, passed only to that child, never logged); with
+a token the sign-in check is skipped, since it reports only the CLI's own login. An agent that is skipped, cannot start, or exits
 non-zero hands over to the next, and the reason (with the last line of its output) is logged
 and listed in the sync result, so a fallback is never silent. A timeout stops the repair,
 since that agent was working.

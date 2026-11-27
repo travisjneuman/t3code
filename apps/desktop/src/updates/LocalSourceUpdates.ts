@@ -41,6 +41,9 @@ const LOCKFILE_PATH = "pnpm-lock.yaml";
 const BUILD_FIX_SUBJECT = "fix(desktop): build upstream nightly ";
 const MERGE_AGENT_TIMEOUT = "20 minutes";
 const AGENT_READINESS_TIMEOUT = "20 seconds";
+/** macOS Keychain item with a `claude setup-token` token, which outlasts the CLI's own sign-in. */
+const CLAUDE_TOKEN_KEYCHAIN_SERVICE = "t3code-repair-claude-token";
+const CLAUDE_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN";
 // Each pass can only see the first error the build reports.
 const MAX_BUILD_REPAIR_PASSES = 3;
 const CONFLICT_MARKER_PATTERN = /^(?:<{7}|>{7})(?: |$)/mu;
@@ -1014,6 +1017,28 @@ const make = Effect.gen(function* () {
       Effect.orElseSucceed(() => null),
     );
 
+  // Read at each run so a saved or replaced token is used at once. It goes only to the agent's
+  // environment, never to logs, spans or results.
+  const claudeTokenEnv = Effect.gen(function* () {
+    const inherited = process.env[CLAUDE_TOKEN_ENV]?.trim();
+    if (inherited) return { [CLAUDE_TOKEN_ENV]: inherited };
+    if (environment.platform !== "darwin") return {};
+    const result = yield* runCommand({
+      operation: "merge",
+      command: "security",
+      args: ["find-generic-password", "-s", CLAUDE_TOKEN_KEYCHAIN_SERVICE, "-w"],
+      cwd: environment.homeDirectory,
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: AGENT_READINESS_TIMEOUT,
+        orElse: () => Effect.succeed(null),
+      }),
+      Effect.orElseSucceed(() => null),
+    );
+    const token = result?.exitCode === 0 ? result.stdout.trim() : "";
+    return token ? { [CLAUDE_TOKEN_ENV]: token } : {};
+  });
+
   const recordSkippedAgent = (label: string, reason: string) =>
     logSourceWarning("repair agent skipped", { agent: label, reason }).pipe(
       Effect.andThen(
@@ -1109,7 +1134,9 @@ const make = Effect.gen(function* () {
       const failures: Array<string> = [];
       for (const agent of agents) {
         const label = repairAgentLabel(agent);
-        const unready = yield* repairAgentUnready(agent, repo);
+        const env = agent.agent === "claude" ? yield* claudeTokenEnv : {};
+        // `auth status` reports the CLI's own sign-in; a bad token fails the run with a reason.
+        const unready = Object.keys(env).length > 0 ? null : yield* repairAgentUnready(agent, repo);
         if (unready !== null) {
           failures.push(`${label} skipped: ${unready}`);
           yield* recordSkippedAgent(label, unready);
@@ -1120,6 +1147,7 @@ const make = Effect.gen(function* () {
           operation: "merge",
           ...mergeAgentCommand(agent, prompt, phase),
           cwd: repo,
+          env,
           outputLimit: phase === "resolving" ? COMMAND_OUTPUT_LIMIT : MARKER_REPORT_OUTPUT_LIMIT,
         }).pipe(
           Effect.option,

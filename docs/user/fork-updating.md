@@ -99,7 +99,19 @@ The desktop app reads the list saved on its own machine. Pi uses the API keys it
 sign-in. An agent that isn't installed, isn't signed in, or has run out of credit is skipped for
 the next line, so keep at least one that is ready where the app can find it. The sync button
 names the agent that is working, and the sync result lists each agent that was skipped and why;
-"not signed in; run `claude auth login`" means Claude Code's sign-in has expired. Pi's repair sessions
+"not signed in; run `claude auth login`" means Claude Code's sign-in has expired.
+
+Claude Code's own sign-in expires now and then. On a Mac, a one-year token keeps repairs working
+in the meantime: run `claude setup-token`, then save the token in your login Keychain (the
+command asks for it, so it stays out of your shell history):
+
+```bash
+security add-generic-password -U -a "$USER" -s t3code-repair-claude-token -w
+```
+
+Repairs read it each time they run Claude Code, so a new token takes effect without a restart.
+Remove it with `security delete-generic-password -s t3code-repair-claude-token`, and revoke the
+token itself in your Claude account's Claude Code settings. Pi's repair sessions
 are saved like any other Pi session, named `t3 repair` and the step, so they show under Other
 Agents and in Usage.
 
